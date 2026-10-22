@@ -67,6 +67,23 @@ fn a_party_signs_in_through_a_client_and_opens_the_address_at_the_issuer() {
     accounts::run(directory.path());
 }
 
+#[test]
+fn sigterm_ends_without_a_pending_account_sign_in() {
+    accounts::sigterm(false, None);
+}
+
+#[test]
+fn sigterm_ends_with_an_unvisited_account_sign_in() {
+    accounts::sigterm(true, None);
+}
+
+/// Vary the deadline itself to distinguish a sign-in wait from an unbounded hang.
+#[test]
+fn sigterm_with_a_pending_sign_in_reaches_its_deadline() {
+    const SIGN_IN_DEADLINE_MS: u64 = 2000;
+    accounts::sigterm(true, Some(SIGN_IN_DEADLINE_MS));
+}
+
 // Reuse the account sign-in world's browser source; it remains a private test helper.
 use jig_protocol_accounts_world::fixtures;
 #[path = "../../../tests/protocol-accounts/src/visitor.rs"]
