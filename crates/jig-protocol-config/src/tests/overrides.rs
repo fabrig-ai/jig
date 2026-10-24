@@ -497,3 +497,11 @@ fn whole_admission_checks_the_limits_handed_to_the_store() {
     assert_eq!(problem.path, path(&[b"limits", b"core", b"policy_bytes"]));
     assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.core.policy_bytes: 65536 exceeds the people-v13 codec envelope of 43695 bytes (PolicyValue.permissions would need 98304 bytes; ceiling 65536).");
 }
+
+#[test]
+fn codec_admission_keeps_a_composed_documents_override_prefix() {
+    let document = document(br#"{"profile":"small","overrides":{"core.policy_bytes":43696}}"#);
+    let prefix = path(&[b"engine", b"limits"]);
+    let problems = overrides::parse(&document, 0, &prefix).unwrap_err();
+    assert_eq!(problems.problems.get(0).unwrap().path, prefix.member(b"overrides").member(b"core.policy_bytes"));
+}

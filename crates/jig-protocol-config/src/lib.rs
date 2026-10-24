@@ -12,7 +12,7 @@ mod directories;
 pub use directories::{Directories, Directory};
 mod domain;
 mod projects;
-pub use domain::{Deployment, Provider, ProviderKind};
+pub use domain::{Deployment, Provider, ProviderKind, amendment_bytes_max, check_effective_limits, policy_bytes_max};
 pub use projects::{Policy, Project};
 mod check;
 mod worker;
@@ -38,7 +38,7 @@ pub mod read;
 pub use address::Address;
 pub use document::{DocumentLimits, document};
 pub use forms::{digest, secret};
-pub use problem::{PROBLEMS, Path, Problem, Problems, Segment, What};
+pub use problem::{CodecBound, PROBLEMS, Path, Problem, Problems, Segment, What};
 /// The engine's protocol configuration (configuration.md, 3).
 #[derive(Debug)]
 pub struct Engine {

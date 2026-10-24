@@ -25,8 +25,23 @@ use policy::{
     encode_amendment, encode_executor, encode_grant, encode_parameter, encode_pattern, encode_permission_role,
     encode_policy_change, encode_policy_role, encode_policy_value, encode_requirement, encode_resource_scope,
 };
+/// Derive and admit the people family's bounds against its schema ceilings.
 #[must_use]
 pub fn limits(domain: &core::Limits) -> Option<wire::Limits> {
+    let limits = derived_limits(domain)?;
+    wire::check_limits(&limits).ok()?;
+    Some(limits)
+}
+
+/// Derive the people-v13 bounds before checking its schema ceilings.
+///
+/// `None` means the derivation's checked arithmetic cannot represent a bound.
+/// A returned value may exceed `people_v13::CEILINGS`; callers must use
+/// `people_v13::check_limits` before using it to encode or decode records.
+/// Configuration uses this diagnostic seam to explain an envelope refusal
+/// (protocol/configuration.md, section 6).
+#[must_use]
+pub fn derived_limits(domain: &core::Limits) -> Option<wire::Limits> {
     let people = &domain.people;
     let authority = &domain.authority;
     let mut limits = wire::Limits {
@@ -122,7 +137,6 @@ pub fn limits(domain: &core::Limits) -> Option<wire::Limits> {
     limits.member_named = limits.authority_grants;
     limits.member_dependencies = people.amendment_bytes.checked_mul(3)?;
     derive_verdicts(people.amendment_bytes, &mut limits)?;
-    wire::check_limits(&limits).ok()?;
     Some(limits)
 }
 
@@ -539,7 +553,7 @@ mod account_hosts;
 
 #[cfg(test)]
 mod envelope_tests {
-    use super::*;
+    use super::{core, derived_limits, wire};
 
     // Inputs read by the people codec from configuration's small and standard profiles.
     // The config crate also tests these with the complete shipped profile constants.

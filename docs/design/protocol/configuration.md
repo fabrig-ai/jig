@@ -1,6 +1,6 @@
 # Configuration
 
-Provisional, 2026-10-10, revised 2026-10-23. What an engine and a worker
+Provisional, 2026-10-10, revised 2026-10-24. What an engine and a worker
 are told when they start, as far as jig defines its shape: the parts of
 `../domain/engine.md`, section 14 that are jig's, the templates an
 application defines its shapes of work with, how an application's
@@ -462,6 +462,45 @@ host's half reports it (`llm.md`, 5.5).
   naming the kind.
 - **The application's limits** are its own members, checked in the same
   sum.
+
+The **effective store codec envelope** bounds the framed byte collections
+people-v13 derives from `core.policy_bytes` and `people.amendment_bytes`,
+as well as its independent fields. Configuration checks it after overrides
+and again with the whole engine, beside settings history and journal-write
+admission. It probes the people codec and the combined store codec; it
+never lowers a configured limit or a derived bound to make it fit.
+With the shipped profiles' other limits, the largest policy budget is
+43,695 bytes and the largest amendment budget is 8,192 bytes.
+
+An application composing its own effective `jig_domain_core::Limits` calls
+`jig_protocol_config::check_effective_limits(&limits) -> Result<(), Problem>`
+on the limits it will hand the store. It may derive its byte budgets within
+`policy_bytes_max(&limits) -> Option<u64>` and
+`amendment_bytes_max(&limits) -> Option<u32>`, exported by the same crate.
+Each maximum holds every other limit unchanged; `None` means even zero
+for that budget cannot be admitted. These are bounded searches over the
+codec's admission predicate, so the codec remains the arithmetic's owner.
+If both budgets exceed the envelope, the check diagnoses policy first,
+isolating amendment to zero in probe copies only, then amendment on a
+subsequent check. An independent ceiling is diagnosed before either.
+
+Problems name their effective fields, or the original override member
+when admission read one. `What::PolicyEnvelope` and
+`What::AmendmentEnvelope` retain the configured value, maximum and the
+binding record field's required bytes and ceiling. The binding field is
+the generated first failure at maximum plus one; its required bytes are
+read at the configured value. An arithmetic refusal has no representable
+required bound. `What::CodecCeiling` retains the generated first independent
+failure, without labeling item counts as bytes; `What::CodecArithmetic` and
+`What::StoreCodec` distinguish arithmetic and a combined-codec failure
+outside the people envelope.
+`Problem::codec_message()` gives these problems' words as owned bytes.
+The policy diagnostic includes its binding field; amendment's words are
+short even though its structured problem retains the bound:
+
+> limits.core.policy_bytes: 65536 exceeds the people-v13 codec envelope of 43695 bytes (PolicyValue.permissions would need 98304 bytes; ceiling 65536).
+>
+> limits.people.amendment_bytes: 8193 exceeds the people-v13 codec envelope of 8192 bytes.
 
 Program-source capacity is per worker, independently of its run slots.
 It bounds whole source lists, inventories and pending sign-outs on both
