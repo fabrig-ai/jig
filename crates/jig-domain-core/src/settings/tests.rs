@@ -1,7 +1,8 @@
 use super::*;
-use crate::tests::{config, limits};
+use crate::tests::{RESTORE_POLICY_BYTES, RESTORE_PROJECT, config, limits, restoring_sized_policy};
+use crate::{Core, CoreRecord, Limits, RestartRequest, RestartStep, Restored};
 use jig_domain_tasks as tasks;
-use skein_lib::Duration;
+use skein_lib::{Duration, Env, Time};
 
 fn template() -> Template {
     Template {
@@ -320,4 +321,58 @@ fn restoring_settings_proposals_requires_the_deployment_scope_without_a_project_
     assert!(core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row.clone()))));
     row.project = 1;
     assert!(!core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row))));
+}
+
+fn stored_policy_change(bytes: u64) -> (Core, Limits, Record) {
+    let (mut core, limits, configured) = restoring_sized_policy(bytes);
+    let mut defaults = List::with_capacity(core.current.defaults.len());
+    for (&setting, default) in &core.current.defaults {
+        defaults.push(Record::Default { setting, default: default.clone() }).expect("stored default count");
+    }
+    for record in defaults.into_boxed() {
+        let _restored = core.restore_core(CoreRecord::Settings(record), &limits);
+    }
+    for record in [
+        Record::Revision {
+            history: false,
+            revision: Revision { head: core.current.head.clone(), items: Box::new([]) },
+        },
+        Record::Extent { oldest: 0 },
+    ] {
+        let _restored = core.restore_core(CoreRecord::Settings(record), &limits);
+    }
+    let changed = Record::Changed {
+        setting: Setting::Policy(RESTORE_PROJECT),
+        changed: Changed { revision: 1, value: Some(Value::Policy(Box::new(configured))) },
+    };
+    (core, limits, changed)
+}
+
+#[test]
+fn oversized_settings_policy_restore_keeps_its_named_failure() {
+    let oversized = RESTORE_POLICY_BYTES.checked_add(1).expect("one past the policy byte budget");
+    let (mut core, limits, record) = stored_policy_change(oversized);
+    assert_eq!(core.restore_core(CoreRecord::Settings(record), &limits), Restored::Rejected);
+    assert_eq!(core.restart_failure(), Some(RestartStep::LoadCore));
+    let _refused = core.restart_refuse();
+    let failure = RestartRequest::Settings {
+        failure: Failure { setting: Setting::Policy(RESTORE_PROJECT), fault: Fault::Shape },
+        changed: true,
+    };
+    assert_eq!(core.restore_failure(), Some(failure));
+    assert_eq!(core.restart_done(RestartStep::LoadCore), failure);
+    assert_eq!(core.restore_failure(), Some(failure));
+    assert!(!core.current.changed(Setting::Policy(RESTORE_PROJECT)));
+    assert!(!core.restart_ready());
+}
+
+#[test]
+fn settings_policy_restore_admits_the_policy_byte_budget() {
+    let (mut core, limits, record) = stored_policy_change(RESTORE_POLICY_BYTES);
+    assert_eq!(core.restore_core(CoreRecord::Settings(record), &limits), Restored::Live);
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    assert!(core.settings_restored(&env));
+    assert_eq!(core.restore_failure(), None);
+    assert_eq!(core.restart_done(RestartStep::LoadCore), RestartRequest::Step(RestartStep::LoadInbox));
+    assert!(core.current.policy(RESTORE_PROJECT).is_some());
 }

@@ -67,3 +67,33 @@ fn a_restored_policy_past_the_current_rules_keeps_its_live_project() {
     assert_eq!(core.projects.as_slice(), [FIRST_PROJECT]);
     assert_eq!(core.names.get(&FIRST_PROJECT).unwrap().as_ref(), "Tally");
 }
+
+#[test]
+fn oversized_project_policy_restore_keeps_its_named_failure() {
+    let oversized = RESTORE_POLICY_BYTES.checked_add(1).expect("one past the policy byte budget");
+    let (mut core, limits, configured) = restoring_sized_policy(oversized);
+    let value = policy::snapshot(&configured.policy, &configured.permissions, &configured.templates)
+        .expect("bounded policy snapshot");
+    assert!(!core.restore_policy(&limits, RESTORE_PROJECT, Box::from("Tally"), value));
+    assert_eq!(core.restart_failure(), Some(RestartStep::LoadCore));
+    let _refused = core.restart_refuse();
+    assert_eq!(core.restore_failure(), Some(RestartRequest::ProjectPolicy { project: RESTORE_PROJECT }));
+    assert_eq!(core.restart_done(RestartStep::LoadCore), RestartRequest::ProjectPolicy { project: RESTORE_PROJECT });
+    assert_eq!(core.restore_failure(), Some(RestartRequest::ProjectPolicy { project: RESTORE_PROJECT }));
+    assert!(!core.restart_ready());
+    assert!(core.projects.is_empty());
+    assert!(core.names.is_empty());
+    assert!(core.authority.policy(RESTORE_PROJECT).is_none());
+}
+
+#[test]
+fn project_policy_restore_admits_the_policy_byte_budget() {
+    let (mut core, limits, configured) = restoring_sized_policy(RESTORE_POLICY_BYTES);
+    let value = policy::snapshot(&configured.policy, &configured.permissions, &configured.templates)
+        .expect("bounded policy snapshot");
+    assert!(core.restore_policy(&limits, RESTORE_PROJECT, Box::from("Tally"), value));
+    assert_eq!(core.restore_failure(), None);
+    assert_eq!(core.restart_done(RestartStep::LoadCore), RestartRequest::Step(RestartStep::LoadInbox));
+    assert_eq!(core.authority.policy(RESTORE_PROJECT), Some(&configured.policy));
+    assert_eq!(core.names.get(&RESTORE_PROJECT).unwrap().as_ref(), "Tally");
+}

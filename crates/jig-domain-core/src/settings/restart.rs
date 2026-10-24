@@ -59,14 +59,14 @@ impl Core {
                     return false;
                 }
                 if let Err(failure) = super::check::admits_change(&self.current, setting, limits) {
-                    self.settings_failure = Some(RestartRequest::Settings { failure, changed: true });
+                    self.restore_failure = Some(RestartRequest::Settings { failure, changed: true });
                     let _refused = self.restart_refuse();
                     return false;
                 }
                 if let Some(value) = &changed.value
                     && let Err(failure) = super::check::shape(setting, value, limits)
                 {
-                    self.settings_failure = Some(RestartRequest::Settings { failure, changed: true });
+                    self.restore_failure = Some(RestartRequest::Settings { failure, changed: true });
                     let _refused = self.restart_refuse();
                     return false;
                 }
@@ -127,8 +127,8 @@ impl Core {
     /// Finish the settings range before routing any later live row. Children
     /// run ahead of the release commit as they do in every ordinary decision.
     pub fn settings_restored(&mut self, env: &Env<Limits>) -> bool {
-        if self.settings_restore.ready || self.settings_failure.is_some() {
-            return self.settings_failure.is_none();
+        if self.settings_restore.ready || self.restore_failure.is_some() {
+            return self.restore_failure.is_none();
         }
         // The empty store is checked and recorded by the existing people-seed
         // continuation. It has no settings range to finish yet.
@@ -187,13 +187,9 @@ impl Core {
     pub fn refuse_settings(&mut self, failure: Failure) -> RestartRequest {
         let changed = self.current.changed(failure.setting);
         let request = RestartRequest::Settings { failure, changed };
-        self.settings_failure = Some(request);
+        self.restore_failure = Some(request);
         let _refused = self.restart_refuse();
         request
-    }
-    #[must_use]
-    pub const fn settings_failure(&self) -> Option<RestartRequest> {
-        self.settings_failure
     }
 
     pub(crate) fn tell_settings(&mut self, env: &Env<Limits>) {
