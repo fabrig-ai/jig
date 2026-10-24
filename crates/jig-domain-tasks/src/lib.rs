@@ -148,8 +148,9 @@ pub use owned::{phase_bytes, stored_bytes, task_bytes, terminal_bytes};
 pub use parts::{Part, PartKey, PartKind};
 pub use periods::PeriodTimes;
 pub use proposals::{
-    PersonAction, PersonProposal, PersonProposalState, Proposal, ProposalAction, ProposalDecision, ProposalHolder,
-    ProposalKind, ProposalOutcome, ProposalState,
+    PROPOSAL_WITHOUT_TASK, PersonAction, PersonProposal, PersonProposalState, Proposal, ProposalAction,
+    ProposalDecision, ProposalHolder, ProposalKind, ProposalOutcome, ProposalState, SETTINGS_ITEMS, Setting,
+    SettingEdit, SettingHead,
 };
 pub use runtime::RetryNotice;
 pub use value::{

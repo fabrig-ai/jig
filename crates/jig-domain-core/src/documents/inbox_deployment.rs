@@ -165,9 +165,47 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
     super::inbox_selection_worst_case(window.rows, limits.tasks.depth).ok_or(Missing::TooLarge)?;
     let entries = core.people.inbox_needs(&limits.people, party).ok_or(Missing::Unknown)?;
     let recent = core.people.cached_updates(&limits.people, party).ok_or(Missing::Unknown)?;
-    let mut ordered = Map::with_capacity(limits.people.inbox_entries.checked_mul(2).ok_or(Missing::TooLarge)?);
-    let cached_needs = core.people.needs(party).ok_or(Missing::Unknown)?;
+    let mut ordered = Map::with_capacity(
+        limits
+            .people
+            .inbox_entries
+            .checked_mul(2)
+            .ok_or(Missing::TooLarge)?
+            .checked_add(limits.settings.proposals)
+            .ok_or(Missing::TooLarge)?,
+    );
+    let cached_needs = core
+        .people
+        .needs(party)
+        .ok_or(Missing::Unknown)?
+        .checked_add(core.settings_needs(party))
+        .ok_or(Missing::TooLarge)?;
     let counts = core.people.counts(&limits.people, party).ok_or(Missing::Unknown)?;
+    if core.people.role(party, people::DEPLOYMENT) == Some(people::Role::Owner) {
+        for (_, row) in core.tasks.person_proposals() {
+            match row.action {
+                jig_domain_tasks::PersonAction::Settings { .. } => {
+                    let since = match row.state {
+                        jig_domain_tasks::PersonProposalState::Pending { since } => since,
+                        jig_domain_tasks::PersonProposalState::Accepted { .. }
+                        | jig_domain_tasks::PersonProposalState::SettingsAccepted { .. }
+                        | jig_domain_tasks::PersonProposalState::Rejected { .. }
+                        | jig_domain_tasks::PersonProposalState::Withdrawn { .. } => continue,
+                    };
+                    let object = InboxObject::Proposal { proposer: Proposer::Party(row.proposer), number: row.number };
+                    let cursor =
+                        Cursor::Inbox { task: jig_domain_tasks::PROPOSAL_WITHOUT_TASK, object, at: Some(since) };
+                    ordered
+                        .insert(
+                            key(cursor)?,
+                            (jig_domain_tasks::PROPOSAL_WITHOUT_TASK, 0, object, None, since, false, cursor, false),
+                        )
+                        .expect("bounded settings needs");
+                }
+                jig_domain_tasks::PersonAction::Batch(_) | jig_domain_tasks::PersonAction::Amend { .. } => {}
+            }
+        }
+    }
     for entry in &entries {
         if core.people.role(party, entry.project).is_none() {
             continue;
@@ -229,11 +267,15 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
             more = true;
             break;
         }
-        let link = match core.archived_chats.get(task) {
-            Some(archive) if archive.party == party => {
-                TaskLink::Retained { chip: archive.chip.clone(), at: archive.at }
+        let link = if *task == jig_domain_tasks::PROPOSAL_WITHOUT_TASK {
+            TaskLink::Stored { number: jig_domain_tasks::PROPOSAL_WITHOUT_TASK, status: None }
+        } else {
+            match core.archived_chats.get(task) {
+                Some(archive) if archive.party == party => {
+                    TaskLink::Retained { chip: archive.chip.clone(), at: archive.at }
+                }
+                Some(_) | None => super::task_tree::link(core, limits, party, *task)?,
             }
-            Some(_) | None => super::task_tree::link(core, limits, party, *task)?,
         };
         let entry = InboxEntry {
             reply,
@@ -266,4 +308,8 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
         updates_time_complete: true,
         selection: Some(selection),
     })
+}
+
+pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
+    Map::<(bool, u64, u64, u64, InboxObject), (u64, u32, InboxObject, Option<u64>, Wall, bool, Cursor, bool)>::worst_case(limits.people.inbox_entries.checked_mul(2)?.checked_add(limits.settings.proposals)?)
 }

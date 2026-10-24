@@ -363,7 +363,12 @@ impl Core {
                 }
                 proposal.number <= deployment.messages
                     && proposal.proposer <= deployment.people
-                    && self.authority.policy(proposal.project).is_some()
+                    && match proposal.action {
+                        tasks::PersonAction::Settings { .. } => proposal.project == jig_domain_people::DEPLOYMENT,
+                        tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {
+                            self.authority.policy(proposal.project).is_some()
+                        }
+                    }
             }
             tasks::Stored::Stub(stub) => stub.task <= deployment.tasks,
             tasks::Stored::Live(task) => {

@@ -176,6 +176,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.people.operations > limits.tasks.tasks
         || limits.accounts.program_names > limits.fleet.program_sources
         || limits.settings.history == 0
+        || limits.settings.proposals == 0
         || limits.templates == 0
         || limits.resume_bytes == 0
         || limits.run_bytes == 0
@@ -453,6 +454,20 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     total = total.checked_add(bytes(limits.people.initial_owners, u64::from(limits.people.identity_bytes))?)?;
     total = total.checked_add(limits.policy_bytes.checked_mul(2)?)?;
     total = total.checked_add(crate::settings::worst_case(limits)?)?;
+    total = total.checked_add(Map::<(people::Proposer, u32), crate::settings::Proposal>::worst_case(
+        limits.settings.proposals,
+    )?)?;
+    total = total.checked_add(
+        u64::from(limits.settings.proposals).checked_mul(
+            crate::settings::set_worst_case(limits)?
+                .checked_add(List::<crate::settings::Item>::worst_case(tasks::SETTINGS_ITEMS)?)?,
+        )?,
+    )?;
+    // One held entrance, including its reason, and one offering awaiting tasks.
+    total = total.checked_add(crate::settings::revision_worst_case(limits)?.checked_mul(2)?)?;
+    total = total.checked_add(u64::from(limits.people.words))?;
+    total = total.checked_add(List::<(people::Proposer, u32)>::worst_case(limits.settings.proposals)?)?;
+    total = total.checked_add(u64::try_from(size_of::<crate::settings::Proposed>()).ok()?)?;
     // A decoded held revision is transient. At a release, the copied defaults
     // and the new record's items coexist until they pass into the journal.
     total = total.checked_add(crate::settings::revision_worst_case(limits)?.checked_mul(2)?)?;

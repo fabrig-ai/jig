@@ -134,6 +134,24 @@ pub(super) fn subject(
             &[Act::Adopt, Act::Reorder, Act::ChangePolicy, Act::Rename, Act::SetRoles, Act::MakeService, Act::SetPool],
             decision,
         ),
+        Subject::Proposal { proposer: super::Proposer::Party(person), number }
+            if match core.tasks.person_proposal(*person, *number) {
+                Some(row) => row.action.is_settings(),
+                None => false,
+            } =>
+        {
+            let owner = core.people.role(party, people::DEPLOYMENT) == Some(people::Role::Owner);
+            let kinds = if owner && *person == party {
+                &[Act::Accept, Act::Reject, Act::Withdraw][..]
+            } else if owner {
+                &[Act::Accept, Act::Reject][..]
+            } else if *person == party {
+                &[Act::Withdraw][..]
+            } else {
+                &[][..]
+            };
+            list(core, limits, party, subject, kinds, decision)
+        }
         Subject::Proposal { proposer, .. } => {
             let kinds = if *proposer == super::Proposer::Party(party) {
                 &[Act::Accept, Act::Reject, Act::PassUp, Act::Withdraw][..]

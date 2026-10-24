@@ -102,6 +102,7 @@ pub fn remap_models(ask: &mut Ask, moved: &[u64; 64]) {
         Ask::Propose { action, .. } => match action {
             Action::Batch(batch) => members(batch, moved),
             Action::Amend { amendment: value, .. } => amendment(value, moved),
+            Action::Settings { .. } => {}
         },
         Ask::Compound { operations, .. } => {
             for at in 0..operations.len() {
@@ -182,6 +183,7 @@ pub fn valid_model_context(ask: &Ask, names: &[Box<[u8]>]) -> bool {
         Ask::Propose { action, .. } => match action {
             Action::Batch(batch) => members_bits(batch),
             Action::Amend { amendment, .. } => amendment_bits(amendment),
+            Action::Settings { .. } => 0,
         },
         Ask::Compound { operations, .. } => {
             let mut bits = 0;
@@ -245,6 +247,7 @@ pub(crate) fn has_model_selector(ask: &Ask) -> bool {
         Ask::Propose { action, .. } => match action {
             Action::Batch(batch) => members_have_selector(batch),
             Action::Amend { amendment, .. } => amendment_has_selector(amendment),
+            Action::Settings { .. } => false,
         },
         Ask::Compound { operations, .. } => {
             for operation in operations {

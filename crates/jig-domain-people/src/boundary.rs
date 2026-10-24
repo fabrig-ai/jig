@@ -261,7 +261,13 @@ pub enum Ask {
     /// Adopt a live task as this authenticated person's own goal, retaining its old requester's reference.
     Move { project: u32, task: u64, reason: Box<[u8]> },
     /// Authenticated keyed decision for a proposal waiting at this person or a policy role.
-    DecideProposal { project: u32, proposer: Proposer, proposal: u64, decision: ProposalDecision },
+    DecideProposal {
+        project: u32,
+        proposer: Proposer,
+        proposal: u64,
+        decision: ProposalDecision,
+        running: Option<crate::Running>,
+    },
     /// Authenticated requester's whole words to an existing chat.
     Say { project: u32, task: u64, words: Box<[u8]> },
     /// Answer a numbered question waiting in a task requested by this person.

@@ -405,6 +405,14 @@ pub enum Event {
         digest: [u8; 32],
         change: Box<crate::settings::Change>,
     },
+    /// A whole proposed set, held only while people admits its keyed digest.
+    ProposeSettings {
+        reply_to: ReplyTo,
+        sign_in: u64,
+        key: [u8; 16],
+        digest: [u8; 32],
+        change: Box<crate::settings::Proposed>,
+    },
     /// Commit a restored release before opening, within the journal's available writes.
     SettingsCommit { room: u32 },
     /// A connector's deployment act, without a party or sign-in (people.md, 5.3).

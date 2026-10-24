@@ -110,6 +110,7 @@ pub enum ProposalHolder {
 /// Decision family used for the final policy recipient.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ProposalKind {
+    Settings,
     Batch,
     Effect,
     Amend,
@@ -153,49 +154,96 @@ pub struct PersonProposal {
     pub state: PersonProposalState,
 }
 
+/// A party settings proposal has no task for its inbox link or goal ancestry.
+pub const PROPOSAL_WITHOUT_TASK: u64 = 0;
+
 impl PersonProposal {
-    /// Proposed roots in their durable order; empty for an amendment.
+    /// Proposed roots in their durable order; empty for amendments and settings.
     #[must_use]
     pub fn batch(&self) -> &[New] {
         match &self.action {
             PersonAction::Batch(batch) => batch,
-            PersonAction::Amend { .. } => &[],
+            PersonAction::Amend { .. } | PersonAction::Settings { .. } => &[],
         }
     }
-    /// The amended task or first root for the inbox link; zero for an invalid empty batch.
+    /// The amended task or first root for the inbox link; zero when there is no task.
     #[must_use]
     pub fn first(&self) -> u64 {
         match &self.action {
             PersonAction::Batch(batch) => match batch.first() {
                 Some(member) => member.number,
-                None => 0,
+                None => PROPOSAL_WITHOUT_TASK,
             },
             PersonAction::Amend { task, .. } => *task,
+            PersonAction::Settings { .. } => PROPOSAL_WITHOUT_TASK,
         }
     }
 }
 
-/// A party's requested action, funded by the accepter.
+/// A party's requested action. Task actions use the accepter's funding;
+/// deployment settings carry no funding (tasks.md, section 9).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum PersonAction {
+    Settings { against: u32, items: Box<[SettingHead]> },
     Batch(Box<[New]>),
     Amend { task: u64, revision: u64, amendment: Box<Amendment> },
 }
 
+/// The tasks child retains only settings item heads (engine.md, 17.6).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum Setting {
+    Charter(u32),
+    Template(u32),
+    Policy(u32),
+    Rules,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SettingEdit {
+    Set,
+    Removed,
+    Reset,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SettingHead {
+    pub setting: Setting,
+    pub edit: SettingEdit,
+}
+pub const SETTINGS_ITEMS: u32 = 128;
+
+impl PersonAction {
+    #[must_use]
+    pub const fn is_settings(&self) -> bool {
+        match self {
+            Self::Settings { .. } => true,
+            Self::Batch(_) | Self::Amend { .. } => false,
+        }
+    }
+}
 /// Durable decision on a person-origin proposal; terminal rows remain in the store.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum PersonProposalState {
+    SettingsAccepted { by: Party, revision: u32 },
     Pending { since: Wall },
     Accepted { by: Party },
     Rejected { by: Party, reason: Box<[u8]>, message: u64, at: Wall },
     Withdrawn { at: Wall },
 }
 
+impl PersonProposalState {
+    #[must_use]
+    pub const fn pending_since(&self) -> Option<Wall> {
+        match self {
+            Self::Pending { since } => Some(*since),
+            Self::SettingsAccepted { .. } | Self::Accepted { .. } | Self::Rejected { .. } | Self::Withdrawn { .. } => {
+                None
+            }
+        }
+    }
+}
 /// A restored or newly proposed action has its bounded durable shape.
 pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) -> bool {
     if proposal.number == 0
         || proposal.proposer == 0
-        || proposal.project == 0
         || proposal.reason.len() > usize::try_from(limits.message_bytes).expect("u32 fits usize")
         || !crate::person_proposals::valid_action(proposal, limits)
     {
@@ -203,8 +251,19 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
     }
     match &proposal.state {
         PersonProposalState::Pending { .. } | PersonProposalState::Withdrawn { .. } => true,
+        PersonProposalState::SettingsAccepted { by, revision } => {
+            let against = match proposal.action {
+                PersonAction::Settings { against, .. } => against,
+                PersonAction::Batch(_) | PersonAction::Amend { .. } => return false,
+            };
+            *revision > against
+                && match by {
+                    Party::Person(person) => *person != 0,
+                    Party::Task(_) | Party::Deployment { .. } => false,
+                }
+        }
         PersonProposalState::Accepted { by } => match by {
-            Party::Person(person) => *person != 0,
+            Party::Person(person) => !proposal.action.is_settings() && *person != 0,
             Party::Task(_) | Party::Deployment { .. } => false,
         },
         PersonProposalState::Rejected { by, reason, message, .. } => match by {
@@ -233,6 +292,7 @@ pub(crate) fn propose_person(
         || match proposal.state {
             PersonProposalState::Pending { .. } => false,
             PersonProposalState::Accepted { .. }
+            | PersonProposalState::SettingsAccepted { .. }
             | PersonProposalState::Rejected { .. }
             | PersonProposalState::Withdrawn { .. } => true,
         }
@@ -285,6 +345,7 @@ pub(crate) fn decide_person(
     by: Party,
     message: Option<u64>,
     decision: ProposalDecision,
+    revision: Option<u32>,
     out: &mut Queue<Request>,
 ) {
     if !domain.ready() {
@@ -292,7 +353,7 @@ pub(crate) fn decide_person(
     }
     let Some(old) = domain.person_proposals.get(&number) else {
         return out.push(Request::PersonProposalDecided {
-            reply_to: to,
+            reply_to: Some(to),
             proposer,
             number,
             outcome: ProposalOutcome::Stale,
@@ -304,19 +365,35 @@ pub(crate) fn decide_person(
     if match old.state {
         PersonProposalState::Pending { .. } => false,
         PersonProposalState::Accepted { .. }
+        | PersonProposalState::SettingsAccepted { .. }
         | PersonProposalState::Rejected { .. }
         | PersonProposalState::Withdrawn { .. } => true,
     } {
         return out.push(Request::PersonProposalDecided {
-            reply_to: to,
+            reply_to: Some(to),
             proposer,
             number,
             outcome: ProposalOutcome::Stale,
         });
     }
+    if decision != ProposalDecision::Accept && revision.is_some() {
+        return refused(to, None, Refusal::Read, out);
+    }
     let outcome = match &decision {
         ProposalDecision::Accept => {
-            if !crate::person_proposals::made(domain, &old.action) {
+            let settings = match old.action {
+                PersonAction::Settings { .. } => true,
+                PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+            };
+            let valid_revision = match old.action {
+                PersonAction::Settings { against, .. } => match revision {
+                    Some(revision) => revision > against,
+                    None => false,
+                },
+                PersonAction::Batch(_) | PersonAction::Amend { .. } => revision.is_none(),
+            };
+            if settings != revision.is_some() || !valid_revision || !crate::person_proposals::made(domain, &old.action)
+            {
                 return refused(to, None, Refusal::State, out);
             }
             ProposalOutcome::Accepted
@@ -335,8 +412,15 @@ pub(crate) fn decide_person(
         ProposalDecision::Pass { .. } => return refused(to, None, Refusal::State, out),
     };
     let mut proposal = domain.person_proposals.remove(&number).expect("checked pending proposal");
+    let settings = match proposal.action {
+        PersonAction::Settings { .. } => true,
+        PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+    };
     proposal.state = match decision {
-        ProposalDecision::Accept => PersonProposalState::Accepted { by },
+        ProposalDecision::Accept => match revision {
+            Some(revision) => PersonProposalState::SettingsAccepted { by, revision },
+            None => PersonProposalState::Accepted { by },
+        },
         ProposalDecision::Reject { reason } => PersonProposalState::Rejected {
             by,
             reason,
@@ -346,9 +430,19 @@ pub(crate) fn decide_person(
         ProposalDecision::Pass { .. } => unreachable!("person proposal has final policy holder"),
     };
     out.push(Request::Erase { key: crate::Key::PersonProposal(number) });
+    out.push(Request::Save {
+        record: Stored::Update(crate::Update {
+            party: proposal.proposer,
+            at: env.wall,
+            task: proposal.first(),
+            object: crate::UpdateObject::Proposal { proposal: crate::Newest::of(proposal.number) },
+        }),
+    });
     out.push(Request::Save { record: Stored::DecidedProposal(Box::new(proposal)) });
-    crate::closing::prune_stubs(domain, env, out);
-    out.push(Request::PersonProposalDecided { reply_to: to, proposer, number, outcome });
+    if !settings {
+        crate::closing::prune_stubs(domain, env, out);
+    }
+    out.push(Request::PersonProposalDecided { reply_to: Some(to), proposer, number, outcome });
 }
 
 /// Root-authenticated decision for the current holder.

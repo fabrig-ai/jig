@@ -5,7 +5,8 @@ use jig_domain_people as people;
 
 #[expect(
     clippy::too_many_lines,
-    reason = "one exhaustive keyed entrance preserves the historical and live dispatch precedence"
+    clippy::manual_map,
+    reason = "one exhaustive keyed entrance uses concrete matches and preserves live dispatch precedence"
 )]
 pub(crate) fn request(
     core: &Core,
@@ -18,7 +19,8 @@ pub(crate) fn request(
 ) -> Result<(), people::Refusal> {
     let (act, subject) = match ask {
         // An account request's check is its holder's, which people made (domain/authority.md, 8.4).
-        people::Ask::ChangeSettings { .. }
+        people::Ask::Propose { action: people::Action::Settings { .. }, .. }
+        | people::Ask::ChangeSettings { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::Application { .. }
         | people::Ask::Compound { .. }
@@ -26,7 +28,8 @@ pub(crate) fn request(
         | people::Ask::AccountSignIn { .. }
         | people::Ask::AccountSignOut { .. }
         | people::Ask::AccountChange { .. } => return Ok(()),
-        people::Ask::Create { .. } | people::Ask::Propose { .. } => {
+        people::Ask::Create { .. }
+        | people::Ask::Propose { action: people::Action::Batch(_) | people::Action::Amend { .. }, .. } => {
             return standing::role(core, project, role, Act::Amend);
         }
         people::Ask::Say { task, .. } => (Act::Message, documents::Subject::Task { task: *task }),
@@ -36,7 +39,23 @@ pub(crate) fn request(
         people::Ask::TakePerson { task, .. } => (Act::Take, documents::Subject::PersonTask { task: *task }),
         people::Ask::HandBackPerson { task, .. } => (Act::HandBack, documents::Subject::PersonTask { task: *task }),
         people::Ask::AnswerPerson { task, .. } => (Act::Answer, documents::Subject::PersonTask { task: *task }),
-        people::Ask::DecideProposal { proposer, proposal, decision, .. } => {
+        people::Ask::DecideProposal { proposer, proposal, decision, running, .. } => {
+            let settings = match proposer {
+                people::Proposer::Party(person) => match core.tasks.person_proposal(*person, *proposal) {
+                    Some(row) => Some(row.action.is_settings()),
+                    None => None,
+                },
+                people::Proposer::Task(task) => match core.tasks.proposal(*task, *proposal) {
+                    Some(_) => Some(false),
+                    None => None,
+                },
+            };
+            if let Some(settings) = settings
+                && running.is_some() != (settings && *decision == people::ProposalDecision::Accept)
+            {
+                return Err(people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running });
+            }
+
             let act = match decision {
                 people::ProposalDecision::Accept => Act::Accept,
                 people::ProposalDecision::Reject { .. } => Act::Reject,

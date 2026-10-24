@@ -7,12 +7,38 @@ use skein_lib::{Env, List, Queue, ReplyTo};
 
 pub(crate) fn valid_action(proposal: &PersonProposal, limits: &Limits) -> bool {
     let batch = match &proposal.action {
+        PersonAction::Settings { against, items } => {
+            if proposal.project != 0
+                || *against == 0
+                || items.is_empty()
+                || items.len() > usize::try_from(crate::SETTINGS_ITEMS).expect("settings item bound")
+            {
+                return false;
+            }
+            for (at, item) in items.iter().enumerate() {
+                match item.setting {
+                    crate::Setting::Charter(0) | crate::Setting::Template(0) | crate::Setting::Policy(0) => {
+                        return false;
+                    }
+                    crate::Setting::Charter(_)
+                    | crate::Setting::Template(_)
+                    | crate::Setting::Policy(_)
+                    | crate::Setting::Rules => {}
+                }
+                for earlier in items.iter().take(at) {
+                    if earlier.setting == item.setting {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
         PersonAction::Batch(batch) => batch,
         PersonAction::Amend { task, amendment, .. } => {
-            return *task != 0 && crate::stored::valid_amendment(limits, amendment);
+            return proposal.project != 0 && *task != 0 && crate::stored::valid_amendment(limits, amendment);
         }
     };
-    if !crate::batch::bounded_batch(limits, batch) {
+    if proposal.project == 0 || !crate::batch::bounded_batch(limits, batch) {
         return false;
     }
     for member in batch {
@@ -47,6 +73,7 @@ pub(crate) fn valid_action(proposal: &PersonProposal, limits: &Limits) -> bool {
 
 pub(crate) fn made(domain: &Domain, action: &PersonAction) -> bool {
     let batch = match action {
+        PersonAction::Settings { .. } => return true,
         PersonAction::Batch(batch) => batch,
         PersonAction::Amend { task, .. } => return crate::domain::record(domain, *task).is_some(),
     };
@@ -70,7 +97,14 @@ pub(crate) fn withdraw(
         Some(row) => row.proposer == proposer,
         None => false,
     };
-    let refusal = if !domain.ready() {
+    // A release withdraws restored settings before task adoption (engine.md, 17.7).
+    let restoring_settings = to.is_none()
+        && domain.startup == crate::domain::Startup::Restoring
+        && match domain.person_proposals.get(&number) {
+            Some(row) => row.action.is_settings(),
+            None => false,
+        };
+    let refusal = if !domain.ready() && !restoring_settings {
         Some(Refusal::NotReady)
     } else if own {
         None
@@ -84,13 +118,25 @@ pub(crate) fn withdraw(
         return;
     }
     let mut proposal = domain.person_proposals.remove(&number).expect("pending proposal checked");
+    let settings = match proposal.action {
+        PersonAction::Settings { .. } => true,
+        PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+    };
     proposal.state = PersonProposalState::Withdrawn { at: env.wall };
     out.push(Request::Erase { key: crate::Key::PersonProposal(number) });
+    out.push(Request::Save {
+        record: Stored::Update(crate::Update {
+            party: proposal.proposer,
+            at: env.wall,
+            task: proposal.first(),
+            object: crate::UpdateObject::Proposal { proposal: crate::Newest::of(proposal.number) },
+        }),
+    });
     out.push(Request::Save { record: Stored::DecidedProposal(Box::new(proposal)) });
-    crate::closing::prune_stubs(domain, env, out);
-    if let Some(reply_to) = to {
-        out.push(Request::PersonProposalDecided { reply_to, proposer, number, outcome: ProposalOutcome::Withdrawn });
+    if !settings {
+        crate::closing::prune_stubs(domain, env, out);
     }
+    out.push(Request::PersonProposalDecided { reply_to: to, proposer, number, outcome: ProposalOutcome::Withdrawn });
 }
 
 pub(crate) fn ended(domain: &mut Domain, env: &Env<Limits>, task: u64, out: &mut Queue<Request>) {
@@ -108,6 +154,7 @@ pub(crate) fn ended(domain: &mut Domain, env: &Env<Limits>, task: u64, out: &mut
                 names
             }
             PersonAction::Amend { task: target, .. } => *target == task,
+            PersonAction::Settings { .. } => false,
         };
         if names {
             pending.push((number, proposal.proposer)).expect("bounded pending proposals");

@@ -16,3 +16,10 @@ pub enum SettingFault {
     Grace,
     Owner,
 }
+
+/// Whether an accepted settings revision moves running work (engine.md, 17.2).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Running {
+    Stays,
+    Moves,
+}

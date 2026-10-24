@@ -27,6 +27,15 @@ pub(super) fn action(
     action: &tasks::PersonAction,
 ) -> Result<(ProposalAction, tasks::ProposalKind), Missing> {
     match action {
+        tasks::PersonAction::Settings { against, items } => Ok((
+            ProposalAction::Settings {
+                against: *against,
+                items: crate::documents::settings_heads(items),
+                review: None,
+                made: None,
+            },
+            tasks::ProposalKind::Settings,
+        )),
         tasks::PersonAction::Batch(members) => {
             let mut batch = List::with_capacity(limits.documents.lines);
             for member in members {

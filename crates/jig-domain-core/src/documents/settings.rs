@@ -41,7 +41,12 @@ pub(super) fn make(core: &Core, party: u64) -> Result<Settings, Missing> {
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return Err(Missing::NotAllowed);
     }
-    Ok(build(&core.current, core.tasks.live_agent_tasks()))
+    let mut result = build(&core.current, core.tasks.live_agent_tasks());
+    result.pending = List::with_capacity(core.settings_proposals.capacity());
+    for (&(proposer, number), _) in &core.settings_proposals {
+        result.pending.push(SettingsProposal { proposer, number }).expect("pending bound");
+    }
+    Ok(result)
 }
 
 pub(crate) fn build(current: &Current, holders: u32) -> Settings {
@@ -75,6 +80,7 @@ pub(super) fn worst_case(limits: &Limits) -> Option<u64> {
     List::<SettingLine>::worst_case(count)?
         .checked_add(u64::from(limits.templates).checked_mul(2)?.checked_mul(u64::from(limits.documents.text_bytes))?)?
         .checked_add(List::<HeldRevision>::worst_case(1)?)?
+        .checked_add(List::<SettingsProposal>::worst_case(limits.settings.proposals)?)?
         .checked_add(u64::try_from(size_of::<Settings>()).ok()?)
 }
 pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {

@@ -472,7 +472,14 @@ pub(crate) fn row_owner(row: &Row) -> Option<&tasks::TaskRecord> {
 pub(crate) fn row_visible(core: &Core, party: u64, row: &Row) -> bool {
     match &row.value {
         Record::Tasks(tasks::Stored::PersonProposal(proposal) | tasks::Stored::DecidedProposal(proposal)) => {
-            core.people.role(party, proposal.project).is_some()
+            match proposal.action {
+                tasks::PersonAction::Settings { .. } => {
+                    party == proposal.proposer || core.people.role(party, people::DEPLOYMENT).is_some()
+                }
+                tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {
+                    core.people.role(party, proposal.project).is_some()
+                }
+            }
         }
         Record::Tasks(tasks::Stored::Ledger(ledger) | tasks::Stored::ClosedLedger(ledger)) => match ledger.funder {
             tasks::Funder::Period { project, .. } => core.people.role(party, project).is_some(),

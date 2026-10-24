@@ -90,7 +90,7 @@ pub(super) fn party(
         "one stale party acceptance"
     );
     work.push(Event::Tasks(tasks::Event::WithdrawPersonProposal {
-        reply_to: ReplyTo::new(request),
+        reply_to: Some(ReplyTo::new(request)),
         proposer: proposal.proposer,
         proposal: proposal.number,
     }));

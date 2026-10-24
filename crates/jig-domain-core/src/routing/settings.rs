@@ -57,47 +57,60 @@ pub(super) fn admitted(
         Some(_) if against != core.current.newest() => {
             people::Outcome::Refused(people::Refusal::Stale { newest: core.current.newest() })
         }
-        Some((Ok(change), room)) => decide(core, env, work, out, person, *change, room),
+        Some((Ok(change), room)) => {
+            match decide(core, env, work, out, s::Decider::Party(person), None, *change, room) {
+                Ok(revision) => people::Outcome::SettingsChanged { revision },
+                Err(why) => people::Outcome::Refused(why),
+            }
+        }
         Some((Err(failure), _)) => malformed(failure),
         None => people::Outcome::Refused(people::Refusal::NotOffered),
     };
     work.push(Event::People(people::Event::Decided { request, outcome }));
 }
-fn malformed(failure: s::Failure) -> people::Outcome {
-    people::Outcome::Refused(people::Refusal::NotWellFormed {
+pub(super) fn malformed(failure: s::Failure) -> people::Outcome {
+    people::Outcome::Refused(malformed_refusal(failure))
+}
+fn malformed_refusal(failure: s::Failure) -> people::Refusal {
+    people::Refusal::NotWellFormed {
         at: 0,
         why: people::Malformed::Settings { setting: failure.setting, fault: failure.fault },
-    })
+    }
 }
-fn decide(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the shared whole-set decision carries its decider and proposal identity"
+)]
+pub(super) fn decide(
     core: &mut Core,
     env: &Env<Limits>,
     work: &mut Queue<Event>,
     out: &mut Queue<Request>,
-    person: u64,
+    by: s::Decider,
+    proposal: Option<(people::Proposer, u32)>,
     change: s::Change,
     room: u32,
-) -> people::Outcome {
+) -> Result<u32, people::Refusal> {
     let previous = core.current.newest();
     if change.against != previous {
-        return people::Outcome::Refused(people::Refusal::Stale { newest: previous });
+        return Err(people::Refusal::Stale { newest: previous });
     }
     if !s::changes_current(&core.current, &change.items) {
-        return people::Outcome::Refused(people::Refusal::NotWellFormed {
-            at: 0,
-            why: people::Malformed::SettingsUnchanged,
-        });
+        return Err(people::Refusal::NotWellFormed { at: 0, why: people::Malformed::SettingsUnchanged });
+    }
+    if let Err(failure) = s::change_shape(&change.items, &env.limits) {
+        return Err(malformed_refusal(failure));
     }
     if let Err(failure) = s::check_change(&core.current, &change.items, &core.settings, &core.connectors, &env.limits) {
-        return malformed(failure);
+        return Err(malformed_refusal(failure));
     }
     let charters = s::check::changed_charters(&core.current, &change.items, &core.settings, &env.limits);
     let (tasks, more) = core.tasks.incompatible_charters(&charters, env.limits.tasks.circle);
     if !tasks.is_empty() || more != 0 {
-        return people::Outcome::Refused(people::Refusal::Full { revision: previous, tasks, more });
+        return Err(people::Refusal::Full { revision: previous, tasks, more });
     }
     let Some(number) = previous.checked_add(1) else {
-        return people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
     };
     let mut templates = false;
     let mut rules = false;
@@ -112,14 +125,8 @@ fn decide(
         }
     }
     let writes = s::apply(&mut core.current, &change.items, number);
-    core.current.head = s::Head {
-        number,
-        against: previous,
-        at: env.wall,
-        by: s::Decider::Party(person),
-        proposal: None,
-        moved: change.running == s::Running::Moves,
-    };
+    core.current.head =
+        s::Head { number, against: previous, at: env.wall, by, proposal, moved: change.running == s::Running::Moves };
     let revision = s::Revision { head: core.current.head.clone(), items: change.items };
     let (writes, oldest) = s::revision_writes(
         Some(revision),
@@ -127,19 +134,20 @@ fn decide(
         core.current.oldest,
         core.current.newest(),
         env.limits.settings.history,
-        room,
+        room.saturating_sub(s::withdrawal_writes(&env.limits).expect("withdrawal write bound")),
     );
     core.current.oldest = oldest;
     for write in writes.into_boxed() {
         out.push(Request::Write(write));
     }
+    withdraw_stale(core, env, out, proposal);
     core.tell_replaced_settings(env, rules, charters);
     if charters || rules {
         core.touch_deployment();
         core.touch_run_waits();
     }
     super::watch_marks::settings_revised(core, work, templates);
-    people::Outcome::SettingsChanged { revision: number }
+    Ok(number)
 }
 
 pub(super) fn room(limits: &Limits) -> Option<skein_lib::JournalRoom> {
@@ -148,4 +156,217 @@ pub(super) fn room(limits: &Limits) -> Option<skein_lib::JournalRoom> {
         writes: s::writes_worst_case(limits)?.checked_add(people)?,
         held: people.checked_add(limits.views.watchers.checked_mul(4)?)?,
     })
+}
+
+#[expect(clippy::too_many_arguments, reason = "one keyed proposal envelope and its held value")]
+pub(super) fn propose_start(
+    core: &mut Core,
+    env: &Env<Limits>,
+    work: &mut Queue<Event>,
+    reply_to: ReplyTo,
+    sign_in: u64,
+    key: [u8; 16],
+    digest: [u8; 32],
+    change: s::Proposed,
+) -> Requests {
+    assert!(core.proposed_input.is_none(), "one settings proposal admission");
+    let s::Proposed { against, items, reason } = change;
+    core.proposed_input = Some(if !s::changes_current(&core.current, &items) {
+        Err(people::Malformed::SettingsUnchanged)
+    } else if items.len() > usize::try_from(jig_domain_tasks::SETTINGS_ITEMS).expect("settings item bound") {
+        Err(people::Malformed::Settings {
+            setting: items.first().expect("past item bound").setting,
+            fault: s::Fault::Count,
+        })
+    } else {
+        match s::change_shape(&items, &env.limits) {
+            Ok(()) => Ok(Box::new(s::Proposal { against, items })),
+            Err(failure) => Err(people::Malformed::Settings { setting: failure.setting, fault: failure.fault }),
+        }
+    });
+    let result = super::people_routes::route_people(
+        core,
+        env,
+        work,
+        people::Event::Ask {
+            reply_to,
+            sign_in,
+            key,
+            models: Box::new([]),
+            ask: people::Ask::Propose {
+                project: people::DEPLOYMENT,
+                action: people::Action::Settings { against, digest },
+                reason,
+            },
+        },
+    );
+    drop(core.proposed_input.take());
+    result
+}
+
+pub(super) fn propose_admitted(
+    core: &mut Core,
+    env: &Env<Limits>,
+    work: &mut Queue<Event>,
+    request: Token,
+    person: u64,
+    against: u32,
+    reason: Box<[u8]>,
+) {
+    let result = proposal_check(core, env, against);
+    let change = match result {
+        Ok(change) => change,
+        Err(outcome) => {
+            work.push(Event::People(people::Event::Decided { request, outcome }));
+            return;
+        }
+    };
+    let Some(next) = core.counters.deployment().messages.checked_add(1) else {
+        return super::refusals::pool_refused(
+            work,
+            request,
+            people::Refusal::Limit { which: people::LimitKind::Arithmetic },
+        );
+    };
+    let Ok(number) = u32::try_from(next) else {
+        return super::refusals::pool_refused(
+            work,
+            request,
+            people::Refusal::Limit { which: people::LimitKind::Arithmetic },
+        );
+    };
+    let fresh = crate::fresh(&mut core.counters, crate::Family::Message).expect("proposal number preflighted");
+    assert!(fresh == u64::from(number), "same proposal sequence");
+    let heads = s::proposal_heads(&change.items);
+    assert!(core.settings_offering.is_none(), "one settings offering");
+    core.settings_offering = Some((request, person, number, s::Proposal { against, items: change.items }));
+    core.goal_routes
+        .insert(
+            request,
+            crate::GoalRoute::Offering { proposal: fresh, to: people::Role::Owner.number(), stubs: Box::new([]) },
+        )
+        .expect("one offering route");
+    work.push(Event::Tasks(jig_domain_tasks::Event::ProposePerson {
+        reply_to: ReplyTo::new(request),
+        proposal: jig_domain_tasks::PersonProposal {
+            number: fresh,
+            proposer: person,
+            project: people::DEPLOYMENT,
+            action: jig_domain_tasks::PersonAction::Settings { against, items: heads },
+            reason,
+            state: jig_domain_tasks::PersonProposalState::Pending { since: env.wall },
+        },
+    }));
+}
+fn proposal_check(core: &mut Core, env: &Env<Limits>, against: u32) -> Result<Box<s::Proposal>, people::Outcome> {
+    let input = core.proposed_input.take().ok_or(people::Outcome::Refused(people::Refusal::NotOffered))?;
+    if against != core.current.newest() {
+        return Err(people::Outcome::Refused(people::Refusal::Stale { newest: core.current.newest() }));
+    }
+    let change = match input {
+        Ok(change) => change,
+        Err(why) => return Err(people::Outcome::Refused(people::Refusal::NotWellFormed { at: 0, why })),
+    };
+    if change.against != against {
+        return Err(people::Outcome::Refused(people::Refusal::NotOffered));
+    }
+    if let Err(failure) = s::check_change(&core.current, &change.items, &core.settings, &core.connectors, &env.limits) {
+        return Err(malformed(failure));
+    }
+    let mut owner = false;
+    for holding in core.people.project_members(people::DEPLOYMENT).unwrap_or(&[]) {
+        owner |= holding.role == people::Role::Owner;
+    }
+    if !owner {
+        return Err(people::Outcome::Refused(people::Refusal::Authority {
+            lacking: people::Lack::Approver,
+            proposable: Some(people::Accepter::Nobody),
+        }));
+    }
+    if core.settings_proposals.len() >= env.limits.settings.proposals {
+        return Err(people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::SettingsProposals }));
+    }
+    Ok(change)
+}
+
+/// Revision changes and release startup share the exact durable withdrawal path.
+pub(crate) fn withdraw_stale(
+    core: &mut Core,
+    env: &Env<Limits>,
+    out: &mut Queue<Request>,
+    except: Option<(people::Proposer, u32)>,
+) {
+    let mut pending = skein_lib::List::with_capacity(env.limits.settings.proposals);
+    for (&key, _) in &core.settings_proposals {
+        if Some(key) != except {
+            pending.push(key).expect("bounded pending sets");
+        }
+    }
+    for (proposer, proposal) in pending.into_boxed() {
+        let person = match proposer {
+            people::Proposer::Party(person) => person,
+            people::Proposer::Task(_) => unreachable!("only parties propose settings"),
+        };
+        super::children::append_tasks(
+            core,
+            env,
+            jig_domain_tasks::Event::WithdrawPersonProposal {
+                reply_to: None,
+                proposer: person,
+                proposal: u64::from(proposal),
+            },
+            out,
+        );
+    }
+}
+
+/// Keep or erase the held set beside its task-owned proposal row.
+pub(super) fn proposal_saved(core: &mut Core, record: &jig_domain_tasks::Stored, out: &mut Queue<Request>) {
+    let row = match record {
+        jig_domain_tasks::Stored::PersonProposal(row) | jig_domain_tasks::Stored::DecidedProposal(row) => row,
+        jig_domain_tasks::Stored::Live(_)
+        | jig_domain_tasks::Stored::Ended(_)
+        | jig_domain_tasks::Stored::Activity(_)
+        | jig_domain_tasks::Stored::Milestone(_)
+        | jig_domain_tasks::Stored::Stub(_)
+        | jig_domain_tasks::Stored::Ledger(_)
+        | jig_domain_tasks::Stored::Writer(_)
+        | jig_domain_tasks::Stored::Pool(_)
+        | jig_domain_tasks::Stored::ClosedLedger(_)
+        | jig_domain_tasks::Stored::History(_)
+        | jig_domain_tasks::Stored::Result(_)
+        | jig_domain_tasks::Stored::EndedByParty(_)
+        | jig_domain_tasks::Stored::EndedByProject(_)
+        | jig_domain_tasks::Stored::EndedDelegate(_)
+        | jig_domain_tasks::Stored::Delegate(_)
+        | jig_domain_tasks::Stored::Update(_) => return,
+    };
+    if !row.action.is_settings() {
+        return;
+    }
+    let number = u32::try_from(row.number).expect("settings proposal fits key");
+    let key = (people::Proposer::Party(row.proposer), number);
+    match row.state {
+        jig_domain_tasks::PersonProposalState::Pending { .. } => {
+            let (_, proposer, offered, value) = core.settings_offering.take().expect("admitted held set");
+            assert!(proposer == row.proposer && offered == number, "same proposal set");
+            out.push(Request::Write(crate::Write::Save(crate::Record::Core(crate::CoreRecord::Settings(
+                crate::settings::Record::Proposal { proposer: key.0, proposal: number, value: value.clone() },
+            )))));
+            assert!(
+                core.settings_proposals.insert(key, value).expect("settings proposal bound").is_none(),
+                "fresh set"
+            );
+        }
+        jig_domain_tasks::PersonProposalState::Accepted { .. }
+        | jig_domain_tasks::PersonProposalState::SettingsAccepted { .. }
+        | jig_domain_tasks::PersonProposalState::Rejected { .. }
+        | jig_domain_tasks::PersonProposalState::Withdrawn { .. } => {
+            core.settings_proposals.remove(&key).expect("decided settings set");
+            out.push(Request::Write(crate::Write::Erase(crate::Key::Core(crate::CoreKey::Settings(
+                crate::settings::Key::Proposal { proposer: key.0, proposal: number },
+            )))));
+        }
+    }
+    core.touch_settings();
 }

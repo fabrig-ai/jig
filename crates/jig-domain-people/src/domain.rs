@@ -143,6 +143,13 @@ impl Domain {
     pub(super) fn party_pending(&self, id: Id<Pending>) -> Option<&PartyPending> {
         self.pending.get(id)?.party()
     }
+    /// The admitted ask retained for one root route, including an asynchronous lookup.
+    #[must_use]
+    pub fn pending_ask(&self, request: Token) -> Option<&Ask> {
+        let flight = self.party_pending(Id::from_token(request))?;
+        Some(&flight.ask)
+    }
+
     fn party_pending_mut(&mut self, id: Id<Pending>) -> Option<&mut PartyPending> {
         self.pending.get_mut(id)?.party_mut()
     }
@@ -1281,6 +1288,9 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
                 && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
                 && crate::amendment::valid(limits, amendment)
         }
+        Ask::Propose { project, action: crate::Action::Settings { .. }, reason } => {
+            *project == crate::DEPLOYMENT && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
+        }
         Ask::Withdraw { proposal, .. } => *proposal != 0,
         Ask::Say { task, words, .. } => {
             *task != 0 && !words.is_empty() && words.len() <= usize::try_from(limits.words).expect("u32 fits usize")
@@ -1302,8 +1312,9 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
                     }
                 }
         }
-        Ask::DecideProposal { proposer, proposal, decision, .. } => {
-            proposer.number() != 0
+        Ask::DecideProposal { proposer, proposal, decision, running, .. } => {
+            (running.is_none() || *decision == crate::ProposalDecision::Accept)
+                && proposer.number() != 0
                 && *proposal != 0
                 && match decision {
                     crate::ProposalDecision::Accept | crate::ProposalDecision::Pass => true,
@@ -1360,7 +1371,7 @@ pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
         | Ask::MakeProject { .. }
         | Ask::ChangeSettings { .. }
         | Ask::AccountChange { .. }
-        | Ask::Propose { action: crate::Action::Amend { .. }, .. } => LimitKind::Words,
+        | Ask::Propose { action: crate::Action::Amend { .. } | crate::Action::Settings { .. }, .. } => LimitKind::Words,
         Ask::Say { task, words, .. } => {
             if *task == 0 {
                 return Refusal::Unknown;
@@ -1385,7 +1396,10 @@ pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
             }
             if *revision == 0 { LimitKind::Revision } else { LimitKind::Words }
         }
-        Ask::DecideProposal { proposer, proposal, .. } => {
+        Ask::DecideProposal { proposer, proposal, decision, running, .. } => {
+            if running.is_some() && *decision != crate::ProposalDecision::Accept {
+                return Refusal::NotWellFormed { at: 0, why: crate::Malformed::Running };
+            }
             if proposer.number() == 0 || *proposal == 0 {
                 return Refusal::Unknown;
             }
@@ -2181,6 +2195,19 @@ pub fn application_part(domain: &mut Domain, env: &Env<Limits>, request: Token, 
 
 fn admission(domain: &Domain, person: u64, _project: u32, role: Option<Role>, ask: &Ask) -> Option<Refusal> {
     match ask {
+        Ask::Propose { project, action: crate::Action::Settings { .. }, .. } => {
+            if *project != crate::DEPLOYMENT {
+                return Some(Refusal::Unknown);
+            }
+            for (_, holdings) in &domain.roles {
+                for holding in &**holdings {
+                    if holding.person == person {
+                        return None;
+                    }
+                }
+            }
+            Some(Refusal::Role { held: None })
+        }
         Ask::ChangeSettings { .. } => {
             if role == Some(Role::Owner) {
                 None
