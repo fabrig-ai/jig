@@ -975,6 +975,12 @@ are entries of its own (section 9), which always wake it.
   wait in the inbox, in order, and are relayed as the run reads, as what
   its policy lets through while it runs is, never more relayed and
   unread than the run's inbox takes (engine.md, 7.1 and 7.4).
+- **Entries are read as messages are.** A proposal or an escalation
+  waiting for a task shows in its inbox as an entry (section 9), relayed
+  and read in order with its messages, and taking none of their room.
+  One decided while offered to a live run keeps its place in that run's
+  inbox until a turn's fence reaches it, so the core never relays more
+  unread than the run's inbox takes (engine.md, 7.4).
 - **Refused or unread, a message stays.** A message the run refused (too
   large, its inbox full, a name in use, or the run ending), or left
   unread (after the answer's fence, the last message it read), stays in
@@ -1131,6 +1137,15 @@ proposed, what an action needs, and what an acceptance funds.
   the proposal waits for them, however long. Passing a proposal up where
   nobody further may accept it is refused, saying there is no one
   further.
+- **A decided entry stays read.** A holder's run may decide an entry in
+  the turn that first reads it, as a model does: the decision commits
+  with its call, before the turn naming the entry as read. The entry
+  leaves the holder's inbox with the decision, but its number stays a
+  fence the run may name for the attempt it was offered to, until a
+  turn's fence reaches it or the attempt ends; the turn is admitted,
+  taking nothing more for it (8.2). Only an entry offered to that
+  attempt stays so: a fence naming one never offered is refused, as
+  before.
 - **Stalled** past its bound, undecided, a proposal or an escalation
   passes up to the next holder that covers it, and past the last, waits
   for the parties the policy names.

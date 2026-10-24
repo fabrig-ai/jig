@@ -658,8 +658,15 @@ the per-run charter routes by them.
   it acknowledges it. A host keeps each turn until it is acknowledged,
   and a run with too many unacknowledged turns waits (hosts.md, 6.4).
   Admission is whole: the tasks child validates the attempt, turn and
-  offered read-through before changing its spend; a refused turn
-  changes nothing, and a duplicate accepted turn changes nothing again.
+  offered read-through before changing its spend: the read-through names
+  a message offered to the attempt, still waiting or, for a proposal or
+  an escalation, decided since it was offered (tasks.md, section 9), and
+  none past the attempt's highest offer; a refused turn changes nothing,
+  and a duplicate accepted turn changes nothing again. The core keeps
+  the ids it offered an attempt with the run's proof until a turn's
+  fence reaches them or the run refuses them, so such a fence survives
+  the entry's decision and the core's restart, and they hold their room
+  in the run's inbox until then (7.4).
 - **The core never looks inside.** A turn is bytes of the agent's own
   conversation vocabulary, bounded, which a client's protocol layer
   renders. The core reads only its size, its spend, what it took and

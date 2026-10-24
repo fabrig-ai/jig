@@ -872,7 +872,9 @@ committed keep their ordinary handling.
   way. What a decision about a task names travels with it: a notice of
   a delegate held, and an escalation, carry the hold's revision
   (section 8). The run names the last it read with each turn and when it
-  waits.
+  waits. A proposal or an escalation relayed to a run and decided before
+  its turn commits, often by a call in that very turn, still ends read
+  when the turn names it (tasks.md, section 9).
 - **A grace asks the run to finish.** Jig keeps `FinishRequested { revision }`
   as a durable inbox kind, separately reserved from merged amendments. Its
   live message and its carried Start message translate to smith's
