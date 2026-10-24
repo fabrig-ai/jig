@@ -26,6 +26,7 @@ fn a_second_party_proposal_request_reads_the_original_committed_decision_after_r
             proposer,
             proposal,
             decision: people::ProposalDecision::Reject { reason: b"first choice".as_slice().into() },
+            running: None,
         },
     );
     let key = root::Key::Core(core::Key::Core(core::CoreKey::ProposalDecision { proposer, proposal }));
@@ -41,7 +42,13 @@ fn a_second_party_proposal_request_reads_the_original_committed_decision_after_r
         &mut world,
         sign_in,
         82,
-        people::Ask::DecideProposal { project: 1, proposer, proposal, decision: people::ProposalDecision::Accept },
+        people::Ask::DecideProposal {
+            project: 1,
+            proposer,
+            proposal,
+            decision: people::ProposalDecision::Accept,
+            running: None,
+        },
     );
     assert_eq!(
         world.people_answers.last(),
@@ -72,6 +79,7 @@ fn a_second_party_proposal_request_reads_the_original_committed_decision_after_r
                 proposer: maker,
                 proposal: number,
                 decision: people::ProposalDecision::Accept,
+                running: None,
             },
         );
         assert_eq!(

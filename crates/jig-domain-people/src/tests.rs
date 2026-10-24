@@ -1842,7 +1842,13 @@ fn a_proposal_makers_kind_is_kept_in_its_key_and_restored_answer() {
     for proposer in [Proposer::Task(7), Proposer::Party(7)] {
         let mut test = Test::new(LIMITS);
         test.member();
-        let ask = Ask::DecideProposal { project: 1, proposer, proposal: 8, decision: ProposalDecision::Accept };
+        let ask = Ask::DecideProposal {
+            project: 1,
+            proposer,
+            proposal: 8,
+            decision: ProposalDecision::Accept,
+            running: None,
+        };
         let request = route(&test.request(10, 1, ask.clone()));
         let outcome = Outcome::ProposalDecided {
             proposer,
@@ -1858,8 +1864,13 @@ fn a_proposal_makers_kind_is_kept_in_its_key_and_restored_answer() {
             Proposer::Task(number) => Proposer::Party(number),
             Proposer::Party(number) => Proposer::Task(number),
         };
-        let other_ask =
-            Ask::DecideProposal { project: 1, proposer: other, proposal: 8, decision: ProposalDecision::Accept };
+        let other_ask = Ask::DecideProposal {
+            project: 1,
+            proposer: other,
+            proposal: 8,
+            decision: ProposalDecision::Accept,
+            running: None,
+        };
         assert_eq!(reply(&test.request(10, 1, other_ask.clone())), Reply::Refused(Refusal::KeyConflict));
         test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
         for record in [
@@ -2360,3 +2371,5 @@ fn whose_reads_a_service_and_answers_not_ready_before_restoration() {
 fn whose_destination() -> ReplyTo {
     ReplyTo::new(Token::new(777))
 }
+
+mod settings_proposals;

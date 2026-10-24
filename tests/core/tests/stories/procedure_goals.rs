@@ -166,6 +166,7 @@ fn a_procedure_goal_proposal_restores_and_accepts_the_original_executor() {
             proposer: people::Proposer::Party(row.proposer),
             proposal,
             decision: people::ProposalDecision::Accept,
+            running: None,
         },
     );
     assert_eq!(
@@ -187,6 +188,7 @@ fn a_procedure_goal_proposal_restores_and_accepts_the_original_executor() {
             proposer: people::Proposer::Party(row.proposer),
             proposal,
             decision: people::ProposalDecision::Accept,
+            running: None,
         },
     );
     assert!(

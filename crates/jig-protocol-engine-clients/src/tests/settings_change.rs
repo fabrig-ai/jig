@@ -163,3 +163,124 @@ fn settings_answers_and_each_fault_keep_their_facts() {
         }
     }
 }
+
+fn proposal_ask() -> w::Ask {
+    let w::Ask::ChangeSettings(value) = ask() else { panic!("settings fixture") };
+    let value = value.into_parts();
+    let limits = f::wire();
+    w::Ask::Propose(
+        w::Propose::new(
+            &limits,
+            w::ProposeParts {
+                project: 0,
+                action: w::ProposeAction::Settings(
+                    w::ProposeSettings::new(
+                        &limits,
+                        w::ProposeSettingsParts { against: value.against, items: value.items },
+                    )
+                    .expect("proposed set"),
+                ),
+                reason: b"review this set".as_slice().into(),
+            },
+        )
+        .expect("proposal ask"),
+    )
+}
+#[test]
+fn settings_proposals_reach_the_core_with_the_whole_set_and_exact_digest() {
+    let mut env = f::env();
+    env.limits.message_bytes = 8192;
+    env.limits.wire.keyed_request = 8192;
+    let mut exchange = Exchange::with_env(env);
+    exchange.component.settings.models[0].name = b"model".as_slice().into();
+    exchange.component.settings.models[1].name = b"other".as_slice().into();
+    let ask = proposal_ask();
+    let bytes = f::encode_ask(&ask);
+    let digest: [u8; 32] = crate::sign_in::digest(&bytes).expose().try_into().expect("digest");
+    assert_eq!(
+        translate::asks::ask(ask, &exchange.component.settings.models, &f::wire()),
+        Ok(p::Ask::Propose {
+            project: 0,
+            action: p::Action::Settings { against: 5, digest },
+            reason: b"review this set".as_slice().into()
+        })
+    );
+    exchange.send(crate::Message::Request(proposal_envelope(bytes, &exchange.env.limits.wire)));
+    exchange.authenticate();
+    let Some(Request::Core(event)) = exchange.out.pop() else { panic!("core proposal") };
+    let core::Event::ProposeSettings { sign_in, digest: held, change, .. } = *event else {
+        panic!("settings proposal entrance")
+    };
+    assert_eq!((sign_in, held, change.against, change.items.len()), (41, digest, 5, 4));
+    assert_eq!(change.reason.as_ref(), b"review this set");
+}
+#[test]
+fn accepting_settings_translates_both_running_choices() {
+    let limits = f::wire();
+    for (wire, expected) in [(w::Running::Stays, p::Running::Stays), (w::Running::Moves, p::Running::Moves)] {
+        let value = w::Ask::Decide(
+            w::Decide::new(
+                &limits,
+                w::DecideParts {
+                    project: 0,
+                    on: w::DecideOn::Proposal(
+                        w::DecideProposal::new(
+                            &limits,
+                            w::DecideProposalParts {
+                                proposal: w::ProposalKey::new(
+                                    &limits,
+                                    w::ProposalKeyParts {
+                                        proposer: w::Proposer::Party(
+                                            w::ProposerParty::new(&limits, w::ProposerPartyParts { value: 9 })
+                                                .expect("proposer"),
+                                        ),
+                                        number: 7,
+                                    },
+                                )
+                                .expect("proposal key"),
+                                decision: w::Decision::Accepted,
+                                running: Some(wire),
+                            },
+                        )
+                        .expect("decision"),
+                    ),
+                },
+            )
+            .expect("ask"),
+        );
+        assert_eq!(
+            translate::asks::ask(value, &f::models(), &limits),
+            Ok(p::Ask::DecideProposal {
+                project: 0,
+                proposer: p::Proposer::Party(9),
+                proposal: 7,
+                decision: p::ProposalDecision::Accept,
+                running: Some(expected)
+            })
+        );
+    }
+}
+#[test]
+fn unknown_models_in_settings_proposals_are_named_before_decoding_the_set() {
+    let mut env = f::env();
+    env.limits.message_bytes = 8192;
+    env.limits.wire.keyed_request = 8192;
+    let mut exchange = Exchange::with_env(env);
+    let bytes = proposal_envelope(f::encode_ask(&proposal_ask()), &exchange.env.limits.wire);
+    let owner = exchange.send(crate::Message::Request(bytes));
+    exchange.authenticate();
+    assert!(exchange.out.is_empty());
+    let w::Final::Refused(value) = exchange.final_answer(owner) else { panic!("named model refusal") };
+    let w::Refusal::Llm(refusal) = value.refusal() else { panic!("LLM refusal") };
+    assert_eq!(refusal.model(), b"model");
+    assert_eq!(*refusal.why(), w::LlmWhy::Unconfigured);
+}
+
+fn proposal_envelope(request: Box<[u8]>, limits: &w::Limits) -> Box<[u8]> {
+    let keyed =
+        w::Keyed::new(limits, w::KeyedParts { key: [5; 16], owner: w::Owner::Jig, version: 19, request, value: None })
+            .expect("whole proposal envelope");
+    let mut writer = skein_lib::Writer::new(usize::try_from(keyed.measure()).expect("wire size"));
+    keyed.encode(&mut writer).expect("measured envelope");
+    writer.finish()
+}

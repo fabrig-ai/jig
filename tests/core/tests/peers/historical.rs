@@ -55,6 +55,7 @@ fn a_second_authenticated_decider_reads_the_first_task_proposal_choice_and_clock
             proposer: original.proposer,
             proposal: original.proposal,
             decision: people::ProposalDecision::Reject { reason: b"second choice".as_slice().into() },
+            running: None,
         },
     })));
     assert_eq!(

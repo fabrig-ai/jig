@@ -133,6 +133,7 @@ pub fn limit_kind_values() -> Box<[domain::LimitKind]> {
         domain::LimitKind::HolderAccounts,
         domain::LimitKind::Sources,
         domain::LimitKind::SignIns,
+        domain::LimitKind::SettingsProposals,
     ])
 }
 pub fn refusal_values() -> Box<[domain::Refusal]> {
@@ -236,6 +237,7 @@ pub fn answered(outcome: domain::Outcome) -> domain::Stored {
             proposer: domain::Proposer::Party(2),
             proposal: 3,
             decision: domain::ProposalDecision::Reject { reason: Box::from(b"reject".as_slice()) },
+            running: None,
         }),
         outcome,
         at: Wall::from_nanos(19),

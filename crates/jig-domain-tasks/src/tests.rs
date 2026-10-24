@@ -49,3 +49,5 @@ mod payer;
 mod account;
 
 mod waits;
+
+mod settings_proposals;

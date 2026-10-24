@@ -243,6 +243,7 @@ fn accepted_proposal(world: &mut World) {
             proposer: jig_domain_people::Proposer::Task(REQUESTER),
             proposal: ACCEPTED_PROPOSAL,
             decision: jig_domain_people::ProposalDecision::Accept,
+            running: None,
         },
     );
     let Some(jig_domain_people::Reply::Outcome(jig_domain_people::Outcome::ProposalDecided {

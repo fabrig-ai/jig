@@ -161,6 +161,7 @@ impl Peers {
                         } else {
                             people::ProposalDecision::Reject { reason: b"not now".as_slice().into() }
                         },
+                        running: None,
                     },
                 };
                 root::Event::Core(core::Event::People(people::Event::Ask {
@@ -576,7 +577,7 @@ fn party_refusal(why: people::Refusal) -> parties::Refusal {
         people::Refusal::Stale { .. }
         | people::Refusal::Full { .. }
         | people::Refusal::NotWellFormed {
-            why: people::Malformed::Settings { .. } | people::Malformed::SettingsUnchanged,
+            why: people::Malformed::Settings { .. } | people::Malformed::SettingsUnchanged | people::Malformed::Running,
             ..
         }
         | people::Refusal::NameTaken
@@ -628,6 +629,7 @@ fn party_limit(value: people::LimitKind) -> parties::LimitKind {
         people::LimitKind::Arithmetic => parties::LimitKind::Arithmetic,
         people::LimitKind::Duplicate => parties::LimitKind::Duplicate,
         people::LimitKind::Empty => parties::LimitKind::Empty,
+        people::LimitKind::SettingsProposals => parties::LimitKind::SettingsProposals,
         people::LimitKind::Batch => parties::LimitKind::Batch,
         people::LimitKind::ProjectLiveTasks => parties::LimitKind::ProjectLiveTasks,
         people::LimitKind::LiveTasks => parties::LimitKind::LiveTasks,

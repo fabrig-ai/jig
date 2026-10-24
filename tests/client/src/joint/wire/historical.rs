@@ -201,7 +201,7 @@ fn person_proposal(
             tasks::PersonProposalState::Pending { since } => {
                 client::OwnerPersonProposalState::Pending { since: *since }
             }
-            tasks::PersonProposalState::Accepted { by } => {
+            tasks::PersonProposalState::Accepted { by } | tasks::PersonProposalState::SettingsAccepted { by, .. } => {
                 client::OwnerPersonProposalState::Accepted { by: results::requester(*by) }
             }
             tasks::PersonProposalState::Rejected { by, reason, message, at } => {
@@ -230,6 +230,7 @@ fn proposal_decision(value: jig_domain_core::ProposalDecisionRecord) -> client::
             tasks::ProposalKind::Amend => client::OwnerMessageProposalKind::Amend,
             tasks::ProposalKind::Widen => client::OwnerMessageProposalKind::Widen,
             tasks::ProposalKind::Release => client::OwnerMessageProposalKind::Release,
+            tasks::ProposalKind::Settings => client::OwnerMessageProposalKind::Settings,
         },
         by: value.by,
         at: value.at,

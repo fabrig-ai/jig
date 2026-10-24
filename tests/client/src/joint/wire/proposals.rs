@@ -26,6 +26,7 @@ pub fn action(
     models: &[jig_domain_core::Model],
 ) -> Result<client::OwnerProposalAction, owner::Invalid> {
     Ok(match value {
+        documents::ProposalAction::Settings { .. } => return Err(owner::Invalid::Settings),
         documents::ProposalAction::Batch(values) => {
             client::OwnerProposalAction::Batch(owner::list(values, limits, |value| {
                 history::proposed(value, limits, models)

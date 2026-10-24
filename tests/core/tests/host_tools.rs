@@ -241,6 +241,7 @@ fn accept(world: &mut World, proposer: jig_domain_people::Proposer, proposal: u6
             proposer,
             proposal,
             decision: jig_domain_people::ProposalDecision::Accept,
+            running: None,
         },
     );
 }

@@ -249,6 +249,7 @@ fn inbox_across_projects_stories() {
             proposer: people::Proposer::Party(1),
             proposal: proposals[0],
             decision: people::ProposalDecision::Reject { reason: b"later".as_slice().into() },
+            running: None,
         },
     );
     a_proposal_decided_in_one_project_leaves_the_inbox_across_projects(&world, proposals[1]);

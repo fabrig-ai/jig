@@ -423,6 +423,7 @@ fn decide_proposal_case(limits: &w::Limits) -> (w::Ask, people::Ask) {
             proposer: p::Proposer::Party(u64::MAX),
             proposal: 5,
             decision: p::ProposalDecision::Accept,
+            running: None,
         },
     )
 }

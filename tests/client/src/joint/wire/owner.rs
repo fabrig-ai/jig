@@ -9,6 +9,8 @@ use skein_lib::List;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Invalid {
+    /// Settings use the real wire world, as their read selectors do.
+    Settings,
     TooLarge,
     /// A model or effort index does not name a configured choice.
     Llm,

@@ -648,7 +648,13 @@ fn offered_proposal_decisions_are_made_at_the_named_holder_and_another_holder_is
                 &mut core,
                 &limits,
                 1,
-                people::Ask::DecideProposal { project: 1, proposer: Proposer::Task(2), proposal: 10, decision: choice }
+                people::Ask::DecideProposal {
+                    project: 1,
+                    proposer: Proposer::Task(2),
+                    proposal: 10,
+                    decision: choice,
+                    running: None
+                }
             ),
             people::Outcome::ProposalDecided {
                 proposer: Proposer::Task(2),
@@ -825,6 +831,7 @@ fn keyed_proposal(core: &mut Core, limits: &Limits, key: u8, proposer: Proposer)
                 proposer,
                 proposal: 10,
                 decision: people::ProposalDecision::Reject { reason: b"no".as_slice().into() },
+                running: None,
             },
         }),
     );

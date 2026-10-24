@@ -71,6 +71,7 @@ pub fn kind(value: &tasks::MessageKind, limits: &Limits) -> Result<client::Owner
                 tasks::ProposalKind::Amend => client::OwnerMessageProposalKind::Amend,
                 tasks::ProposalKind::Widen => client::OwnerMessageProposalKind::Widen,
                 tasks::ProposalKind::Release => client::OwnerMessageProposalKind::Release,
+                tasks::ProposalKind::Settings => client::OwnerMessageProposalKind::Settings,
             },
         },
         tasks::MessageKind::PersonStalled { task } => client::OwnerMessageKind::PersonStalled { task: *task },

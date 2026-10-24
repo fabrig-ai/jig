@@ -883,7 +883,9 @@ fn inbox_context_memory_prices_every_reserved_container_and_complete_document_en
     // 16 document lines × 16 templates × 8 bytes adds 2,048 to 987,136.
     const TEMPLATE_ENVELOPES: u64 = 989_184;
     // A settings inventory document is priced beside every document (engine.md 17.7).
-    const SETTINGS_DOCUMENT: u64 = 5_152;
+    // Four pending inventory heads add 96 bytes; the two value sets and
+    // bounded review/item-head carriers add 115,248 bytes at this fixture.
+    const SETTINGS_DOCUMENT: u64 = 120_496;
 
     let (mut core, limits) = fixture();
     waiting(

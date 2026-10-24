@@ -519,6 +519,7 @@ impl World {
                 proposer: people::Proposer::Task(self.call_key(1).task),
                 proposal,
                 decision,
+                running: None,
             },
         })));
     }

@@ -371,7 +371,7 @@ fn a_carried_value_is_kept_before_the_application_sees_its_request() {
 }
 
 #[test]
-fn settings_proposals_and_running_choices_are_not_served_until_task_e() {
+fn settings_proposals_and_running_choices_reach_the_core() {
     let limits = fixtures::limits().wire;
     let propose = w::Ask::Propose(
         w::Propose::new(
@@ -424,13 +424,15 @@ fn settings_proposals_and_running_choices_are_not_served_until_task_e() {
     let bearer = fixtures::signed_in(&mut peer);
     for ask in asks {
         let socket = peer.post(b"/jig/v1/request", keyed([71; 16], &ask), Some(&bearer));
-        assert!(peer.take_core().is_none(), "task E must own settings proposal admission");
-        let answer = w::KeyedAnswer::decode(
-            &limits,
-            &mut skein_lib::Reader::new(peer.answered(socket).expect("not-served answer")),
-        )
-        .expect("wire answer");
-        let w::KeyedAnswer::NotServed(value) = answer else { panic!("not-served") };
-        assert_eq!(value.owner(), &w::Owner::Jig);
+        let event = peer.take_core().expect("settings requests reach the core");
+        let reply_to = if let core::Event::ProposeSettings { reply_to, .. } = event {
+            reply_to
+        } else {
+            let core::Event::People(people::Event::Ask { reply_to, .. }) = event else { panic!("settings decision") };
+            reply_to
+        };
+        assert!(peer.answered(socket).is_none(), "the answer waits for the core decision");
+        peer.answer_request(reply_to, people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Unknown)));
+        assert!(peer.answered(socket).is_some(), "the released answer closes this exchange");
     }
 }

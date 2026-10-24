@@ -807,6 +807,7 @@ impl Application for Ops {
                             proposer: people::Proposer::Task(row.number),
                             proposal: proposal.number,
                             decision: people::ProposalDecision::Accept,
+                            running: None,
                         },
                     }))));
                 }

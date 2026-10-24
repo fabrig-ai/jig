@@ -805,6 +805,7 @@ impl World {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "the world dispatches every child output to its scripted owner")]
     pub fn deliver(&mut self) {
         for request in std::mem::take(&mut self.pending) {
             match request {
@@ -831,8 +832,12 @@ impl World {
                 Request::WriterWaiting { reply_to, resource, .. } => {
                     self.reply(reply_to, Reply::WriterWaiting(resource));
                 }
+                Request::PersonProposalDecided { reply_to, .. } => {
+                    if let Some(reply_to) = reply_to {
+                        self.reply(reply_to, Reply::Done);
+                    }
+                }
                 Request::PersonProposed { reply_to, .. }
-                | Request::PersonProposalDecided { reply_to, .. }
                 | Request::Sent { reply_to, .. }
                 | Request::Done { reply_to }
                 | Request::ProposalDecided { reply_to, .. } => self.reply(reply_to, Reply::Done),

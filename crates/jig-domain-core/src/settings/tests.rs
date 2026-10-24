@@ -277,3 +277,47 @@ fn zero_numbered_edits_and_repeated_settings_are_malformed() {
         Err(Failure { setting, fault: Fault::Shape })
     );
 }
+
+#[test]
+fn current_lookup_keeps_each_kinds_default_change_and_removal_origin() {
+    let mut config = config(1);
+    config.defaults.templates = Box::new([template()]);
+    config.defaults.policies = Map::with_capacity(1);
+    config.defaults.policies.insert(1, config.seed_projects[0].policy.clone()).unwrap();
+    let mut current = Current::new(config.defaults, &limits());
+    for setting in [Setting::Charter(1), Setting::Template(1), Setting::Policy(1), Setting::Rules] {
+        let default = current.value(setting).unwrap().clone();
+        assert_eq!(current.lookup(setting), (Some(&default), Some((false, 1))));
+        current.changes.insert(setting, Changed { value: Some(default.clone()), revision: 2 }).unwrap();
+        assert_eq!(current.lookup(setting), (Some(&default), Some((true, 2))));
+        current.changes.insert(setting, Changed { value: None, revision: 3 }).unwrap();
+        assert_eq!(current.lookup(setting), (None, Some((true, 3))));
+        current.changes.remove(&setting);
+        assert_eq!(current.lookup(setting), (Some(&default), Some((false, 1))));
+    }
+    assert_eq!(current.lookup(Setting::Template(999)), (None, None));
+}
+
+#[test]
+fn restoring_settings_proposals_requires_the_deployment_scope_without_a_project_policy() {
+    let (mut core, _) = crate::tests::core();
+    core.counters.deployment.messages = 1;
+    core.counters.deployment.people = 1;
+    let mut row = jig_domain_tasks::PersonProposal {
+        number: 1,
+        proposer: 1,
+        project: jig_domain_people::DEPLOYMENT,
+        action: jig_domain_tasks::PersonAction::Settings {
+            against: 1,
+            items: Box::new([jig_domain_tasks::SettingHead {
+                setting: jig_domain_tasks::Setting::Template(1),
+                edit: jig_domain_tasks::SettingEdit::Removed,
+            }]),
+        },
+        reason: b"review".as_slice().into(),
+        state: jig_domain_tasks::PersonProposalState::Pending { since: Wall::EPOCH },
+    };
+    assert!(core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row.clone()))));
+    row.project = 1;
+    assert!(!core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row))));
+}

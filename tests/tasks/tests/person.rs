@@ -304,6 +304,7 @@ fn reject_goal_proposal(world: &mut World, number: u64) {
             by: Party::Person(10),
             message: Some(number + 10),
             decision: tasks::ProposalDecision::Reject { reason: Box::new([1]) },
+            revision: None,
         }),
         Reply::Done
     );

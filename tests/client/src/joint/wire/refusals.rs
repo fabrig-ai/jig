@@ -36,6 +36,7 @@ pub fn refusal(value: people::Refusal) -> Result<client::Refusal, super::owner::
                     })
                 }
                 people::Malformed::SettingsUnchanged => client::Malformed::SettingsUnchanged,
+                people::Malformed::Running => client::Malformed::Running,
                 people::Malformed::Name(rule) => client::Malformed::Name(name_rule(rule)),
                 people::Malformed::AsAllowedTwice => client::Malformed::TwoAsAllowed,
                 people::Malformed::EndedBy => client::Malformed::EndedBy,
@@ -163,6 +164,7 @@ pub fn limit(value: people::LimitKind) -> client::AdmissionLimit {
         people::LimitKind::HolderAccounts => client::AdmissionLimit::HolderAccounts,
         people::LimitKind::Sources => client::AdmissionLimit::Sources,
         people::LimitKind::SignIns => client::AdmissionLimit::SignIns,
+        people::LimitKind::SettingsProposals => client::AdmissionLimit::SettingsProposals,
     }
 }
 

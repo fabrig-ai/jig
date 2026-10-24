@@ -1391,3 +1391,5 @@ fn project_asks_answers_and_name_refusals_round_trip() {
         people_round_trip(fixtures::people_outcomes::answered(Outcome::Refused(why)));
     }
 }
+
+mod settings_proposals;
