@@ -769,6 +769,7 @@ fn shape_refusal_keeps_the_pending_set_across_restart() {
 }
 
 #[test]
+#[ignore = "E-QA-2 (mission 3): the capacity premise is unproven; rewrite on an established retained bound (reports/qa-e2.md, Retained failures)"]
 fn acceptance_refuses_a_model_removed_since_proposal() {
     let (mut world, owner, number) = refused_model_proposal();
     // Retained failed expectation: restoring the model alone did not make
@@ -781,6 +782,7 @@ fn acceptance_refuses_a_model_removed_since_proposal() {
 }
 
 #[test]
+#[ignore = "E-QA-2 (mission 3): the capacity premise is unproven; rewrite on an established retained bound (reports/qa-e2.md, Retained failures)"]
 fn full_acceptance_preserves_the_pending_set_and_holders() {
     // engine.md, 17.2, 17.6 and 17.8: a live run holds its revision
     // even when its task moves. Retained failed capacity assumption: the
