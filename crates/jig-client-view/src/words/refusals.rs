@@ -220,6 +220,7 @@ impl Words {
             AdmissionLimit::Sources => JigPhrase::EngineLimitSources,
             AdmissionLimit::Projects => JigPhrase::EngineLimitProjects,
             AdmissionLimit::SignIns => JigPhrase::EngineLimitSignIns,
+            AdmissionLimit::SettingsProposals => JigPhrase::EngineLimitSettingsProposals,
         };
         self.text(b, phrase, &[]);
     }

@@ -9,7 +9,7 @@ pub(super) fn refusal(value: people::Refusal) -> application::Refusal {
         | people::Refusal::Stale { .. }
         | people::Refusal::Full { .. }
         | people::Refusal::NotWellFormed {
-            why: people::Malformed::Settings { .. } | people::Malformed::SettingsUnchanged,
+            why: people::Malformed::Settings { .. } | people::Malformed::SettingsUnchanged | people::Malformed::Running,
             ..
         }
         | people::Refusal::NameTaken
@@ -134,6 +134,7 @@ pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
         | people::LimitKind::Accounts
         | people::LimitKind::HolderAccounts
         | people::LimitKind::Sources
+        | people::LimitKind::SettingsProposals
         | people::LimitKind::SignIns => unreachable!("an application asks for no account"),
     }
 }

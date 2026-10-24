@@ -108,11 +108,27 @@ impl OwnerHistorical {
                 self.key == ObjectKey::Task(document.chip.task) && result.task.task == document.chip.task
             }
             OwnerHistoricalValue::Proposal(proposal) => {
-                self.key
-                    == ObjectKey::Proposal(ProposalKey {
-                        proposer: Proposer::Task(proposal.proposer),
-                        number: proposal.number,
-                    })
+                let proposer = match proposal.action {
+                    super::OwnerRetainedAction::Settings(_) => {
+                        return self.key
+                            == ObjectKey::Proposal(ProposalKey {
+                                proposer: Proposer::Party(proposal.proposer),
+                                number: proposal.number,
+                            })
+                            || self.key
+                                == ObjectKey::Proposal(ProposalKey {
+                                    proposer: Proposer::Task(proposal.proposer),
+                                    number: proposal.number,
+                                });
+                    }
+                    super::OwnerRetainedAction::Batch(_)
+                    | super::OwnerRetainedAction::Effect { .. }
+                    | super::OwnerRetainedAction::ProcedureEffect { .. }
+                    | super::OwnerRetainedAction::Amend { .. }
+                    | super::OwnerRetainedAction::Widen { .. }
+                    | super::OwnerRetainedAction::Release { .. } => Proposer::Task(proposal.proposer),
+                };
+                self.key == ObjectKey::Proposal(ProposalKey { proposer, number: proposal.number })
             }
             OwnerHistoricalValue::PersonProposal { proposal, decision } => {
                 let key = ProposalKey { proposer: Proposer::Party(proposal.proposer), number: proposal.number };

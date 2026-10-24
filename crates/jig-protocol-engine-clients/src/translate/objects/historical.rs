@@ -63,7 +63,16 @@ pub fn retained_action(
     limits: &w::Limits,
 ) -> Result<w::OwnerRetainedAction, w::Problem> {
     Ok(match value {
-        // task E: add the retained settings action with the accepted revision when the domain produces it.
+        d::RetainedAction::Settings { against, items, made } => {
+            w::OwnerRetainedAction::Settings(w::OwnerRetainedActionSettings::new(
+                limits,
+                w::OwnerRetainedActionSettingsParts {
+                    against: *against,
+                    items: super::super::settings::item_heads(items, limits)?,
+                    made: *made,
+                },
+            )?)
+        }
         d::RetainedAction::Batch(rows) => {
             let mut copied = List::with_capacity(rows.len());
             for row in rows {
@@ -297,7 +306,7 @@ pub fn person_proposal(
                         w::OwnerPersonProposalStatePendingParts { since: since.as_nanos() },
                     )?)
                 }
-                t::PersonProposalState::Accepted { by } => {
+                t::PersonProposalState::Accepted { by } | t::PersonProposalState::SettingsAccepted { by, .. } => {
                     w::OwnerPersonProposalState::Accepted(w::OwnerPersonProposalStateAccepted::new(
                         limits,
                         w::OwnerPersonProposalStateAcceptedParts { by: owner::requester(*by, limits)? },
@@ -316,5 +325,44 @@ pub fn person_proposal(
                 }
             },
         },
+    )
+}
+
+pub(crate) fn settings_history(
+    models: &[crate::Model],
+    proposal: &t::PersonProposal,
+    limits: &w::Limits,
+) -> Result<w::OwnerProposalHistory, w::Problem> {
+    let (against, items) = match &proposal.action {
+        t::PersonAction::Settings { against, items } => (*against, d::settings_heads(items)),
+        t::PersonAction::Batch(_) | t::PersonAction::Amend { .. } => unreachable!("settings history selected"),
+    };
+    let (state, made) = match &proposal.state {
+        t::PersonProposalState::Pending { since } => (
+            d::ProposalHistoryState::Pending(d::ProposalWaiting {
+                holder: t::ProposalHolder::Policy { project: 0, kind: t::ProposalKind::Settings },
+                since: *since,
+            }),
+            None,
+        ),
+        t::PersonProposalState::SettingsAccepted { by, revision } => {
+            (d::ProposalHistoryState::Accepted { by: *by }, Some(*revision))
+        }
+        t::PersonProposalState::Accepted { .. } => unreachable!("settings acceptance records its revision"),
+        t::PersonProposalState::Rejected { by, reason, .. } => {
+            (d::ProposalHistoryState::Rejected { by: *by, reason: d::Text { bytes: reason.clone(), cut: false } }, None)
+        }
+        t::PersonProposalState::Withdrawn { .. } => (d::ProposalHistoryState::Withdrawn, None),
+    };
+    proposal_history(
+        models,
+        &d::ProposalHistory {
+            number: proposal.number,
+            proposer: proposal.proposer,
+            as_holder: false,
+            action: d::RetainedAction::Settings { against, items, made },
+            state,
+        },
+        limits,
     )
 }

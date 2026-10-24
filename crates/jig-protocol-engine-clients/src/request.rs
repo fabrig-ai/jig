@@ -99,17 +99,45 @@ impl Component {
     ) {
         let ask = match w::Ask::decode(&env.limits.wire, &mut skein_lib::Reader::new(&keyed.request)) {
             Ok(value) => {
-                if settings_not_served(&value) {
-                    // task E: settings proposals and decisions carrying the running-work choice.
-                    let answer = w::KeyedAnswer::NotServed(crate::served::not_served(
-                        &self.settings,
-                        w::Owner::Jig,
-                        &env.limits.wire,
-                    ));
-                    self.respond(env, exchange, routes::encoded(&answer));
-                    return;
-                }
                 let value = match value {
+                    w::Ask::Propose(value)
+                        if match value.action() {
+                            w::ProposeAction::Settings(_) => true,
+                            w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => false,
+                        } =>
+                    {
+                        if keyed.value.is_some() {
+                            self.not_a_record(env, owner);
+                            return;
+                        }
+                        if let Ok(Some(answer)) = crate::translate::llm::refused(
+                            &w::Ask::Propose(value.clone()),
+                            &self.settings.models,
+                            &env.limits.wire,
+                        ) {
+                            self.respond(env, exchange, routes::encoded(&answer));
+                            return;
+                        }
+                        let Ok(change) =
+                            crate::translate::settings::proposed(value, &self.settings.models, &env.limits.wire)
+                        else {
+                            self.not_a_record(env, owner);
+                            return;
+                        };
+                        let digest = sign_in::digest(&keyed.request).expose().try_into().expect("32-byte digest");
+                        self.pending
+                            .exchanges
+                            .insert(exchange, Waiting::Ask { sign_in, family: None, version: keyed.version })
+                            .expect("released slot");
+                        out.push(Request::Core(Box::new(core::Event::ProposeSettings {
+                            reply_to: ReplyTo::new(exchange),
+                            sign_in,
+                            key: keyed.key,
+                            digest,
+                            change: Box::new(change),
+                        })));
+                        return;
+                    }
                     w::Ask::ChangeSettings(value) => {
                         if keyed.value.is_some() {
                             self.not_a_record(env, owner);
@@ -365,46 +393,6 @@ fn carried_bound(ask: &w::Ask, key_bytes: u32, moved_bytes: u64, redirect_bytes:
         | w::AccountChange::Written(_) => 0,
     }
 }
-
-// task E: remove this admission guard when the people/core proposal vocabulary lands.
-fn settings_not_served(ask: &w::Ask) -> bool {
-    match ask {
-        w::Ask::Propose(value) => match value.action() {
-            w::ProposeAction::Settings(_) => true,
-            w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => false,
-        },
-        w::Ask::Decide(value) => match value.on() {
-            w::DecideOn::Proposal(value) => value.running().is_some(),
-            w::DecideOn::Escalation(_) => false,
-        },
-        w::Ask::AccountChange(_)
-        | w::Ask::Amend(_)
-        | w::Ask::Answer(_)
-        | w::Ask::Cancel(_)
-        | w::Ask::ChangePolicy(_)
-        | w::Ask::Compound(_)
-        | w::Ask::Create(_)
-        | w::Ask::DeleteNote(_)
-        | w::Ask::EditNote(_)
-        | w::Ask::HandBack(_)
-        | w::Ask::MakeProject(_)
-        | w::Ask::MakeService(_)
-        | w::Ask::Message(_)
-        | w::Ask::MoveTask(_)
-        | w::Ask::Release(_)
-        | w::Ask::Rename(_)
-        | w::Ask::Seen(_)
-        | w::Ask::SetPool(_)
-        | w::Ask::SetRoles(_)
-        | w::Ask::SignIn(_)
-        | w::Ask::SignOut(_)
-        | w::Ask::Stop(_)
-        | w::Ask::Take(_)
-        | w::Ask::Withdraw(_)
-        | w::Ask::ChangeSettings(_) => false,
-    }
-}
-
 /// The pasted address is the sole jig value held without a durable carry.
 fn held_address(ask: &people::Ask) -> bool {
     match ask {

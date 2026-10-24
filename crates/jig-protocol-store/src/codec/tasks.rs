@@ -35,6 +35,7 @@ pub fn limits(domain: &domain::Limits) -> Option<wire::Limits> {
         .ok()?,
     )?;
     let limits = wire::Limits {
+        proposed_settings_items: domain::SETTINGS_ITEMS,
         row_models: jig_domain_tasks::MODELS,
         model_name_value: jig_domain_core::MODEL_NAME_BYTES,
         person_proposal_reason: domain.message_bytes,

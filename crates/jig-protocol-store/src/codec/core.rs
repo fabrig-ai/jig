@@ -183,6 +183,7 @@ pub fn decode_escalation_decision(value: wire::EscalationDecision, _limits: &Lim
 #[must_use]
 pub fn encode_proposal_kind(value: &tasks::ProposalKind, _limits: &Limits) -> wire::ProposalKind {
     match value {
+        tasks::ProposalKind::Settings => wire::ProposalKind::Settings,
         tasks::ProposalKind::Batch => wire::ProposalKind::Batch,
         tasks::ProposalKind::Effect => wire::ProposalKind::Effect,
         tasks::ProposalKind::Amend => wire::ProposalKind::Amend,
@@ -193,6 +194,7 @@ pub fn encode_proposal_kind(value: &tasks::ProposalKind, _limits: &Limits) -> wi
 #[must_use]
 pub fn decode_proposal_kind(value: wire::ProposalKind, _limits: &Limits) -> tasks::ProposalKind {
     match value {
+        wire::ProposalKind::Settings => tasks::ProposalKind::Settings,
         wire::ProposalKind::Batch => tasks::ProposalKind::Batch,
         wire::ProposalKind::Effect => tasks::ProposalKind::Effect,
         wire::ProposalKind::Amend => tasks::ProposalKind::Amend,

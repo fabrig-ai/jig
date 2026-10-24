@@ -105,6 +105,8 @@ pub enum Lack {
 /// The bound a final refusal identifies.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LimitKind {
+    /// Pending deployment settings sets have no room.
+    SettingsProposals,
     /// Empty or too many compound operations.
     Operations,
     /// The words or other byte payload exceed their bound.

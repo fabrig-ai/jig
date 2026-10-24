@@ -208,7 +208,7 @@ pub(crate) fn refused(
     let (at, found) = match record {
         w::Ask::Create(value) => (None, batch(value.tasks(), models, limits)?),
         w::Ask::Propose(value) => match value.action() {
-            w::ProposeAction::Settings(_) => return Ok(None), // task E: answered not-served at the request entrance.
+            w::ProposeAction::Settings(value) => (None, settings_items(value.items(), models, limits)?),
             w::ProposeAction::Batch(value) => (None, batch(value.tasks(), models, limits)?),
             w::ProposeAction::Amendment(value) => (None, lacking(value.change().llm().as_ref(), models)),
         },
@@ -375,4 +375,84 @@ pub(crate) fn refusal(
         p::LlmWhy::Repeated => w::LlmWhy::Repeated,
     };
     Ok(w::Refusal::Llm(w::RefusalLlm::new(limits, w::RefusalLlmParts { model: bytes::copy_of(&model.name), why })?))
+}
+
+fn settings_items(bytes: &[u8], models: &[Model], limits: &w::Limits) -> Result<Option<Lacking>, w::Problem> {
+    let mut reader = Reader::new(bytes);
+    for _ in 0..t::SETTINGS_ITEMS {
+        let Some(bytes) = piece(&mut reader)? else {
+            return Ok(None);
+        };
+        let mut row = Reader::new(&bytes);
+        let item = w::SettingItem::decode(limits, &mut row)?;
+        if !row.is_empty() {
+            return Err(super::problem(skein_codec::Reason::Malformed));
+        }
+        let found = match item.edit() {
+            w::SettingEdit::Removed | w::SettingEdit::Reset => None,
+            w::SettingEdit::Set(value) => match value.value() {
+                w::SettingValue::Template(value) => lacking(value.llm().as_ref(), models),
+                w::SettingValue::Charter(value) => {
+                    let mut found = settings_model(value.model(), models);
+                    for alternative in value.alternatives() {
+                        if found.is_none() {
+                            found = settings_model(alternative, models);
+                        }
+                    }
+                    found
+                }
+                w::SettingValue::Policy(value) => {
+                    let mut found = settings_selector(value.ceiling().models().as_ref(), models);
+                    for role in value.roles() {
+                        if found.is_none() {
+                            found = settings_selector(role.authority().models().as_ref(), models);
+                        }
+                    }
+                    found
+                }
+                w::SettingValue::Rules(value) => settings_selector(value.ceiling().models().as_ref(), models),
+            },
+        };
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    if !reader.is_empty() {
+        return Err(super::problem(skein_codec::Reason::Bound));
+    }
+    Ok(None)
+}
+fn settings_selector(selector: Option<&w::ModelSet>, models: &[Model]) -> Option<Lacking> {
+    match selector {
+        Some(w::ModelSet::Names(names)) => {
+            for name in names.names() {
+                let mut configured = false;
+                for model in models {
+                    configured |= model.name.as_ref() == name.as_ref();
+                }
+                if !configured {
+                    return Some(Lacking { model: name.clone(), why: w::LlmWhy::Unconfigured });
+                }
+            }
+        }
+        Some(w::ModelSet::All) | None => {}
+    }
+    None
+}
+fn settings_model(model: &w::SettingModel, models: &[Model]) -> Option<Lacking> {
+    for configured in models {
+        if configured.name.as_ref() == model.name() {
+            if let Some(effort) = model.effort() {
+                let mut offered = false;
+                for name in &configured.efforts {
+                    offered |= name.as_ref() == effort.as_ref();
+                }
+                if !offered {
+                    return Some(Lacking { model: bytes::copy_of(model.name()), why: w::LlmWhy::Effort });
+                }
+            }
+            return None;
+        }
+    }
+    Some(Lacking { model: bytes::copy_of(model.name()), why: w::LlmWhy::Unconfigured })
 }

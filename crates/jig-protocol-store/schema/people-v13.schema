@@ -125,7 +125,8 @@ record AskMakeService { project: u32 name: bytes 8192 role: Role }
 record AskAdopt { project: u32 adoption: Adoption }
 record ActionBatch { members: list 8 Member }
 record ActionAmend { task: u64 revision: u64 amendment: Amendment }
-enum Action { batch: ActionBatch, amend: boxed ActionAmend }
+record ActionSettings { against: u32 digest: fixed 32 }
+enum Action { batch: ActionBatch, amend: boxed ActionAmend, settings: ActionSettings }
 record AskPropose { project: u32 action: Action reason: bytes 8192 }
 record AskWithdraw { project: u32 proposal: u64 }
 record AskStop { project: u32 task: u64 }
@@ -135,7 +136,8 @@ record AskTakePerson { project: u32 task: u64 }
 record AskHandBackPerson { project: u32 task: u64 }
 record AskAnswerPerson { project: u32 task: u64 revision: u64 result: PersonResult }
 record AskMove { project: u32 task: u64 reason: bytes 8192 }
-record AskDecideProposal { project: u32 proposer: Proposer proposal: u64 decision: ProposalDecision }
+enum Running { stays, moves }
+record AskDecideProposal { project: u32 proposer: Proposer proposal: u64 decision: ProposalDecision running: option Running }
 record AskSay { project: u32 task: u64 words: bytes 8192 }
 record AskAnswerQuestion { project: u32 task: u64 question: u64 words: bytes 8192 }
 record AskAmend { project: u32 task: u64 revision: u64 amendment: Amendment release: option u64 }
@@ -216,7 +218,7 @@ record LackFailed { connector: u16 kind: u16 }
 record LackUnguarded { connector: u16 kind: u16 }
 record LackTaskKind { executor: option TaskExecutor }
 enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: LackTaskKind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackAgain, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models }
-enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins }
+enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals }
 record RefusalRole { held: option Role }
 record AccepterRole { role: u32 }
 enum Accepter { nobody, role: AccepterRole }
@@ -227,7 +229,7 @@ record RefusalEnded { how: Ending }
 record RefusalTaken { by: u64 }
 enum NameRule { empty, long, control, space, digits }
 record MalformedName { rule: NameRule }
-enum Malformed { name: MalformedName, cycle, as_allowed_twice, conversation, proposed_as_allowed, ended_by, settings: MalformedSettings, settings_unchanged }
+enum Malformed { name: MalformedName, cycle, as_allowed_twice, conversation, proposed_as_allowed, ended_by, settings: MalformedSettings, settings_unchanged, running }
 record RefusalNotWellFormed { at: u32 why: Malformed }
 enum LlmWhy { unconfigured, effort, charter, authority, procedure, repeated }
 record RefusalLlm { model: u8 why: LlmWhy }

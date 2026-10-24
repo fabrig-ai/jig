@@ -7,7 +7,7 @@ use jig_domain_tasks as t;
 use skein_lib::{List, Writer};
 
 mod change;
-pub(crate) use change::change;
+pub(crate) use change::{change, proposed};
 
 #[must_use]
 pub fn setting(value: &w::Setting) -> s::Setting {
@@ -371,4 +371,93 @@ pub fn revisions(v: &reads::RevisionsPage, limits: &w::Limits) -> Result<w::Revi
         .expect("page count");
     }
     w::RevisionsPage::new(limits, w::RevisionsPageParts { rows, next: v.next, forgotten: v.forgotten })
+}
+
+pub(crate) fn item_heads(
+    items: &List<reads::RevisionItemHead>,
+    limits: &w::Limits,
+) -> Result<List<w::RevisionItemHead>, w::Problem> {
+    let mut result = List::with_capacity(items.len());
+    for item in items {
+        result
+            .push(w::RevisionItemHead::new(
+                limits,
+                w::RevisionItemHeadParts { setting: name(item.setting, limits)?, edit: item_edit(item.edit) },
+            )?)
+            .expect("bounded heads");
+    }
+    Ok(result)
+}
+fn item_edit(edit: reads::RevisionEdit) -> w::RevisionItemEdit {
+    match edit {
+        reads::RevisionEdit::Set => w::RevisionItemEdit::Set,
+        reads::RevisionEdit::Removed => w::RevisionItemEdit::Removed,
+        reads::RevisionEdit::Reset => w::RevisionItemEdit::Reset,
+    }
+}
+fn review_value(
+    v: Option<&s::Value>,
+    bound: u64,
+    models: &[crate::Model],
+    limits: &w::Limits,
+) -> Result<w::ReviewValue, w::Problem> {
+    Ok(match v {
+        None => w::ReviewValue::None,
+        Some(v) => {
+            let value = value(v, models, limits)?;
+            let bytes = u64::from(value.measure());
+            if bytes > bound.min(u64::from(limits.owned_record)) {
+                w::ReviewValue::TooLarge(w::Size::new(limits, w::SizeParts { bytes })?)
+            } else {
+                w::ReviewValue::Value(w::SettingSet::new(limits, w::SettingSetParts { value })?)
+            }
+        }
+    })
+}
+pub(crate) fn review(
+    v: &d::SettingsReview,
+    models: &[crate::Model],
+    limits: &w::Limits,
+) -> Result<w::SettingsReview, w::Problem> {
+    let mut pieces = List::with_capacity(v.items.len());
+    let mut used = 0_u64;
+    let mut cut = false;
+    for item in &v.items {
+        let row = w::ReviewItem::new(
+            limits,
+            w::ReviewItemParts {
+                setting: name(item.setting, limits)?,
+                edit: item_edit(item.edit),
+                now: review_value(item.now.as_ref(), v.value_bytes, models, limits)?,
+                origin: match item.origin {
+                    Some((changed, revision)) => {
+                        let revision = w::OriginRevision::new(limits, w::OriginRevisionParts { revision })?;
+                        if changed { w::SettingOrigin::Change(revision) } else { w::SettingOrigin::Default(revision) }
+                    }
+                    None => w::SettingOrigin::NotOffered,
+                },
+                would_be: review_value(item.would_be.as_ref(), v.value_bytes, models, limits)?,
+            },
+        )?;
+        used = used
+            .checked_add(u64::from(row.measure()))
+            .expect("bounded review bytes")
+            .checked_add(4)
+            .expect("frame bytes");
+        if used > u64::from(limits.settings_review_items) {
+            cut = true;
+            break;
+        }
+        let mut bytes = Writer::new(usize::try_from(row.measure()).expect("measured review item"));
+        row.encode(&mut bytes).expect("measured review item");
+        pieces.push(bytes.finish()).expect("review count");
+    }
+    w::SettingsReview::new(
+        limits,
+        w::SettingsReviewParts {
+            newest: v.newest,
+            items: super::pieces(&pieces, limits.settings_review_items, w::Path::SettingsReviewItems)?,
+            cut,
+        },
+    )
 }

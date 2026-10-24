@@ -368,6 +368,7 @@ pub(crate) fn admission_limit(value: &w::AdmissionLimit, _limits: &Limits) -> c:
         w::AdmissionLimit::HolderAccounts => c::AdmissionLimit::HolderAccounts,
         w::AdmissionLimit::Sources => c::AdmissionLimit::Sources,
         w::AdmissionLimit::SignIns => c::AdmissionLimit::SignIns,
+        w::AdmissionLimit::SettingsProposals => c::AdmissionLimit::SettingsProposals,
         w::AdmissionLimit::Projects => c::AdmissionLimit::Projects,
     }
 }
