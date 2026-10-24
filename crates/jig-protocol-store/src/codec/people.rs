@@ -536,3 +536,72 @@ fn derive_amendment(domain: &core::Limits, limits: &mut wire::Limits) -> Option<
 }
 
 mod account_hosts;
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::*;
+
+    // Inputs read by the people codec from configuration's small and standard profiles.
+    // The config crate also tests these with the complete shipped profile constants.
+    fn profile_inputs(standard: bool) -> core::Limits {
+        let mut limits = crate::tests::fixtures::CORE_LIMITS;
+        limits.policy_bytes = 16_384;
+        limits.people.amendment_bytes = 8_192;
+        limits.people.identity_bytes = 1_024;
+        limits.people.words = 2_048;
+        limits.people.program_host_name_bytes = 32;
+        limits.authority.segment_bytes = 256;
+        if standard {
+            limits.templates = 16;
+            limits.people.operations = 16;
+            limits.people.batch = 4;
+            limits.people.holdings = 32;
+            limits.people.program_hosts = 65;
+            limits.authority.grants = 8;
+            limits.authority.roles = 8;
+            limits.authority.requirements = 8;
+            limits.tasks.circle = 32;
+            limits.tasks.dependencies = 16;
+        } else {
+            limits.templates = 8;
+            limits.people.operations = 8;
+            limits.people.batch = 2;
+            limits.people.holdings = 8;
+            limits.people.program_hosts = 9;
+            limits.authority.grants = 4;
+            limits.authority.roles = 4;
+            limits.authority.requirements = 4;
+            limits.tasks.circle = 8;
+            limits.tasks.dependencies = 8;
+        }
+        limits
+    }
+
+    #[test]
+    fn shipped_profile_people_inputs_derive_within_the_ceilings() {
+        for standard in [false, true] {
+            let limits = profile_inputs(standard);
+            let derived = derived_limits(&limits).unwrap();
+            assert_eq!(wire::check_limits(&derived), Ok(()));
+            assert_eq!(super::limits(&limits), Some(derived));
+        }
+    }
+
+    #[test]
+    fn rejected_policy_derivation_keeps_the_required_byte_bounds() {
+        let mut limits = profile_inputs(false);
+        limits.policy_bytes = 65_536;
+        let derived = derived_limits(&limits).unwrap();
+        assert_eq!(derived.policy_value_permissions, 98_304);
+        assert_eq!(derived.delegation_kinds, 73_728);
+        assert!(wire::check_limits(&derived).is_err());
+        assert_eq!(super::limits(&limits), None);
+    }
+
+    #[test]
+    fn unrepresentable_arithmetic_has_no_derived_limits() {
+        let mut limits = profile_inputs(false);
+        limits.policy_bytes = u64::MAX;
+        assert_eq!(derived_limits(&limits), None);
+    }
+}

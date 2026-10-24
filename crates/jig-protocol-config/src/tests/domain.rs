@@ -631,3 +631,112 @@ fn a_seed_policy_whose_whole_value_exceeds_its_byte_limit_refuses_start() {
     // Permission mappings fit 256 bytes, but the role and whole ceiling do not.
     refuses(br#""profile": "small""#, br#""profile": "small", "overrides": {"core.policy_bytes": 256}"#, What::Bound);
 }
+
+// Current people-v13 envelope, configuration.md, section 6.
+const POLICY_MAX: u64 = 43_695;
+const AMENDMENT_MAX: u32 = 8_192;
+const LARGE_POLICY: u64 = 65_536;
+
+#[test]
+fn shipped_profiles_fit_the_effective_codec_envelope() {
+    for profile in [crate::Profile::Small, crate::Profile::Standard] {
+        let limits = crate::profile(profile).core;
+        assert_eq!(crate::check_effective_limits(&limits), Ok(()), "{profile:?}");
+        let derived = jig_protocol_store::codec::people::derived_limits(&limits).unwrap();
+        assert_eq!(jig_protocol_store::people_v13::check_limits(&derived), Ok(()));
+    }
+}
+
+#[test]
+fn exported_maxima_are_the_last_codec_admitted_values() {
+    for profile in [crate::Profile::Small, crate::Profile::Standard] {
+        let limits = crate::profile(profile).core;
+        assert_eq!(crate::policy_bytes_max(&limits), Some(POLICY_MAX), "{profile:?}");
+        assert_eq!(crate::amendment_bytes_max(&limits), Some(AMENDMENT_MAX), "{profile:?}");
+        let mut policy = limits;
+        policy.policy_bytes = POLICY_MAX;
+        assert_eq!(crate::check_effective_limits(&policy), Ok(()));
+        assert!(jig_protocol_store::codec::limits(&policy).is_some());
+        let mut amendment = limits;
+        amendment.people.amendment_bytes = AMENDMENT_MAX;
+        assert_eq!(crate::check_effective_limits(&amendment), Ok(()));
+        assert!(jig_protocol_store::codec::limits(&amendment).is_some());
+    }
+}
+
+fn policy_problem(value: u64) -> crate::Problem {
+    let mut limits = crate::profile(crate::Profile::Small).core;
+    limits.policy_bytes = value;
+    crate::check_effective_limits(&limits).expect_err("policy exceeds the codec envelope")
+}
+
+#[test]
+fn policy_past_the_envelope_names_its_binding_field() {
+    let problem = policy_problem(LARGE_POLICY);
+    assert_eq!(problem.path, fixtures::path(&[b"limits", b"core", b"policy_bytes"]));
+    assert_eq!(problem.what, What::PolicyEnvelope {
+        value: LARGE_POLICY,
+        maximum: POLICY_MAX,
+        bound: Some(crate::CodecBound {
+            field: b"PolicyValue.permissions",
+            needed: 98_304,
+            ceiling: 65_536,
+        }),
+    });
+    assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.core.policy_bytes: 65536 exceeds the people-v13 codec envelope of 43695 bytes (PolicyValue.permissions would need 98304 bytes; ceiling 65536).");
+}
+
+#[test]
+fn the_next_policy_byte_is_refused_at_the_binding_field() {
+    let problem = policy_problem(POLICY_MAX + 1);
+    assert_eq!(problem.what, What::PolicyEnvelope {
+        value: POLICY_MAX + 1,
+        maximum: POLICY_MAX,
+        bound: Some(crate::CodecBound {
+            field: b"PolicyValue.permissions",
+            needed: 65_544,
+            ceiling: 65_536,
+        }),
+    });
+}
+
+#[test]
+fn the_next_amendment_byte_is_refused_with_the_agreed_words() {
+    let mut limits = crate::profile(crate::Profile::Small).core;
+    limits.people.amendment_bytes = AMENDMENT_MAX + 1;
+    let problem = crate::check_effective_limits(&limits).unwrap_err();
+    assert_eq!(problem.path, fixtures::path(&[b"limits", b"people", b"amendment_bytes"]));
+    assert_eq!(problem.what, What::AmendmentEnvelope {
+        value: AMENDMENT_MAX + 1,
+        maximum: AMENDMENT_MAX,
+        bound: Some(crate::CodecBound { field: b"Segment.bytes", needed: 8_193, ceiling: 8_192 }),
+    });
+    assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.people.amendment_bytes: 8193 exceeds the people-v13 codec envelope of 8192 bytes.");
+}
+
+#[test]
+fn an_independent_ceiling_names_the_generated_first_failure() {
+    let mut limits = crate::profile(crate::Profile::Small).core;
+    limits.people.identity_bytes = 8_193;
+    let problem = crate::check_effective_limits(&limits).unwrap_err();
+    assert_eq!(problem.path, fixtures::path(&[b"limits", b"people", b"identity_bytes"]));
+    assert_eq!(problem.what, What::CodecCeiling {
+        bound: crate::CodecBound { field: b"IdentityKey.subject", needed: 8_193, ceiling: 8_192 },
+    });
+    assert_eq!(crate::policy_bytes_max(&limits), None);
+    assert_eq!(crate::amendment_bytes_max(&limits), None);
+    assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.people.identity_bytes: IdentityKey.subject would need 8193 bytes; people-v13 codec ceiling 8192.");
+}
+
+#[test]
+fn arithmetic_endpoints_are_refused_without_panicking() {
+    let mut limits = crate::profile(crate::Profile::Small).core;
+    limits.policy_bytes = u64::MAX;
+    let problem = crate::check_effective_limits(&limits).unwrap_err();
+    assert_eq!(problem.path, fixtures::path(&[b"limits", b"core", b"policy_bytes"]));
+    assert!(jig_protocol_store::codec::people::derived_limits(&limits).is_none());
+    limits.policy_bytes = 16_384;
+    limits.people.amendment_bytes = u32::MAX;
+    let problem = crate::check_effective_limits(&limits).unwrap_err();
+    assert_eq!(problem.path, fixtures::path(&[b"limits", b"people", b"amendment_bytes"]));
+}
