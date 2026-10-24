@@ -1,5 +1,5 @@
 //! Named limits and strict profile selection (configuration.md, 6).
-use crate::{Limits, Path, Problems, Profile, What, profile, read};
+use crate::{Limits, Path, Problem, Problems, Profile, Segment, What, profile, read};
 use skein_json::{Document, document::Kind};
 use skein_lib::{Duration, bytes};
 
@@ -596,7 +596,8 @@ pub fn parse(document: &Document, at: u32, path: &Path) -> Result<Limits, Proble
             Err(what) => problems.push(path.member(b"profile"), what),
         }
     }
-    if let Some(at) = object.member(document, b"overrides") {
+    let overrides_at = object.member(document, b"overrides");
+    if let Some(at) = overrides_at {
         let path = path.member(b"overrides");
         if let Err(what) = members(document, at, &path, &mut limits, &mut problems) {
             problems.push(path, what);
@@ -608,7 +609,50 @@ pub fn parse(document: &Document, at: u32, path: &Path) -> Result<Limits, Proble
     limits.core.documents.implications = limits.core.authority.implications;
     object.finish(document, path, &mut problems);
     crate::clients::check_settings(&limits, &mut problems);
+    if let Err(what) = crate::domain::check_message(&limits.core) {
+        problems.push(path.clone(), what);
+    }
+    if problems.is_empty()
+        && let Err(problem) = crate::check_effective_limits(&limits.core)
+    {
+        let problem = codec_problem(document, overrides_at, path, problem);
+        problems.push(problem.path, problem.what);
+    }
     if problems.is_empty() { Ok(limits) } else { Err(problems) }
+}
+
+// A canonical effective-limit path is translated back to its spelling in the
+// override document when that member was present, including a caller's prefix.
+fn codec_problem(document: &Document, overrides_at: Option<u32>, path: &Path, problem: Problem) -> Problem {
+    if let Some(at) = overrides_at {
+        let end = read::after(document, at)
+            .expect("override object was checked")
+            .checked_sub(1)
+            .expect("object has an end token");
+        let mut next = at.checked_add(1).expect("checked document position");
+        for _ in at..end {
+            if next == end {
+                break;
+            }
+            let key = document.token(next).expect("checked override key");
+            let name = document.text(key).expect("checked override name");
+            if crate::domain::codec_path(name) == problem.path {
+                return Problem { path: path.member(b"overrides").member(name), what: problem.what };
+            }
+            let value = next.checked_add(1).expect("checked override value");
+            next = read::after(document, value).expect("override value was checked");
+        }
+    }
+    let mut complete = path.clone();
+    for (index, segment) in problem.path.segments.iter().enumerate() {
+        if index > 0 {
+            complete = complete.child(match segment {
+                Segment::Member(name) => Segment::Member(bytes::copy_of(name)),
+                Segment::Index(index) => Segment::Index(*index),
+            });
+        }
+    }
+    Problem { path: complete, what: problem.what }
 }
 
 fn members(
