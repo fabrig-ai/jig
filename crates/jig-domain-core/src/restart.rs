@@ -80,12 +80,19 @@ pub enum RestartStep {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartRequest {
-    Settings { failure: crate::settings::Failure, changed: bool },
+    Settings {
+        failure: crate::settings::Failure,
+        changed: bool,
+    },
     /// A saved project policy exceeds the current byte budget or cannot be accounted.
-    ProjectPolicy { project: u32 },
+    ProjectPolicy {
+        project: u32,
+    },
     Step(RestartStep),
     Idle,
-    Refused { step: RestartStep },
+    Refused {
+        step: RestartStep,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

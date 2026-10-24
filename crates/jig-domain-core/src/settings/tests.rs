@@ -161,7 +161,7 @@ fn pruning_a_lowered_history_limit_uses_only_the_commits_remaining_room() {
     let (writes, oldest) = revision_writes(None, List::with_capacity(0), 1, 20, 2, 4);
     assert_eq!(oldest, 4);
     assert_eq!(writes.len(), 4);
-    let crate::Write::Save(crate::Record::Core(crate::CoreRecord::Settings(Record::Extent { oldest: stored }))) =
+    let crate::Write::Save(crate::Record::Core(CoreRecord::Settings(Record::Extent { oldest: stored }))) =
         &writes.as_slice()[3]
     else {
         panic!("the extent closes the pruning commit")
