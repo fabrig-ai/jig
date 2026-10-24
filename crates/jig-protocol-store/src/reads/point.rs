@@ -66,10 +66,7 @@ pub(super) fn proposal(
     spent: &mut Spent,
 ) -> Result<reads::Loaded, Failure> {
     match proposer {
-        Proposer::Party(party) => {
-            if party != range.party {
-                return Ok(empty());
-            }
+        Proposer::Party(_) => {
             for key in [tasks::Key::PersonProposal(proposal), tasks::Key::DecidedProposal(proposal)] {
                 let Some(value) = record(store, &core::Key::Tasks(key))? else { continue };
                 let related = core::Key::Core(core::CoreKey::ProposalDecision { proposer, proposal });

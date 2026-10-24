@@ -384,6 +384,7 @@ pub(super) fn encode_limit_kind(value: domain::LimitKind, _limits: &wire::Limits
         domain::LimitKind::Accounts => wire::LimitKind::Accounts,
         domain::LimitKind::HolderAccounts => wire::LimitKind::HolderAccounts,
         domain::LimitKind::Sources => wire::LimitKind::Sources,
+        domain::LimitKind::SettingsProposals => wire::LimitKind::SettingsProposals,
         domain::LimitKind::SignIns => wire::LimitKind::SignIns,
         domain::LimitKind::Operations => wire::LimitKind::Operations,
         domain::LimitKind::Grace => wire::LimitKind::Grace,
@@ -431,6 +432,7 @@ pub(super) fn decode_limit_kind(value: wire::LimitKind) -> domain::LimitKind {
         wire::LimitKind::Accounts => domain::LimitKind::Accounts,
         wire::LimitKind::HolderAccounts => domain::LimitKind::HolderAccounts,
         wire::LimitKind::Sources => domain::LimitKind::Sources,
+        wire::LimitKind::SettingsProposals => domain::LimitKind::SettingsProposals,
         wire::LimitKind::SignIns => domain::LimitKind::SignIns,
         wire::LimitKind::Operations => domain::LimitKind::Operations,
         wire::LimitKind::Grace => domain::LimitKind::Grace,
@@ -466,6 +468,7 @@ pub(super) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> 
                         )?)
                     }
                     domain::Malformed::SettingsUnchanged => wire::Malformed::SettingsUnchanged,
+                    domain::Malformed::Running => wire::Malformed::Running,
                     domain::Malformed::ProposedAsAllowed => wire::Malformed::ProposedAsAllowed,
                     domain::Malformed::Cycle => wire::Malformed::Cycle,
                     domain::Malformed::Name(rule) => wire::Malformed::Name(wire::MalformedName::new(
@@ -592,6 +595,7 @@ pub(super) fn decode_refusal(value: wire::Refusal) -> domain::Refusal {
                         fault: decode_setting_fault(value.fault()),
                     },
                     wire::Malformed::SettingsUnchanged => domain::Malformed::SettingsUnchanged,
+                    wire::Malformed::Running => domain::Malformed::Running,
                     wire::Malformed::ProposedAsAllowed => domain::Malformed::ProposedAsAllowed,
                     wire::Malformed::Cycle => domain::Malformed::Cycle,
                     wire::Malformed::Name(value) => domain::Malformed::Name(decode_name_rule(value.rule().clone())),

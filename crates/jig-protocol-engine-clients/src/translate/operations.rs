@@ -25,16 +25,17 @@ pub(super) fn answer(project: u32, on: w::AnswerOn) -> p::Ask {
 pub(super) fn decide(project: u32, on: w::DecideOn) -> Result<p::Ask, Untranslatable> {
     Ok(match on {
         w::DecideOn::Proposal(value) => {
-            // task E: the request entrance answers this choice not-served.
-            if value.running().is_some() {
-                return Err(Untranslatable { path: w::Path::DecideProposalRunning });
-            }
             let v = value.into_parts();
             p::Ask::DecideProposal {
                 project,
                 proposer: asks::proposer(v.proposal.proposer()),
                 proposal: v.proposal.number(),
                 decision: asks::proposal_decision(v.decision)?,
+                running: match v.running {
+                    Some(w::Running::Stays) => Some(p::Running::Stays),
+                    Some(w::Running::Moves) => Some(p::Running::Moves),
+                    None => None,
+                },
             }
         }
         w::DecideOn::Escalation(value) => {
@@ -354,10 +355,18 @@ pub(super) fn propose(
     limits: &w::Limits,
     names: &mut List<Box<[u8]>>,
 ) -> Result<p::Ask, Untranslatable> {
+    let digest = match value.action() {
+        w::ProposeAction::Settings(_) => {
+            let record = w::Ask::Propose(value.clone());
+            let mut bytes = skein_lib::Writer::new(usize::try_from(record.measure()).expect("ask size"));
+            record.encode(&mut bytes).expect("measured ask");
+            crate::sign_in::digest(&bytes.finish()).expose().try_into().expect("32-byte digest")
+        }
+        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => [0; 32],
+    };
     let v = value.into_parts();
     let action = match v.action {
-        // task E: the request entrance answers settings proposals not-served.
-        w::ProposeAction::Settings(_) => return Err(Untranslatable { path: w::Path::ProposeSettingsItems }),
+        w::ProposeAction::Settings(value) => p::Action::Settings { against: value.against(), digest },
         w::ProposeAction::Batch(value) => {
             p::Action::Batch(batch(value.tasks(), w::Path::ProposeBatchTasks, models, limits, names)?)
         }

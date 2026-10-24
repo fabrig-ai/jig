@@ -8,6 +8,7 @@ use skein_lib::{List, Wall};
 /// Translate `ProposalKind` to its store value.
 pub fn kind(source: &domain::ProposalKind, _limits: &wire::Limits) -> Result<wire::ProposalKind, wire::Problem> {
     Ok(match source {
+        domain::ProposalKind::Settings => wire::ProposalKind::Settings,
         domain::ProposalKind::Batch => wire::ProposalKind::Batch,
         domain::ProposalKind::Effect => wire::ProposalKind::Effect,
         domain::ProposalKind::Amend => wire::ProposalKind::Amend,
@@ -18,6 +19,7 @@ pub fn kind(source: &domain::ProposalKind, _limits: &wire::Limits) -> Result<wir
 /// Read `ProposalKind` from its store value.
 pub fn read_kind(source: wire::ProposalKind, _limits: &wire::Limits) -> Result<domain::ProposalKind, wire::Problem> {
     Ok(match source {
+        wire::ProposalKind::Settings => domain::ProposalKind::Settings,
         wire::ProposalKind::Batch => domain::ProposalKind::Batch,
         wire::ProposalKind::Effect => domain::ProposalKind::Effect,
         wire::ProposalKind::Amend => domain::ProposalKind::Amend,
@@ -450,6 +452,12 @@ pub fn person_state(
     limits: &wire::Limits,
 ) -> Result<wire::PersonProposalState, wire::Problem> {
     Ok(match source {
+        domain::PersonProposalState::SettingsAccepted { by, revision } => {
+            wire::PersonProposalState::SettingsAccepted(wire::SettingsAccepted::new(
+                limits,
+                wire::SettingsAcceptedParts { by: value::party(by, limits)?, revision: *revision },
+            )?)
+        }
         domain::PersonProposalState::Withdrawn { at } => wire::PersonProposalState::Withdrawn(
             wire::WithdrawnPersonProposal::new(limits, wire::WithdrawnPersonProposalParts { at: at.as_nanos() })?,
         ),
@@ -478,6 +486,10 @@ pub fn read_person_state(
     _limits: &wire::Limits,
 ) -> Result<domain::PersonProposalState, wire::Problem> {
     Ok(match source {
+        wire::PersonProposalState::SettingsAccepted(row) => {
+            let row = row.into_parts();
+            domain::PersonProposalState::SettingsAccepted { by: value::read_party(row.by), revision: row.revision }
+        }
         wire::PersonProposalState::Withdrawn(value) => {
             domain::PersonProposalState::Withdrawn { at: Wall::from_nanos(value.into_parts().at) }
         }
@@ -509,6 +521,22 @@ pub fn person_proposal(
 ) -> Result<wire::PersonProposal, wire::Problem> {
     let domain::PersonProposal { number, proposer, project, action, reason, state } = source;
     let action = match action {
+        domain::PersonAction::Settings { against, items } => {
+            if items.len() > usize::try_from(limits.proposed_settings_items).expect("item bound fits") {
+                return Err(wire::Problem {
+                    path: wire::Path::ProposedSettingsItems,
+                    reason: skein_codec::Reason::Bound,
+                });
+            }
+            let mut heads = List::with_capacity(domain::SETTINGS_ITEMS);
+            for item in items {
+                heads.push(setting_head(item, limits)?).expect("bounded heads");
+            }
+            wire::PersonAction::Settings(wire::ProposedSettings::new(
+                limits,
+                wire::ProposedSettingsParts { against: *against, items: heads },
+            )?)
+        }
         domain::PersonAction::Batch(members) => wire::PersonAction::Batch(wire::ProposedBatch::new(
             limits,
             wire::ProposedBatchParts { members: batch(members, limits, moved)? },
@@ -543,6 +571,14 @@ pub fn read_person_proposal(
 ) -> Result<domain::PersonProposal, wire::Problem> {
     let wire::PersonProposalParts { number, proposer, project, action, reason, state } = source.into_parts();
     let action = match action {
+        wire::PersonAction::Settings(row) => {
+            let row = row.into_parts();
+            let mut items = List::with_capacity(domain::SETTINGS_ITEMS);
+            for item in row.items.into_boxed() {
+                items.push(read_setting_head(item)).expect("decoded heads");
+            }
+            domain::PersonAction::Settings { against: row.against, items: items.into_boxed() }
+        }
         wire::PersonAction::Batch(batch) => {
             domain::PersonAction::Batch(read_batch(batch.into_parts().members, limits)?)
         }
@@ -767,5 +803,47 @@ fn read_tracking(source: Option<wire::Tracking>) -> Option<domain::Tracking> {
         }
         Some(wire::Tracking::Untracked) => Some(domain::Tracking::Untracked),
         None => None,
+    }
+}
+
+fn setting_head(item: &domain::SettingHead, limits: &wire::Limits) -> Result<wire::SettingHead, wire::Problem> {
+    let setting = match item.setting {
+        domain::Setting::Charter(number) => {
+            wire::Setting::Charter(wire::SettingNumber::new(limits, wire::SettingNumberParts { number })?)
+        }
+        domain::Setting::Template(number) => {
+            wire::Setting::Template(wire::SettingNumber::new(limits, wire::SettingNumberParts { number })?)
+        }
+        domain::Setting::Policy(number) => {
+            wire::Setting::Policy(wire::SettingNumber::new(limits, wire::SettingNumberParts { number })?)
+        }
+        domain::Setting::Rules => wire::Setting::Rules,
+    };
+    wire::SettingHead::new(
+        limits,
+        wire::SettingHeadParts {
+            setting,
+            edit: match item.edit {
+                domain::SettingEdit::Set => wire::SettingEdit::Set,
+                domain::SettingEdit::Removed => wire::SettingEdit::Removed,
+                domain::SettingEdit::Reset => wire::SettingEdit::Reset,
+            },
+        },
+    )
+}
+fn read_setting_head(item: wire::SettingHead) -> domain::SettingHead {
+    let item = item.into_parts();
+    domain::SettingHead {
+        setting: match item.setting {
+            wire::Setting::Charter(n) => domain::Setting::Charter(n.number()),
+            wire::Setting::Template(n) => domain::Setting::Template(n.number()),
+            wire::Setting::Policy(n) => domain::Setting::Policy(n.number()),
+            wire::Setting::Rules => domain::Setting::Rules,
+        },
+        edit: match item.edit {
+            wire::SettingEdit::Set => domain::SettingEdit::Set,
+            wire::SettingEdit::Removed => domain::SettingEdit::Removed,
+            wire::SettingEdit::Reset => domain::SettingEdit::Reset,
+        },
     }
 }

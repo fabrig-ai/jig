@@ -538,6 +538,7 @@ fn proposed(proposal: u64, holder: jig_domain_tasks::ProposalHolder) -> Rendered
             ProposalKind::Amend => b"the project's role for amendments",
             ProposalKind::Widen => b"the project's role for widenings",
             ProposalKind::Release => b"the project's role for releases",
+            ProposalKind::Settings => b"the deployment's owners",
         }),
     };
     text(&[b"Proposed ", Decimal::of(proposal).as_bytes(), b", to ", &to], false)

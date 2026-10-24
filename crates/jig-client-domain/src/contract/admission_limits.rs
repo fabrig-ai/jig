@@ -44,5 +44,6 @@ pub enum AdmissionLimit {
     HolderAccounts,
     Sources,
     SignIns,
+    SettingsProposals,
     Projects,
 }

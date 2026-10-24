@@ -122,7 +122,7 @@ enum HoldSource { resource: Name, effect: HoldEffect, circle: Circle }
 record Held { was: Was why: Hold source: option HoldSource }
 record Final { ending: Ending }
 enum Phase { waiting, active: Activation, closing: Closing, held: Held, ended: Final }
-enum ProposalKind { batch, effect, amend, widen, release }
+enum ProposalKind { batch, effect, amend, widen, release, settings }
 record PolicyHolder { project: u32 kind: ProposalKind }
 enum ProposalHolder { task: Task, person: Person, policy: PolicyHolder }
 record PendingProposal { holder: ProposalHolder since: u64 }
@@ -152,8 +152,14 @@ record History { task: u64 revision: u64 by: Party change: Change reason: bytes 
 record PendingPersonProposal { since: u64 }
 record RejectedPersonProposal { by: Party reason: bytes 65536 message: u64 at: u64 }
 record WithdrawnPersonProposal { at: u64 }
-enum PersonProposalState { pending: PendingPersonProposal, accepted: AcceptedProposal, rejected: RejectedPersonProposal, withdrawn: WithdrawnPersonProposal }
-enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment }
+record SettingsAccepted { by: Party revision: u32 }
+enum PersonProposalState { pending: PendingPersonProposal, accepted: AcceptedProposal, rejected: RejectedPersonProposal, withdrawn: WithdrawnPersonProposal, settings_accepted: SettingsAccepted }
+record SettingNumber { number: u32 }
+enum Setting { charter: SettingNumber, template: SettingNumber, policy: SettingNumber, rules }
+enum SettingEdit { set, removed, reset }
+record SettingHead { setting: Setting edit: SettingEdit }
+record ProposedSettings { against: u32 items: list 128 SettingHead }
+enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment, settings: ProposedSettings }
 record PersonProposal { number: u64 proposer: u64 project: u32 action: PersonAction reason: bytes 65536 state: PersonProposalState }
 record Milestone { task: u64 position: u64 phase: Phase at: u64 }
 record Grace { by: Party until: u64 reason: bytes 65536 message: u64 }

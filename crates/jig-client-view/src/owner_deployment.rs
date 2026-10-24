@@ -469,6 +469,7 @@ fn admission(b: &mut Builder, words: &Words, value: AdmissionLimit) {
         AdmissionLimit::Sources => P::AdmissionSources,
         AdmissionLimit::Projects => P::AdmissionProjects,
         AdmissionLimit::SignIns => P::AdmissionSignIns,
+        AdmissionLimit::SettingsProposals => P::AdmissionSettingsProposals,
     };
     text(b, words, phrase, &[]);
 }

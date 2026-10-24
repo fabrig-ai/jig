@@ -1006,6 +1006,7 @@ pub enum JigPhrase {
     EngineLimitHolderAccounts,
     EngineLimitSources,
     EngineLimitSignIns,
+    EngineLimitSettingsProposals,
     FailedBare,
     CancelledBare,
     DecidedBare,
@@ -1661,6 +1662,7 @@ impl JigPhrase {
             Self::EngineLimitHolderAccounts => 566,
             Self::EngineLimitSources => 567,
             Self::EngineLimitSignIns => 568,
+            Self::EngineLimitSettingsProposals => 7918,
             Self::FailedBare => 448,
             Self::CancelledBare => 449,
             Self::DecidedBare => 450,
@@ -1844,6 +1846,7 @@ impl JigPhrase {
             | Self::NameSpace
             | Self::NameDigits
             | Self::EngineLimitProjects
+            | Self::EngineLimitSettingsProposals
             | Self::EngineLimitSignIns
             | Self::EngineLimitService
             | Self::FailedBare
@@ -2394,7 +2397,7 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 637] = [
+pub const ALL: [JigPhrase; 638] = [
     JigPhrase::SettingsChanged,
     JigPhrase::SettingsStale,
     JigPhrase::SettingsFull,
@@ -2984,6 +2987,7 @@ pub const ALL: [JigPhrase; 637] = [
     JigPhrase::EngineLimitHolderAccounts,
     JigPhrase::EngineLimitSources,
     JigPhrase::EngineLimitSignIns,
+    JigPhrase::EngineLimitSettingsProposals,
     JigPhrase::FailedBare,
     JigPhrase::CancelledBare,
     JigPhrase::DecidedBare,

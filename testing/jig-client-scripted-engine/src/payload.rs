@@ -1271,6 +1271,7 @@ impl Payload for AdmissionLimit {
             | Self::Sources
             | Self::Projects
             | Self::SignIns
+            | Self::SettingsProposals
             | Self::Service => Some(0),
         }
     }

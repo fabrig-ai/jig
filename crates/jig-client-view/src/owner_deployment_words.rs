@@ -223,6 +223,7 @@ pub enum DeploymentPhrase {
     AdmissionHolderAccounts,
     AdmissionSources,
     AdmissionSignIns,
+    AdmissionSettingsProposals,
     AdmissionProjects,
 
     Connectors,
@@ -231,7 +232,7 @@ pub enum DeploymentPhrase {
     StoreBytes,
     StoreMark,
 }
-pub const ALL: [DeploymentPhrase; 285] = [
+pub const ALL: [DeploymentPhrase; 286] = [
     DeploymentPhrase::Agent(AgentPhrase::Model),
     DeploymentPhrase::Agent(AgentPhrase::Window),
     DeploymentPhrase::Agent(AgentPhrase::Output),
@@ -490,6 +491,7 @@ pub const ALL: [DeploymentPhrase; 285] = [
     DeploymentPhrase::AdmissionHolderAccounts,
     DeploymentPhrase::AdmissionSources,
     DeploymentPhrase::AdmissionSignIns,
+    DeploymentPhrase::AdmissionSettingsProposals,
     DeploymentPhrase::AdmissionProjects,
     DeploymentPhrase::Connectors,
     DeploymentPhrase::ConnectorsCut,
@@ -734,6 +736,7 @@ impl DeploymentPhrase {
                 Self::AdmissionHolderAccounts => 9426,
                 Self::AdmissionSources => 9427,
                 Self::AdmissionSignIns => 9428,
+                Self::AdmissionSettingsProposals => 9431,
                 Self::AdmissionProjects => 9430,
 
                 Self::Connectors => 9396,
@@ -911,6 +914,7 @@ impl DeploymentPhrase {
             | Self::AdmissionHolderAccounts
             | Self::AdmissionSources
             | Self::AdmissionProjects
+            | Self::AdmissionSettingsProposals
             | Self::AdmissionSignIns
             | Self::AdmissionService
             | Self::Connectors
@@ -1172,6 +1176,7 @@ impl DeploymentPhrase {
             Self::AdmissionHolderAccounts => b"Structural limit: holder accounts",
             Self::AdmissionSources => b"Structural limit: sources",
             Self::AdmissionSignIns => b"Structural limit: account sign-ins",
+            Self::AdmissionSettingsProposals => b"Structural limit: pending settings proposals",
             Self::AdmissionProjects => b"The deployment has no room for another project",
 
             Self::Connectors => b"Configured connectors",

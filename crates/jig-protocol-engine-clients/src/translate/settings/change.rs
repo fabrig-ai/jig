@@ -349,3 +349,27 @@ fn part(value: w::OwnerPart) -> t::Part {
         },
     }
 }
+
+pub(crate) fn proposed(
+    value: w::Propose,
+    models: &[crate::Model],
+    limits: &w::Limits,
+) -> Result<s::Proposed, Untranslatable> {
+    let value = value.into_parts();
+    if value.project != 0 {
+        return Err(Untranslatable { path: w::Path::ProposeProject });
+    }
+    let value_set = match value.action {
+        w::ProposeAction::Settings(v) => v.into_parts(),
+        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => return Err(bad()),
+    };
+    let envelope = match w::ChangeSettings::new(
+        limits,
+        w::ChangeSettingsParts { against: value_set.against, items: value_set.items, running: w::Running::Stays },
+    ) {
+        Ok(value) => value,
+        Err(problem) => return Err(map_problem(problem)),
+    };
+    let change = change(envelope, models, limits)?;
+    Ok(s::Proposed { against: change.against, items: change.items, reason: value.reason })
+}

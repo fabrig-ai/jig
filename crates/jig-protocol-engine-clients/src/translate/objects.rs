@@ -30,6 +30,17 @@ pub fn historical(
             limits,
             w::OwnerHistoricalValueProposalParts { value: historical::proposal_history(models, value, limits)? },
         )?),
+        reads::Past::PersonProposal { proposal, .. }
+            if match proposal.action {
+                jig_domain_tasks::PersonAction::Settings { .. } => true,
+                jig_domain_tasks::PersonAction::Batch(_) | jig_domain_tasks::PersonAction::Amend { .. } => false,
+            } =>
+        {
+            w::OwnerHistoricalValue::Proposal(w::OwnerHistoricalValueProposal::new(
+                limits,
+                w::OwnerHistoricalValueProposalParts { value: historical::settings_history(models, proposal, limits)? },
+            )?)
+        }
         reads::Past::PersonProposal { proposal, decision } => {
             w::OwnerHistoricalValue::PersonProposal(w::OwnerHistoricalValuePersonProposal::new(
                 limits,

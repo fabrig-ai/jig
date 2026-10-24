@@ -307,6 +307,10 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
         )?),
         domain::Ask::Propose { project, action, reason } => {
             let action = match action {
+                domain::Action::Settings { against, digest } => wire::Action::Settings(wire::ActionSettings::new(
+                    limits,
+                    wire::ActionSettingsParts { against: *against, digest: *digest },
+                )?),
                 domain::Action::Batch(batch) => wire::Action::Batch(wire::ActionBatch::new(
                     limits,
                     wire::ActionBatchParts { members: super::batch::encode(batch, limits)? },
@@ -406,7 +410,7 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
             limits,
             wire::AskMoveParts { project: *project, task: *task, reason: reason.clone() },
         )?),
-        domain::Ask::DecideProposal { project, proposer, proposal, decision } => {
+        domain::Ask::DecideProposal { project, proposer, proposal, decision, running } => {
             wire::Ask::DecideProposal(wire::AskDecideProposal::new(
                 limits,
                 wire::AskDecideProposalParts {
@@ -414,6 +418,11 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
                     proposer: encode_proposer(proposer, limits)?,
                     proposal: *proposal,
                     decision: encode_proposal_decision(decision, limits)?,
+                    running: match running {
+                        Some(domain::Running::Stays) => Some(wire::Running::Stays),
+                        Some(domain::Running::Moves) => Some(wire::Running::Moves),
+                        None => None,
+                    },
                 },
             )?)
         }
@@ -506,6 +515,9 @@ pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask
         wire::Ask::Propose(value) => {
             let wire::AskProposeParts { project, action, reason } = value.into_parts();
             let action = match action {
+                wire::Action::Settings(value) => {
+                    domain::Action::Settings { against: value.against(), digest: *value.digest() }
+                }
                 wire::Action::Batch(batch) => {
                     domain::Action::Batch(super::batch::decode(batch.into_parts().members, limits)?)
                 }
@@ -586,12 +598,17 @@ pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask
             domain::Ask::Move { project, task, reason }
         }
         wire::Ask::DecideProposal(value) => {
-            let wire::AskDecideProposalParts { project, proposer, proposal, decision } = value.into_parts();
+            let wire::AskDecideProposalParts { project, proposer, proposal, decision, running } = value.into_parts();
             domain::Ask::DecideProposal {
                 project,
                 proposer: decode_proposer(proposer),
                 proposal,
                 decision: decode_proposal_decision(decision),
+                running: match running {
+                    Some(wire::Running::Stays) => Some(domain::Running::Stays),
+                    Some(wire::Running::Moves) => Some(domain::Running::Moves),
+                    None => None,
+                },
             }
         }
         wire::Ask::Say(value) => {

@@ -58,6 +58,7 @@ pub(crate) fn refusal(value: p::Refusal, limits: &w::Limits) -> Result<w::Refusa
                         },
                     )?),
                     p::Malformed::SettingsUnchanged => w::Malformed::SettingsUnchanged,
+                    p::Malformed::Running => w::Malformed::Running,
                     p::Malformed::Name(rule) => w::Malformed::Name(w::MalformedName::new(
                         limits,
                         w::MalformedNameParts { rule: name_rule(rule) },
@@ -244,6 +245,7 @@ pub(super) fn limit(value: p::LimitKind) -> w::AdmissionLimit {
         p::LimitKind::HolderAccounts => w::AdmissionLimit::HolderAccounts,
         p::LimitKind::Sources => w::AdmissionLimit::Sources,
         p::LimitKind::SignIns => w::AdmissionLimit::SignIns,
+        p::LimitKind::SettingsProposals => w::AdmissionLimit::SettingsProposals,
     }
 }
 fn moved(value: p::Moved, limits: &w::Limits) -> Result<w::Refusal, w::Problem> {

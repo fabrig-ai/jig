@@ -36,6 +36,7 @@ pub fn amendment(
 }
 pub fn kind(value: t::ProposalKind) -> w::OwnerMessageProposalKind {
     match value {
+        t::ProposalKind::Settings => w::OwnerMessageProposalKind::Settings,
         t::ProposalKind::Batch => w::OwnerMessageProposalKind::Batch,
         t::ProposalKind::Effect => w::OwnerMessageProposalKind::Effect,
         t::ProposalKind::Amend => w::OwnerMessageProposalKind::Amend,
@@ -103,7 +104,20 @@ pub fn action(
     limits: &w::Limits,
 ) -> Result<w::OwnerProposalAction, w::Problem> {
     Ok(match value {
-        // task E: add the settings action with its pending review or accepted revision when the domain produces it.
+        d::ProposalAction::Settings { against, items, review, made } => {
+            w::OwnerProposalAction::Settings(Box::new(w::OwnerProposalActionSettings::new(
+                limits,
+                w::OwnerProposalActionSettingsParts {
+                    against: *against,
+                    items: super::super::settings::item_heads(items, limits)?,
+                    made: *made,
+                    review: match review {
+                        Some(review) => Some(super::super::settings::review(review, models, limits)?),
+                        None => None,
+                    },
+                },
+            )?))
+        }
         d::ProposalAction::Batch(value) => {
             let mut rows = List::with_capacity(value.len());
             for row in value {

@@ -6,7 +6,7 @@ enum Proposer { task: ProposerTask, party: ProposerParty }
 enum ProposalChoice { accepted, rejected, passed, withdrawn, stale }
 record EscalationDecisionReject { reason: bytes 8192 }
 enum EscalationDecision { release, reject: EscalationDecisionReject, pass }
-enum ProposalKind { batch, effect, amend, widen, release }
+enum ProposalKind { batch, effect, amend, widen, release, settings }
 record EscalationOutcomePassed { revision: u64 }
 enum EscalationOutcome { released, rejected, passed: EscalationOutcomePassed, stale, no_further, limit }
 enum ProposalOutcome { accepted, rejected, passed, withdrawn, stale }
