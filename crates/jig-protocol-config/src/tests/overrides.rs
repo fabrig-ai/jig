@@ -477,3 +477,23 @@ fn a_journal_too_small_for_settings_is_refused_before_start() {
     }
     assert!(found, "the refusal names the journal write limit");
 }
+
+#[test]
+fn a_policy_override_past_the_codec_envelope_is_refused_at_its_path() {
+    let errors = parse(br#"{"profile":"small","overrides":{"core.policy_bytes":65536}}"#).unwrap_err();
+    assert_eq!(errors.problems.len(), 1);
+    let problem = errors.problems.get(0).unwrap();
+    assert_eq!(problem.path, path(&[b"limits", b"overrides", b"core.policy_bytes"]));
+    assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.overrides.core.policy_bytes: 65536 exceeds the people-v13 codec envelope of 43695 bytes (PolicyValue.permissions would need 98304 bytes; ceiling 65536).");
+}
+
+#[test]
+fn whole_admission_checks_the_limits_handed_to_the_store() {
+    let mut engine = super::fixtures::engine(super::fixtures::ENGINE_SMALL).unwrap();
+    engine.limits.core.policy_bytes = 65_536;
+    let mut problems = Problems::empty();
+    crate::domain::whole(&engine, &mut problems);
+    let problem = problems.problems.get(0).unwrap();
+    assert_eq!(problem.path, path(&[b"limits", b"core", b"policy_bytes"]));
+    assert_eq!(problem.codec_message().unwrap().as_ref(), b"limits.core.policy_bytes: 65536 exceeds the people-v13 codec envelope of 43695 bytes (PolicyValue.permissions would need 98304 bytes; ceiling 65536).");
+}
