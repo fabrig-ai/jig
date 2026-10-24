@@ -491,6 +491,14 @@ live task's window in the copy before the switch (store.md, 10.2, step
 4), so the restart restores them closed, and each task's next attempt
 starts fresh (7.2).
 
+`RestartRequest::ProjectPolicy { project: u32 }` names a saved project
+policy whose byte size exceeds `limits.policy_bytes` or cannot be
+accounted. `Core::restore_policy` keeps its boolean result, records this
+refusal and stops the restart. `Core::restore_failure(&self) -> Option<RestartRequest>` reports either
+this refusal or the existing
+`Settings { failure, changed }` detail from one private slot. A later
+`restart_refuse` retains it, and `restart_done` returns it without advancing.
+
 ### 6.1 Stopping
 
 The engine stops when its service is told to (a signal, an operator), and
@@ -1931,6 +1939,10 @@ Its code comes after the rest (`../STATUS.md`).
   - *past limits:* held revisions or charter versions past limits
     lowered since, or a release's revision that would pass them, refuse
     the start, saying which, as a live set past lowered limits does.
+
+  A saved project policy above the current policy byte budget refuses the
+  start naming its project and policy; the named restore failure is retained
+  until the shell reports it.
 
   All of it, the release's revision included, is committed before the
   core admits anything.

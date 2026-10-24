@@ -460,7 +460,11 @@ impl Core {
         }
         match people::policy_bytes(&value) {
             Some(bytes) if bytes <= limits.policy_bytes => {}
-            Some(_) | None => return false,
+            Some(_) | None => {
+                self.restore_failure = Some(crate::RestartRequest::ProjectPolicy { project });
+                let _refused = self.restart_refuse();
+                return false;
+            }
         }
         let Some(ceiling) = authority_to_authority(value.ceiling.clone()) else { return false };
         let mut policy = authority::Policy {

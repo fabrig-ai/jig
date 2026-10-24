@@ -206,6 +206,98 @@ pub(crate) fn limits() -> Limits {
         },
     }
 }
+
+// Existing Small-profile bounds (jig-protocol-config/src/profile/small.rs). The
+// tiny unit limits cannot express a 16 KiB policy while keeping its shape valid.
+pub(crate) const RESTORE_POLICY_BYTES: u64 = 16_384;
+const RESTORE_GRANTS: u32 = 4;
+const RESTORE_REQUIREMENTS: u32 = 4;
+const RESTORE_SEGMENTS: u32 = 4;
+const RESTORE_SEGMENT_BYTES: u32 = 256;
+const RESTORE_NOTE_SCOPES: u32 = 8;
+pub(crate) const RESTORE_PROJECT: u32 = 1;
+const RESTORE_CONNECTOR: u16 = 1;
+
+/// One policy of the requested owned size, under independent Small-profile
+/// shape bounds. Full note scopes account for most bytes; requirement words
+/// fill the rest without changing counts, references, authority or funding.
+pub(crate) fn restoring_sized_policy(bytes: u64) -> (Core, Limits, ConfiguredPolicy) {
+    let mut limits = limits();
+    limits.policy_bytes = RESTORE_POLICY_BYTES;
+    limits.authority.grants = RESTORE_GRANTS;
+    limits.authority.requirements = RESTORE_REQUIREMENTS;
+    limits.authority.segments = RESTORE_SEGMENTS;
+    limits.authority.segment_bytes = RESTORE_SEGMENT_BYTES;
+    limits.notes.scopes = RESTORE_NOTE_SCOPES;
+    let mut config = config(41);
+    let mut configured = config.seed_projects[0].policy.clone();
+    configured.permissions = Box::new([]);
+    let word = restore_policy_word(u64::from(RESTORE_SEGMENT_BYTES));
+    let mut segments = List::with_capacity(RESTORE_SEGMENTS);
+    for _ in 0..RESTORE_SEGMENTS {
+        segments.push(word.clone()).expect("scope segment count");
+    }
+    let scope = authority::ResourceScope {
+        connector: RESTORE_CONNECTOR,
+        pattern: authority::Pattern { segments: segments.into_boxed(), last: authority::Last::Exact(word) },
+    };
+    let mut scopes = List::with_capacity(RESTORE_GRANTS);
+    for _ in 0..RESTORE_GRANTS {
+        scopes.push(scope.clone()).expect("scope count");
+    }
+    let scopes = scopes.into_boxed();
+    config.defaults.rules.ceiling.note_resources = scopes.clone();
+    configured.policy.ceiling.note_resources = scopes.clone();
+    configured.policy.roles[0].authority.note_resources = scopes;
+    let mut segments = List::with_capacity(RESTORE_SEGMENTS);
+    for _ in 0..RESTORE_SEGMENTS {
+        segments.push(Box::<[u8]>::from([])).expect("requirement segment count");
+    }
+    let requirement = authority::Requirement {
+        connector: RESTORE_CONNECTOR,
+        kind: 1,
+        pattern: authority::Pattern { segments: segments.into_boxed(), last: authority::Last::Exact(Box::new([])) },
+        judge: authority::Judge { connector: RESTORE_CONNECTOR, requirement: 1, parameters: 0 },
+        guard: authority::Guard::Guarded,
+        must_be_guarded: false,
+    };
+    let mut requirements = List::with_capacity(RESTORE_REQUIREMENTS);
+    for _ in 0..RESTORE_REQUIREMENTS {
+        requirements.push(requirement.clone()).expect("requirement count");
+    }
+    configured.policy.requirements = requirements.into_boxed();
+    let snapshot = policy::snapshot(&configured.policy, &configured.permissions, &configured.templates)
+        .expect("bounded policy snapshot");
+    let base = people::policy_bytes(&snapshot).expect("bounded policy bytes");
+    let mut remaining = bytes.checked_sub(base).expect("requested size holds the policy carriers and scopes");
+    for requirement in &mut configured.policy.requirements {
+        for segment in &mut requirement.pattern.segments {
+            let count = remaining.min(u64::from(RESTORE_SEGMENT_BYTES));
+            *segment = restore_policy_word(count);
+            remaining = remaining.checked_sub(count).expect("remaining requirement bytes");
+        }
+        let count = remaining.min(u64::from(RESTORE_SEGMENT_BYTES));
+        requirement.pattern.last = authority::Last::Exact(restore_policy_word(count));
+        remaining = remaining.checked_sub(count).expect("remaining terminal bytes");
+    }
+    config.seed_projects = Box::new([]);
+    let mut core = Core::new(config, &limits).expect("restoring core");
+    core.restart_begin();
+    let mut deployment = core.counters.deployment();
+    deployment.projects = u64::from(RESTORE_PROJECT);
+    deployment.commits = 1;
+    core.restore_core(CoreRecord::Deployment(deployment), &limits);
+    (core, limits, configured)
+}
+
+fn restore_policy_word(count: u64) -> Box<[u8]> {
+    let mut word = List::with_capacity(u32::try_from(count).expect("bounded word size"));
+    for _ in 0..count {
+        word.push(b'x').expect("word byte count");
+    }
+    word.into_boxed()
+}
+
 fn authority_limits() -> authority::Limits {
     authority::Limits {
         projects: 1,

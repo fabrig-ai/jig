@@ -146,7 +146,7 @@ fn a_stored_charter_with_an_unconfigured_model_refuses_the_start_naming_the_chan
     })]));
     world.restart_with(configuration().0);
     assert_eq!(
-        world.domain.settings_failure(),
+        world.domain.restore_failure(),
         Some(core::RestartRequest::Settings {
             failure: settings::Failure { setting: settings::Setting::Charter(1), fault: settings::Fault::Reference },
             changed: true
@@ -171,7 +171,7 @@ fn a_live_agent_task_on_a_dropped_charter_refuses_the_start_before_a_release_com
     config.core.defaults.rules.ceiling.delegation.kinds = Box::new([]);
     world.restart_with(config);
     assert_eq!(
-        world.domain.settings_failure(),
+        world.domain.restore_failure(),
         Some(core::RestartRequest::Settings {
             failure: settings::Failure { setting: settings::Setting::Charter(1), fault: settings::Fault::Reference },
             changed: false
@@ -203,7 +203,7 @@ fn changes_past_their_kinds_bound_refuse_before_the_overflow_value_is_retained()
     assert!(!world.domain.ready());
     assert!(!world.domain.settings().changed(settings::Setting::Charter(extra)));
     assert_eq!(
-        world.domain.settings_failure(),
+        world.domain.restore_failure(),
         Some(core::RestartRequest::Settings {
             failure: settings::Failure { setting: settings::Setting::Charter(extra), fault: settings::Fault::Count },
             changed: true

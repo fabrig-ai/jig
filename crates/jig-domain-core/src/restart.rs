@@ -81,6 +81,8 @@ pub enum RestartStep {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartRequest {
     Settings { failure: crate::settings::Failure, changed: bool },
+    /// A saved project policy exceeds the current byte budget or cannot be accounted.
+    ProjectPolicy { project: u32 },
     Step(RestartStep),
     Idle,
     Refused { step: RestartStep },
@@ -161,6 +163,12 @@ impl Core {
         }
     }
 
+    /// The named settings or project-policy refusal, retained for the shell's report.
+    #[must_use]
+    pub const fn restore_failure(&self) -> Option<RestartRequest> {
+        self.restore_failure
+    }
+
     /// Connector continuations and timers may finish the step currently asked.
     #[must_use]
     pub fn restart_step(&self) -> Option<RestartStep> {
@@ -173,7 +181,7 @@ impl Core {
     /// Advance only from the matching completed step. Proofs must all be loaded
     /// and every restored claim must reach the fleet before the script proceeds.
     pub fn restart_done(&mut self, done: RestartStep) -> RestartRequest {
-        if let Some(failure) = self.settings_failure {
+        if let Some(failure) = self.restore_failure {
             return failure;
         }
         match self.restart {

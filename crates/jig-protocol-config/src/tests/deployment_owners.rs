@@ -152,8 +152,14 @@ fn first_owners_hold_the_deployments_roles_across_start_and_restart() {
             first_saves.insert(0, Record::Core(CoreRecord::Deployment(core.counters.next_commit())));
         }
         let mut restart = core.restart_done(RestartStep::LoadCore);
-        while let RestartRequest::Step(next) = restart {
-            restart = core.restart_done(next);
+        loop {
+            match restart {
+                RestartRequest::Step(next) => restart = core.restart_done(next),
+                RestartRequest::Idle => break,
+                RestartRequest::Settings { .. }
+                | RestartRequest::ProjectPolicy { .. }
+                | RestartRequest::Refused { .. } => panic!("first-owner restart refused: {restart:?}"),
+            }
         }
         if row.sign_in {
             records.extend(saves(

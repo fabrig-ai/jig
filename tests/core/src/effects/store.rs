@@ -57,7 +57,7 @@ impl World {
                     }
                     let env = self.env();
                     let restored = root::restore_record(&mut self.domain, &env, row.clone());
-                    assert!(restored || self.domain.settings_failure().is_some(), "restored {row:?}");
+                    assert!(restored || self.domain.restore_failure().is_some(), "restored {row:?}");
                 }
                 Up::Root(event) => {
                     if let root::Event::RestartDone(step) = &event {

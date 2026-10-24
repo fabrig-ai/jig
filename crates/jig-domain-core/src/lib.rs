@@ -349,7 +349,7 @@ pub struct Core {
     pub current: settings::Current,
     pub(crate) hub_turns: u32,
     pub(crate) settings_restore: settings::restart::Restore,
-    pub(crate) settings_failure: Option<RestartRequest>,
+    pub(crate) restore_failure: Option<RestartRequest>,
     /// Names seeded or restored with the project policies (core.md, 6.1).
     pub(crate) names: Map<u32, Box<str>>,
     /// Mutable connector permission mappings approved by policy edits.
@@ -733,7 +733,7 @@ impl Core {
             current,
             hub_turns: config.hub_turns,
             settings_restore: settings::restart::Restore::new(limits),
-            settings_failure: None,
+            restore_failure: None,
             authority,
             people: people::Domain::new(
                 &limits.people,

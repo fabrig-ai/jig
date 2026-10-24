@@ -361,8 +361,8 @@ impl Domain {
         &self.core.current
     }
     #[must_use]
-    pub fn settings_failure(&self) -> Option<core::RestartRequest> {
-        self.core.settings_failure()
+    pub fn restore_failure(&self) -> Option<core::RestartRequest> {
+        self.core.restore_failure()
     }
     /// Project each child's original elapsed deadline and the saved people
     /// wall expiry at the supplied clocks. The loop sends the owner's Timer.
@@ -520,6 +520,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
                 core::RestartRequest::Step(step) => domain.restart_load = Some(step),
                 core::RestartRequest::Idle
                 | core::RestartRequest::Settings { .. }
+                | core::RestartRequest::ProjectPolicy { .. }
                 | core::RestartRequest::Refused { .. } => {}
             }
         }
@@ -719,7 +720,9 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
             }
             Work::Restart(request) => match request {
                 core::RestartRequest::Idle => {}
-                core::RestartRequest::Settings { .. } | core::RestartRequest::Refused { .. } => {
+                core::RestartRequest::Settings { .. }
+                | core::RestartRequest::ProjectPolicy { .. }
+                | core::RestartRequest::Refused { .. } => {
                     domain.stopped_reported = false;
                 }
                 core::RestartRequest::Step(step) => match step {

@@ -20,7 +20,10 @@ pub(crate) fn route(
     work: &mut Queue<Work>,
 ) {
     match request {
-        core::RestartRequest::Idle | core::RestartRequest::Settings { .. } | core::RestartRequest::Refused { .. } => {}
+        core::RestartRequest::Idle
+        | core::RestartRequest::Settings { .. }
+        | core::RestartRequest::ProjectPolicy { .. }
+        | core::RestartRequest::Refused { .. } => {}
         core::RestartRequest::Step(step) => match step {
             core::RestartStep::LoadCore => held(decision, Output::Load { step, range: Range::Core }),
             core::RestartStep::LoadInbox => {
