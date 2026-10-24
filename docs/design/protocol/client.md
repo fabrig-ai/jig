@@ -1,6 +1,6 @@
 # The client's protocol
 
-Provisional, 2026-10-10, revised 2026-10-23. What carries jig's API
+Provisional, 2026-10-10, revised 2026-10-24. What carries jig's API
 (`../client/domain/contract.md`) as messages and bytes, whatever the
 transport: jig's messages; the clients' component's messages toward the
 application's transport and server, and the client's link toward its
@@ -441,7 +441,7 @@ heard:    Reply { exchange, message } | Lost { exchange } | Streamed { message }
   request always has the same digest. A request carrying a value
   (below) has a digest of its own.
 - **A request carrying a value,** an LLM account's key added or
-  replaced, or a moved account's file moved in
+  replaced, a sign-in's pasted address, or a moved account's file moved in
   (`../client/domain/contract.md`, 3.2), or an application's
   request that carries one, is sent once and never kept: the client
   never stores it in the small store, and never sends it again by
@@ -454,7 +454,10 @@ heard:    Reply { exchange, message } | Lost { exchange } | Streamed { message }
     value named by a number jig draws for it, never one the request
     names, and the value's digest. An LLM key's value is then adopted
     into its source's secret row in one commit, which erases the
-    carried row (`store.md`, section 9). The request's own digest covers
+    carried row (`store.md`, section 9). A sign-in's pasted address is
+    held, not kept: in the secrets' store's memory alone, never written,
+    and erased once its request is answered, the core leaving every
+    finish unused (`store.md`, section 9; `llm.md`, 5.4). The request's own digest covers
     its record, the value left out, and its value, each after its
     length, in place of the record's bytes as they came, so that a key
     sent again with another value is told apart. Those digests are the

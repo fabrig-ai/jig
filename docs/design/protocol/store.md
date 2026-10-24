@@ -994,6 +994,20 @@ Removing a missing file is not a failure.
   so, naming the number, and the component erases that value, if its
   own decode kept it; replacing or erasing a kept value goes through
   the core's decisions alone.
+- **A pasted address held, never kept.** A sign-in's pasted address
+  (`llm.md`, 5.4) is carried as a key is, with one difference: the
+  store holds it in memory and writes nothing, under a number of a
+  range of its own, drawn in memory, which names a value of this run
+  alone. The core names it by number and digest as it names a carried
+  value, and leaves its request unused whatever the answer, so the
+  clients' component erases it once the request is answered, its one
+  eraser; the accounts component only reads it, and a value already
+  gone answers its finish not waiting. The store drops what it holds
+  at its close, and a value held past the sign-in time; a crash or a
+  restart loses it with the sign-in it was for, which never survives
+  one. Held values are bounded by the clients' component's carried
+  values at once, each by the driver's redirect bound, in the worst
+  case.
 - **An LLM key adopted before granted.** The accounts component checks
   the carried value against its byte bound, then asks the store to
   adopt it into the source's row, naming the digest it replaces, or

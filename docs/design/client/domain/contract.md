@@ -1,6 +1,6 @@
 # The client and the engine
 
-Provisional, 2026-10-09, revised 2026-10-23. jig's API: what crosses
+Provisional, 2026-10-09, revised 2026-10-24. jig's API: what crosses
 between a party's client and the engine, at the level of the two
 domains. It says who the party is; the plumbing operations a party asks,
 alone or several in one compound request, each keyed and answered once
@@ -221,7 +221,7 @@ has left (`../../domain/authority.md`, 8.1 and 8.4).
 | `MakeProject` | the deployment, its scope (7.5); the new project's name (`../../domain/core.md`, 6.1); the number of a policy among the settings, the newest's (`../../domain/engine.md`, 17.1) | a project, its policy a copy of that one, its maker its owner and only party (`../../domain/people.md`, 5.2), its number answered; the maker's `me` gains it. Not among a compound request's operations (3.4) |
 | the project's own | notes, by the revision recalled; its name (`../../domain/core.md`, 6.1); the policy, its templates' overrides among them (3.6); roles; a party's pool; services, a service's credential answered once; as `../../domain/people.md`, 5.1 and 5.2 | the note or the project changed |
 | adopting a resource | the application's own request (3.3), its form the application's; the engine's root makes the people request on the party's behalf | the project changed |
-| the party's LLM accounts | as `../../domain/accounts.md`, section 5 has them: signing in with an LLM provider; signing a source out; adding or replacing a key, carrying its value (3.1), of at most the bytes `me` states (5.1), and removing one; declaring a program's login under a name; checking a program source's login; an account's place among the holder's and its sources' order; its uses; resuming a limited source; removing an account, which signs each of its sources out and erases its keys; moving an account out, saying it *written* by the move's number, and moving one in, carrying the moved file as its value (3.1; `../../domain/accounts.md`, section 6). The party's own accounts, or, for an owner, the deployment's | an account made, renewed or changed. A sign-in is answered done with the address to open in a browser on the engine's machine, and ends on the `accounts` watch (7.1), made, renewed or refused; a sign-out's answer says whether the provider confirmed revocation, and names each host that did not sign a program's login out; a program's login declared is answered with the source's name, by which the application's own command signs the program in on each host; a move out is answered *moving out*, naming the account and the move's number, with the moved record to write, once (3.1); *written* is answered done; a move in is answered *moved in*, naming the account and whether it renewed one |
+| the party's LLM accounts | as `../../domain/accounts.md`, section 5 has them: signing in with an LLM provider; finishing the party's sign-in under way with the address its browser was sent to, carrying it as its value (3.1), of at most the bytes `me` states (5.1); signing a source out; adding or replacing a key, carrying its value (3.1), of at most the bytes `me` states (5.1), and removing one; declaring a program's login under a name; checking a program source's login; an account's place among the holder's and its sources' order; its uses; resuming a limited source; removing an account, which signs each of its sources out and erases its keys; moving an account out, saying it *written* by the move's number, and moving one in, carrying the moved file as its value (3.1; `../../domain/accounts.md`, section 6). The party's own accounts, or, for an owner, the deployment's | an account made, renewed or changed. A sign-in is answered done with the address to open in a browser, and ends on the `accounts` watch (7.1), made, renewed or refused; a finish is answered *finishing* once the sign-in has taken the address, and the sign-in ends on the watch; a sign-out's answer says whether the provider confirmed revocation, and names each host that did not sign a program's login out; a program's login declared is answered with the source's name, by which the application's own command signs the program in on each host; a move out is answered *moving out*, naming the account and the move's number, with the moved record to write, once (3.1); *written* is answered done; a move in is answered *moved in*, naming the account and whether it renewed one |
 
 - **A task's fields cross as data** (`../../domain/tasks.md`,
   section 3): *tracked* and *priority*, which the engine acts on; a
@@ -458,7 +458,7 @@ Every request has one answer, of one of these kinds:
   - *limit:* which one (the deployment's projects, the project's live
     tasks, its goals, the
     operations per request, a grace past its bound, the inbox full, the
-    words too long, a key past the bytes `me` states (5.1), the LLM
+    words too long, a key or a pasted address past the bytes `me` states (5.1), the LLM
     accounts' bounds: accounts in the deployment, accounts per holder,
     sources per account, sign-ins at once, program sources per worker);
   - *provider's rule:* an LLM provider's terms forbid it, naming the
@@ -504,6 +504,16 @@ Every request has one answer, of one of these kinds:
     the check's closed list (`../../domain/engine.md`, 17.1), or that
     changes nothing). A client words each refusal of a change from
     these facts, checking no setting itself;
+  - *sign-in redirect:* a finish refused, saying why: *not waiting*
+    (no sign-in of the party's under that number waits for its
+    redirect: none, another party's, one that has taken one, ended,
+    or begun before the engine's restart), *address* (not the
+    sign-in's redirect: another scheme, host, port or path, a
+    fragment, a field twice, past its bounds, or without its code or
+    issued client id), *state* (another sign-in's: the sign-in still
+    waits), or *too many* (it has refused a few for their state, and
+    takes no more pastes, still waiting for its browser: skein's
+    `oauth.md`, 6.5; `../../domain/accounts.md`, section 5);
   - *key conflict:* the key names another ask, which is a client's bug
     where the client drew the key (3.1);
   - *account move:* an account's move refused, saying why: *not signed
@@ -565,7 +575,8 @@ served is held, kept and unsent, for its owner's version (client.md,
     cache writes are priced at input when no separate price is given)
     and its optional description as configured, so that a task's LLM
     choice (3.2) is drafted from it; the most bytes a key may have,
-    which bounds a request carrying one (3.1); and the retention of the
+    which bounds a request carrying one (3.1), and the most a pasted
+    sign-in address may have, the driver's redirect bound; and the retention of the
     engine's answers (3.1). It carries no version: the stream's hello does
     (section 8);
   - *a task:* its header, overview, budget and authority; its fields

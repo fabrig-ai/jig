@@ -1,6 +1,6 @@
 # LLM accounts
 
-Provisional, 2026-10-19, revised 2026-10-23. How an application on jig pays for its runs'
+Provisional, 2026-10-19, revised 2026-10-24. How an application on jig pays for its runs'
 LLMs: who holds an account, the sources by which a run may use it, the
 states the accounts child keeps of each, whose work it pays for, which
 account each run gets, what people do with their accounts, and how an
@@ -510,7 +510,8 @@ among their own (`../client/domain/contract.md`, 7.1).
 
 | Request | What it does |
 |---|---|
-| sign in | starts an LLM provider's sign-in; the visit goes to the client that asked, and the redirect to a loopback listener the engine binds for this sign-in; makes an account, renews one of the same subject, or is refused for a subject another holder holds (3.3); refused before it starts for the deployment where the provider's sign-in brings a plan, since only a person holds one (3.2) |
+| sign in | starts an LLM provider's sign-in, cancelling first the party's own still waiting with that provider, which ends *cancelled*, so that starting again gets a port the provider fixes (`../protocol/llm.md`, 5.4); the visit goes to the client that asked, and the redirect to a loopback listener the engine binds for this sign-in; makes an account, renews one of the same subject, or is refused for a subject another holder holds (3.3); refused before it starts for the deployment where the provider's sign-in brings a plan, since only a person holds one (3.2) |
+| finish a sign-in | the address the sign-in's browser was sent to, which its person pasted, for a browser on another machine than the engine's: carried as a key is, and handed to the sign-in as its redirect (`../protocol/llm.md`, 5.4); only from the party who started that sign-in, while it waits; answered *finishing* once the sign-in takes it, the sign-in then ending as any does; refused, the sign-in still waiting, as another address, another sign-in's state, or *too many* once it has refused a few for their state; refused *not waiting* when no sign-in of the party's under that number waits, whoever's it is, once it has taken a redirect, ended, or the engine restarted, and while another finish of it is out; a sign-in that ends with a finish out answers it *not waiting* before its end |
 | sign out | revokes the record at the LLM provider, or has each worker sign a program's login out, and removes the source; when revocation is not confirmed, the answer says to disconnect the application in the provider's settings (providers.md, 2.3) |
 | add a key, replace it, remove it | adding names the account it joins, a new key's account by default; a person's, or the deployment's by its owners, or added by the deployment's `AddKey` (people.md, 5.3) |
 | declare a program's login | makes the account, or adds the source to one, under the name its holder gives (3.4); each host then reports whether its login is usable, and the answer names the application's command to run there, which hands the terminal to the program's own sign-in (smith's `protocol/programs.md`, section 4) |
@@ -538,9 +539,16 @@ among their own (`../client/domain/contract.md`, 7.1).
   binds a loopback listener on an ephemeral port for each sign-in, or
   on the port its configuration fixes (`../protocol/llm.md`, section 5),
   as an LLM provider that requires a loopback redirect allows
-  (providers.md, 2.2). The person signs in from a browser on the
-  engine's machine, or on another computer, whose record a move then
-  brings in (section 6).
+  (providers.md, 2.2). A person whose browser is on another computer
+  finishes the sign-in with the address that browser was sent to
+  (above), or signs in on a computer of their own whose record a move
+  then brings in (section 6).
+- **A pasted address is a value too,** held, never kept: in memory,
+  for as long as its request takes, and erased whatever its answer
+  (`../protocol/store.md`, section 9). It holds the sign-in's state and
+  its code, but no token or verifier: the code is spent once, and only
+  with the verifier the engine holds. Only its starter may hand it
+  in, since a state or a sign-in's number alone grants nothing.
 - **Plan usage declined** keeps the sign-in and marks the source
   refused, and the answer offers its two ways on: sign in again with
   the scope, or another source (providers.md, 2.2).

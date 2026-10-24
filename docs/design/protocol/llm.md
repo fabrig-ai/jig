@@ -1,6 +1,6 @@
 # LLM calls and accounts in the engine
 
-Provisional, 2026-10-10, revised 2026-10-23. How a host that runs agents
+Provisional, 2026-10-10, revised 2026-10-24. How a host that runs agents
 in its own process makes their LLM calls, and how every engine that runs
 agents carries out its LLM accounts: the completions
 `smith-inline-agent`'s runs ask for, in the engine or on a worker whose
@@ -237,6 +237,7 @@ child's vocabulary and the driver's, both ways, exhaustive on both:
 | release a source | release |
 | sign out a source, or remove it | sign out: revoke its record, take the account out |
 | cancel a sign-in | cancel |
+| finish a sign-in, with the number of the address its person pasted | redirected, with the address read from the secrets' store (5.4); a value already gone, the finish not waiting |
 | withdraw a source for a move | release, then remove: an exchange already sent finishes and keeps its record first (5.6) |
 | bring a moved source back, or adopt a moved record | add, with its record and the owner's store as keeper (5.6) |
 | refresh a source once before it is lent | nothing more: the record that add hands over has its access token disowned, so the driver's first grant refreshes it (5.6) |
@@ -246,6 +247,8 @@ child's vocabulary and the driver's, both ways, exhaustive on both:
 |---|---|
 | visit: the authorization address | visit: the address the party's sign-in request is answered with |
 | keep: a record | nothing: the routing keeps it in the secrets' store and answers `kept` (`store.md`, section 9) |
+| taken: a redirected the sign-in took | the finish taken: its answer, *finishing* |
+| refused, a redirected: another address, another sign-in's state, full, or not waiting | the finish refused, saying which (full: *too many*), the sign-in still waiting: never a sign-in failed, nor its source signed out; not waiting for any other refusal of a redirected |
 | signed in: the subject, the scopes granted | signed in, with the subject and display name: the child makes the account, renews the one of that subject, or refuses the subject another holder holds (`../domain/accounts.md`, 3.3) |
 | signed in, without a scope the provider requires | refused, naming the scope |
 | granted: the access token, its generation, how long it is valid | granted: the generation and how long it is valid; the token goes into the table (5.3) |
@@ -260,8 +263,8 @@ child's vocabulary and the driver's, both ways, exhaustive on both:
 | closed | closed |
 
 - **Unreachable in the engine:** `hand in` and `expiring`, since no
-  access-only record is handed in (5.4); `redirected`, since a confidential
-  registration is refused at its start; a grant's refusals for an
+  access-only record is handed in (5.4); a `redirected` refused for its
+  source, since a confidential registration is refused at its start; a grant's refusals for an
   account the driver does not hold. The translation names them, and
   asserts they never come.
 - **The visit is not a value to hide:** the address holds the sign-in's
@@ -305,8 +308,24 @@ child's vocabulary and the driver's, both ways, exhaustive on both:
   its `accounts` watch (`../client/domain/contract.md`, 7.1).
 - **Only a public registration signs in.** A confidential one, whose
   redirect reaches a web server (skein's `oauth.md`, 6.5), is refused
-  at its start, naming the LLM provider. Signing in from a browser on
-  another machine is open (section 10).
+  at its start, naming the LLM provider.
+- **A browser on another machine** than the engine's is sent to the
+  redirect on its own loopback, where nothing answers. Its person
+  copies that page's whole address and finishes the sign-in with it
+  through a client (`../domain/accounts.md`, section 5): the request
+  carries the address as its value, which the clients' component holds
+  in the secrets' store, in memory and never written (`store.md`,
+  section 9), and the core hands the accounts child its number. The
+  child admits it only from the party who started that sign-in, while
+  it waits, one at a time; the routing reads the address and hands it
+  to the driver as a `redirected` (skein's `oauth.md`, 6.5). The
+  clients' component erases it once the request is answered, whatever
+  the answer: the core leaves every finish unused, as it leaves a
+  refused key's value. The driver checks it as its listener checks a
+  redirect, against the address the listener bound, and takes it or
+  refuses it with the sign-in still waiting; the listener stays up
+  meanwhile, so whichever comes first is the sign-in's one exchange.
+  The sign-in ends on the `accounts` watch as any does.
 - **The registration's parts.** The client id the provider issues at
   the first sign-in is kept with the record and used after it; the
   installation's identifier (`store.md`, 4.4) goes where the provider
@@ -551,8 +570,8 @@ section 2).
 
 - **A redirect relayed by a client,** for an engine on another machine
   than the person's browser: the native client binds the loopback
-  listener and hands the code to the engine. Until then, a sign-in's
-  browser is on the engine's machine (5.4). A confidential
+  listener and hands the redirect to the engine, as a pasted one is
+  (5.4), with no person copying it. A confidential
   registration's redirect, reaching the application's server on its own
   routes, which hands it to the driver (`service.md`, section 2), is
   open with it.
