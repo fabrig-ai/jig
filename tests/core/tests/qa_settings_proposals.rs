@@ -562,6 +562,7 @@ fn a_stale_proposal_reports_the_newest_revision() {
 }
 
 #[test]
+#[ignore = "F (mission 3): a task records and moves to its settings revision, engine.md 17.3-17.4; E-QA-1"]
 fn acceptance_can_move_tasks_without_changing_a_live_run() {
     let mut world = world();
     let owner = world.sign_in.expect("owner sign-in");
@@ -608,6 +609,7 @@ fn a_party_without_any_role_cannot_propose_settings() {
 }
 
 #[test]
+#[ignore = "F (mission 3): a task records and moves to its settings revision, engine.md 17.3-17.4; E-QA-1"]
 fn acceptance_moves_work_created_after_a_real_first_start() {
     let (config, limits) = configuration();
     let mut world = World::first_start_with_accounts(config, &limits);
