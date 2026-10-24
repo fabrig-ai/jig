@@ -645,6 +645,7 @@ fn atomic(world: &mut World, action: Action) -> Result<(), Violation> {
                     proposer: people::Proposer::Task(parent(world).0),
                     proposal,
                     decision: people::ProposalDecision::Accept,
+                    running: None,
                 },
             );
         }

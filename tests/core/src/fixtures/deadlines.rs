@@ -34,7 +34,13 @@ pub fn decide(world: &mut World, sign_in: u64, key: u8, proposal: u64, decision:
         world,
         sign_in,
         key,
-        people::Ask::DecideProposal { project: PROJECT, proposer: people::Proposer::Party(PARTY), proposal, decision },
+        people::Ask::DecideProposal {
+            project: PROJECT,
+            proposer: people::Proposer::Party(PARTY),
+            proposal,
+            decision,
+            running: None,
+        },
     );
 }
 
@@ -122,7 +128,13 @@ pub fn task_decide(world: &mut World, sign_in: u64, key: u8, proposal: u64, deci
         world,
         sign_in,
         key,
-        people::Ask::DecideProposal { project: PROJECT, proposer: people::Proposer::Task(1), proposal, decision },
+        people::Ask::DecideProposal {
+            project: PROJECT,
+            proposer: people::Proposer::Task(1),
+            proposal,
+            decision,
+            running: None,
+        },
     );
 }
 #[must_use]

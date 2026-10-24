@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "each settings binary uses its own subset of the shared story helpers")]
 //! Settings travel through the real restart, store and commit barrier (engine.md, 17.7).
 use jig_core_world::{client_peer::ClientPeer, effects::World, peers, world};
 use jig_domain_core::{self as core, documents, reads, settings};
@@ -100,7 +101,13 @@ pub(super) fn revision(world: &World, number: u32, history: bool) -> &settings::
 }
 pub(super) fn restart(world: &mut World, config: root::Config) {
     world.restart_with(config);
-    assert!(world.domain.ready());
+    assert!(
+        world.domain.ready(),
+        "restart trace: {:?}; steps: {:?}; failure: {:?}",
+        world.trace,
+        world.restart_steps,
+        world.domain.settings_failure()
+    );
 }
 
 pub(super) fn change(
@@ -143,5 +150,175 @@ pub(super) fn settings_rows(world: &World) -> Vec<(root::Key, root::Record)> {
         .iter()
         .filter(|(key, _)| matches!(key, root::Key::Core(core::Key::Core(core::CoreKey::Settings(_)))))
         .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
+}
+
+pub(super) fn propose(
+    world: &mut World,
+    signed: u64,
+    request_key: u8,
+    against: u32,
+    items: Box<[settings::Item]>,
+) -> people::Reply {
+    world.send(root::Event::Core(core::Event::ProposeSettings {
+        reply_to: ReplyTo::new(Token::new(SEED)),
+        sign_in: signed,
+        key: [request_key; 16],
+        digest: [request_key; 32],
+        change: Box::new(settings::Proposed {
+            against,
+            items,
+            reason: b"Please review these settings".as_slice().into(),
+        }),
+    }));
+    let (_, root::Delivery::Core(core::Held::PeopleReply { reply, .. })) =
+        world.client_peer.as_mut().expect("client").delivered.pop().expect("proposal reply")
+    else {
+        panic!("proposal reply")
+    };
+    reply
+}
+pub(super) fn proposed(reply: &people::Reply) -> u64 {
+    let people::Reply::Outcome(people::Outcome::Proposed { proposal, to }) = reply else {
+        panic!("proposed: {reply:?}")
+    };
+    assert_eq!(*to, people::Role::Owner.number());
+    *proposal
+}
+pub(super) fn party(world: &mut World, subject: &[u8], role: Option<(u32, people::Role)>) -> (u64, u64) {
+    world.send(root::Event::Core(core::Event::SignIn {
+        held: None,
+        reply_to: ReplyTo::new(Token::new(SEED)),
+        identity: people::Identity {
+            key: people::IdentityKey { provider: 1, subject: subject.into() },
+            login: subject.into(),
+            name: subject.into(),
+        },
+    }));
+    let (
+        _,
+        root::Delivery::Core(core::Held::PeopleReply {
+            reply: people::Reply::SignedIn { person, sign_in, .. }, ..
+        }),
+    ) = world.client_peer.as_mut().expect("client").delivered.pop().expect("signed in")
+    else {
+        panic!("signed in")
+    };
+    if let Some((project, role)) = role {
+        let root::Record::Core(core::Record::People(people::Stored::Roles { holdings, .. })) =
+            &world.store.rows[&root::Key::Core(core::Key::People(people::Key::Roles(project)))]
+        else {
+            panic!("seeded roster")
+        };
+        let mut holdings = holdings.to_vec();
+        holdings.push(people::Holding { person, role });
+        world.send(root::Event::Core(core::Event::People(people::Event::Roles {
+            project,
+            holdings: holdings.into_boxed_slice(),
+        })));
+    }
+    (person, sign_in)
+}
+pub(super) fn decide(
+    world: &mut World,
+    signed: u64,
+    request_key: u8,
+    proposer: u64,
+    proposal: u64,
+    decision: people::ProposalDecision,
+    running: Option<people::Running>,
+) -> people::Reply {
+    ask(
+        world,
+        signed,
+        request_key,
+        people::Ask::DecideProposal {
+            project: people::DEPLOYMENT,
+            proposer: people::Proposer::Party(proposer),
+            proposal,
+            decision,
+            running,
+        },
+    )
+}
+pub(super) fn read(world: &mut World, signed: u64, value: reads::Read) -> reads::Answer {
+    world.send(root::Event::Core(core::Event::Read {
+        reply: ReplyTo::new(Token::new(SEED)),
+        sign_in: signed,
+        read: value,
+    }));
+    let (_, root::Delivery::Core(core::Held::Read { answer, .. })) =
+        world.client_peer.as_mut().expect("client").delivered.pop().expect("read reply")
+    else {
+        panic!("read reply")
+    };
+    answer
+}
+pub(super) fn proposal_document(world: &mut World, signed: u64, proposer: u64, proposal: u64) -> documents::Proposal {
+    let reads::Answer::Document(document) =
+        read(world, signed, reads::Read::Proposal { proposer: people::Proposer::Party(proposer), proposal })
+    else {
+        panic!("pending proposal document")
+    };
+    let documents::Document::Proposal(value) = *document else { panic!("proposal document") };
+    *value
+}
+pub(super) fn inventory(world: &mut World, signed: u64) -> documents::Settings {
+    let reads::Answer::Document(document) = read(world, signed, reads::Read::Settings) else {
+        panic!("settings document")
+    };
+    let documents::Document::Settings(value) = *document else { panic!("settings inventory") };
+    *value
+}
+pub(super) fn proposal_set_key(proposer: u64, proposal: u64) -> root::Key {
+    key(settings::Key::Proposal {
+        proposer: people::Proposer::Party(proposer),
+        proposal: u32::try_from(proposal).expect("proposal fits"),
+    })
+}
+pub(super) fn charter_and_template(world: &World) -> Box<[settings::Item]> {
+    let mut charter = world.domain.settings().charter(1).expect("configured charter").clone();
+    charter.policy.instructions = b"Changed by review".as_slice().into();
+    Box::new([
+        settings::Item {
+            setting: settings::Setting::Charter(1),
+            edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+        },
+        settings::Item { setting: settings::Setting::Template(2), edit: settings::Edit::Removed },
+    ])
+}
+pub(super) fn removing_charter(world: &World) -> Box<[settings::Item]> {
+    let mut rules = world.domain.settings().rules().clone();
+    rules.ceiling.delegation.kinds = Box::new([]);
+    Box::new([
+        settings::Item { setting: settings::Setting::Charter(1), edit: settings::Edit::Removed },
+        settings::Item { setting: settings::Setting::Template(1), edit: settings::Edit::Removed },
+        settings::Item { setting: settings::Setting::Policy(1), edit: settings::Edit::Removed },
+        settings::Item {
+            setting: settings::Setting::Rules,
+            edit: settings::Edit::Set(settings::Value::Rules(Box::new(rules))),
+        },
+    ])
+}
+pub(super) fn updates(world: &mut World, signed: u64) -> Vec<documents::InboxEntry> {
+    let reads::Answer::Page(page) = read(
+        world,
+        signed,
+        reads::Read::Inbox {
+            group: reads::Group::Updates,
+            filter: reads::Filter { project: None, goal: None },
+            from: None,
+        },
+    ) else {
+        panic!("updates page")
+    };
+    page.rows
+        .into_boxed()
+        .into_vec()
+        .into_iter()
+        .map(|row| {
+            let reads::PageRow::Inbox(entry) = row else { panic!("inbox entry") };
+            entry
+        })
         .collect()
 }

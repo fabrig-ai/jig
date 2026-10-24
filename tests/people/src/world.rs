@@ -579,9 +579,10 @@ impl World {
                             unreachable!("party batches are exercised by the core world")
                         }
                         Ask::MakeService { .. } => RouteKind::Service,
-                        Ask::DecideProposal { .. } | Ask::Propose { action: people::Action::Amend { .. }, .. } => {
-                            RouteKind::Proposal
-                        }
+                        Ask::DecideProposal { .. }
+                        | Ask::Propose {
+                            action: people::Action::Amend { .. } | people::Action::Settings { .. }, ..
+                        } => RouteKind::Proposal,
                         Ask::TakePerson { .. } | Ask::HandBackPerson { .. } | Ask::AnswerPerson { .. } => {
                             RouteKind::TakePerson
                         }
@@ -777,6 +778,18 @@ impl World {
                                     &mut self.domain,
                                     &self.env,
                                     Event::MakeService { request, person: candidate },
+                                    &mut self.out,
+                                );
+                            }
+                            Ask::Propose { action: people::Action::Settings { .. }, .. } => {
+                                let proposal = self.name();
+                                people::step(
+                                    &mut self.domain,
+                                    &self.env,
+                                    Event::Decided {
+                                        request,
+                                        outcome: Outcome::Proposed { proposal, to: people::Role::Owner.number() },
+                                    },
                                     &mut self.out,
                                 );
                             }

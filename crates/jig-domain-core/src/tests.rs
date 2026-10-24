@@ -132,7 +132,7 @@ pub(crate) fn limits() -> Limits {
         history: 2,
     };
     Limits {
-        settings: settings::Limits { history: 64, alternatives: 16, permissions: 32 },
+        settings: settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
         templates: 8,
         fill_mark: 1000,
         documents: DocumentLimits {
@@ -1128,7 +1128,7 @@ fn documents_proposal_actions_keep_effect_parts_and_amendment_before_and_after()
                 assert_eq!(after.ceiling.spend, 15);
             }
             ProposalAction::Release { hold, .. } => assert_eq!(hold.unwrap().reason, tasks::Hold::Budget),
-            ProposalAction::Batch(_) => panic!(),
+            ProposalAction::Settings { .. } | ProposalAction::Batch(_) => panic!(),
         }
         send_task(
             &mut core,

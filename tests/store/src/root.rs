@@ -105,7 +105,7 @@ pub const PEOPLE_LIMITS: people::Limits = people::Limits {
 };
 
 pub const CORE_LIMITS: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
     templates: 8,
     fill_mark: 1000,
     documents: core::documents::DocumentLimits {

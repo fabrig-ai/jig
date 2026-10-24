@@ -94,9 +94,6 @@ fn translate(
         client::Ask::Take { project, task } => people::Ask::TakePerson { project: *project, task: *task },
         client::Ask::HandBack { project, task } => people::Ask::HandBackPerson { project: *project, task: *task },
         client::Ask::Decide { project, on: client::DecideOn::Proposal { proposal, decision, running } } => {
-            if running.is_some() {
-                return Err(Invalid::Settings);
-            }
             people::Ask::DecideProposal {
                 project: *project,
                 proposer: match proposal.proposer {
@@ -105,6 +102,10 @@ fn translate(
                 },
                 proposal: proposal.number,
                 decision: proposal_decision(decision)?,
+                running: running.as_ref().map(|value| match value {
+                    client::Running::Stays => people::Running::Stays,
+                    client::Running::Moves => people::Running::Moves,
+                }),
             }
         }
         client::Ask::Decide { project, on: client::DecideOn::Escalation { task, revision, decision } } => {
@@ -777,7 +778,8 @@ mod tests {
                     project: 4,
                     proposer: owner,
                     proposal: 7,
-                    decision: people::ProposalDecision::Reject { reason: Box::from(UTF8_TEXTS[0]) }
+                    decision: people::ProposalDecision::Reject { reason: Box::from(UTF8_TEXTS[0]) },
+                    running: None
                 })
             );
         }

@@ -68,6 +68,7 @@ pub fn action(
     models: &[jig_domain_core::Model],
 ) -> Result<client::OwnerRetainedAction, owner::Invalid> {
     Ok(match value {
+        documents::RetainedAction::Settings { .. } => return Err(owner::Invalid::Settings),
         documents::RetainedAction::Batch(value) => {
             client::OwnerRetainedAction::Batch(owner::list(value, limits, |value| proposed(value, limits, models))?)
         }
@@ -106,6 +107,7 @@ fn kind(value: tasks::ProposalKind) -> client::OwnerMessageProposalKind {
         tasks::ProposalKind::Amend => client::OwnerMessageProposalKind::Amend,
         tasks::ProposalKind::Widen => client::OwnerMessageProposalKind::Widen,
         tasks::ProposalKind::Release => client::OwnerMessageProposalKind::Release,
+        tasks::ProposalKind::Settings => client::OwnerMessageProposalKind::Settings,
     }
 }
 

@@ -505,3 +505,28 @@ fn codec_admission_keeps_a_composed_documents_override_prefix() {
     let problems = overrides::parse(&document, 0, &prefix).unwrap_err();
     assert_eq!(problems.problems.get(0).unwrap().path, prefix.member(b"overrides").member(b"core.policy_bytes"));
 }
+
+#[test]
+fn pending_settings_proposals_are_positive_and_keep_the_profile_defaults() {
+    assert_eq!(small().core.settings.proposals, 4);
+    assert_eq!(profile(Profile::Standard).core.settings.proposals, 8);
+    assert_eq!(
+        parse(br#"{"profile":"small","overrides":{"core.settings.proposals":2}}"#).unwrap().core.settings.proposals,
+        2
+    );
+    problem(
+        br#"{"profile":"small","overrides":{"core.settings.proposals":0}}"#,
+        &[b"limits", b"overrides", b"core.settings.proposals"],
+        What::Override,
+    );
+}
+#[test]
+fn the_journal_prices_each_pending_settings_withdrawal() {
+    let mut limits = small().core;
+    limits.settings.proposals = 1;
+    let one = jig_domain_core::settings::writes_worst_case(&limits).expect("write room");
+    limits.settings.proposals = 2;
+    let two = jig_domain_core::settings::writes_worst_case(&limits).expect("write room");
+    // Set erase, pending erase, terminal row, decision archive and proposer update.
+    assert_eq!(two - one, 5);
+}

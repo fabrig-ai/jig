@@ -584,6 +584,7 @@ pub fn people_asks() -> Box<[people::Ask]> {
             proposer: Proposer::Party(2),
             proposal: 3,
             decision: people::ProposalDecision::Reject { reason: Box::new([4]) },
+            running: None,
         },
         Ask::Say { project: 1, task: 2, words: Box::new([3]) },
         Ask::AnswerQuestion { project: 1, task: 2, question: 3, words: Box::new([4]) },
@@ -613,7 +614,7 @@ pub fn people_asks() -> Box<[people::Ask]> {
 }
 
 pub const CORE_LIMITS: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
     templates: 8,
     fill_mark: 1000,
     documents: core::documents::DocumentLimits {

@@ -196,6 +196,7 @@ fn two_maintainers_decide_one_proposal_and_the_second_is_told_who_how_and_when()
             proposer: Proposer::Task(7),
             proposal: 8,
             decision: ProposalDecision::Accept,
+            running: None,
         },
     );
     world.commit_all();
@@ -216,6 +217,7 @@ fn two_maintainers_decide_one_proposal_and_the_second_is_told_who_how_and_when()
             proposer: Proposer::Task(7),
             proposal: 8,
             decision: ProposalDecision::Reject { reason: b"no".to_vec().into_boxed_slice() },
+            running: None,
         },
     );
     world.commit_all();
@@ -669,6 +671,7 @@ fn a_widening_amendment_with_release_is_proposed_and_released_on_acceptance() {
         proposer: Proposer::Party(person),
         proposal,
         decision: ProposalDecision::Accept,
+        running: None,
     };
     let call = world.request(10, [2; 16], decision.clone());
     assert!(world.reply(call).is_none());

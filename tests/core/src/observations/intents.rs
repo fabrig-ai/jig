@@ -2,8 +2,18 @@
 use super::{core, people, r, tasks};
 #[path = "named.rs"]
 mod named;
+use jig_test_domain::Record;
 use skein_lib::Token;
 use std::collections::{BTreeMap, BTreeSet};
+
+fn signed_party(store: &crate::Store, sign_in: u64) -> Option<u64> {
+    store.rows.values().find_map(|row| match row {
+        Record::Core(core::Record::People(people::Stored::SignIn { number, person, .. })) if *number == sign_in => {
+            Some(*person)
+        }
+        Record::Core(_) | Record::Connector { .. } => None,
+    })
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Intents {
@@ -21,17 +31,14 @@ impl Intents {
     }
 
     pub fn inbound_root(&mut self, store: &crate::Store, event: &mut jig_test_domain::Event) -> Vec<r::Observed> {
-        use jig_test_domain::{Event, Record};
+        use jig_test_domain::Event;
         if let Event::Core(core::Event::People(people::Event::Ask { models: _, reply_to, sign_in, key, ask })) = event {
-            let person = store.rows.values().find_map(|row| match row {
-                Record::Core(core::Record::People(people::Stored::SignIn { number, person, .. }))
-                    if number == sign_in =>
-                {
-                    Some(*person)
-                }
-                Record::Core(_) | Record::Connector { .. } => None,
-            });
+            let person = signed_party(store, *sign_in);
             return person.map_or_else(Vec::new, |person| self.party(reply_to, person, *key, ask));
+        }
+        if let Event::Core(core::Event::ProposeSettings { reply_to, sign_in, key, .. }) = event {
+            let person = signed_party(store, *sign_in);
+            return person.map_or_else(Vec::new, |person| self.party_proposal(reply_to, person, *key));
         }
         if let Event::Core(event) = event {
             return self.inbound(event);
@@ -72,14 +79,17 @@ impl Intents {
         ask: &people::Ask,
     ) -> Vec<r::Observed> {
         let mut observed = named::party(ask);
-        if !matches!(ask, people::Ask::Propose { .. }) {
-            return observed;
+        if matches!(ask, people::Ask::Propose { .. }) {
+            observed.extend(self.party_proposal(reply, person, key));
         }
+        observed
+    }
+
+    fn party_proposal(&mut self, reply: &mut skein_lib::ReplyTo, person: u64, key: [u8; 16]) -> Vec<r::Observed> {
         self.replies.insert(Token::new(super::destination(reply)), (person, key));
         if let std::collections::btree_map::Entry::Vacant(entry) = self.parties.entry((person, key)) {
             entry.insert(true);
-            observed.push(r::Observed::ProposeAsked { proposer: r::Source::Person(person) });
-            observed
+            vec![r::Observed::ProposeAsked { proposer: r::Source::Person(person) }]
         } else {
             Vec::new()
         }

@@ -128,3 +128,149 @@ fn random_small_settings_changes_and_stale_requests_survive_restarts() {
     }
     assert_eq!(coverage, [true; 5], "stale, reset, template set, charter set and restart all reached");
 }
+
+fn pending_settings(world: &jig_core_world::effects::World) -> Vec<(u64, u32, settings::Proposal)> {
+    world
+        .store
+        .rows
+        .values()
+        .filter_map(|row| match row {
+            root::Record::Core(core::Record::Core(core::CoreRecord::Settings(settings::Record::Proposal {
+                proposer: people::Proposer::Party(person),
+                proposal,
+                value,
+            }))) => Some((*person, *proposal, value.clone())),
+            root::Record::Core(_) | root::Record::Connector { .. } => None,
+        })
+        .collect()
+}
+fn proposal_sets_agree(world: &mut jig_core_world::effects::World, signed: u64) {
+    let sets = pending_settings(world);
+    let pending = inventory(world, signed).pending;
+    assert_eq!(pending.len(), u32::try_from(sets.len()).expect("bounded sets"));
+    let task_rows: Vec<_> = world
+        .store
+        .rows
+        .values()
+        .filter_map(|row| match row {
+            root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::PersonProposal(row)))
+                if row.action.is_settings() =>
+            {
+                Some((row.proposer, row.number, row.action.clone()))
+            }
+            root::Record::Core(_) | root::Record::Connector { .. } => None,
+        })
+        .collect();
+    assert_eq!(sets.len(), task_rows.len());
+    for (person, proposal, set) in sets {
+        assert_eq!(set.against, world.domain.settings().newest());
+        assert!(pending.iter().any(|row| row.proposer == people::Proposer::Party(person) && row.number == proposal));
+        assert!(task_rows.iter().any(|(proposer, number, action)| *proposer == person
+            && *number == u64::from(proposal)
+            && *action
+                == jig_domain_tasks::PersonAction::Settings {
+                    against: set.against,
+                    items: settings::proposal_heads(&set.items)
+                }));
+        let jig_domain_core::documents::ProposalAction::Settings { against, review: Some(review), .. } =
+            proposal_document(world, signed, person, u64::from(proposal)).action
+        else {
+            panic!("pending settings review")
+        };
+        assert_eq!(against, set.against);
+        assert_eq!(review.items.len(), u32::try_from(set.items.len()).expect("bounded items"));
+        for (shown, item) in review.items.iter().zip(&set.items) {
+            assert_eq!(shown.setting, item.setting);
+            let expected = match &item.edit {
+                settings::Edit::Set(value) => Some(value),
+                settings::Edit::Removed => None,
+                settings::Edit::Reset => world.domain.settings().default_value(item.setting),
+            };
+            assert_eq!(shown.would_be.as_ref(), expected);
+        }
+    }
+}
+#[test]
+fn random_settings_proposals_decisions_and_restarts_keep_all_three_owners_in_agreement() {
+    const SEEDS: u64 = 8;
+    const STEPS: u8 = 32;
+    let mut coverage = [false; 6];
+    let count =
+        std::env::var("JIG_CORE_SETTINGS_SEEDS").ok().map_or(SEEDS, |value| value.parse::<u64>().expect("seed count"));
+    let first = std::env::var("JIG_SETTINGS_PROPOSALS_SEED")
+        .map_or(713, |value| value.parse::<u64>().expect("settings proposal seed"));
+    for seed in first..first.checked_add(count).expect("settings seed range") {
+        let result = std::panic::catch_unwind(|| {
+            let mut reached = [false; 6];
+            let mut rng = Rng::new(seed);
+            let mut world = start(4);
+            let signed = sign_in(&mut world);
+            for step in 0..STEPS {
+                let operation = usize::try_from(rng.below(6)).expect("six operations");
+                reached[operation] = true;
+                let pending = pending_settings(&world).first().cloned();
+                let key = 20 + step;
+                match operation {
+                    0 => {
+                        let item = template_edit(&world, 6 + rng.below(10));
+                        let against = world.domain.settings().newest();
+                        propose(&mut world, signed, key, against, Box::new([item]));
+                    }
+                    1 => {
+                        if let Some((person, proposal, _)) = pending {
+                            decide(
+                                &mut world,
+                                signed,
+                                key,
+                                person,
+                                u64::from(proposal),
+                                people::ProposalDecision::Accept,
+                                Some(people::Running::Stays),
+                            );
+                        }
+                    }
+                    2 => {
+                        if let Some((person, proposal, _)) = pending {
+                            decide(
+                                &mut world,
+                                signed,
+                                key,
+                                person,
+                                u64::from(proposal),
+                                people::ProposalDecision::Reject { reason: b"random rejection".as_slice().into() },
+                                None,
+                            );
+                        }
+                    }
+                    3 => {
+                        if let Some((_, proposal, _)) = pending {
+                            ask(
+                                &mut world,
+                                signed,
+                                key,
+                                people::Ask::Withdraw { project: 0, proposal: u64::from(proposal) },
+                            );
+                        }
+                    }
+                    4 => {
+                        let item = template_edit(&world, 6 + rng.below(10));
+                        let against = world.domain.settings().newest();
+                        change(&mut world, signed, key, against, Box::new([item]));
+                    }
+                    5 => {
+                        restart(&mut world, configuration().0);
+                    }
+                    _ => unreachable!(),
+                }
+                agree(&world);
+                proposal_sets_agree(&mut world, signed);
+            }
+            reached
+        });
+        let Ok(reached) = result else { panic!("settings proposal replay seed {seed}") };
+        for (covered, reached) in coverage.iter_mut().zip(reached) {
+            *covered |= reached;
+        }
+    }
+    assert_eq!(coverage, [true; 6]);
+}

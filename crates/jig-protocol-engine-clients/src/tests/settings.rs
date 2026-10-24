@@ -303,3 +303,43 @@ fn revision_page_heads_and_cursors_reach_the_client_without_values() {
     assert_eq!(page.rows.get(0).unwrap().more, 3);
     assert_eq!(page.rows.get(0).unwrap().items.get(0).unwrap().edit, c::RevisionItemEdit::Set);
 }
+
+#[test]
+fn review_values_hold_at_the_document_bound_and_give_the_size_one_past_it() {
+    let mut limits = f::wire();
+    limits.owned_record = w::CEILINGS.owned_record;
+    for value in values() {
+        let setting = match &value {
+            s::Value::Charter(value) => s::Setting::Charter(value.number),
+            s::Value::Template(value) => s::Setting::Template(value.number),
+            s::Value::Policy(_) => s::Setting::Policy(1),
+            s::Value::Rules(_) => s::Setting::Rules,
+        };
+        let bytes = u64::from(translate::value(&value, &f::models(), &limits).expect("whole value").measure());
+        for (bound, too_large) in [(bytes, false), (bytes - 1, true)] {
+            let mut items = List::with_capacity(1);
+            items
+                .push(d::ReviewItem {
+                    setting,
+                    edit: reads::RevisionEdit::Set,
+                    now: Some(value.clone()),
+                    origin: Some((false, 1)),
+                    would_be: Some(value.clone()),
+                })
+                .expect("review item");
+            let review = d::SettingsReview { newest: 1, items, value_bytes: bound };
+            let wire = translate::review(&review, &f::models(), &limits).expect("review");
+            let mut input = Reader::new(wire.items());
+            let piece = skein_codec::piece::split(&mut input).expect("frame").expect("review item");
+            let row = w::ReviewItem::decode(&limits, &mut Reader::new(&piece)).expect("typed item");
+            for shown in [row.now(), row.would_be()] {
+                if too_large {
+                    let w::ReviewValue::TooLarge(size) = shown else { panic!("size instead of a value") };
+                    assert_eq!(size.bytes(), bytes);
+                } else {
+                    let w::ReviewValue::Value(_) = shown else { panic!("whole review value within its bound") };
+                }
+            }
+        }
+    }
+}

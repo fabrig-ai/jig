@@ -106,7 +106,7 @@ fn a_partys_withdrawn_proposal_is_decided_withdrawn() {
     let mut world = World::new(341, LIMITS);
     propose_batch(&mut world, 9, 100, vec![task(1, &[])]);
     let reply_to = world.to();
-    world.send(Event::WithdrawPersonProposal { reply_to, proposer: 9, proposal: 100 });
+    world.send(Event::WithdrawPersonProposal { reply_to: Some(reply_to), proposer: 9, proposal: 100 });
     let jig_domain_tasks::Stored::DecidedProposal(row) = &world.records[&jig_domain_tasks::Key::DecidedProposal(100)]
     else {
         panic!("decided proposal")
@@ -120,7 +120,7 @@ fn withdrawing_another_partys_proposal_is_unknown() {
     let mut world = World::new(342, LIMITS);
     propose_batch(&mut world, 9, 100, vec![task(1, &[])]);
     let reply_to = world.to();
-    world.send(Event::WithdrawPersonProposal { reply_to, proposer: 8, proposal: 100 });
+    world.send(Event::WithdrawPersonProposal { reply_to: Some(reply_to), proposer: 8, proposal: 100 });
     assert_eq!(
         world.replies.last_key_value().expect("withdrawal reply").1.clone(),
         Reply::Refused(jig_domain_tasks::Problem {
