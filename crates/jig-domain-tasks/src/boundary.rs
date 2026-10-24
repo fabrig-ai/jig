@@ -1371,7 +1371,7 @@ pub enum Event {
     /// Root admits a person's goal proposal after validating policy and shape.
     ProposePerson { reply_to: ReplyTo, proposal: crate::PersonProposal },
     /// Withdraw the proposing party's pending proposal.
-    WithdrawPersonProposal { reply_to: ReplyTo, proposer: u64, proposal: u64 },
+    WithdrawPersonProposal { reply_to: Option<ReplyTo>, proposer: u64, proposal: u64 },
     /// Root commits a policy holder's decision on a person-origin goal proposal.
     DecidePersonProposal {
         reply_to: ReplyTo,
@@ -1380,6 +1380,7 @@ pub enum Event {
         by: Party,
         message: Option<u64>,
         decision: crate::ProposalDecision,
+        revision: Option<u32>,
     },
     /// A newly opened project period makes the core recurring procedure due.
     TickRecurring { task: u64, period: u64 },
@@ -1721,7 +1722,7 @@ pub enum Request {
     /// Terminal for one admitted person-origin goal proposal.
     PersonProposed { reply_to: ReplyTo, proposal: u64 },
     /// Terminal for one person-origin goal decision.
-    PersonProposalDecided { reply_to: ReplyTo, proposer: u64, number: u64, outcome: crate::ProposalOutcome },
+    PersonProposalDecided { reply_to: Option<ReplyTo>, proposer: u64, number: u64, outcome: crate::ProposalOutcome },
     /// The core procedure needs one whole root-numbered template batch in this period.
     RecurringDue { task: u64, period: u64, members: u32 },
     /// A changed requester tree asks root to recheck the current proposal recipient from the nearest holder.

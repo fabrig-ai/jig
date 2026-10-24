@@ -515,6 +515,8 @@ pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
         .checked_add(crate::limits::stub_capacity(limits)?)?
         .checked_add(limits.tasks.checked_mul(limits.holdings)?.checked_mul(3)?)?
         .checked_add(crate::activity::lines_per_decision(limits)?)?
+        // Each party proposal terminal uses four outputs: pending erase, update
+        // index, terminal row and notification, within this eight-per-row room.
         .checked_add(limits.tasks.checked_mul(8)?)?
         .checked_add(8)
 }
@@ -560,10 +562,12 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             crate::proposals::propose_person(domain, env, reply_to, proposal, out);
         }
         Event::WithdrawPersonProposal { reply_to, proposer, proposal } => {
-            crate::person_proposals::withdraw(domain, env, Some(reply_to), proposer, proposal, out);
+            crate::person_proposals::withdraw(domain, env, reply_to, proposer, proposal, out);
         }
-        Event::DecidePersonProposal { reply_to, proposer, proposal, by, message, decision } => {
-            crate::proposals::decide_person(domain, env, reply_to, proposer, proposal, by, message, decision, out);
+        Event::DecidePersonProposal { reply_to, proposer, proposal, by, message, decision, revision } => {
+            crate::proposals::decide_person(
+                domain, env, reply_to, proposer, proposal, by, message, decision, revision, out,
+            );
         }
         Event::TickRecurring { task, period } => crate::recurring::tick(domain, env, task, period, out),
         Event::RenewStanding { task, period } => crate::standing::renew(domain, env, task, period, out),

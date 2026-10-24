@@ -189,7 +189,8 @@ fn valid_proposal_update(party: u64, row: &super::Row) -> bool {
         return false;
     }
     let valid = match proposal.state {
-        tasks::PersonProposalState::Accepted { by: tasks::Party::Person(by) } => {
+        tasks::PersonProposalState::Accepted { by: tasks::Party::Person(by) }
+        | tasks::PersonProposalState::SettingsAccepted { by: tasks::Party::Person(by), .. } => {
             decision.by == by && decision.choice == jig_domain_people::ProposalChoice::Accepted
         }
         tasks::PersonProposalState::Rejected { by: tasks::Party::Person(by), at, .. } => {
@@ -198,7 +199,11 @@ fn valid_proposal_update(party: u64, row: &super::Row) -> bool {
         tasks::PersonProposalState::Withdrawn { at } => {
             decision.by == party && decision.at == at && decision.choice == jig_domain_people::ProposalChoice::Withdrawn
         }
-        tasks::PersonProposalState::Pending { .. }
+        tasks::PersonProposalState::SettingsAccepted {
+            by: tasks::Party::Task(_) | tasks::Party::Deployment { .. },
+            ..
+        }
+        | tasks::PersonProposalState::Pending { .. }
         | tasks::PersonProposalState::Accepted { by: tasks::Party::Task(_) | tasks::Party::Deployment { .. } }
         | tasks::PersonProposalState::Rejected {
             by: tasks::Party::Task(_) | tasks::Party::Deployment { .. }, ..

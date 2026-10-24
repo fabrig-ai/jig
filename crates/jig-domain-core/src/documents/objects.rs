@@ -53,6 +53,12 @@ pub struct AmendmentState {
 /// What accepting the immutable proposal would do.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ProposalAction {
+    Settings {
+        against: u32,
+        items: List<crate::reads::RevisionItemHead>,
+        review: Option<Box<super::SettingsReview>>,
+        made: Option<u32>,
+    },
     Batch(List<ProposedTask>),
     Effect {
         part: Part,
@@ -203,6 +209,7 @@ pub enum ProposalHistoryState {
 /// only its requested fields because no before snapshot is retained there.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum RetainedAction {
+    Settings { against: u32, items: List<crate::reads::RevisionItemHead>, made: Option<u32> },
     Batch(List<ProposedTask>),
     Effect { part: Part, authority: AuthorityLine, attempt: u64, completion: u32, position: u32, purpose: u64 },
     ProcedureEffect { part: Part, authority: AuthorityLine, step: u64, purpose: u64 },
@@ -455,6 +462,26 @@ fn holder_source(core: &Core, party: u64, project: u32, holder: tasks::ProposalH
         }
     }
 }
+fn reviewed_party_action(
+    core: &Core,
+    limits: &Limits,
+    party: u64,
+    value: &tasks::PersonProposal,
+) -> Result<(ProposalAction, tasks::ProposalKind), Missing> {
+    let (mut action, kind) = party::action(core, limits, party, &value.action)?;
+    match &mut action {
+        ProposalAction::Settings { review, .. } => {
+            *review = super::settings_review::review(core, limits, value.proposer, value.number);
+        }
+        ProposalAction::Batch(_)
+        | ProposalAction::Effect { .. }
+        | ProposalAction::ProcedureEffect { .. }
+        | ProposalAction::Amend { .. }
+        | ProposalAction::Widen { .. }
+        | ProposalAction::Release { .. } => {}
+    }
+    Ok((action, kind))
+}
 pub(super) fn proposal(
     core: &Core,
     limits: &Limits,
@@ -486,23 +513,24 @@ pub(super) fn proposal(
         }
         Proposer::Party(person) => {
             let value = core.tasks.person_proposal(person, number).ok_or(Missing::Ended)?;
-            if core.people.role(party, value.project).is_none() {
+            if party != person && core.people.role(party, value.project).is_none() {
                 return Err(Missing::NotAllowed);
             }
             let since = match value.state {
                 tasks::PersonProposalState::Pending { since } => since,
-                tasks::PersonProposalState::Accepted { .. }
+                tasks::PersonProposalState::SettingsAccepted { .. }
+                | tasks::PersonProposalState::Accepted { .. }
                 | tasks::PersonProposalState::Rejected { .. }
                 | tasks::PersonProposalState::Withdrawn { .. } => {
                     return Err(Missing::Ended);
                 }
             };
-            let (action, kind) = party::action(core, limits, party, &value.action)?;
+            let (action, kind) = reviewed_party_action(core, limits, party, &value)?;
             (
                 value.project,
                 super::small::text(&value.reason, limits.documents.text_bytes),
                 action,
-                true,
+                kind != tasks::ProposalKind::Settings,
                 ProposalWaiting { holder: tasks::ProposalHolder::Policy { project: value.project, kind }, since },
             )
         }
@@ -519,7 +547,10 @@ pub(super) fn proposal(
             }
             offers.push(funding(core, source, needed)).expect("one acceptance source");
         }
-        ProposalAction::Effect { .. } | ProposalAction::ProcedureEffect { .. } | ProposalAction::Release { .. } => {
+        ProposalAction::Settings { .. }
+        | ProposalAction::Effect { .. }
+        | ProposalAction::ProcedureEffect { .. }
+        | ProposalAction::Release { .. } => {
             // Price belongs to the connector's effect description; authority's
             // budget is a ceiling, never a quoted effect price.
         }
@@ -532,7 +563,8 @@ pub(super) fn proposal(
             let ceiling = match &made {
                 ProposalAction::Amend { after, .. } => after.authority.ceiling.spend,
                 ProposalAction::Widen { after, .. } => after.ceiling.spend,
-                ProposalAction::Batch(_)
+                ProposalAction::Settings { .. }
+                | ProposalAction::Batch(_)
                 | ProposalAction::Effect { .. }
                 | ProposalAction::ProcedureEffect { .. }
                 | ProposalAction::Release { .. } => {

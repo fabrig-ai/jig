@@ -183,7 +183,7 @@ impl Core {
         }
         let next = match done {
             RestartStep::LoadCore => {
-                if !self.restoring_proofs.is_empty() {
+                if !self.restoring_proofs.is_empty() || !self.settings_proposals_consistent() {
                     return self.restart_refuse();
                 }
                 self.counters.finish_restore();

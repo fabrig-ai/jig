@@ -12,7 +12,7 @@ pub(crate) mod restart;
 pub use check::{check, check_change};
 pub use restart::revision_writes;
 
-pub use people::{Setting, SettingFault as Fault};
+pub use people::{Running, Setting, SettingFault as Fault};
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Charter(Box<Charter>),
@@ -54,10 +54,11 @@ pub struct Change {
     pub items: Box<[Item]>,
     pub running: Running,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Running {
-    Stays,
-    Moves,
+#[derive(Debug)]
+pub struct Proposed {
+    pub against: u32,
+    pub items: Box<[Item]>,
+    pub reason: Box<[u8]>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Decider {
@@ -111,6 +112,7 @@ pub struct Failure {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub history: u32,
+    pub proposals: u32,
     pub alternatives: u32,
     pub permissions: u32,
 }
@@ -198,6 +200,24 @@ impl Current {
                 Some(default) => Some(&default.value),
                 None => None,
             },
+        }
+    }
+    /// The current value and the origin it follows, including explicit removal.
+    #[must_use]
+    pub fn lookup(&self, setting: Setting) -> (Option<&Value>, Option<(bool, u32)>) {
+        match self.changes.get(&setting) {
+            Some(change) => (change.value.as_ref(), Some((true, change.revision))),
+            None => match self.defaults.get(&setting) {
+                Some(default) => (Some(&default.value), Some((false, default.revision))),
+                None => (None, None),
+            },
+        }
+    }
+    #[must_use]
+    pub fn default_value(&self, setting: Setting) -> Option<&Value> {
+        match self.defaults.get(&setting) {
+            Some(default) => Some(&default.value),
+            None => None,
         }
     }
     #[must_use]
@@ -396,5 +416,35 @@ pub fn writes_worst_case(limits: &crate::Limits) -> Option<u32> {
         .checked_add(limits.people.initial_owners)?
         .checked_add(limits.authority.projects.checked_mul(2)?)?
         .checked_add(4)?;
-    Some(first.max(count.checked_mul(2)?.checked_add(8)?))
+    first.max(count.checked_mul(2)?.checked_add(8)?).checked_add(withdrawal_writes(limits)?)
+}
+
+/// Each withdrawal erases the set and pending row, saves the terminal row and
+/// the core decision archive, plus the proposer's update index. Settings never
+/// carry task stubs, so this path does not prune unrelated stubs.
+#[must_use]
+pub fn withdrawal_writes(limits: &crate::Limits) -> Option<u32> {
+    limits.settings.proposals.checked_mul(5)
+}
+#[must_use]
+pub fn proposal_heads(items: &[Item]) -> Box<[jig_domain_tasks::SettingHead]> {
+    let mut heads = List::with_capacity(u32::try_from(items.len()).expect("bounded settings items"));
+    for item in items {
+        heads
+            .push(jig_domain_tasks::SettingHead {
+                setting: match item.setting {
+                    Setting::Charter(n) => jig_domain_tasks::Setting::Charter(n),
+                    Setting::Template(n) => jig_domain_tasks::Setting::Template(n),
+                    Setting::Policy(n) => jig_domain_tasks::Setting::Policy(n),
+                    Setting::Rules => jig_domain_tasks::Setting::Rules,
+                },
+                edit: match item.edit {
+                    Edit::Set(_) => jig_domain_tasks::SettingEdit::Set,
+                    Edit::Removed => jig_domain_tasks::SettingEdit::Removed,
+                    Edit::Reset => jig_domain_tasks::SettingEdit::Reset,
+                },
+            })
+            .expect("bounded heads");
+    }
+    heads.into_boxed()
 }

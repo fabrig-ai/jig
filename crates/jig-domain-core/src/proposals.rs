@@ -340,7 +340,8 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
     match row {
         tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) => {
             let (by, choice) = match &row.state {
-                tasks::PersonProposalState::Accepted { by: tasks::Party::Person(by) } => {
+                tasks::PersonProposalState::Accepted { by: tasks::Party::Person(by) }
+                | tasks::PersonProposalState::SettingsAccepted { by: tasks::Party::Person(by), .. } => {
                     (*by, people::ProposalChoice::Accepted)
                 }
                 tasks::PersonProposalState::Rejected { by: tasks::Party::Person(by), .. } => {
@@ -348,6 +349,10 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
                 }
                 tasks::PersonProposalState::Withdrawn { .. } => (row.proposer, people::ProposalChoice::Withdrawn),
                 tasks::PersonProposalState::Pending { .. }
+                | tasks::PersonProposalState::SettingsAccepted {
+                    by: tasks::Party::Task(_) | tasks::Party::Deployment { .. },
+                    ..
+                }
                 | tasks::PersonProposalState::Accepted {
                     by: tasks::Party::Task(_) | tasks::Party::Deployment { .. },
                 }
@@ -361,6 +366,7 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
                 proposer: people::Proposer::Party(row.proposer),
                 proposal: row.number,
                 kind: match row.action {
+                    tasks::PersonAction::Settings { .. } => tasks::ProposalKind::Settings,
                     tasks::PersonAction::Batch(_) => tasks::ProposalKind::Batch,
                     tasks::PersonAction::Amend { .. } => tasks::ProposalKind::Amend,
                 },
@@ -368,6 +374,7 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
                 at: match row.state {
                     tasks::PersonProposalState::Withdrawn { at } => at,
                     tasks::PersonProposalState::Pending { .. }
+                    | tasks::PersonProposalState::SettingsAccepted { .. }
                     | tasks::PersonProposalState::Accepted { .. }
                     | tasks::PersonProposalState::Rejected { .. } => at,
                 },

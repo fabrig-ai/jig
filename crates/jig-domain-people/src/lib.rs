@@ -56,7 +56,7 @@
 #![forbid(unsafe_code)]
 extern crate alloc;
 mod settings;
-pub use settings::{Setting, SettingFault};
+pub use settings::{Running, Setting, SettingFault};
 mod scope;
 pub use scope::ApplicationScope;
 mod templates;

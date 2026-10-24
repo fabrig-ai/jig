@@ -34,7 +34,9 @@ pub use accounts::{AccountLine, Accounts, LastEnd, SignInLine, SourceLine};
 pub use jig_domain_accounts::Use;
 mod deployment;
 mod settings;
+mod settings_review;
 pub use settings::{Follows, HeldRevision, SettingLine, Settings, SettingsProposal};
+pub use settings_review::{ReviewItem, SettingsReview, settings_heads};
 mod programs;
 pub use deployment::{
     Account, AccountState, Capacity, Deployment, DocumentClock, HelloRefusalLine, Host, HostRun, ProjectCapacity,
@@ -502,6 +504,7 @@ pub fn document_worst_case(limits: &DocumentLimits) -> Option<u64> {
 pub fn document_with_context_worst_case(limits: &Limits) -> Option<u64> {
     document_worst_case(&limits.documents)?
         .checked_add(settings::worst_case(limits)?)?
+        .checked_add(settings_review::worst_case(limits)?)?
         .checked_add(inbox_selection_worst_case(limits.documents.rows, limits.tasks.depth)?)?
         .checked_add(u64::from(limits.documents.lines).checked_mul(crate::templates::list_worst_case(limits)?)?)
 }
@@ -513,6 +516,7 @@ pub(crate) fn document_scratch_worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<people::Entry>::worst_case(crate::inbox::waiting_capacity(limits)?)?)?;
     Some(
         deployment::scratch_worst_case(limits)?
+            .max(inbox_deployment::scratch_worst_case(limits)?)
             .max(settings::scratch_worst_case(limits)?)
             .max(catalogue::scratch_worst_case(limits)?)
             .max(List::<jig_domain_accounts::Pending>::worst_case(limits.accounts.sign_ins)?)

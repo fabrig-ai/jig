@@ -49,7 +49,9 @@ pub(crate) fn gate(core: &mut Core, event: Event) -> Result<Event, Requests> {
         return Ok(event);
     }
     match event {
-        Event::ChangeSettings { reply_to, .. } | Event::SignIn { reply_to, .. } => Err(party(reply_to)),
+        Event::ChangeSettings { reply_to, .. }
+        | Event::ProposeSettings { reply_to, .. }
+        | Event::SignIn { reply_to, .. } => Err(party(reply_to)),
         Event::Act { reply_to, carried, .. } => Err(crate::routing::application_routes::first(
             crate::routing::application_routes::number(carried),
             answer(Some(Request::Held(Box::new(Held::Acted {

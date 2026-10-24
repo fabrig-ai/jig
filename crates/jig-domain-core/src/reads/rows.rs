@@ -82,7 +82,10 @@ fn inbox_filter(core: &Core, limits: &Limits, filter: Filter, entry: &documents:
 pub(super) fn needs_store(read: &Read, document: &Document) -> bool {
     match document {
         Document::Inbox(value) => match read {
-            Read::Inbox { group: Group::Updates | Group::Results | Group::Replies, .. } => {
+            // Party proposal decisions have durable update indexes, outside the
+            // results/replies cache. Read the shared update order from its owner.
+            Read::Inbox { group: Group::Updates, .. } => true,
+            Read::Inbox { group: Group::Results | Group::Replies, .. } => {
                 if !value.updates_time_complete {
                     return true;
                 }
@@ -599,7 +602,10 @@ fn object(
                 })
             }
             Record::Tasks(tasks::Stored::PersonProposal(value) | tasks::Stored::DecidedProposal(value)) => {
-                if *proposer != Proposer::Party(value.proposer) || value.number != *proposal {
+                if *proposer != Proposer::Party(value.proposer)
+                    || value.number != *proposal
+                    || (!value.action.is_settings() && range.party != value.proposer)
+                {
                     return Ok(None);
                 }
                 let decision = match &row.related {
@@ -616,17 +622,22 @@ fn object(
                     None => None,
                 };
                 match value.state {
-                    tasks::PersonProposalState::Accepted { .. } if decision.is_none() => {
+                    tasks::PersonProposalState::Accepted { .. }
+                    | tasks::PersonProposalState::SettingsAccepted { .. }
+                        if decision.is_none() =>
+                    {
                         return Ok(Some(Answer::None(Why::Gone)));
                     }
-                    tasks::PersonProposalState::Accepted { .. }
+                    tasks::PersonProposalState::SettingsAccepted { .. }
+                    | tasks::PersonProposalState::Accepted { .. }
                     | tasks::PersonProposalState::Pending { .. }
                     | tasks::PersonProposalState::Rejected { .. }
                     | tasks::PersonProposalState::Withdrawn { .. } => {}
                 }
                 let (at, by) = match &value.state {
                     tasks::PersonProposalState::Pending { since } => (Some(*since), None),
-                    tasks::PersonProposalState::Accepted { by } => (
+                    tasks::PersonProposalState::Accepted { by }
+                    | tasks::PersonProposalState::SettingsAccepted { by, .. } => (
                         match &decision {
                             Some(value) => Some(value.at),
                             None => None,
@@ -1159,12 +1170,15 @@ fn person_proposal_need(
         {
             at
         }
-        tasks::PersonProposalState::Accepted { .. } if group.updates() && party == proposal.proposer => {
+        tasks::PersonProposalState::Accepted { .. } | tasks::PersonProposalState::SettingsAccepted { .. }
+            if group.updates() && party == proposal.proposer =>
+        {
             let Some(record) = &row.related else { return Err(Missing::Unknown) };
             let Some(decision) = proposal_decision(record) else { return Err(Missing::Unknown) };
             decision.at
         }
         tasks::PersonProposalState::Pending { .. }
+        | tasks::PersonProposalState::SettingsAccepted { .. }
         | tasks::PersonProposalState::Accepted { .. }
         | tasks::PersonProposalState::Rejected { .. }
         | tasks::PersonProposalState::Withdrawn { .. } => return Ok(None),

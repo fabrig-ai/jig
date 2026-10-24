@@ -115,11 +115,28 @@ impl Core {
     #[must_use]
     pub fn person_proposal_entries(&self, row: &tasks::PersonProposal) -> Box<[people::Entry]> {
         let mut entries = List::with_capacity(self.authority.limits().roles.max(1));
+        if row.action.is_settings() {
+            if let Some(since) = row.state.pending_since() {
+                entries
+                    .push(people::Entry {
+                        task: tasks::PROPOSAL_WITHOUT_TASK,
+                        project: 0,
+                        whom: people::Whom::Role { project: 0, role: people::Role::Owner.number() },
+                        kind: people::EntryKind::Proposal { number: row.number },
+                        at: since,
+                    })
+                    .expect("one owner recipient");
+            }
+            return entries.into_boxed();
+        }
         match &row.state {
             tasks::PersonProposalState::Pending { since } => {
                 if let Some(project) = self.authority.policy(row.project) {
                     for policy in &project.roles {
                         let kind = match row.action {
+                            tasks::PersonAction::Settings { .. } => {
+                                unreachable!("settings recipient is the deployment owner")
+                            }
                             tasks::PersonAction::Batch(_) => authority::ProposalKind::Batch,
                             tasks::PersonAction::Amend { .. } => authority::ProposalKind::Amend,
                         };
@@ -139,6 +156,7 @@ impl Core {
                 }
             }
             tasks::PersonProposalState::Rejected { .. }
+            | tasks::PersonProposalState::SettingsAccepted { .. }
             | tasks::PersonProposalState::Accepted { .. }
             | tasks::PersonProposalState::Withdrawn { .. } => {}
         }
@@ -249,6 +267,7 @@ impl Core {
                 by: tasks::Party::Person(by),
                 message: None,
                 decision: tasks::ProposalDecision::Accept,
+                revision: None,
             });
         }
         let person_route = if person_proposal { self.routing_people_proposals.remove(&request) } else { None };

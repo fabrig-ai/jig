@@ -758,32 +758,7 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
         Startup::Restoring => {}
     }
     match stored {
-        Stored::PersonProposal(row) => {
-            if !crate::proposals::valid_person_proposal(&row, &env.limits) {
-                return failed(domain, None, Refusal::Restore, out);
-            }
-            for member in row.batch() {
-                if !crate::flags::shaped(member.flags, member.executor) {
-                    return failed(domain, None, Refusal::Restore, out);
-                }
-            }
-            match row.state {
-                crate::PersonProposalState::Pending { .. } => {
-                    if domain.person_proposals.len() >= env.limits.tasks
-                        || domain.person_proposals.contains_key(&row.number)
-                    {
-                        return failed(domain, None, Refusal::Restore, out);
-                    }
-                    let inserted = domain.person_proposals.insert(row.number, *row);
-                    assert!(inserted == Ok(None), "restored person proposal admitted");
-                }
-                crate::PersonProposalState::Accepted { .. }
-                | crate::PersonProposalState::Rejected { .. }
-                | crate::PersonProposalState::Withdrawn { .. } => {
-                    failed(domain, None, Refusal::Restore, out);
-                }
-            }
-        }
+        Stored::PersonProposal(row) => restore_person_proposal(domain, env, *row, out),
         Stored::Live(task) => {
             let number = task.number;
             if domain.names.contains_key(&number) || domain.tasks.is_full() || !valid_record(domain, &env.limits, &task)
@@ -852,6 +827,42 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
             if record.made > env.limits.tree_tasks || !crate::funders::restore_funding(domain, record) {
                 failed(domain, None, Refusal::Restore, out);
             }
+        }
+    }
+}
+
+fn restore_person_proposal(
+    domain: &mut Domain,
+    env: &Env<Limits>,
+    row: crate::PersonProposal,
+    out: &mut Queue<Request>,
+) {
+    if !crate::proposals::valid_person_proposal(&row, &env.limits) {
+        return failed(domain, None, Refusal::Restore, out);
+    }
+    for member in row.batch() {
+        if !crate::flags::shaped(member.flags, member.executor) {
+            return failed(domain, None, Refusal::Restore, out);
+        }
+    }
+    match row.state {
+        crate::PersonProposalState::Pending { .. } => {
+            if domain.person_proposals.len() >= env.limits.tasks || domain.person_proposals.contains_key(&row.number) {
+                return failed(domain, None, Refusal::Restore, out);
+            }
+            for (_, old) in &domain.person_proposals {
+                if old.proposer == row.proposer {
+                    return failed(domain, None, Refusal::Restore, out);
+                }
+            }
+            let inserted = domain.person_proposals.insert(row.number, row);
+            assert!(inserted == Ok(None), "restored person proposal admitted");
+        }
+        crate::PersonProposalState::Accepted { .. }
+        | crate::PersonProposalState::SettingsAccepted { .. }
+        | crate::PersonProposalState::Rejected { .. }
+        | crate::PersonProposalState::Withdrawn { .. } => {
+            failed(domain, None, Refusal::Restore, out);
         }
     }
 }

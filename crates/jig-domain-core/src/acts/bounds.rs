@@ -460,6 +460,19 @@ pub(crate) fn proposal_has_recipient(core: &Core, holder: tasks::ProposalHolder)
         tasks::ProposalHolder::Task(_) | tasks::ProposalHolder::Person(_) => return true,
     };
     let kind = match kind {
+        tasks::ProposalKind::Settings => {
+            return match core.people.project_members(0) {
+                Some(holdings) => {
+                    for holding in holdings {
+                        if holding.role == people::Role::Owner {
+                            return true;
+                        }
+                    }
+                    false
+                }
+                None => false,
+            };
+        }
         tasks::ProposalKind::Batch => authority::ProposalKind::Batch,
         tasks::ProposalKind::Effect => authority::ProposalKind::Effect,
         tasks::ProposalKind::Amend => authority::ProposalKind::Amend,

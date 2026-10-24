@@ -32,6 +32,7 @@ fn add(
 
 fn proposal_kind(kind: tasks::ProposalKind) -> authority::ProposalKind {
     match kind {
+        tasks::ProposalKind::Settings => unreachable!("settings proposals have no task holder"),
         tasks::ProposalKind::Batch => authority::ProposalKind::Batch,
         tasks::ProposalKind::Effect => authority::ProposalKind::Effect,
         tasks::ProposalKind::Amend => authority::ProposalKind::Amend,
@@ -445,5 +446,23 @@ fn matches_ended(phase: &tasks::Phase) -> bool {
     match phase {
         tasks::Phase::Ended(_) => true,
         tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => false,
+    }
+}
+
+impl Core {
+    /// Deployment settings have proposal identities and no task tally.
+    #[must_use]
+    pub(crate) fn settings_needs(&self, party: u64) -> u32 {
+        if self.people.role(party, people::DEPLOYMENT) == Some(people::Role::Owner) {
+            self.settings_proposals.len()
+        } else {
+            0
+        }
+    }
+    #[must_use]
+    pub(crate) fn party_need_counts(&self, party: u64) -> Option<people::Needs> {
+        let mut counts = self.people.need_counts(party)?;
+        counts.proposals = counts.proposals.checked_add(self.settings_needs(party))?;
+        Some(counts)
     }
 }

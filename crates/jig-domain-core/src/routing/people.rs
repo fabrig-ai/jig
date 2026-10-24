@@ -287,8 +287,9 @@ pub(super) fn tag_people(
                     people::Ask::SetPool { person: beneficiary, budget, .. } => {
                         pool_route(core, env, work, request, person, project, beneficiary, budget);
                     }
-                    people::Ask::DecideProposal { proposer, proposal, decision, .. } => proposal_request(
+                    people::Ask::DecideProposal { proposer, proposal, decision, running, .. } => proposal_request(
                         core, env, work, request, person, project, role, &mut out, proposer, proposal, decision,
+                        running,
                     ),
                     people::Ask::SetRoles { holdings, .. } => {
                         roles_route(core, env, work, &mut out, request, person, project, holdings);
@@ -333,6 +334,9 @@ pub(super) fn tag_people(
                         super::create::Creation { request, person, project, role: role.expect("admitted role"), batch },
                     ),
                     people::Ask::Propose { action, reason, .. } => match action {
+                        people::Action::Settings { against, .. } => {
+                            super::settings::propose_admitted(core, env, work, request, person, against, reason);
+                        }
                         people::Action::Batch(batch) => super::propose::propose_request(
                             core,
                             env,

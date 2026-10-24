@@ -148,7 +148,7 @@ pub(super) fn withdraw_request(core: &mut Core, work: &mut Queue<Event>, out: &m
             "one withdrawal flight"
         );
         work.push(Event::Tasks(tasks::Event::WithdrawPersonProposal {
-            reply_to: ReplyTo::new(request),
+            reply_to: Some(ReplyTo::new(request)),
             proposer: person,
             proposal,
         }));

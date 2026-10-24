@@ -118,6 +118,8 @@ pub enum Malformed {
         fault: crate::SettingFault,
     },
     SettingsUnchanged,
+    /// Running work is chosen only on accepting a settings proposal.
+    Running,
     Name(crate::NameRule),
     /// A proposed batch must name every budget.
     ProposedAsAllowed,
@@ -177,6 +179,8 @@ pub enum Lack {
 /// The bound a final refusal identifies.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LimitKind {
+    /// The deployment has no room for another pending settings set.
+    SettingsProposals,
     /// The deployment has no room for another project.
     Projects,
     /// Empty or too many operations in one compound request.

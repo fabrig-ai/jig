@@ -195,6 +195,9 @@ pub(crate) fn whole(engine: &crate::Engine, problems: &mut Problems) {
     }
     let limits = &engine.limits.core;
     let settings_path = Path::root().member(b"limits").member(b"core").member(b"settings.history");
+    if limits.settings.proposals == 0 {
+        problems.push(Path::root().member(b"limits").member(b"core").member(b"settings.proposals"), What::Bound);
+    }
     if limits.settings.history == 0 {
         problems.push(settings_path, What::Bound);
     }

@@ -77,9 +77,17 @@ impl Core {
                     || self.settings_restore.held
                     || revision.head.number == 0
                     || revision.head.against >= revision.head.number
-                    || revision.head.proposal.is_some()
                 {
                     return false;
+                }
+                if let Some((proposer, number)) = revision.head.proposal {
+                    let valid = match proposer {
+                        jig_domain_people::Proposer::Party(person) => person > 0,
+                        jig_domain_people::Proposer::Task(_) => false,
+                    };
+                    if !valid || number == 0 {
+                        return false;
+                    }
                 }
                 self.current.head = revision.head;
                 // The decoded items are a row transient, never retained by Current or Restore.
@@ -94,7 +102,26 @@ impl Core {
                 self.settings_restore.extent = true;
                 true
             }
-            Record::Charter { .. } | Record::Proposal { .. } => false,
+            Record::Charter { .. } => false,
+            Record::Proposal { proposer, proposal, value } => {
+                let person = match proposer {
+                    jig_domain_people::Proposer::Party(person) => person,
+                    jig_domain_people::Proposer::Task(_) => return false,
+                };
+                if proposal == 0
+                    || person == 0
+                    || value.against == 0
+                    || value.items.is_empty()
+                    || value.items.len() > usize::try_from(tasks::SETTINGS_ITEMS).expect("item bound")
+                    || super::change_shape(&value.items, limits).is_err()
+                {
+                    return false;
+                }
+                if self.settings_proposals.contains_key(&(proposer, proposal)) {
+                    return false;
+                }
+                self.settings_proposals.insert((proposer, proposal), value).is_ok()
+            }
         }
     }
     /// Finish the settings range before routing any later live row. Children
@@ -208,11 +235,47 @@ impl Core {
         );
         assert!(fleet_out.is_empty(), "needs replacement retains running attempts");
     }
+    /// Settings rows precede tasks rows, so identity and head equality are checked
+    /// only after both ranges restore, before the release withdraws anything.
+    pub(crate) fn settings_proposals_consistent(&self) -> bool {
+        let against = self.settings_restore.release.unwrap_or(self.current.newest());
+        let mut count = 0_u32;
+        for (_, row) in self.tasks.person_proposals() {
+            match &row.action {
+                tasks::PersonAction::Settings { against: revision, items } => {
+                    let Ok(number) = u32::try_from(row.number) else {
+                        return false;
+                    };
+                    let Some(set) =
+                        self.settings_proposals.get(&(jig_domain_people::Proposer::Party(row.proposer), number))
+                    else {
+                        return false;
+                    };
+                    if row.project != 0
+                        || set.against != against
+                        || *revision != against
+                        || super::proposal_heads(&set.items).as_ref() != items.as_ref()
+                    {
+                        return false;
+                    }
+                    count = count.checked_add(1).expect("bounded pending sets");
+                }
+                tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {}
+            }
+        }
+        count == self.settings_proposals.len()
+    }
     pub(crate) fn commit_restored_settings(&mut self, env: &Env<Limits>, room: u32) -> Requests {
         let mut out = Queue::with_capacity(room);
         if !self.settings_restored(env) {
             return Requests::Out(out);
         }
+        if !self.settings_proposals_consistent() {
+            let _refused = self.refuse_settings(Failure { setting: Setting::Rules, fault: Fault::Shape });
+            return Requests::Out(out);
+        }
+        let release = self.settings_restore.release.is_some();
+        let reserve = if release { super::withdrawal_writes(&env.limits).expect("withdrawal room") } else { 0 };
         let count = self.settings_restore.pending.len();
         let mut defaults = List::with_capacity(count);
         for (&setting, &present) in &self.settings_restore.pending {
@@ -248,11 +311,14 @@ impl Core {
             self.current.oldest,
             self.current.newest(),
             env.limits.settings.history,
-            room,
+            room.saturating_sub(reserve),
         );
         self.current.oldest = oldest;
         for write in writes.into_boxed() {
             out.push(Request::Write(write));
+        }
+        if release {
+            crate::routing::settings::withdraw_stale(self, env, &mut out, None);
         }
         self.settings_restore = Restore::new(&env.limits);
         self.settings_restore.ready = true;

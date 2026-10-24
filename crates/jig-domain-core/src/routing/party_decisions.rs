@@ -12,7 +12,11 @@ use jig_domain_people as people;
 use jig_domain_tasks as tasks;
 use skein_lib::{Env, Queue, ReplyTo, Token};
 
-#[expect(clippy::too_many_arguments, reason = "an exact pending goal carries the keyed holder decision")]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one holder decision checks and schedules its complete action atomically"
+)]
 pub(super) fn goal_decide(
     core: &mut Core,
     env: &Env<Limits>,
@@ -59,6 +63,7 @@ pub(super) fn goal_decide(
                 work.push(Event::Tasks(event));
             }
             let event = match proposal.action {
+                tasks::PersonAction::Settings { .. } => unreachable!("settings acceptance has its own decision"),
                 tasks::PersonAction::Batch(mut batch) => {
                     super::deadlines::fund(&mut batch, source, env.wall);
                     tasks::Event::Make {
@@ -116,6 +121,7 @@ pub(super) fn goal_decide(
                 by: tasks::Party::Person(person),
                 message: Some(message),
                 decision: tasks::ProposalDecision::Reject { reason },
+                revision: None,
             }
         }
         people::ProposalDecision::Pass => {
@@ -488,15 +494,94 @@ pub(super) fn proposal_request(
     proposer: people::Proposer,
     proposal: u64,
     decision: people::ProposalDecision,
+    running: Option<people::Running>,
 ) {
     match proposer {
         people::Proposer::Party(number) => {
-            if core.tasks.person_proposal(number, proposal).is_some() {
+            if let Some(row) = core.tasks.person_proposal(number, proposal) {
+                let settings = match row.action {
+                    tasks::PersonAction::Settings { .. } => true,
+                    tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => false,
+                };
+                let accepts = decision == people::ProposalDecision::Accept;
+                if running.is_some() != (settings && accepts) {
+                    pool_refused(
+                        work,
+                        request,
+                        people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running },
+                    );
+                    return;
+                }
+                if settings && accepts {
+                    if row.project != project {
+                        pool_refused(work, request, people::Refusal::Unknown);
+                        return;
+                    }
+                    if let Err(why) = crate::acts::proposal(
+                        core,
+                        &env.limits,
+                        person,
+                        crate::acts::Act::Accept,
+                        crate::documents::Proposer::Party(number),
+                        proposal,
+                        env.wall,
+                    ) {
+                        pool_refused(work, request, why);
+                        return;
+                    }
+                    let key =
+                        (people::Proposer::Party(number), u32::try_from(proposal).expect("settings proposal identity"));
+                    let set = core.settings_proposals.get(&key).expect("pending settings set").clone();
+                    let room = super::settings::room(&env.limits)
+                        .expect("settings decision room")
+                        .writes
+                        .saturating_sub(1)
+                        .saturating_sub(people::max_out(&env.limits.people));
+                    let outcome = super::settings::decide(
+                        core,
+                        env,
+                        work,
+                        out,
+                        crate::settings::Decider::Party(person),
+                        Some(key),
+                        crate::settings::Change {
+                            against: set.against,
+                            items: set.items,
+                            running: running.expect("settings acceptance"),
+                        },
+                        room,
+                    );
+                    match outcome {
+                        Ok(revision) => {
+                            core.goal_routes
+                                .insert(request, GoalRoute::Deciding { proposer: number, proposal, by: person })
+                                .expect("one settings acceptance");
+                            work.push(Event::Tasks(tasks::Event::DecidePersonProposal {
+                                reply_to: ReplyTo::new(request),
+                                proposer: number,
+                                proposal,
+                                by: tasks::Party::Person(person),
+                                message: None,
+                                revision: Some(revision),
+                                decision: tasks::ProposalDecision::Accept,
+                            }));
+                        }
+                        Err(why) => work.push(Event::People(people::Event::Decided {
+                            request,
+                            outcome: people::Outcome::Refused(why),
+                        })),
+                    }
+                    return;
+                }
                 goal_decide(core, env, work, request, person, role, project, number, proposal, decision);
                 return;
             }
         }
         people::Proposer::Task(number) => {
+            if running.is_some() {
+                pool_refused(work, request, people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running });
+                return;
+            }
             if core.tasks.proposal(number, proposal).is_some() {
                 person_proposal_decide(core, env, work, request, person, role, project, number, proposal, decision);
                 return;

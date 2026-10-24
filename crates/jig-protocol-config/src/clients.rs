@@ -94,6 +94,9 @@ pub(crate) fn check_settings(limits: &crate::Limits, problems: &mut Problems) {
     if wire.settings_review_items < wire.owned_record {
         problems.push(path.member(b"clients.wire.settings_review"), crate::What::Bound);
     }
+    if core.settings.proposals > wire.settings_document_pending {
+        problems.push(path.member(b"core.settings.proposals"), crate::What::Bound);
+    }
     // Defaults and changes may name disjoint settings; both belong to the inventory.
     let inventory = match jig_domain_core::settings::capacity(core) {
         Some(count) => double_settings(count),
@@ -146,6 +149,11 @@ mod settings_tests {
         check_settings(&limits, &mut problems);
         assert_eq!(problems.problems.len(), 1, "one past: {name:?}: {problems:?}");
         assert_eq!(problems.problems.get(0).unwrap().path, Path::root().member(b"limits").member(name));
+    }
+    #[test]
+    fn pending_settings_fit_the_wire_inventory() {
+        let maximum = crate::profile(crate::Profile::Small).clients.wire.settings_document_pending;
+        ceiling(b"core.settings.proposals", maximum);
     }
     #[test]
     fn policy_roles_fit_the_wire() {

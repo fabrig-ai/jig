@@ -5,6 +5,11 @@ use alloc::boxed::Box;
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Action {
     Batch(Box<[Member]>),
+    /// A held deployment settings set, identified by its request digest.
+    Settings {
+        against: u32,
+        digest: [u8; 32],
+    },
     /// Amend a task at the displayed specification revision.
     Amend {
         task: u64,
@@ -197,7 +202,7 @@ pub fn shaped(member: &Member) -> bool {
 pub(crate) fn restore_shaped(ask: &crate::Ask) -> bool {
     let batch = match ask {
         crate::Ask::Create { batch, .. } | crate::Ask::Propose { action: Action::Batch(batch), .. } => batch,
-        crate::Ask::Propose { action: Action::Amend { .. }, .. }
+        crate::Ask::Propose { action: Action::Amend { .. } | Action::Settings { .. }, .. }
         | crate::Ask::Compound { .. }
         | crate::Ask::MarkSeen { .. }
         | crate::Ask::Application { .. }

@@ -114,7 +114,7 @@ pub(super) const DOCUMENTS: core::documents::DocumentLimits = core::documents::D
     ..small::DOCUMENTS
 };
 pub(super) const CORE: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits { history: 64, proposals: 8, alternatives: 16, permissions: 32 },
     templates: 16,
     fill_mark: 1_073_741_824,
     connectors: 4,

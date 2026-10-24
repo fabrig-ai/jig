@@ -112,18 +112,35 @@ pub(super) fn route_historical_proposal(
         if named {
             let allowed = proposer == people::Proposer::Party(person)
                 || person == row.by
-                || core.proposal_policy_standing(
-                    person,
-                    project,
-                    match row.kind {
-                        tasks::ProposalKind::Batch => authority::ProposalKind::Batch,
-                        tasks::ProposalKind::Effect => authority::ProposalKind::Effect,
-                        tasks::ProposalKind::Amend => authority::ProposalKind::Amend,
-                        tasks::ProposalKind::Widen => authority::ProposalKind::Widen,
-                        tasks::ProposalKind::Release => authority::ProposalKind::Escalation,
-                    },
-                );
-            if allowed {
+                || (row.kind == tasks::ProposalKind::Settings && core.people.role(person, 0).is_some())
+                || (row.kind != tasks::ProposalKind::Settings
+                    && core.proposal_policy_standing(
+                        person,
+                        project,
+                        match row.kind {
+                            tasks::ProposalKind::Settings => {
+                                unreachable!("settings visibility checked by deployment role")
+                            }
+                            tasks::ProposalKind::Batch => authority::ProposalKind::Batch,
+                            tasks::ProposalKind::Effect => authority::ProposalKind::Effect,
+                            tasks::ProposalKind::Amend => authority::ProposalKind::Amend,
+                            tasks::ProposalKind::Widen => authority::ProposalKind::Widen,
+                            tasks::ProposalKind::Release => authority::ProposalKind::Escalation,
+                        },
+                    ));
+            let running_valid = match core.people.pending_ask(request) {
+                Some(people::Ask::DecideProposal { decision, running, .. }) => {
+                    let accepting = match decision {
+                        people::ProposalDecision::Accept => true,
+                        people::ProposalDecision::Reject { .. } | people::ProposalDecision::Pass => false,
+                    };
+                    running.is_some() == (row.kind == tasks::ProposalKind::Settings && accepting)
+                }
+                Some(_) | None => true,
+            };
+            if allowed && !running_valid {
+                people::Outcome::Refused(people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running })
+            } else if allowed {
                 people::Outcome::ProposalDecided { proposer, proposal, by: row.by, at: row.at, choice: row.choice }
             } else {
                 people::Outcome::Refused(people::Refusal::Unknown)

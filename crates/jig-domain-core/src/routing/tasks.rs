@@ -64,8 +64,12 @@ pub(super) fn tag_tasks(
                 continue;
             }
             tasks::Request::PersonProposalDecided { reply_to, proposer, number, outcome } => {
-                let event = core.person_proposal_decided(reply_to.into_token(), proposer, number, outcome, env.wall);
-                append_people(core, env, event, &mut out);
+                core.touch_party(proposer);
+                if let Some(reply_to) = reply_to {
+                    let event =
+                        core.person_proposal_decided(reply_to.into_token(), proposer, number, outcome, env.wall);
+                    append_people(core, env, event, &mut out);
+                }
                 continue;
             }
             tasks::Request::EscalationDecided { reply_to, task, revision, outcome } if person_escalation => {
@@ -601,6 +605,7 @@ pub(super) fn tag_tasks(
                             by: tasks::Party::Person(by),
                             message: None,
                             decision: tasks::ProposalDecision::Accept,
+                            revision: None,
                         },
                         &mut follow,
                     );
@@ -771,6 +776,7 @@ pub(super) fn tag_tasks(
                 continue;
             }
             tasks::Request::Save { record } => {
+                super::settings::proposal_saved(core, &record, &mut out);
                 if let tasks::Stored::Activity(line) = &record {
                     let _retained = core.remember_question(line);
                 }
@@ -1020,7 +1026,11 @@ pub(super) fn tag_tasks(
                         Some((task.number, core.waiting_entries(&env.limits, task)))
                     }
                     tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) => {
-                        Some((row.first(), core.person_proposal_entries(row)))
+                        if row.first() == tasks::PROPOSAL_WITHOUT_TASK {
+                            None
+                        } else {
+                            Some((row.first(), core.person_proposal_entries(row)))
+                        }
                     }
                     tasks::Stored::Ledger(_)
                     | tasks::Stored::Writer(_)
@@ -1175,6 +1185,12 @@ pub(super) fn tag_tasks(
                         connector,
                         ask: Ask::Effect(crate::connector::Ask::Drop { owner, answer: authority::Answer::Refuse }),
                     });
+                }
+                if match &core.settings_offering {
+                    Some((request, ..)) => *request == token,
+                    None => false,
+                } {
+                    drop(core.settings_offering.take());
                 }
                 if core.goal_routes.remove(&token).is_some() {
                     let outcome = person_problem_refusal(core, problem);

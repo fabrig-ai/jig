@@ -32,6 +32,9 @@ pub fn inbox_selection_worst_case(rows: u32, depth: u32) -> Option<u64> {
 pub(super) fn live(core: &Core, limits: &Limits, task: u64, cursor: Cursor) -> Result<InboxSelection, Missing> {
     let capacity = limits.tasks.depth.checked_add(1).ok_or(Missing::TooLarge)?;
     let mut goals = List::with_capacity(capacity);
+    if task == tasks::PROPOSAL_WITHOUT_TASK {
+        return Ok(InboxSelection { cursor, goals });
+    }
     let mut number = task;
     for _ in 0..=limits.tasks.depth {
         goals.push(number).expect("one root for each bounded requester step");
@@ -57,7 +60,9 @@ pub(crate) fn retained(
         return Err(Missing::TooLarge);
     }
     let mut goals = List::with_capacity(capacity);
-    goals.push(task).expect("self always has a place");
+    if task != tasks::PROPOSAL_WITHOUT_TASK {
+        goals.push(task).expect("self always has a place");
+    }
     for root in ancestors {
         goals.push(*root).expect("whole admitted original ancestry fits");
     }

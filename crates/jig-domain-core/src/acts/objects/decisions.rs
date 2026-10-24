@@ -21,6 +21,7 @@ pub(crate) fn proposal(
                 return match row.state {
                     tasks::PersonProposalState::Pending { .. } if person == party => Ok(()),
                     tasks::PersonProposalState::Pending { .. }
+                    | tasks::PersonProposalState::SettingsAccepted { .. }
                     | tasks::PersonProposalState::Accepted { .. }
                     | tasks::PersonProposalState::Rejected { .. }
                     | tasks::PersonProposalState::Withdrawn { .. } => Err(people::Refusal::NotOffered),
@@ -30,7 +31,8 @@ pub(crate) fn proposal(
             core.goal_standing(&row, row.project, role)?;
             match &row.state {
                 tasks::PersonProposalState::Pending { .. } => {}
-                tasks::PersonProposalState::Accepted { .. }
+                tasks::PersonProposalState::SettingsAccepted { .. }
+                | tasks::PersonProposalState::Accepted { .. }
                 | tasks::PersonProposalState::Rejected { .. }
                 | tasks::PersonProposalState::Withdrawn { .. } => {
                     return Err(people::Refusal::Unknown);
@@ -38,6 +40,9 @@ pub(crate) fn proposal(
             }
             match act {
                 Act::Accept => {
+                    if row.action.is_settings() {
+                        return Ok(());
+                    }
                     if let tasks::PersonAction::Batch(_) = &row.action
                         && core.projections.len() >= limits.tasks.tasks
                     {

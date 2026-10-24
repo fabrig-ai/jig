@@ -505,6 +505,12 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
     } = limits;
     let jig_domain_core::CoreBriefBudgets { tail, task, dependencies, attempts, plan, notes } = brief_core_budgets;
     match name {
+        b"settings.proposals" => {
+            if value == 0 {
+                return Err(What::Override);
+            }
+            settings.proposals = count(value)?;
+        }
         b"settings.history" => {
             if value == 0 {
                 return Err(What::Override);
