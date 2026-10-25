@@ -428,7 +428,7 @@ impl Store {
                 let row = root::Record::Core(row);
                 self.rows.insert(row.key(), row);
             }
-            Event::Failed { .. } => self.failed = true,
+            Event::Failed { .. } | Event::FrameTooLarge { .. } => self.failed = true,
             Event::OpenRefused { why, .. } => panic!("world store open refused: {why:?}"),
             event @ (Event::Restored { .. } | Event::Loaded { .. } | Event::Read { .. })
                 if self.page_delay != 0 || self.pages_paused =>

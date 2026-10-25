@@ -186,6 +186,7 @@ fn answer_frame(disk: &mut Disk, store: &mut Store, events: Box<[Event]>, refuse
             | Event::OpenRefused { .. }
             | Event::Committed { .. }
             | Event::Failed { .. }
+            | Event::FrameTooLarge { .. }
             | Event::Restored { .. }
             | Event::Loaded { .. }
             | Event::Read { .. }

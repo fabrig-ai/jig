@@ -18,7 +18,8 @@ pub enum Request {
     /// store that holds one answers its own instead.
     Open { owner: Token, root: Root, installation: [u8; 16] },
     /// Commit `number` (store.md 6): its writes, in order, one skein-kv
-    /// commit with the same number. Terminal: `Committed` or `Failed`.
+    /// commit with the same number. Terminal: `Committed`, `Failed` or
+    /// `FrameTooLarge`; a refusal stops the engine.
     Commit { number: u64, writes: Box<[Write]> },
     /// A page of one restart step's ranges (store.md 7.2), from `after`.
     Restore { owner: Token, range: Restore, after: Option<Cursor>, rows: u32, bytes: u64 },
@@ -461,6 +462,14 @@ pub enum Event {
     /// Commit `number` failed or was refused; the engine stops (store.md 6).
     Failed {
         number: u64,
+    },
+    /// Commit refused before any of its data IO: this turn's complete encoded
+    /// frame exceeds the page byte bound (store.md 6 and 8.2). In-process only.
+    FrameTooLarge {
+        number: u64,
+        task: u64,
+        bytes: u32,
+        limit: u32,
     },
     /// A restore's page; `next` is none once the step's ranges are done.
     Restored {

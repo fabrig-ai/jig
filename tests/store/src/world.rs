@@ -443,6 +443,7 @@ impl World {
                     }
                     other @ (Event::Committed { .. }
                     | Event::Failed { .. }
+                    | Event::FrameTooLarge { .. }
                     | Event::Restored { .. }
                     | Event::Loaded { .. }
                     | Event::Read { .. }

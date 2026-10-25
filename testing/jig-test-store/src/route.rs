@@ -190,7 +190,9 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
             into.push(Up::Ask(Request::Site { owner, patcher, result: Err(skein_codec::patch::Halt::NoSite(site)) }));
         }
         Event::Committed { number, fill } => into.push(Up::Root(root::Event::Committed { number, fill })),
-        Event::Failed { number } => into.push(Up::Root(root::Event::Failed { number })),
+        Event::Failed { number } | Event::FrameTooLarge { number, .. } => {
+            into.push(Up::Root(root::Event::Failed { number }))
+        }
         Event::Restored { owner, rows, next } => restored(routes, owner, rows, next, into),
         Event::Read { owner, result } => {
             if let Some(Flight::Read(load)) = routes.pending.remove(&owner) {

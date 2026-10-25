@@ -23,16 +23,22 @@ pub(crate) fn submit(
     );
     crate::directory::events_up(store, false, &mut events, above, below);
 }
+#[derive(Debug)]
+pub(crate) enum Refusal {
+    Failed,
+    FrameTooLarge { task: u64, bytes: u32, limit: u32 },
+}
+
 pub(crate) fn operations(
     store: &mut Store,
     number: u64,
     writes: Box<[Write]>,
     format_due: bool,
-) -> Option<crate::transcripts::Pending> {
-    if writes.len() > usize::try_from(store.limits.journal.writes).ok()? {
-        return None;
+) -> Result<crate::transcripts::Pending, Refusal> {
+    if writes.len() > usize::try_from(store.limits.journal.writes).ok().ok_or(Refusal::Failed)? {
+        return Err(Refusal::Failed);
     }
-    let capacity = most_ops(store.limits.journal.writes, store.limits.orphan_erases)?;
+    let capacity = most_ops(store.limits.journal.writes, store.limits.orphan_erases).ok_or(Refusal::Failed)?;
     let mut ops = List::with_capacity(capacity);
     let mut frames = Queue::with_capacity(store.limits.journal.writes);
     let mut drops = Queue::with_capacity(store.limits.journal.writes);
@@ -41,14 +47,21 @@ pub(crate) fn operations(
     for write in writes {
         match write {
             Write::DropTranscript { task } => {
-                crate::transcripts::drop::queue(store, task, number)?;
-                ops.push(operation(store, Write::DropTranscript { task })?).ok()?;
+                crate::transcripts::drop::queue(store, task, number).ok_or(Refusal::Failed)?;
+                ops.push(operation(store, Write::DropTranscript { task }).ok_or(Refusal::Failed)?)
+                    .ok()
+                    .ok_or(Refusal::Failed)?;
                 drops.push(task);
             }
             Write::Save(Record::Core(CoreRecord::Turn(turn))) => {
-                let body = crate::transcripts::frame::encode(&turn, &store.codec)?;
-                let offset =
-                    crate::transcripts::place(store, number, &turn, u64::try_from(body.len()).ok()?, &mut ops)?;
+                let body = crate::transcripts::frame::encode(&turn, &store.codec).ok_or(Refusal::Failed)?;
+                let bytes = u32::try_from(body.len()).ok().ok_or(Refusal::Failed)?;
+                let limit = store.limits.store.page.bytes;
+                if bytes > limit {
+                    return Err(Refusal::FrameTooLarge { task: turn.task, bytes, limit });
+                }
+                let offset = crate::transcripts::place(store, number, &turn, u64::from(bytes), &mut ops)
+                    .ok_or(Refusal::Failed)?;
                 frames.push(crate::transcripts::Frame { task: turn.task, offset, bytes: body });
             }
             write @ (Write::Save(
@@ -74,7 +87,7 @@ pub(crate) fn operations(
                 if let Some(id) = header_id(&write) {
                     deployment = Some(id);
                 }
-                ops.push(operation(store, write)?).ok()?;
+                ops.push(operation(store, write).ok_or(Refusal::Failed)?).ok().ok_or(Refusal::Failed)?;
             }
         }
     }
@@ -83,27 +96,30 @@ pub(crate) fn operations(
         let mut row = format::current(store.application.version, id);
         row.levels = format::recorded(crate::patching::plan::binary(&store.patch_sets));
         ops.push(skein_kv::Op::Put {
-            key: keys::encode_own(&keys::Own::Format, store.limits.store.key)?,
-            value: row.encode().ok()?,
+            key: keys::encode_own(&keys::Own::Format, store.limits.store.key).ok_or(Refusal::Failed)?,
+            value: row.encode().ok().ok_or(Refusal::Failed)?,
         })
-        .ok()?;
+        .ok()
+        .ok_or(Refusal::Failed)?;
         ops.push(skein_kv::Op::Put {
-            key: keys::encode_own(&keys::Own::Layouts, store.limits.store.key)?,
+            key: keys::encode_own(&keys::Own::Layouts, store.limits.store.key).ok_or(Refusal::Failed)?,
             value: store.layouts.encode(),
         })
-        .ok()?;
+        .ok()
+        .ok_or(Refusal::Failed)?;
         ops.push(skein_kv::Op::Put {
-            key: keys::installation(store.limits.store.key)?,
+            key: keys::installation(store.limits.store.key).ok_or(Refusal::Failed)?,
             value: codec::accounts::Installation { id: store.installation }.encode(),
         })
-        .ok()?;
+        .ok()
+        .ok_or(Refusal::Failed)?;
     }
-    crate::transcripts::drop::erases(store, &mut ops)?;
+    crate::transcripts::drop::erases(store, &mut ops).ok_or(Refusal::Failed)?;
     let mut bounded = List::with_capacity(capacity);
-    for op in unique(ops.into_boxed(), capacity)? {
-        append(&mut bounded, op, &mut bytes, store.limits.store.commit)?;
+    for op in unique(ops.into_boxed(), capacity).ok_or(Refusal::Failed)? {
+        append(&mut bounded, op, &mut bytes, store.limits.store.commit).ok_or(Refusal::Failed)?;
     }
-    Some(crate::transcripts::Pending { number, frames, ops: bounded.into_boxed(), drops })
+    Ok(crate::transcripts::Pending { number, frames, ops: bounded.into_boxed(), drops })
 }
 fn operation(store: &mut Store, write: Write) -> Option<skein_kv::Op> {
     let limit = store.limits.store.key;

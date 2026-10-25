@@ -82,6 +82,25 @@ fn a_failed_commit_releases_nothing_after_it() {
 }
 
 #[test]
+fn a_frame_refusal_keeps_the_reference_uncommitted_stop_barrier() {
+    let mut driven = fixtures::Driven::started(&fixtures::engine_document());
+    driven.chat(101, b"one");
+    let first = driven.commit_asked();
+    driven.chat(102, b"two");
+    let second = driven.commit_asked();
+    fixtures::engine(&mut driven.service).store.above.push(jig_protocol_store::Event::FrameTooLarge {
+        number: first,
+        task: 11,
+        bytes: 79,
+        limit: 78,
+    });
+    driven.commit(second);
+    assert_eq!(driven.released_to_parties(), 0);
+    assert_eq!(fixtures::engine(&mut driven.service).store.above.len(), 0);
+    assert_eq!(driven.end(), Some(&End::Stopped(Stop::CommitFailed { number: first })));
+}
+
+#[test]
 fn the_service_waits_while_its_load_is_outstanding() {
     let mut service = fixtures::started(&fixtures::engine_document());
     fixtures::turn(&mut service);
