@@ -205,10 +205,7 @@ pub(crate) fn unsubscribe(
 pub(crate) fn notice(domain: &mut Domain, env: &Env<Limits>, number: u64, word: Word, out: &mut Queue<Request>) {
     let Some(task) = record(domain, number) else { return };
     let Some(subscription_number) = hint_of(&word.kind) else { return };
-    let subscription = match find(task, subscription_number) {
-        Some(subscription) => subscription,
-        None => return,
-    };
+    let Some(subscription) = find(task, subscription_number) else { return };
     let matching = match word.kind {
         MessageKind::Notice { target, .. } => match subscription.kind {
             SubscriptionKind::Task { target: watched, .. } => target == watched,

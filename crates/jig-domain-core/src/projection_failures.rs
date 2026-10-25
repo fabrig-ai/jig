@@ -94,9 +94,7 @@ pub(crate) fn failed(core: &mut Core, goal: u64, connector: u16, source: u64, at
 }
 pub(crate) fn recover(core: &mut Core, goal: u64, connector: u16, owner: Token) -> Requests {
     let mut out = Queue::with_capacity(4);
-    let result = if !member(core, goal, connector) {
-        ProjectionRecovery::Missing
-    } else {
+    let result = if member(core, goal, connector) {
         match core.projection_failures.get_mut(&(goal, connector)) {
             None => ProjectionRecovery::Missing,
             Some(row) => match row.state {
@@ -112,6 +110,8 @@ pub(crate) fn recover(core: &mut Core, goal: u64, connector: u16, owner: Token) 
                 }
             },
         }
+    } else {
+        ProjectionRecovery::Missing
     };
     out.push(Request::Held(Box::new(Held::ProjectionRecovery { connector, owner, result })));
     out.push(Request::Decided);
@@ -246,7 +246,9 @@ pub(crate) fn restore(core: &mut Core, row: ProjectionFailure) -> bool {
 pub(crate) fn consistent(core: &Core) -> bool {
     for (goal, state) in &core.projections {
         if state.closing_at.is_some()
-            && (!state.milestones.is_empty() || (state.pending.is_empty() && !pending(core, *goal)))
+            && (!crate::projections::final_owner(core, *goal)
+                || !state.milestones.is_empty()
+                || (state.pending.is_empty() && !pending(core, *goal)))
         {
             return false;
         }

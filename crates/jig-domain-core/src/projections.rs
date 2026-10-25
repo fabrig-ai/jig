@@ -547,7 +547,18 @@ pub(crate) fn restore(core: &mut Core, limits: &Limits, row: ProjectionRecord) -
     }
 }
 
-#[expect(clippy::too_many_arguments, reason = "restore checks the durable header as one row")]
+pub(crate) fn final_owner(core: &Core, goal: u64) -> bool {
+    match core.tasks.task(goal) {
+        None => true,
+        Some(task) => match task.phase {
+            tasks::Phase::Ended(_) => true,
+            tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => {
+                task.tracked.is_none()
+            }
+        },
+    }
+}
+
 fn restore_goal(
     core: &mut Core,
     limits: &Limits,
@@ -572,20 +583,14 @@ fn restore_goal(
     {
         return false;
     }
-    let closing = match goal.phase {
-        tasks::Phase::Ended(_) => true,
-        tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => false,
-    };
-    let untracked = match core.tasks.task(goal.number) {
-        Some(task) => task.tracked.is_none(),
-        None => false,
-    };
+    // Headers may precede live task rows. Missing owners are valid; complete
+    // LoadCore consistency rejects a later present, live tracked owner.
     match closing_at {
         Some(generation) => {
             if generation == 0
                 || generation > deployment.commits
                 || generation.checked_sub(1) != fed_at
-                || (!closing && !untracked)
+                || !final_owner(core, goal.number)
             {
                 return false;
             }

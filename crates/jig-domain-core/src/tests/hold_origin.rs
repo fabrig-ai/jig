@@ -352,7 +352,8 @@ fn reported_projection_recovery_fences_stale_none_callbacks_and_releases_only_th
     let fresh = begin_projection(&mut core, &limits, 1, 2, 903).unwrap();
     assert!(fresh > entries[1]);
     drop(step(&mut core, &env, Event::ProjectionFailed { goal: 1, connector: 2, source: fresh }));
-    assert!(
-        matches!(core.projection_failures.get(&(1, 2)).unwrap().state, ProjectionFailureState::Pending(source) if source.source == fresh)
-    );
+    let ProjectionFailureState::Pending(source) = core.projection_failures.get(&(1, 2)).unwrap().state else {
+        panic!("new source opens a pending episode")
+    };
+    assert_eq!(source.source, fresh);
 }

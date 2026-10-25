@@ -99,10 +99,10 @@ fn projection_news_uses_reserved_or_refusable_room_and_stays_quiet() {
             assert_eq!(test.domain.task(1).expect("goal").phase, before, "quiet news changes no execution phase");
             let mut heard = false;
             for _ in 0..out.len() {
-                if let Request::Save { record: crate::Stored::Activity(line) } = out.pop().expect("news output") {
-                    if let crate::Line::Heard(word) = line.line {
-                        heard = word.at == Wall::from_nanos(7);
-                    }
+                if let Request::Save { record: crate::Stored::Activity(line) } = out.pop().expect("news output")
+                    && let crate::Line::Heard(word) = line.line
+                {
+                    heard = word.at == Wall::from_nanos(7);
                 }
             }
             assert!(heard, "activity keeps receipt time");

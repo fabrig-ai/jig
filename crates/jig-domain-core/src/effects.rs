@@ -428,7 +428,10 @@ fn describe_busy(core: &mut Core, _env: &Env<Limits>, work: &mut Queue<Event>, o
     if let Some(flight) = core.effect_flights.remove(&owner) {
         let answer = match flight.origin {
             EffectOrigin::Projection { .. } => authority::Answer::Wait,
-            _ => authority::Answer::Refuse,
+            EffectOrigin::Call { .. }
+            | EffectOrigin::Propose { .. }
+            | EffectOrigin::Accept { .. }
+            | EffectOrigin::Procedure { .. } => authority::Answer::Refuse,
         };
         drop_effect(out, flight.connector, owner, answer);
         if !origin_current(core, flight.connector, &flight.origin) {
@@ -474,7 +477,7 @@ fn describe_refused(
                 accept_refused(core, work, out, to, key, authority::Answer::Refuse, None);
             }
             EffectOrigin::Projection { goal, source, .. } => {
-                crate::projection_failures::failed(core, goal, flight.connector, source, env.wall, out)
+                crate::projection_failures::failed(core, goal, flight.connector, source, env.wall, out);
             }
             EffectOrigin::Procedure { task, step, entry: _ } => procedure_wait(core, work, task, step),
         }

@@ -3735,7 +3735,7 @@ fn projection_receipts_reserve_before_refusal_and_recover_only_reported_episodes
     );
     let fence = core.projection_failures.get(&key).expect("receipt").after;
     let Requests::Out(mut armed) = projection_failures::recover(&mut core, 1, connector, Token::new(801));
-    let mut writes = 0;
+    let mut writes = 0_u32;
     for _ in 0..armed.len() {
         if let Request::Write(_) = armed.pop().expect("Armed output") {
             writes += 1;
@@ -3751,10 +3751,10 @@ fn projection_receipts_reserve_before_refusal_and_recover_only_reported_episodes
     let Requests::Out(mut busy) = projection_failures::recover(&mut core, 1, connector, Token::new(802));
     let mut result = None;
     for _ in 0..busy.len() {
-        if let Request::Held(held) = busy.pop().expect("Pending output") {
-            if let Held::ProjectionRecovery { result: got, .. } = *held {
-                result = Some(got);
-            }
+        if let Request::Held(held) = busy.pop().expect("Pending output")
+            && let Held::ProjectionRecovery { result: got, .. } = *held
+        {
+            result = Some(got);
         }
     }
     assert_eq!(result, Some(ProjectionRecovery::Busy));
@@ -3905,9 +3905,13 @@ fn projection_final_generations_reject_stale_members_and_wait_for_pending_news()
     let env = Env { now: Time::ZERO, wall: Wall::from_nanos(99), limits };
     projection_failures::deliver(&mut core, &env, &mut out);
     assert!(core.projections.contains_key(&1), "the second connector still owes news");
-    let heard =
-        core.tasks.task(1).unwrap().inbox.iter().find(|word| word.words.as_ref() == b"Projection 1 failed").unwrap();
-    assert_eq!(heard.at, Wall::from_nanos(19));
+    let mut heard_at = None;
+    for word in &core.tasks.task(1).unwrap().inbox {
+        if word.words.as_ref() == b"Projection 1 failed" {
+            heard_at = Some(word.at);
+        }
+    }
+    assert_eq!(heard_at, Some(Wall::from_nanos(19)));
     projection_failures::deliver(&mut core, &env, &mut out);
     assert!(core.projections.contains_key(&1), "at most one news per decision");
     core.counters.next_commit();
@@ -4008,4 +4012,44 @@ fn projection_describe_busy_preserves_the_episode_and_returns_wait_for_normal_re
     assert!(wait);
     assert_eq!(core.projection_failures.get(&(1, connector)).unwrap().state, ProjectionFailureState::Armed);
     assert!(core.effect_flights.is_empty());
+}
+
+#[test]
+fn projection_final_owner_validation_waits_for_the_complete_live_task_range() {
+    let (mut core, limits) = make_tree();
+    let owner = core.tasks.task(1).unwrap().clone();
+    let goal = core.projections.remove(&1).unwrap().goal;
+    while core.counters.deployment().tasks < 4 {
+        fresh(&mut core.counters, Family::Task).unwrap();
+    }
+    core.counters.next_commit();
+    core.tasks = fixtures::fresh_tasks(&core, &limits);
+    let connector = core.connectors[0];
+    assert!(
+        projections::restore(
+            &mut core,
+            &limits,
+            ProjectionRecord::Goal {
+                goal,
+                pending: Box::new([connector]),
+                changed: false,
+                fed_at: Some(0),
+                closing_at: Some(1),
+            }
+        ),
+        "header may precede its live task row in the same paged range"
+    );
+    assert!(projection_failures::consistent(&core), "an absent final owner is allowed by the recovery blueprint");
+    for tracked in [owner.tracked, None] {
+        core.tasks = fixtures::fresh_tasks(&core, &limits);
+        let mut row = owner.clone();
+        row.tracked = tracked;
+        send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Live(Box::new(row)) });
+        assert_eq!(core.tasks.task(1).unwrap().tracked, tracked);
+        assert_eq!(projection_failures::consistent(&core), tracked.is_none(), "late owner decides final consistency");
+    }
+    core.tasks = fixtures::fresh_tasks(&core, &limits);
+    core.projections.get_mut(&1).unwrap().goal.phase =
+        tasks::Phase::Ended(tasks::Ending::Done(tasks::TaskResult::Report { words: b"done".as_slice().into() }));
+    assert!(projection_failures::consistent(&core), "an archived ended owner needs no live task row");
 }
