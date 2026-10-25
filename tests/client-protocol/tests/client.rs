@@ -445,7 +445,7 @@ fn a_party_proposes_a_batch_and_withdraws_it_before_it_is_decided() {
     assert_eq!(
         story.answered(PROPOSE),
         vec![Outcome::Answered(Answered::Jig(contract::Answer::Done(contract::Outcome::Owner(
-            contract::OwnerOutcome::Proposed { proposal: 1 }
+            contract::OwnerOutcome::Proposed { proposal: 1, to: 0 }
         ))))]
     );
     let key = contract::ProposalKey { proposer: contract::Proposer::Party(fixtures::FIRST_OWNER), number: 1 };
@@ -734,7 +734,7 @@ fn a_goal_past_the_first_bound_is_proposed_to_the_policy_s_role() {
     assert_eq!(
         story.answered(SHAPED_GOAL),
         vec![Outcome::Answered(Answered::Jig(contract::Answer::Done(contract::Outcome::Owner(
-            contract::OwnerOutcome::Proposed { proposal: GOAL_PROPOSAL }
+            contract::OwnerOutcome::Proposed { proposal: GOAL_PROPOSAL, to: 0 }
         ))))]
     );
 }

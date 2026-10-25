@@ -83,7 +83,7 @@ pub(crate) fn owner_outcome(value: &w::OwnerOutcome, limits: &Limits) -> Result<
             c::OwnerOutcome::QuestionAnswered { task: row.task(), question: row.question(), message: row.message() }
         }
         w::OwnerOutcome::Amended(row) => c::OwnerOutcome::Amended { task: row.task() },
-        w::OwnerOutcome::Proposed(row) => c::OwnerOutcome::Proposed { proposal: row.proposal() },
+        w::OwnerOutcome::Proposed(row) => c::OwnerOutcome::Proposed { proposal: row.proposal(), to: row.to() },
         w::OwnerOutcome::Withdrawn(row) => c::OwnerOutcome::Withdrawn { proposal: row.proposal() },
         w::OwnerOutcome::RolesSet(row) => c::OwnerOutcome::RolesSet { project: row.project() },
         w::OwnerOutcome::Renamed(row) => c::OwnerOutcome::Renamed { project: row.project() },
@@ -618,5 +618,60 @@ fn classify(problem: w::Problem) -> super::Undecodable {
         | skein_codec::Reason::Bool
         | skein_codec::Reason::Version
         | skein_codec::Reason::Trailing => super::Undecodable::Malformed,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn original_nonzero_recipient_survives_wire_decoding_and_contract_translation() {
+    use skein_lib::{Duration, RequestLimits, Writer};
+    let limits = Limits::new(
+        jig_client_domain::Limits {
+            owners: &[],
+            watches: 4,
+            handles: 8,
+            turn_bytes: 32,
+            ask_bytes: 16384,
+            requests: RequestLimits {
+                requests: 4,
+                bytes: 65536,
+                out: 16,
+                first: Duration::from_nanos(10),
+                most: Duration::from_nanos(80),
+                margin: Duration::from_secs(1),
+            },
+            fields: 4,
+            reads: 4,
+            parts: 8,
+            delegates: 2,
+            document_bytes: 65536,
+            records: 2,
+            kept: 4,
+            projects: 2,
+            text: 32,
+            turn_text: 32,
+            rows: 2,
+            segments: 4,
+            backoff: jig_client_domain::Backoff { first: Duration::from_nanos(10), most: Duration::from_nanos(80) },
+            authority: 8,
+            accounts: jig_client_domain::AccountCounts { accounts: 8, sources: 8, sign_ins: 8 },
+            heartbeat: Duration::from_nanos(100),
+        },
+        4,
+    )
+    .expect("existing small client fixture bounds");
+    for to in [7, 91, u32::MAX] {
+        let original = w::OwnerOutcome::Proposed(
+            w::OwnerOutcomeProposed::new(&limits.wire, w::OwnerOutcomeProposedParts { proposal: 31, to })
+                .expect("recipient record"),
+        );
+        let mut out = Writer::new(usize::try_from(original.measure()).expect("small result"));
+        original.encode(&mut out).expect("measured room");
+        let bytes = out.finish();
+        let decoded = w::OwnerOutcome::decode(&limits.wire, &mut Reader::new(&bytes)).expect("real record decoder");
+        assert_eq!(
+            owner_outcome(&decoded, &limits).expect("contract translation"),
+            c::OwnerOutcome::Proposed { proposal: 31, to }
+        );
     }
 }

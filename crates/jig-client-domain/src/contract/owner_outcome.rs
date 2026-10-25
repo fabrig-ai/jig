@@ -116,9 +116,10 @@ pub enum OwnerOutcome {
     Amended {
         task: u64,
     },
-    /// A party's action awaits the supplied proposal number.
+    /// A party's action was admitted to the original role in the request's project.
     Proposed {
         proposal: u64,
+        to: u32,
     },
     /// A party withdrew its own proposal.
     Withdrawn {

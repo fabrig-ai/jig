@@ -1684,6 +1684,8 @@ section 17; the records are `../protocol/store.md`, 4.4.
 
 ### 17.2 A change
 
+Until held charter versions are implemented, a settings change is refused as full when a live agent task selects a model not present in the prospective charters, or its charter is removed. This newest-only refusal names the current revision and incompatible tasks; Stays and Moves do not avoid it. It is not the retained-version capacity rule of 17.8. A refused acceptance keeps the proposal pending.
+
 - **A set, against a revision.** An owner's `ChangeSettings` (people.md,
   5.1) names the revision it was made against and its items, at most
   one per setting, each a setting and what becomes of it: *set* to a

@@ -29,7 +29,7 @@ fn maximum_outcomes() -> [OwnerOutcome; 26] {
         OwnerOutcome::Said { task: u64::MAX, message: u64::MAX },
         OwnerOutcome::QuestionAnswered { task: u64::MAX, question: u64::MAX, message: u64::MAX },
         OwnerOutcome::Amended { task: u64::MAX },
-        OwnerOutcome::Proposed { proposal: u64::MAX },
+        OwnerOutcome::Proposed { proposal: u64::MAX, to: u32::MAX },
         OwnerOutcome::Withdrawn { proposal: u64::MAX },
         OwnerOutcome::RolesSet { project: u32::MAX },
         OwnerOutcome::PolicyChanged { project: u32::MAX },
@@ -97,7 +97,7 @@ fn closed_decision_choices_and_release_flags_need_no_explanation_payload() {
         for value in [
             OwnerOutcome::Said { task: 7, message: 11 },
             OwnerOutcome::Amended { task: 13 },
-            OwnerOutcome::Proposed { proposal: 23 },
+            OwnerOutcome::Proposed { proposal: 23, to: 0 },
         ] {
             assert_eq!(owner_outcome_bytes(&value, &bounds), Some(bytes));
             assert_eq!(admit_owner_outcome(&value, &bounds), Ok(()));

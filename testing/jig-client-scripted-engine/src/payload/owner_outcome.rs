@@ -72,7 +72,8 @@ impl Payload for OwnerOutcome {
             | Self::PersonHandedBack { task }
             | Self::PersonAnswered { task }
             | Self::Moved { task } => task.heap(bounds),
-            Self::Proposed { proposal } | Self::Withdrawn { proposal } => proposal.heap(bounds),
+            Self::Proposed { proposal, to } => sum(&[proposal.heap(bounds), to.heap(bounds)]),
+            Self::Withdrawn { proposal } => proposal.heap(bounds),
             Self::ProposalDecided { proposal, by, at, choice } => {
                 sum(&[proposal.heap(bounds), by.heap(bounds), at.heap(bounds), choice.heap(bounds)])
             }

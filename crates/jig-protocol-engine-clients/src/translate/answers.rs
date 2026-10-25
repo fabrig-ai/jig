@@ -110,9 +110,9 @@ fn owner(value: &p::Outcome, limits: &w::Limits) -> Result<w::OwnerOutcome, w::P
                 w::OwnerOutcomeAccountMovedInParts { account: *account, renewed: *renewed },
             )?)
         }
-        p::Outcome::Proposed { proposal, .. } => w::OwnerOutcome::Proposed(w::OwnerOutcomeProposed::new(
+        p::Outcome::Proposed { proposal, to } => w::OwnerOutcome::Proposed(w::OwnerOutcomeProposed::new(
             limits,
-            w::OwnerOutcomeProposedParts { proposal: *proposal },
+            w::OwnerOutcomeProposedParts { proposal: *proposal, to: *to },
         )?),
         p::Outcome::Withdrawn { proposal } => w::OwnerOutcome::Withdrawn(w::OwnerOutcomeWithdrawn::new(
             limits,

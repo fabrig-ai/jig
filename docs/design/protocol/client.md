@@ -425,6 +425,9 @@ heard:    Reply { exchange, message } | Lost { exchange } | Streamed { message }
 
 ## 5. Keyed requests
 
+An owner proposal outcome carries its proposal number and the original admitted role (`OwnerOutcomeProposed.to`), in the project of the request. Replays retain that original role; the proposal document gives its current recipient. Active client-v19 records change together before first release, without a family/version bump.
+
+
 - **One exchange per attempt.** The request table's send (its attempt,
   its key, its request) becomes one keyed request: the key, the
   request's owner, version and record, with the credential. Its reply,

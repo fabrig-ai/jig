@@ -106,7 +106,7 @@ fn an_explicit_span_goal_proposal_can_follow_authority_refusal() {
     assert_eq!(
         story.answered(PROPOSE),
         vec![jig_client::Outcome::Answered(jig_client::Answered::Jig(c::Answer::Done(c::Outcome::Owner(
-            c::OwnerOutcome::Proposed { proposal: 1 }
+            c::OwnerOutcome::Proposed { proposal: 1, to: 0 }
         ))))]
     );
 }

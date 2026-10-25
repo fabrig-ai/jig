@@ -72,7 +72,7 @@ pub enum Receipt {
 pub enum DraftOutcome {
     Made,
     Proposed(jig_client::contract::ProposalKey),
-    ProposedByParty { number: u64 },
+    ProposedByParty { number: u64, to: u32 },
     Refused,
 }
 /// Durable truth reported by the engine boundary, drained once.

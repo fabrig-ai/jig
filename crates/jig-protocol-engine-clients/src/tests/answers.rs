@@ -85,6 +85,13 @@ fn an_application_outcome_is_carried_under_its_family() {
 }
 #[test]
 fn owner_outcomes_keep_every_supplied_fact() {
+    for to in [7, 91] {
+        let final_answer = f::translated(&p::Reply::Outcome(p::Outcome::Proposed { proposal: 31, to }), &f::wire());
+        let w::Final::Done(done) = final_answer else { panic!("done") };
+        let w::Outcome::Owner(owner) = done.outcome() else { panic!("owner outcome") };
+        let w::OwnerOutcome::Proposed(row) = owner.value() else { panic!("proposal") };
+        assert_eq!((row.proposal(), row.to()), (31, to));
+    }
     let limits = f::wire();
     for cases in [f::owner_outcomes().as_slice(), f::decision_outcomes().as_slice(), f::seen_outcomes().as_slice()] {
         for (reply, expected) in cases {

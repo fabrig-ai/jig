@@ -183,7 +183,15 @@ impl Offers {
     }
     pub(super) fn answered(&mut self, client: ClientId, attempt: Token, outcome: DraftOutcome, judge: &mut JudgeOf) {
         let outcome = match outcome {
-            DraftOutcome::ProposedByParty { number } => {
+            DraftOutcome::ProposedByParty { number, to } => {
+                if let Some(Fall::Proposable(recipient)) = self.drafts.get(&(client, attempt.raw())) {
+                    let matches = match recipient {
+                        Recipient::Role { role, .. } => *role == to,
+                        Recipient::Roles { roles, .. } => roles.iter().any(|role| *role == to),
+                        Recipient::Task(_) | Recipient::Party(_) => false,
+                    };
+                    judge.check(matches, "offers kept: actual admitted role differs from the offer");
+                }
                 let party = self.parties.get(&client).expect("a draft's confirmed party was delivered");
                 DraftOutcome::Proposed(ProposalKey { proposer: Proposer::Party(*party), number })
             }
@@ -208,8 +216,8 @@ impl Offers {
 pub(crate) fn outcome(answer: &Answer) -> Option<DraftOutcome> {
     match answer {
         Answer::Done(Outcome::Made { .. } | Outcome::Owner(OwnerOutcome::Created { .. })) => Some(DraftOutcome::Made),
-        Answer::Done(Outcome::Owner(OwnerOutcome::Proposed { proposal })) => {
-            Some(DraftOutcome::ProposedByParty { number: *proposal })
+        Answer::Done(Outcome::Owner(OwnerOutcome::Proposed { proposal, to })) => {
+            Some(DraftOutcome::ProposedByParty { number: *proposal, to: *to })
         }
         Answer::Done(Outcome::Proposed { proposal }) => Some(DraftOutcome::Proposed(*proposal)),
         Answer::Refused { .. } => Some(DraftOutcome::Refused),

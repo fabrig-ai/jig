@@ -101,6 +101,8 @@ fn member_proposal_has_an_owner_review() {
     let owner = world.sign_in.expect("owner sign-in");
     let member = fixtures::second_party(&mut world, b"member", people::Role::Member);
     let number = propose(&mut world, member, 10, 1, Box::new([charter_item(b"proposed charter")]));
+    let own_review = proposal_document(&mut world, member, MEMBER, number);
+    assert_eq!(own_review.project, DEPLOYMENT, "the proposing member can read its pending proposal");
     let doc = proposal_document(&mut world, owner, MEMBER, number);
     assert_eq!(doc.project, DEPLOYMENT);
     let core::documents::ProposalAction::Settings { against, items, review, made } = doc.action else {
@@ -769,7 +771,7 @@ fn shape_refusal_keeps_the_pending_set_across_restart() {
 }
 
 #[test]
-#[ignore = "E-QA-2 (mission 3): the capacity premise is unproven; rewrite on an established retained bound (reports/qa-e2.md, Retained failures)"]
+#[ignore = "F: retained-version capacity remains pending; E-QA-2 retargeted newest-only compatibility and no-holder retry are in ordinary settings_proposals tests"]
 fn acceptance_refuses_a_model_removed_since_proposal() {
     let (mut world, owner, number) = refused_model_proposal();
     // Retained failed expectation: restoring the model alone did not make
@@ -782,7 +784,7 @@ fn acceptance_refuses_a_model_removed_since_proposal() {
 }
 
 #[test]
-#[ignore = "E-QA-2 (mission 3): the capacity premise is unproven; rewrite on an established retained bound (reports/qa-e2.md, Retained failures)"]
+#[ignore = "F: retained-version capacity remains pending; E-QA-2 retargeted newest-only compatibility and no-holder retry are in ordinary settings_proposals tests"]
 fn full_acceptance_preserves_the_pending_set_and_holders() {
     // engine.md, 17.2, 17.6 and 17.8: a live run holds its revision
     // even when its task moves. Retained failed capacity assumption: the

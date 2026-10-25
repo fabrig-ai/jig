@@ -367,3 +367,29 @@ fn settings_proposal_records_and_arms_round_trip() {
         assert_eq!(out.finish().as_ref(), bytes.as_slice(), "record_decide_proposal_full");
     }
 }
+
+#[test]
+fn original_proposal_recipient_round_trips_and_old_short_bodies_are_rejected() {
+    for to in [0, 7, 91, u32::MAX] {
+        let value = w::OwnerOutcomeProposed::new(&w::CEILINGS, w::OwnerOutcomeProposedParts { proposal: 31, to })
+            .expect("scalar role");
+        assert_eq!(value.measure(), 12);
+        let mut out = Writer::new(12);
+        value.encode(&mut out).expect("exact room");
+        let bytes = out.finish();
+        let mut reader = Reader::new(&bytes);
+        let read = w::OwnerOutcomeProposed::decode(&w::CEILINGS, &mut reader).expect("complete new record");
+        assert_eq!((read.proposal(), read.to()), (31, to));
+        assert!(reader.is_empty());
+        for length in 8..12 {
+            let mut reader = Reader::new(&bytes[..length]);
+            let found = w::OwnerOutcomeProposed::decode(&w::CEILINGS, &mut reader).expect_err("old/truncated to");
+            assert_eq!(found.path, w::Path::OwnerOutcomeProposedTo);
+        }
+        let mut extra = bytes.into_vec();
+        extra.push(0);
+        let mut reader = Reader::new(&extra);
+        let found = w::OwnerOutcomeProposed::decode(&w::CEILINGS, &mut reader).expect_err("trailing byte");
+        assert_eq!(found.path, w::Path::OwnerOutcomeProposedTail);
+    }
+}

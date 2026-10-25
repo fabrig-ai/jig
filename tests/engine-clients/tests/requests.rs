@@ -239,6 +239,7 @@ fn a_v9_propose_beyond_the_role_is_answered_proposed() {
     let w::Outcome::Owner(owner) = done.outcome() else { panic!("owner outcome") };
     let w::OwnerOutcome::Proposed(row) = owner.value() else { panic!("proposed") };
     assert_eq!(row.proposal(), 1);
+    assert_eq!(row.to(), 0);
     assert_eq!(jig_core_world::fixtures::live_row(&world, 2).numbers.budget, 20);
 }
 #[test]

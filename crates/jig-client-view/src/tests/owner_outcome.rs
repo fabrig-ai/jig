@@ -134,7 +134,10 @@ fn max_cases() -> [(OwnerOutcome, &'static [&'static [u8]]); 23] {
             ],
         ),
         (OwnerOutcome::Amended { task: u64::MAX }, &[b"Task amended", b"Task: 18446744073709551615"]),
-        (OwnerOutcome::Proposed { proposal: u64::MAX }, &[b"Proposed", b"Proposal number: 18446744073709551615"]),
+        (
+            OwnerOutcome::Proposed { proposal: u64::MAX, to: u32::MAX },
+            &[b"Proposed", b"Proposal number: 18446744073709551615"],
+        ),
         (OwnerOutcome::RolesSet { project: u32::MAX }, &[b"Project roles set", b"Project: 4294967295"]),
         (OwnerOutcome::PolicyChanged { project: u32::MAX }, &[b"Project policy changed", b"Project: 4294967295"]),
         (
@@ -242,7 +245,7 @@ fn released_flags_and_question_message_identities_remain_independent() {
         let cases: [(OwnerOutcome, &[&[u8]]); 3] = [
             (OwnerOutcome::Said { task: 7, message: 11 }, &[b"Words admitted", b"Task: 7", b"Message: 11"]),
             (OwnerOutcome::Amended { task: 13 }, &[b"Task amended", b"Task: 13"]),
-            (OwnerOutcome::Proposed { proposal: 23 }, &[b"Proposed", b"Proposal number: 23"]),
+            (OwnerOutcome::Proposed { proposal: 23, to: 0 }, &[b"Proposed", b"Proposal number: 23"]),
         ];
         for (value, expected) in cases {
             expect_lines(&render(&value, &words), expected);

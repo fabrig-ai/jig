@@ -1893,7 +1893,7 @@ fn owner_goal_answers_preserve_numeric_proposals_and_late_started_task_facts() {
                 drive(&mut domain, Time::ZERO, Event::Went { place: Place::Elsewhere });
             }
             let outcome = Outcome::Owner(if proposed {
-                OwnerOutcome::Proposed { proposal: u64::MAX }
+                OwnerOutcome::Proposed { proposal: u64::MAX, to: u32::MAX }
             } else {
                 OwnerOutcome::Created { first: u64::MAX, last: u64::MAX, given: None }
             });

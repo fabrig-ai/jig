@@ -364,3 +364,5 @@ gives, it says so to the user rather than cutting the cover.
 - **Coverage of the root's arms:** whether the harness should report
   which of the root's routes a suite never exercised, as transition
   coverage does for state machines.
+
+Settings acceptance interim (engine.md,17.2; configuring E-QA-2 retargeted): Until held charter versions are implemented, a settings change is refused as full when a live agent task selects a model not present in the prospective charters, or its charter is removed. This newest-only refusal names the current revision and incompatible tasks; Stays and Moves do not avoid it. It is not the retained-version capacity rule of 17.8. A refused acceptance keeps the proposal pending. E-QA-2 covers newest-only compatibility, restart and no-partial-commit; retained-version capacity remains pending for F.

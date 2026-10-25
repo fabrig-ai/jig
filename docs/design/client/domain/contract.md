@@ -434,8 +434,9 @@ Every request has one answer, of one of these kinds:
 - **done,** with its outcome: what was made (the first and the last of
   the tasks' numbers, consecutive in the batch's order, and the
   `AsAllowed` task, if any, with what it was given; a word's message
-  number; a proposal's number, whom it waits for being in its
-  document; an account moved out, with its record, once: 3.1), or what
+  number; a proposal's number and the role it was originally admitted to, in the
+  request's project; its present recipient is in its document. A replay keeps
+  the original outcome's role; an account moved out, with its record, once: 3.1), or what
   was decided; for a compound request, its
   operations made, in order, and the first of the message numbers they
   took, one each (3.4); and, when another party decided first,

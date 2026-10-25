@@ -362,7 +362,7 @@ record OwnerOutcomeProposalDecided { proposal: ProposalKey by: u64 at: u64 choic
 record OwnerOutcomeSaid { task: u64 message: u64 }
 record OwnerOutcomeQuestionAnswered { task: u64 question: u64 message: u64 }
 record OwnerOutcomeAmended { task: u64 }
-record OwnerOutcomeProposed { proposal: u64 }
+record OwnerOutcomeProposed { proposal: u64 to: u32 }
 record OwnerOutcomeWithdrawn { proposal: u64 }
 record OwnerOutcomeRolesSet { project: u32 }
 record OwnerOutcomePolicyChanged { project: u32 }

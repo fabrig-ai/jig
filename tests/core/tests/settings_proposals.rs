@@ -121,29 +121,58 @@ fn rejected_settings_keep_the_reason_and_notify_the_project_member() {
 }
 #[test]
 fn an_acceptance_refused_as_full_keeps_the_proposal_and_set_pending() {
-    let mut world = start(64);
-    let owner = sign_in(&mut world);
-    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
-    let chat = fixtures::chat(&world, 1, b"live task".as_slice().into());
-    let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(&mut world, owner, 1, chat) else {
-        panic!("live agent")
-    };
-    let items = removing_charter(&world);
-    let proposal = proposed(&propose(&mut world, owner, 2, 1, items));
-    assert_eq!(
-        decide(&mut world, owner, 3, OWNER, proposal, people::ProposalDecision::Accept, Some(people::Running::Stays)),
-        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
-            revision: 1,
-            tasks: Box::new([first]),
-            more: 0
-        }))
-    );
-    assert!(world.store.rows.contains_key(&proposal_set_key(OWNER, proposal)));
-    assert_eq!(inventory(&mut world, owner).pending.len(), 1);
-    assert!(matches!(
-        proposal_document(&mut world, owner, OWNER, proposal).action,
-        documents::ProposalAction::Settings { review: Some(_), made: None, .. }
-    ));
+    for running in [people::Running::Stays, people::Running::Moves] {
+        let mut world = start(64);
+        let owner = sign_in(&mut world);
+        world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+        let chat = fixtures::chat(&world, 1, b"live task".as_slice().into());
+        let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(&mut world, owner, 1, chat) else {
+            panic!("live agent")
+        };
+        assert!(matches!(fixtures::live_row(&world, first).executor, tasks::Executor::Agent { charter: 1 }));
+        let items = removing_charter(&world);
+        assert!(
+            items
+                .iter()
+                .any(|item| item.setting == settings::Setting::Charter(1) && item.edit == settings::Edit::Removed)
+        );
+        let proposal = proposed(&propose(&mut world, owner, 2, 1, items));
+        for request in [3, 4] {
+            let before_rows = world.store.rows.clone();
+            let before_task = fixtures::live_row(&world, first).clone();
+            let before_settings = settings_rows(&world);
+            let before_review = proposal_document(&mut world, owner, OWNER, proposal).action;
+            let assignments = world.assignments.clone();
+            let cancellations = world.cancellations.clone();
+            assert_eq!(
+                decide(&mut world, owner, request, OWNER, proposal, people::ProposalDecision::Accept, Some(running)),
+                people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
+                    revision: 1,
+                    tasks: Box::new([first]),
+                    more: 0
+                }))
+            );
+            for (key, row) in &before_rows {
+                let mut expected = row.clone();
+                if let root::Record::Core(core::Record::Core(core::CoreRecord::Deployment(header))) = &mut expected {
+                    header.commits += 1; // The normal keyed refusal itself commits once.
+                }
+                assert_eq!(world.store.rows.get(key), Some(&expected), "refusal changed durable row {key:?}");
+            }
+            let added: Vec<_> = world.store.rows.keys().filter(|key| !before_rows.contains_key(*key)).collect();
+            assert_eq!(added.len(), 1, "only the keyed refusal is added");
+            assert!(matches!(added[0], root::Key::Core(core::Key::People(people::Key::Answer(_)))));
+            assert_eq!(settings_rows(&world), before_settings);
+            assert_eq!(fixtures::live_row(&world, first), &before_task);
+            assert_eq!(world.assignments, assignments);
+            assert_eq!(world.cancellations, cancellations);
+            assert_eq!(proposal_document(&mut world, owner, OWNER, proposal).action, before_review);
+            assert!(world.store.rows.contains_key(&proposal_set_key(OWNER, proposal)));
+            assert_eq!(inventory(&mut world, owner).pending.len(), 1);
+            restart(&mut world, configuration().0);
+            assert_eq!(proposal_document(&mut world, owner, OWNER, proposal).action, before_review);
+        }
+    }
 }
 #[test]
 fn accepting_or_changing_settings_withdraws_stale_proposals_and_proposers_hear() {
@@ -379,4 +408,48 @@ fn ordinary_party_proposal_history_stays_private_to_its_proposer() {
             why: people::Malformed::Running
         }))
     );
+}
+
+#[test]
+fn a_shape_refused_proposal_can_retry_after_its_unused_model_returns_without_a_holder() {
+    let (mut config, limits) = configuration();
+    let mut model = config.core.settings.models[0].clone();
+    model.name = b"pending-only".as_slice().into();
+    config.core.settings.models = Box::new([config.core.settings.models[0].clone(), model.clone()]);
+    config.core.settings.llm_providers.providers[0].models =
+        Box::new([b"scripted".as_slice().into(), model.name.clone()]);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let owner = sign_in(&mut world);
+    assert!(world.assignments.is_empty(), "positive retry has no live holder");
+    let mut charter = world.domain.settings().charter(1).expect("fixture charter").clone();
+    charter.policy.model = model.clone();
+    let items = Box::new([settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    }]);
+    let proposal = proposed(&propose(&mut world, owner, 1, 1, items));
+    restart(&mut world, configuration().0);
+    let before = proposal_document(&mut world, owner, OWNER, proposal).action;
+    let rows = settings_rows(&world);
+    assert!(matches!(
+        decide(&mut world, owner, 2, OWNER, proposal, people::ProposalDecision::Accept, Some(people::Running::Stays)),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::NotWellFormed {
+            why: people::Malformed::Settings { .. },
+            ..
+        }))
+    ));
+    assert_eq!(settings_rows(&world), rows);
+    assert_eq!(proposal_document(&mut world, owner, OWNER, proposal).action, before);
+    let (mut restored, _) = configuration();
+    restored.core.settings.models = Box::new([restored.core.settings.models[0].clone(), model.clone()]);
+    restored.core.settings.llm_providers.providers[0].models =
+        Box::new([b"scripted".as_slice().into(), model.name.clone()]);
+    restart(&mut world, restored);
+    assert!(matches!(
+        decide(&mut world, owner, 3, OWNER, proposal, people::ProposalDecision::Accept, Some(people::Running::Stays)),
+        people::Reply::Outcome(people::Outcome::ProposalDecided { choice: people::ProposalChoice::Accepted, .. })
+    ));
+    assert_eq!(world.domain.settings().newest(), 2);
+    assert!(!world.store.rows.contains_key(&proposal_set_key(OWNER, proposal)));
 }

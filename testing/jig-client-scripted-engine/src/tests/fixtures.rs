@@ -42,7 +42,7 @@ pub(super) fn proposed_amendment(bounded: bool, changed: bool) -> (Script, Ask, 
     let answer = Answer::Done(Outcome::Owner(if changed {
         OwnerOutcome::Amended { task: row.chip.task }
     } else {
-        OwnerOutcome::Proposed { proposal: 1 }
+        OwnerOutcome::Proposed { proposal: 1, to: 0 }
     }));
     setup.truth.objects.insert(ObjectKey::Task(row.chip.task), ReadValue::Task(Box::new(row)));
     setup.rules.push(Rule { party: Some(1), ask: ask.clone(), answer: answer.clone(), changes: vec![] });

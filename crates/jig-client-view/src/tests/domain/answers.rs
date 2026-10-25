@@ -291,7 +291,7 @@ fn every_owner_outcome_remains_whole_on_its_original_card_after_duplicate_termin
         O::Said { task: 122, message: 123 },
         O::QuestionAnswered { task: 124, question: 125, message: 126 },
         O::Amended { task: 128 },
-        O::Proposed { proposal: 130 },
+        O::Proposed { proposal: 130, to: 0 },
         O::RolesSet { project: 131 },
         O::PolicyChanged { project: 132 },
         O::PoolSet { project: 133, person: 134 },
@@ -364,7 +364,7 @@ fn owner_historical_proposal_choices_keep_the_named_winner_and_clock_without_exp
             assert_eq!(domain.objects().get(id).unwrap().answer, Some(Answer::Done(outcome)));
         }
     }
-    let value = OwnerOutcome::Proposed { proposal: u64::MAX };
+    let value = OwnerOutcome::Proposed { proposal: u64::MAX, to: u32::MAX };
     assert!(!crate::objects::stops_waiting(ObjectKey::Proposal(proposal().key), &Outcome::Owner(value)));
 }
 

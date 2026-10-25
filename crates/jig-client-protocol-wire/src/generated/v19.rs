@@ -2613,6 +2613,8 @@ pub enum Path {
     OwnerOutcomeAmendedTail,
     /// The `proposal` field of `OwnerOutcomeProposed`.
     OwnerOutcomeProposedProposal,
+    /// The `to` field of `OwnerOutcomeProposed`.
+    OwnerOutcomeProposedTo,
     /// Bytes after `OwnerOutcomeProposed`.
     OwnerOutcomeProposedTail,
     /// The `proposal` field of `OwnerOutcomeWithdrawn`.
@@ -20811,19 +20813,22 @@ impl OwnerOutcomeAmended {
 pub struct OwnerOutcomeProposedParts {
     /// The `proposal` field.
     pub proposal: u64,
+    /// The `to` field.
+    pub to: u32,
 }
 
 /// `OwnerOutcomeProposed` in this codec family.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OwnerOutcomeProposed {
     proposal: u64,
+    to: u32,
 }
 
 impl OwnerOutcomeProposed {
     /// Makes a value within the given limits.
     pub fn new(_limits: &Limits, parts: OwnerOutcomeProposedParts) -> Result<Self, Problem> {
-        let OwnerOutcomeProposedParts { proposal } = parts;
-        let value = Self { proposal };
+        let OwnerOutcomeProposedParts { proposal, to } = parts;
+        let value = Self { proposal, to };
         Ok(value)
     }
 
@@ -20831,9 +20836,13 @@ impl OwnerOutcomeProposed {
     #[must_use]
     pub fn proposal(&self) -> u64 { self.proposal }
 
+    /// Reads the `to` field.
+    #[must_use]
+    pub fn to(&self) -> u32 { self.to }
+
     /// Moves the fields out without copying.
     #[must_use]
-    pub fn into_parts(self) -> OwnerOutcomeProposedParts { OwnerOutcomeProposedParts { proposal: self.proposal } }
+    pub fn into_parts(self) -> OwnerOutcomeProposedParts { OwnerOutcomeProposedParts { proposal: self.proposal, to: self.to } }
 
 }
 
@@ -63684,6 +63693,7 @@ impl OwnerOutcomeProposed {
     pub fn measure(&self) -> u32 {
         let mut size = 0_u32;
         size = size.checked_add(8).expect("schema ceilings fit u32");
+        size = size.checked_add(4).expect("schema ceilings fit u32");
         size
     }
 
@@ -63691,6 +63701,8 @@ impl OwnerOutcomeProposed {
     pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
         let field_proposal = &self.proposal;
         writer.put(&field_proposal.to_be_bytes())?;
+        let field_to = &self.to;
+        writer.put(&field_to.to_be_bytes())?;
         Ok(())
     }
 
@@ -63703,7 +63715,8 @@ impl OwnerOutcomeProposed {
 
     fn decode_from(_limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
         let decoded_proposal = reader.u64().ok_or(Problem { path: Path::OwnerOutcomeProposedProposal, reason: skein_codec::Reason::Short })?;
-        Ok(Self { proposal: decoded_proposal })
+        let decoded_to = reader.u32().ok_or(Problem { path: Path::OwnerOutcomeProposedTo, reason: skein_codec::Reason::Short })?;
+        Ok(Self { proposal: decoded_proposal, to: decoded_to })
     }
 }
 
@@ -103137,7 +103150,7 @@ impl OwnerOutcomeProposed {
 
     pub(crate) fn worst_case_bytes_within(_limits: &Limits) -> Option<u64> {
         let mut size = 0_u64;
-        size = size.checked_add(8_u64)?;
+        size = size.checked_add(8_u64)?.checked_add(4_u64)?;
         size.checked_add(0)
     }
 
@@ -103150,7 +103163,7 @@ impl OwnerOutcomeProposed {
 
     pub(crate) fn worst_case_heap_within(_limits: &Limits) -> Option<u64> {
         let mut heap = 0_u64;
-        heap = heap.checked_add(0_u64)?;
+        heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
         heap.checked_add(0)
     }
 }
@@ -125917,8 +125930,8 @@ mod golden_tests {
         ("record_owner_outcome_question_answered_full", || { let value = OwnerOutcomeQuestionAnswered::new(&CEILINGS, OwnerOutcomeQuestionAnsweredParts { task: u64::MAX, question: u64::MAX, message: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeQuestionAnswered::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_owner_outcome_amended_smallest", || { let value = OwnerOutcomeAmended::new(&CEILINGS, OwnerOutcomeAmendedParts { task: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeAmended::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_owner_outcome_amended_full", || { let value = OwnerOutcomeAmended::new(&CEILINGS, OwnerOutcomeAmendedParts { task: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeAmended::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_owner_outcome_proposed_smallest", || { let value = OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeProposed::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_owner_outcome_proposed_full", || { let value = OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeProposed::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_owner_outcome_proposed_smallest", || { let value = OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: 0_u64, to: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeProposed::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_owner_outcome_proposed_full", || { let value = OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: u64::MAX, to: u32::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeProposed::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_owner_outcome_withdrawn_smallest", || { let value = OwnerOutcomeWithdrawn::new(&CEILINGS, OwnerOutcomeWithdrawnParts { proposal: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeWithdrawn::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_owner_outcome_withdrawn_full", || { let value = OwnerOutcomeWithdrawn::new(&CEILINGS, OwnerOutcomeWithdrawnParts { proposal: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeWithdrawn::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_owner_outcome_roles_set_smallest", || { let value = OwnerOutcomeRolesSet::new(&CEILINGS, OwnerOutcomeRolesSetParts { project: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcomeRolesSet::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -125991,8 +126004,8 @@ mod golden_tests {
         ("enum_owner_outcome_question_answered_full", || { let value = OwnerOutcome::QuestionAnswered(OwnerOutcomeQuestionAnswered::new(&CEILINGS, OwnerOutcomeQuestionAnsweredParts { task: u64::MAX, question: u64::MAX, message: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[13, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_outcome_amended_smallest", || { let value = OwnerOutcome::Amended(OwnerOutcomeAmended::new(&CEILINGS, OwnerOutcomeAmendedParts { task: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[14, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_outcome_amended_full", || { let value = OwnerOutcome::Amended(OwnerOutcomeAmended::new(&CEILINGS, OwnerOutcomeAmendedParts { task: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[14, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_owner_outcome_proposed_smallest", || { let value = OwnerOutcome::Proposed(OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[15, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_owner_outcome_proposed_full", || { let value = OwnerOutcome::Proposed(OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[15, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_owner_outcome_proposed_smallest", || { let value = OwnerOutcome::Proposed(OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: 0_u64, to: 0_u32 }).expect("golden within ceilings")); let bytes: &[u8] = &[15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_owner_outcome_proposed_full", || { let value = OwnerOutcome::Proposed(OwnerOutcomeProposed::new(&CEILINGS, OwnerOutcomeProposedParts { proposal: u64::MAX, to: u32::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[15, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_outcome_withdrawn_smallest", || { let value = OwnerOutcome::Withdrawn(OwnerOutcomeWithdrawn::new(&CEILINGS, OwnerOutcomeWithdrawnParts { proposal: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[16, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_outcome_withdrawn_full", || { let value = OwnerOutcome::Withdrawn(OwnerOutcomeWithdrawn::new(&CEILINGS, OwnerOutcomeWithdrawnParts { proposal: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[16, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_outcome_roles_set_smallest", || { let value = OwnerOutcome::RolesSet(OwnerOutcomeRolesSet::new(&CEILINGS, OwnerOutcomeRolesSetParts { project: 0_u32 }).expect("golden within ceilings")); let bytes: &[u8] = &[17, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),

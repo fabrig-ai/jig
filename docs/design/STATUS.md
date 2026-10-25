@@ -361,3 +361,5 @@ Skein pin remains 057a415c.
 
 | Draft | About | Next |
 |---|---|---|
+
+Configuring E-QA-2 is retargeted to the current newest-only compatibility rule, not retained-version capacity: Until held charter versions are implemented, a settings change is refused as full when a live agent task selects a model not present in the prospective charters, or its charter is removed. This newest-only refusal names the current revision and incompatible tasks; Stays and Moves do not avoid it. It is not the retained-version capacity rule of 17.8. A refused acceptance keeps the proposal pending. E-QA-3 is pending the application-owned judged-settings mechanism; no test-only hook substitutes for it.
