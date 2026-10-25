@@ -157,7 +157,7 @@ pub(crate) fn projection_room(domain: &Domain, limits: &Limits, task: u64, bytes
     )
 }
 
-#[expect(clippy::too_many_arguments, reason = "the shared credit calculation admits the reserved core hint")]
+#[expect(clippy::too_many_lines, reason = "one shared credit calculation admits the reserved core hint")]
 fn room_staged(
     domain: &Domain,
     staged: &crate::compound::Staged,
