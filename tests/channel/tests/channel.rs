@@ -123,9 +123,13 @@ fn an_undecodable_charter_is_refused_as_invalid_before_the_agent_starts() {
 fn a_relayed_call_reaches_the_agent_and_is_answered_once() {
     let outcome = run(Story::Call);
     assert_eq!(outcome.verdict, Verdict::Passed);
-    assert_eq!(outcome.calls_answered, 1);
-    assert_eq!(outcome.turns_committed, 2);
+    assert!(outcome.named_call_error_observed, "the next actual model query carries the original call's error");
+    assert!(outcome.calls_busy > 0, "the concurrent valid calls reach fleet capacity");
+    assert_eq!(outcome.calls_answered, outcome.calls_busy + 2, "busy retries eventually return both recall answers");
+    assert_eq!(outcome.turns_committed, 3, "oversized recall, later valid recall, then finish");
     assert_eq!(outcome.answers_acknowledged, 1);
+    assert!(outcome.services_empty, "engine and worker drain after the real Smith agent finishes");
+    assert!(outcome.shut_down);
 }
 
 #[test]

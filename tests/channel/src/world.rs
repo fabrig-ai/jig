@@ -42,6 +42,9 @@ pub struct Outcome {
     pub turns_committed: u32,
     pub answers_acknowledged: u32,
     pub calls_answered: u32,
+    pub calls_busy: u32,
+    pub named_call_error_observed: bool,
+    pub services_empty: bool,
     pub messages_ended: u32,
     pub refusal: Option<u16>,
     pub reset_injected: bool,
@@ -183,6 +186,25 @@ fn outcome(procs: &[Proc], store: &Store, views: &Views, reset_injected: bool, k
         turns_committed: u32::try_from(turns.len()).expect("bounded turns"),
         answers_acknowledged: worker.map_or(0, |wire| u32::try_from(wire.acknowledgements.len()).expect("bounded answers")),
         calls_answered: worker.map_or(0, |wire| wire.calls_answered),
+        calls_busy: worker.map_or(0, |wire| u32::try_from(wire.frames.iter().filter(|(_, kind, bytes)| {
+            *kind == 0x0182 && jig_protocol_worker_wire::Relayed::decode(&jig_protocol_worker_wire::CEILINGS,
+                &mut skein_lib::Reader::new(bytes)).is_ok_and(|relay| matches!(relay.answer(), jig_protocol_worker_wire::RelayAnswer::Busy))
+        }).count()).expect("busy count")),
+        named_call_error_observed: procs.iter().any(|proc| {
+            let Proc::Peer(peer) = proc else { return false };
+            smith_agent_process_world::fake::queries(peer).any(|query| {
+                use skein_fake_llm_domain::api::Part;
+                query.messages.iter().flat_map(|message| message.parts.iter()).any(|part| {
+                    let Part::ToolOutput { id, output, .. } = part else { return false };
+                    output.as_ref() == b"Error: call too large" && query.messages.iter().flat_map(|message| message.parts.iter()).any(|part|
+                        matches!(part, Part::ToolCall { id: original, name, arguments } if original == id && name.as_ref() == b"recall" && arguments.len() == 65))
+                })
+            })
+        }),
+        services_empty: procs.iter().all(|proc| match proc {
+            Proc::Engine(host) | Proc::Worker(host) => host.service.is_empty(),
+            Proc::Agent { .. } | Proc::Peer(_) | Proc::Auth(_) | Proc::Client(_) | Proc::Probe(_) => true,
+        }),
         refusal,
         reset_injected,
         adopting_hellos: worker.map_or(0, |wire| wire.adopting_hellos),
@@ -658,6 +680,8 @@ fn spawn_channel_side(
             processes::worker_message
         } else if matches!(script.story, crate::stories::Story::InvalidCharter) {
             processes::worker_bad_charter
+        } else if matches!(script.story, crate::stories::Story::Call) {
+            processes::worker_calls
         } else {
             processes::worker
         };

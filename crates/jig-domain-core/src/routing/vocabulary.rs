@@ -242,7 +242,9 @@ pub enum Now {
     SettledCallRefused { to: ReplyTo, key: CallKey, name: Box<[u8]>, tool: Box<[u8]> },
     /// The protocol layer decodes this attested tool and input at the root boundary.
     Call { to: ReplyTo, run: Token, attempt: Token, call: fleet::Call },
-    /// A fenced or over-capacity call changed nothing.
+    /// A current host's bounded call can retry without a retained flight.
+    RelayBusy { channel: Token, run: Token, attempt: Token, call: fleet::Call },
+    /// A fenced call or an overlong name changed nothing.
     DropCall { call: fleet::Call },
     /// The host did not take this message; its durable inbox word remains unread.
     Undelivered { run: Token, attempt: Token, message: fleet::Message },

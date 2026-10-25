@@ -24,16 +24,16 @@ impl Relays {
             )?,
         )
     }
-    pub(crate) fn add(&mut self, run: Token, attempt: Token, call: Box<[u8]>, frame: &Frame) -> bool {
+    pub(crate) fn add(&mut self, run: Token, attempt: Token, call: Box<[u8]>, frame: &Frame) -> Result<(), Box<[u8]>> {
         let key = (run, attempt, call);
         if self.records.contains_key(&key) {
-            return true;
+            return Ok(());
         }
         if self.records.insert(key.clone(), copy(frame)).is_err() {
-            return false;
+            return Err(key.2);
         }
         self.order.push(key).expect("same capacity as records");
-        true
+        Ok(())
     }
     pub(crate) fn end(&mut self, run: Token, attempt: Token, call: &[u8]) -> bool {
         let key = (run, attempt, bytes::copy_of(call));

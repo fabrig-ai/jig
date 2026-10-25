@@ -11,8 +11,8 @@
 //! A relayed call is the parent's to answer, exactly once: the fleet keeps it
 //! until the parent does, whatever becomes of its attempt meanwhile, and
 //! passes the answer down only if the attempt is still the live claim, on a
-//! worker in contact. A call beyond the room for calls is dropped, and its
-//! run withdraws it past its own deadline.
+//! worker in contact. A call beyond the room for calls is answered busy at
+//! its original address, after ownership and bounded-name validation.
 
 use alloc::boxed::Box;
 use core::mem;
@@ -108,10 +108,7 @@ pub(crate) fn relay(
     let name = call.name.clone();
     match domain.calls.insert(PendingCall { attempt: id, name, writes: call.writes }) {
         Ok(id) => out.push(Request::Relay { reply_to: ReplyTo::new(id.token()), run, attempt, call }),
-        Err(_) => {
-            domain.facts.push(Fact::Dropped);
-            out.push(Request::DropCall { call });
-        }
+        Err(_) => out.push(Request::RelayBusy { channel, run, attempt, call }),
     }
 }
 

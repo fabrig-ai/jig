@@ -259,6 +259,12 @@ answer, and a **notice** is not answered.
   still deciding the first, so the run asks again, and from the record it
   kept once the first is decided, never deciding it twice
   (`../domain/engine.md`, 7.3).
+- **Live call capacity is retryable.** After checking the current hosting
+  channel and bounded opaque name, the fleet answers a call beyond its
+  capacity as busy at that original channel, run, attempt and name. It
+  allocates no call flight and starts no tool effect. A stale or foreign
+  call, or one whose name exceeds the bound, is still discarded before
+  capacity handling. The application only forwards the addressed answer.
 - **Refusals ride with turns** (`../domain/hosts.md`, 6.4): a turn or an
   answer carries those the hub kept since the run's previous turn, at
   most as many as the run's inbox takes, and carries them again after a
@@ -327,6 +333,14 @@ answer, and a **notice** is not answered.
   (`../domain/engine.md`, section 8; `../domain/hosts.md`, 6.6).
 
 ## 6. Bytes of other owners
+
+Calls are refused at the worker component before encoding when their input
+exceeds its configured call-input bound. The hub receives one terminal
+answer under the original run, attempt and opaque call name: an error with
+ASCII `call too large`, shortened to the answer bound (empty at zero).
+Other call encoding failures return `call refused` under the same rule.
+The component never copies or truncates the refused input, sends no call
+frame and retains no replay entry. The agent can then continue its run.
 
 ### 6.1 smith's charter, turns and results
 
@@ -664,7 +678,15 @@ holds, and neither of its components reads them.
 - **Relays outlive channels.** A relayed call's answer may come on a later
   channel than the call. The component keeps every relay in flight in one
   table across channels, bounded by the hub's slots and calls per run,
-  and ends each once: answered, or cancelled by the hub.
+  and ends each once: answered, or cancelled by the hub. Every active call
+  is validated before the phase-specific send: a valid call is kept for
+  replay even before hello or during an outage; an invalid call ends
+  locally under its original name. Full replay capacity returns retryable
+  busy without registering the call. Cancellation acknowledges only a
+  relay still retained. An answer or local refusal followed by a late or
+  repeated cancellation produces no second terminal. The owner stops the
+  link after draining its hub and agents; the component preserves its
+  stopping and closed guards and emits nothing after closed.
 - **Shutting down,** the worker stops redialling once the hub has given up
   what it keeps (`../domain/hosts.md`, 6.7).
 

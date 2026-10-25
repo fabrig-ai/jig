@@ -367,6 +367,9 @@ pub(super) fn tag_fleet(
                     Request::Now(Box::new(Now::Relayed { channel, run, attempt, call, answer }))
                 }
             }
+            fleet::Request::RelayBusy { channel, run, attempt, call } => {
+                Request::Now(Box::new(Now::RelayBusy { channel, run, attempt, call }))
+            }
             fleet::Request::DropCall { call } => Request::Now(Box::new(Now::DropCall { call })),
             fleet::Request::Undelivered { run, attempt, message, undelivered: _ } => {
                 let _pending = core.relaying.remove(&run.raw());

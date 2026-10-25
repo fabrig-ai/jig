@@ -235,7 +235,15 @@ fn worker_configured(root: kernel::Fd, bad_charter: bool, message: bool, provide
 #[derive(Clone, Copy)]
 enum Backend {
     Direct,
+    Calls,
     Program,
+}
+pub(crate) fn worker_calls(root: kernel::Fd) -> Proc {
+    let document = String::from_utf8(fixtures::WORKER_DOCUMENT.to_vec())
+        .expect("worker JSON")
+        .replace("\"core.call_answer_bytes\":2048", "\"core.call_answer_bytes\":64")
+        .replace("\"hub.run_calls\":1", "\"hub.run_calls\":2");
+    worker_document(root, false, false, false, Backend::Calls, document.as_bytes())
 }
 fn worker_document(
     root: kernel::Fd,
@@ -260,6 +268,11 @@ fn worker_document(
         agent.host_limits.accounts = 3;
     }
 
+    if matches!(backend, Backend::Calls) {
+        agent.host_limits.calls = 2;
+        agent.limits.calls = 2;
+        agent.limits.channel.output_bytes = smith_host_protocol::output_bytes(&agent.limits).expect("host output");
+    }
     if bad_charter {
         agent.endpoints = smith_protocol_channel::Endpoints::new(skein_lib::List::with_capacity(0));
     }

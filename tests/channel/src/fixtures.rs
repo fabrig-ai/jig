@@ -341,6 +341,7 @@ pub(crate) fn engine_call_document() -> Vec<u8> {
         .expect("fixture UTF-8")
         .replace("\"tools\": 0", "\"tools\": 256")
         .replace("\"notes\": 0", "\"notes\": 1")
+        .replace("\"core.call_answer_bytes\":2048", "\"core.call_answer_bytes\":64")
         .into_bytes()
 }
 
@@ -439,7 +440,13 @@ pub fn provider_turns(script: &Script) -> Box<[skein_fake_llm_domain::api::Turn]
             lines: Box::new([if matches!(script.story, crate::stories::Story::Call) {
                 Line::Call {
                     name: b"recall".as_slice().into(),
-                    arguments: br#"{"kind":"name","name":1}"#.as_slice().into(),
+                    arguments: if number == 0 {
+                        let mut input = br#"{"kind":"name","name":1}"#.to_vec();
+                        input.resize(65, b' ');
+                        input.into_boxed_slice()
+                    } else {
+                        br#"{"kind":"name","name":1}"#.as_slice().into()
+                    },
                 }
             } else if matches!(script.story, crate::stories::Story::Wait | crate::stories::Story::InvalidTranscript) {
                 Line::Call { name: b"wait".as_slice().into(), arguments: b"{}".as_slice().into() }
@@ -456,6 +463,18 @@ pub fn provider_turns(script: &Script) -> Box<[skein_fake_llm_domain::api::Turn]
             },
             tokens: 1,
         });
+    }
+    if matches!(script.story, crate::stories::Story::Call) {
+        turns[1].lines = Box::new([
+            Line::Call {
+                name: b"recall".as_slice().into(),
+                arguments: br#"{"kind":"name","name":1}"#.as_slice().into(),
+            },
+            Line::Call {
+                name: b"recall".as_slice().into(),
+                arguments: br#"{"kind":"name","name":2}"#.as_slice().into(),
+            },
+        ]);
     }
     turns.push(Turn {
         lines: Box::new([Line::Call { name: b"finish".as_slice().into(), arguments: script.result.clone() }]),

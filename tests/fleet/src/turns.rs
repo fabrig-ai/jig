@@ -269,6 +269,7 @@ impl World {
                 | Request::Inbound { .. }
                 | Request::Relay { .. }
                 | Request::Relayed { .. }
+                | Request::RelayBusy { .. }
                 | Request::DropCall { .. }
                 | Request::Undelivered { .. }
                 | Request::Grant { .. }

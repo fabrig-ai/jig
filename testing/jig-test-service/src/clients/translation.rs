@@ -59,7 +59,8 @@ pub(crate) fn immediate(now: core::Now, admission: &mut Option<Token>) -> Option
         core::Now::RunText { watcher, turn, from, to, text, cut, call } => {
             Some(kit::Event::RunText { watcher, turn, from, to, text, cut, call })
         }
-        core::Now::CallBusy { .. }
+        core::Now::RelayBusy { .. }
+        | core::Now::CallBusy { .. }
         | core::Now::Relayed { .. }
         | core::Now::EffectAnswer { .. }
         | core::Now::SettledCallRefused { .. }

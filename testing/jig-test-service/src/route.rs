@@ -184,6 +184,22 @@ fn immediate(engine: &mut Engine, now: core::Now) {
                 engine.events.push(event);
             }
         }
+        core::Now::RelayBusy { channel, run, attempt, call } => {
+            if let Some(workers) = &mut engine.workers {
+                workers.send(
+                    engine.env.now,
+                    channel,
+                    jig_domain_host::LinkDown::Relayed {
+                        run,
+                        attempt,
+                        call: call.name,
+                        answer: jig_domain_host::Relayed::Busy,
+                    },
+                    &engine.values,
+                    &mut engine.events,
+                );
+            }
+        }
         core::Now::DropCall { call } => {
             engine.tools.forget_name(&call.name);
         }

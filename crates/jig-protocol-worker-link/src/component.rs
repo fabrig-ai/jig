@@ -124,7 +124,7 @@ impl Component {
                 if self.life != Life::Active {
                     return;
                 }
-                self.up(now, up, &parts, out);
+                self.up(up, &parts, out);
                 self.pump(now, out);
             }
         }
@@ -300,22 +300,45 @@ impl Component {
             Phase::Idle { .. } | Phase::Connecting | Phase::Opening { .. } | Phase::Closing { .. } => {}
         }
     }
-    fn up(&mut self, now: Time, up: host::LinkUp, parts: &[wire::Part], out: &mut Queue<Request>) {
+    fn up(&mut self, up: host::LinkUp, parts: &[wire::Part], out: &mut Queue<Request>) {
+        let limits = sizes::limits(&self.limits.sizes).expect("checked sizes");
+        let up = match up {
+            host::LinkUp::Call { run, attempt, call, tool, writes, input, deadline } => {
+                if input.len() > usize::try_from(limits.call_input).expect("call bound fits") {
+                    self.refuse_call(run, attempt, call, b"call too large", out);
+                    return;
+                }
+                let name = bytes::copy_of(&call);
+                let up = host::LinkUp::Call { run, attempt, call, tool, writes, input, deadline };
+                let Some(frame) = translate::up(up, parts, &limits) else {
+                    self.dropped = self.dropped.saturating_add(1);
+                    self.refuse_call(run, attempt, name, b"call refused", out);
+                    return;
+                };
+                if let Err(call) = self.relays.add(run, attempt, name, &frame) {
+                    out.push(Request::Down {
+                        down: host::LinkDown::Relayed { run, attempt, call, answer: host::Relayed::Busy },
+                        parts: Box::new([]),
+                    });
+                    return;
+                }
+                if let Phase::Open { hello: true, .. } = self.phase {
+                    self.command(channel::Request::Send { token: Token::new(1), frame });
+                }
+                return;
+            }
+            up @ (host::LinkUp::Logins { .. }
+            | host::LinkUp::SignedOut { .. }
+            | host::LinkUp::Piece { .. }
+            | host::LinkUp::Activity { .. }
+            | host::LinkUp::Unauthorized { .. }
+            | host::LinkUp::Limited { .. }
+            | host::LinkUp::AccountRefused { .. }
+            | host::LinkUp::Turn { .. }
+            | host::LinkUp::Answer { .. }) => up,
+        };
         match self.phase {
             Phase::Open { hello: true, .. } => {
-                let limits = sizes::limits(&self.limits.sizes).expect("checked sizes");
-                let relay = match &up {
-                    host::LinkUp::Call { run, attempt, call, .. } => Some((*run, *attempt, bytes::copy_of(call))),
-                    host::LinkUp::Logins { .. }
-                    | host::LinkUp::SignedOut { .. }
-                    | host::LinkUp::Piece { .. }
-                    | host::LinkUp::Activity { .. }
-                    | host::LinkUp::Unauthorized { .. }
-                    | host::LinkUp::Limited { .. }
-                    | host::LinkUp::AccountRefused { .. }
-                    | host::LinkUp::Turn { .. }
-                    | host::LinkUp::Answer { .. } => None,
-                };
                 let Some(frame) = translate::up(up, parts, &limits) else {
                     self.dropped = self.dropped.saturating_add(1);
                     return;
@@ -328,12 +351,6 @@ impl Component {
                     self.facts = self.facts.saturating_add(1);
                     return;
                 }
-                if let Some((run, attempt, call)) = relay
-                    && !self.relays.add(run, attempt, call, &frame)
-                {
-                    self.lose(now, Closed::Owner, out);
-                    return;
-                }
                 self.command(channel::Request::Send { token: Token::new(1), frame });
             }
             Phase::Idle { .. }
@@ -342,6 +359,14 @@ impl Component {
             | Phase::Open { hello: false, .. }
             | Phase::Closing { .. } => {}
         }
+    }
+    fn refuse_call(&self, run: Token, attempt: Token, call: Box<[u8]>, reason: &[u8], out: &mut Queue<Request>) {
+        let bound = usize::try_from(self.limits.sizes.answer).expect("answer bound fits");
+        let text = bytes::copy_of(reason.get(..reason.len().min(bound)).expect("bounded ASCII reason"));
+        out.push(Request::Down {
+            down: host::LinkDown::Relayed { run, attempt, call, answer: host::Relayed::Answer { error: true, text } },
+            parts: Box::new([]),
+        });
     }
     fn command(&mut self, request: channel::Request) {
         if let Some(link) = self.phase.connection() {

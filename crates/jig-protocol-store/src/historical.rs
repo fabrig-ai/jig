@@ -21,7 +21,8 @@ pub fn key(now: &Now) -> Option<Key> {
         Now::HistoricalEscalation { task, revision, .. } => {
             Some(Key::Core(CoreKey::EscalationDecision { task: *task, revision: *revision }))
         }
-        Now::CallBusy { .. }
+        Now::RelayBusy { .. }
+        | Now::CallBusy { .. }
         | Now::Relayed { .. }
         | Now::EffectAnswer { .. }
         | Now::SettledCallRefused { .. }
@@ -97,7 +98,8 @@ pub fn answer(now: Now, row: Option<Record>) -> Option<core::Event> {
             row: escalation_row(row),
             busy: false,
         },
-        Now::CallBusy { .. }
+        Now::RelayBusy { .. }
+        | Now::CallBusy { .. }
         | Now::Relayed { .. }
         | Now::EffectAnswer { .. }
         | Now::SettledCallRefused { .. }
