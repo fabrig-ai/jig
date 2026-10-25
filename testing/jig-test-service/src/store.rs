@@ -505,6 +505,7 @@ pub(super) fn answer(engine: &mut crate::Engine) {
             other @ (protocol::Event::Site { .. }
             | protocol::Event::Committed { .. }
             | protocol::Event::Failed { .. }
+            | protocol::Event::FrameTooLarge { .. }
             | protocol::Event::Restored { .. }
             | protocol::Event::Loaded { .. }
             | protocol::Event::Read { .. }

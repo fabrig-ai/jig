@@ -828,6 +828,7 @@ impl Owner {
                 | store::Event::Patched { .. }
                 | store::Event::Committed { .. }
                 | store::Event::Failed { .. }
+                | store::Event::FrameTooLarge { .. }
                 | store::Event::Restored { .. }
                 | store::Event::Loaded { .. }
                 | store::Event::Read { .. }
