@@ -760,7 +760,7 @@ fn a_relayed_answer_for_an_attempt_gone_is_dropped() {
 }
 
 #[test]
-fn a_relayed_call_beyond_the_room_is_dropped() {
+fn a_relayed_call_beyond_the_room_is_busy_at_its_original_address() {
     let mut h = Harness::new(LIMITS);
     h.hello(C1, 2, &[], &[]);
     h.place(R1, A1, 1);
@@ -769,8 +769,16 @@ fn a_relayed_call_beyond_the_room_is_dropped() {
     }
     assert_eq!(
         &*h.step(Event::Relay { channel: C1, run: R1, attempt: A1, call: host_call(Token::new(9), payload(9)) }),
-        &[Request::DropCall { call: host_call(Token::new(9), payload(9)) }]
+        &[Request::RelayBusy { channel: C1, run: R1, attempt: A1, call: host_call(Token::new(9), payload(9)) }]
     );
+    assert_eq!(h.domain.calls(), 2, "refusal creates no flight");
+    unowned_worker_inputs(&mut h, C2);
+    let mut overlong = host_call(Token::new(10), payload(10));
+    overlong.name = Box::new([0; 65]);
+    let refused = h.step(Event::Relay { channel: C1, run: R1, attempt: A1, call: overlong });
+    let [Request::DropCall { call }] = &*refused else { panic!("overlong name remains discarded") };
+    assert_eq!(call.name.len(), usize::try_from(LIMITS.call_name_bytes + 1).expect("small call name"));
+    assert_eq!(h.domain.calls(), 2);
 }
 
 fn unowned_worker_inputs(h: &mut Harness, channel: Token) {

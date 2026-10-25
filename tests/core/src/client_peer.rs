@@ -144,6 +144,7 @@ impl ClientPeer {
             | core::Now::EffectAnswer { .. }
             | core::Now::SettledCallRefused { .. }
             | core::Now::Call { .. }
+            | core::Now::RelayBusy { .. }
             | core::Now::CallBusy { .. }
             | core::Now::DropCall { .. }
             | core::Now::Undelivered { .. }

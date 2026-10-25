@@ -1499,6 +1499,18 @@ fn core_now(domain: &mut Domain, env: &Env<Limits>, value: core::Now, work: &mut
         core::Now::RestoreRefused => {
             let _request = domain.core.restart_refuse();
         }
+        core::Now::RelayBusy { channel: _, run, attempt, call } => {
+            domain.host_calls.remove(&call.name);
+            now(
+                domain,
+                Output::ToChild(Released::Host(host::Event::Down(host::LinkDown::Relayed {
+                    run,
+                    attempt,
+                    call: call.name,
+                    answer: host::Relayed::Busy,
+                }))),
+            );
+        }
         core::Now::DropCall { call } => {
             if let Some(binding) = domain.host_calls.remove(&call.name) {
                 now(

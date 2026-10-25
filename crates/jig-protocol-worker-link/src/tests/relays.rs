@@ -7,7 +7,7 @@ fn record(name: &[u8]) -> Frame {
     frame.finish().expect("complete")
 }
 fn add(relays: &mut Relays, run: u64, name: &[u8]) -> bool {
-    relays.add(Token::new(run), Token::new(2), name.into(), &record(name))
+    relays.add(Token::new(run), Token::new(2), name.into(), &record(name)).is_ok()
 }
 #[test]
 fn a_relay_answered_ends_once_and_a_late_cancel_finds_nothing() {
@@ -50,7 +50,7 @@ fn the_relay_table_holds_every_slot_and_call() {
 fn a_repeated_call_keeps_its_first_record_and_position() {
     let mut relays = Relays::new(&fixtures::LIMITS);
     assert!(add(&mut relays, 7, b"first"));
-    assert!(relays.add(Token::new(7), Token::new(2), b"first".as_slice().into(), &record(b"new")));
+    relays.add(Token::new(7), Token::new(2), b"first".as_slice().into(), &record(b"new")).expect("existing relay");
     assert_eq!(relays.replay(0).expect("record").bytes().get(8..), Some(b"first".as_slice()));
     assert!(relays.replay(1).is_none());
 }

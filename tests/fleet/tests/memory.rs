@@ -316,7 +316,7 @@ fn a_fleet_full_to_its_limits_stays_within_its_worst_case() {
             deadline: Duration::ZERO,
         },
     });
-    assert!(matches!(up[..], [Request::DropCall { .. }]), "a call beyond the room is dropped: {up:?}");
+    assert!(matches!(up[..], [Request::RelayBusy { .. }]), "a call beyond the room is busy: {up:?}");
     // Drained: every call answered, every attempt answered or lost.
     for (nth, to) in calls.into_iter().enumerate() {
         let down = fleet.step(Event::Relayed { to, answer: Token::new(100 + nth as u64) });

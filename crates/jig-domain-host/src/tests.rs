@@ -890,3 +890,46 @@ fn an_assignments_live_ask_reaches_the_agents_start() {
         assert_eq!(start.live, live);
     }
 }
+
+#[test]
+fn a_local_call_error_retires_the_relay_and_ignores_late_terminals() {
+    let mut h = Harness::new();
+    let (owner, workspace, agent) = h.live(1);
+    named_relay(&mut h, owner, b"oversized");
+    let error = Event::Down(LinkDown::Relayed {
+        run: Token::new(1),
+        attempt: Token::new(1001),
+        call: b"oversized".as_slice().into(),
+        answer: crate::Relayed::Answer { error: true, text: b"call too large".as_slice().into() },
+    });
+    assert_eq!(
+        &*h.step(error),
+        &[Request::Reply {
+            agent,
+            call: b"oversized".as_slice().into(),
+            reply: Reply::Relayed { error: true, text: b"call too large".as_slice().into() }
+        }]
+    );
+    h.domain.reclaim();
+    assert_eq!(h.domain.calls(), 0);
+    assert!(!h.domain.owns_relay(Token::new(1), Token::new(1001), b"oversized"));
+    assert!(h.step(named_answer(1, b"oversized")).is_empty());
+    assert!(
+        h.step(Event::RelayCancelled {
+            run: Token::new(1),
+            attempt: Token::new(1001),
+            call: b"oversized".as_slice().into()
+        })
+        .is_empty()
+    );
+    assert_eq!(h.domain.calls(), 0);
+    assert_eq!(&*h.step(fixtures::finished(owner, Finish::Parked)), &[Request::Stop { agent }]);
+    assert_eq!(&*h.step(Event::Gone { owner, detail: Box::new([]) }), &[Request::Save { owner, workspace }]);
+    let requests = h.step(Event::Saved { owner, at: None });
+    let [Request::Release { .. }, Request::Up(LinkUp::Answer { .. })] = &*requests else {
+        panic!("the drained assignment answers: {requests:?}");
+    };
+    h.step(Event::Down(LinkDown::Acknowledge { run: Token::new(1), attempt: Token::new(1001) }));
+    h.domain.reclaim();
+    assert_eq!((h.domain.hosted(), h.domain.calls()), (0, 0));
+}

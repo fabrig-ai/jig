@@ -64,6 +64,9 @@ fn script(story: Story) -> crate::world::Script {
     ) {
         script.leading_turns = 1;
     }
+    if matches!(story, Story::Call) {
+        script.leading_turns = 2;
+    }
     if matches!(
         story,
         Story::Restart { .. } | Story::Providers | Story::ApplicationGeneration | Story::Key { replaced: true }

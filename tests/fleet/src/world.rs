@@ -257,6 +257,7 @@ pub struct Stats {
     pub admitted: u32,
     pub calls: u32,
     pub replies: u32,
+    pub capacity_refusals: u32,
     pub inbound: u32,
     pub delivered: u32,
     pub observed: u32,
@@ -959,6 +960,19 @@ impl World {
             }
             Request::DropCall { call } => {
                 self.payloads.end(skein_lib::Reader::new(&call.input).u64().expect("body token"));
+            }
+            Request::RelayBusy { channel, run, attempt, call } => {
+                self.payloads.end(skein_lib::Reader::new(&call.input).u64().expect("body token"));
+                self.stats.capacity_refusals += 1;
+                self.sent(run, attempt, Down::Relayed);
+                self.down(
+                    channel,
+                    Message::Relayed {
+                        run: run.raw(),
+                        attempt: attempt.raw(),
+                        call: skein_lib::Reader::new(&call.name).u64().expect("scripted call token"),
+                    },
+                );
             }
             Request::Grant { channel, run, attempt, grant } => self.record_grant(channel, run, attempt, grant),
             Request::Unauthorized { .. } | Request::Limited { .. } | Request::AccountRefused { .. } => {}

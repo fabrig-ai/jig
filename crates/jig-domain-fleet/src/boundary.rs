@@ -436,7 +436,14 @@ pub enum Request {
         /// Whether the original call changes state and its answer must wait for commitment.
         writes: bool,
     },
-    /// Return a call that cannot be relayed; the parent owns its bytes.
+    /// The current host's bounded call found no live call capacity; retry at its original address.
+    RelayBusy {
+        channel: Token,
+        run: Token,
+        attempt: Token,
+        call: Call,
+    },
+    /// Return a fenced call or one whose name exceeds the bound; the parent owns its bytes.
     DropCall {
         call: Call,
     },

@@ -442,7 +442,8 @@ pub fn now_event(now: core::Now) -> Option<Event> {
         core::Now::RunText { watcher, turn, from, to, text, cut, call } => {
             Event::RunText { watcher, turn, from, to, text, cut, call }
         }
-        core::Now::CallBusy { .. }
+        core::Now::RelayBusy { .. }
+        | core::Now::CallBusy { .. }
         | core::Now::Relayed { .. }
         | core::Now::EffectAnswer { .. }
         | core::Now::SettledCallRefused { .. }
