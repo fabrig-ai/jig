@@ -364,6 +364,15 @@ secrets' store (section 9).
 
 ## 5. Records
 
+Core-v6's projection records include the final header's
+`closing_at: Option<u64>` and a failure receipt keyed by goal and connector
+under projection tag 4. The receipt holds its source fence and Armed,
+Pending or Reported state, with source and original receipt wall time
+for Pending and Reported (../domain/connectors.md, 8). These shapes change
+in place in core-v6; their generated Core layout fingerprint changes.
+An old Core layout is refused by name before row decode and without store
+mutation. Versions are unchanged; no migration or automatic wipe is added.
+
 The current tasks family is version 9: its durable `MessageKind` adds
 `FinishRequested { revision }` for a cancel grace. Tasks version 8 stores
 refuse to open under the existing format check; no migration is added.

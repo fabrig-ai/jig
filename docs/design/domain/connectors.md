@@ -599,6 +599,80 @@ Projection outbox outcomes settle resource writers without settling calls,
 holding a task or waking a procedure. Made, Failed, Withdrawn and NotMade
 release the writer; Uncertain and Held retain it for connector recovery.
 
+### 8.1 Failure episodes and sources
+
+The core keeps a bounded `ProjectionFailure` per goal and connector, keyed
+by `ProjectionKey::Failure`. Its `after` fence and its state, `Armed`,
+`Pending(ProjectionFailureSource)` or `Reported(ProjectionFailureSource)`,
+survive restart. The source records the attempt's number and the wall time
+of its permanent failure. Reading a message never rearms an episode.
+
+`ProjectionBegin { goal, connector, owner }` is the only entrance that
+creates this row. Before admission or a refusal without a write, it reserves
+a fresh source and answers `ProjectionBegun { owner, source }`; `None`
+refuses the reservation. Begin preserves an existing fence. The source
+travels in `EffectOrigin::Projection`, through flights without an entry,
+Keep, the eventual entry and retries. An entry's number equals its source.
+A source must be nonzero, within the connector's counter, above the fence,
+and absent from every other flight. Retry preserves it.
+
+`ProjectionFailed` never creates a receipt. For an admitted source, the
+first permanent failure changes Armed to Pending atomically with the
+failure decision. Duplicate callbacks cannot make another message.
+Transient Busy and Wait are not permanent failures. Begin, success,
+refeeding and live retracking preserve the episode and its fence.
+
+Recovery is explicit. `ProjectionRecover { goal, connector, owner }`
+answers Pending with Busy, and a missing or final projection with Missing;
+both write nothing. Armed returns its existing fence without writing.
+Only Reported resets to Armed at the connector's current counter. The
+connector stages an infallible reset with room reserved, and the root
+routes `CommitProjectionRecovery` synchronously in that decision. Its reset
+and the core's fence commit together; `Held::ProjectionRecovery` names
+connector and owner. Reset abandons retained entries at or below the fence,
+or obtains a new Begin before replacing them. Root ordering adds no policy.
+
+### 8.2 Live failure news
+
+Pending owes one quiet Kept message, `Projection N failed`, to its original
+goal. Delivery uses the receipt's wall time and a fresh Message number.
+The tasks child's room predicate and application share all checks: a live,
+non-Ended destination, its message and byte bounds, and output room.
+Tracked news reserves its merged position; untracked news reserves every
+ordinary refusal credit. Delivery records Heard, inbox, publication,
+task tagging, Activity and Reported in the same decision. It uses neither
+an unconditional notice nor a second inbox deduplication record.
+
+At most one receipt is delivered in a decision. News is owed and delivered
+only while the core is not stopping, restart is Open, a fresh number is
+available and the destination has room. Full, missing and exhausted
+destinations preserve Pending and cause no busy continuation. A later
+eligible decision retries. Archived delivery is a separate continuation.
+
+### 8.3 Final feeds and durable acceptance
+
+Every feed carries a nonzero `generation`, checked as the next commit
+number. A final header saves `closing_at = Some(generation)` and its
+connector cohort. Settlement carries that generation and removes only a
+matching member. Old and duplicate settlements do nothing. A member that
+has settled cannot Begin, fail or recover under that final header.
+
+The root accepts the final feed synchronously in the feedmark decision:
+the connector saves its accepted desired view and generation with the
+core's writes, or makes a bounded refusal. Later settlement names the
+generation of that accepted desired view, including after restart. It
+never obtains a generation from the core at callback time.
+
+A final header is not refed and accumulates no more milestones; saves
+update only its existing goal and plan. A live retrack clears closing_at
+and the cohort and marks the projection changed, preserving failure
+provenance. Final forget waits for remaining members and Pending news.
+Restore checks header, receipt and fence consistency: a final generation
+is nonzero and no newer than the committed counter, and `closing_at =
+Some(g)` requires `fed_at = Some(g - 1)`;
+a header without it has an empty cohort; an empty final cohort retains
+Pending news. The final owner is absent, Ended or untracked.
+
 ## 9. Reads and brief sections
 
 - **Reads an agent may call** (engine.md, 7.3): typed, each with an

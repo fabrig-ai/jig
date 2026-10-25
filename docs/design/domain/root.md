@@ -362,6 +362,19 @@ commented as such. Its crate has one module per part of this document:
 A new application copies it, replaces `ops`'s connectors with its own,
 and lets the compiler list the arms to fill.
 
+Final projection feeds obey connectors.md, 8.3: connector acceptance and
+its saved desired generation belong to the core's feedmark decision.
+Projection recovery is likewise a synchronous hand-off: the pre-reserved,
+infallible connector reset commits with the core's fence, and its keyed
+held answer crosses the commit barrier (connectors.md, 8.1).
+
+The held root in `jig-test-domain` deliberately accepts projection feeds
+after commit, retaining delayed settlement for its worlds. This is an
+at-most-once test contract. It does not establish crash safety between
+commit and delivery, or durable final-feed acceptance across that cut.
+The shipped application must prove its synchronous durable acceptance in
+its own root world.
+
 ## 13. The world
 
 The root has no world of its own beyond its application's: the
