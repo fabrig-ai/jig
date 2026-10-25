@@ -392,7 +392,10 @@ pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     segment: 692_301_684,
     snapshot_after: 346_150_842,
     chunk: 1_569_928,
-    page: skein_kv::Page { rows: 2, bytes: 1_569_908 },
+    // Accounting ceiling for applications' derived pages: the shipped largest
+    // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
+    // No row, chunk, decoder, queue or read-slot capacity changes with it.
+    page: skein_kv::Page { rows: 2, bytes: 1_590_110 },
     deadline: Duration::from_secs(30),
 };
 pub(super) const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {
