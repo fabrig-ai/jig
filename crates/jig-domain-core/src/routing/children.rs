@@ -720,9 +720,15 @@ pub(super) fn route_fleet(
     tag_fleet(core, env, work, out, fleet::max_out(&env.limits.fleet))
 }
 
-pub(super) fn route_projection_settled(core: &mut Core, env: &Env<Limits>, goal: u64, connector: u16) -> Requests {
+pub(super) fn route_projection_settled(
+    core: &mut Core,
+    env: &Env<Limits>,
+    goal: u64,
+    connector: u16,
+    generation: u64,
+) -> Requests {
     let mut out = Queue::with_capacity(route_room(&env.limits).checked_add(1).expect("settlement mark"));
-    crate::projections::settled(core, goal, connector, &mut out);
+    crate::projections::settled(core, goal, connector, generation, &mut out);
     out.push(Request::Decided);
     Requests::Out(out)
 }

@@ -32,11 +32,12 @@ pub fn own(rng: &mut Rng) -> Own {
 pub fn core_key(rng: &mut Rng) -> CoreKey {
     match rng.below(8) {
         0 => CoreKey::Deployment,
-        1 => CoreKey::Projection(match rng.below(4) {
+        1 => CoreKey::Projection(match rng.below(5) {
             0 => ProjectionKey::Goal(number(rng)),
             1 => ProjectionKey::Task { goal: number(rng), task: number(rng) },
             2 => ProjectionKey::Lifecycle { goal: number(rng), task: number(rng), position: number(rng) },
-            _ => ProjectionKey::Revision { goal: number(rng), task: number(rng), revision: number(rng) },
+            3 => ProjectionKey::Revision { goal: number(rng), task: number(rng), revision: number(rng) },
+            _ => ProjectionKey::Failure { goal: number(rng), connector: u16::try_from(rng.below(65536)).expect("u16") },
         }),
         2 => CoreKey::RunProof(number(rng)),
         3 => CoreKey::Call(core::CallKey {

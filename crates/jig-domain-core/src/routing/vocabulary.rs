@@ -109,6 +109,10 @@ pub enum Ask {
     ProjectGoal { feed: Box<crate::ProjectionFeed> },
     /// Release a goal's projection state after every closing write has settled.
     ForgetProjection { goal: u64 },
+    /// Begin reserves the source before any projection admission or refusal.
+    ProjectionBegun { owner: Token, source: Option<u64> },
+    /// Apply the connector's pre-reserved reset infallibly within this decision.
+    CommitProjectionRecovery { goal: u64, owner: Token, after: u64 },
     /// Complete a connector-owned subscription after the task hub accepts it.
     SubscriptionDone { request: Token, key: CallKey, subscription: u64 },
     /// Complete a connector-owned unsubscription after the task hub accepts it.
@@ -139,6 +143,8 @@ pub enum Write {
 /// Core output that must follow the decision's commit.
 #[derive(Debug)]
 pub enum Held {
+    /// Keyed recovery result after the connector reset and core fence commit.
+    ProjectionRecovery { connector: u16, owner: Token, result: crate::ProjectionRecovery },
     /// Terminal deployment act answer, released once its decision is durable.
     Acted { to: ReplyTo, outcome: people::Outcome },
     /// Every earlier commit is durable when the journal releases this terminal.
@@ -417,19 +423,39 @@ pub enum Event {
         change: Box<crate::settings::Proposed>,
     },
     /// Commit a restored release before opening, within the journal's available writes.
-    SettingsCommit { room: u32 },
+    SettingsCommit {
+        room: u32,
+    },
     /// A connector's deployment act, without a party or sign-in (people.md, 5.3).
-    Act { reply_to: ReplyTo, connector: u16, key: [u8; 16], act: Box<people::Act>, carried: Option<Carried> },
+    Act {
+        reply_to: ReplyTo,
+        connector: u16,
+        key: [u8; 16],
+        act: Box<people::Act>,
+        carried: Option<Carried>,
+    },
     /// Store map bytes from each commit answer; needs no commit (store.md, 11.2).
-    Fill { bytes: u64 },
+    Fill {
+        bytes: u64,
+    },
     /// Refuse new decisions while the service drains (engine.md, 6.1).
     Stopping,
     /// A connector's state change names its opaque subjects in this decision.
-    Marked { connector: u16, subjects: List<Token> },
+    Marked {
+        connector: u16,
+        subjects: List<Token>,
+    },
     /// Exactly one terminal for a previously admitted read load.
-    ReadLoaded { load: Token, result: crate::reads::Loaded },
+    ReadLoaded {
+        load: Token,
+        result: crate::reads::Loaded,
+    },
     /// An unkeyed one-shot read on the supplied live sign-in.
-    Read { reply: ReplyTo, sign_in: u64, read: crate::reads::Read },
+    Read {
+        reply: ReplyTo,
+        sign_in: u64,
+        read: crate::reads::Read,
+    },
     /// Admit an application request by metadata; its owner retains the value.
     /// A value the request carried is named by its number and digest only.
     Application {
@@ -444,35 +470,101 @@ pub enum Event {
     },
     /// An LLM key ask whose value is already in the secrets' store. People keeps
     /// only the ask's digest; the accounts child receives the carried number.
-    Key { reply_to: ReplyTo, sign_in: u64, key: [u8; 16], ask: Box<people::Ask>, carried: Carried },
+    Key {
+        reply_to: ReplyTo,
+        sign_in: u64,
+        key: [u8; 16],
+        ask: Box<people::Ask>,
+        carried: Carried,
+    },
     /// A connector asks the core within the admitted party decision.
-    ApplicationPart { request: Token, ask: Box<people::Ask> },
+    ApplicationPart {
+        request: Token,
+        ask: Box<people::Ask>,
+    },
     /// The connector durably kept its outcome, or could not decide this time.
-    ApplicationFinished { request: Token, outcome: Result<Token, people::Again> },
+    ApplicationFinished {
+        request: Token,
+        outcome: Result<Token, people::Again>,
+    },
     /// A connector's final projection write has settled, or its project has no home there.
-    ProjectionSettled { goal: u64, connector: u16 },
+    ProjectionSettled {
+        goal: u64,
+        connector: u16,
+        generation: u64,
+    },
+    ProjectionBegin {
+        goal: u64,
+        connector: u16,
+        owner: Token,
+    },
+    ProjectionFailed {
+        goal: u64,
+        connector: u16,
+        source: u64,
+    },
+    ProjectionRecover {
+        goal: u64,
+        connector: u16,
+        owner: Token,
+    },
     /// A protocol-rendered answer, with opaque workspace evidence preserved verbatim.
-    SettledCall { to: ReplyTo, key: CallKey, call: crate::SettledCall },
+    SettledCall {
+        to: ReplyTo,
+        key: CallKey,
+        call: crate::SettledCall,
+    },
     /// A connector owns the decoded effect under this transient owner.
-    EffectStart { owner: Token, connector: u16, origin: crate::EffectOrigin },
+    EffectStart {
+        owner: Token,
+        connector: u16,
+        origin: crate::EffectOrigin,
+    },
     /// Connector handoffs and outbox outcomes in the core vocabulary.
     EffectConnector(crate::connector::Event),
     /// Subscribe to an offered connector topic after checking every read resource.
-    SubscribeTopic { to: ReplyTo, key: CallKey, connector: u16, topic: u64, resources: Box<[authority::Effect]> },
+    SubscribeTopic {
+        to: ReplyTo,
+        key: CallKey,
+        connector: u16,
+        topic: u64,
+        resources: Box<[authority::Effect]>,
+    },
     /// Release effect answers whose absolute answer deadline has passed.
     EffectDeadline,
     /// Allocate the person and session named by a new party sign-in.
-    SignIn { reply_to: ReplyTo, identity: people::Identity, held: Option<u64> },
+    SignIn {
+        reply_to: ReplyTo,
+        identity: people::Identity,
+        held: Option<u64>,
+    },
     /// Admit a visible subject on a live sign-in, without a request key.
-    Watch { watcher: Token, sign_in: u64, subject: crate::documents::Watched, window: crate::documents::Window },
+    Watch {
+        watcher: Token,
+        sign_in: u64,
+        subject: crate::documents::Watched,
+        window: crate::documents::Window,
+    },
     /// Follow a task's live run from the client's acknowledged turn and offset.
-    WatchRun { watcher: Token, sign_in: u64, task: u64, turn: Option<views::TurnName>, offset: u32 },
+    WatchRun {
+        watcher: Token,
+        sign_in: u64,
+        task: u64,
+        turn: Option<views::TurnName>,
+        offset: u32,
+    },
     /// The client leaves one volatile watch.
-    Unwatch { watcher: Token },
+    Unwatch {
+        watcher: Token,
+    },
     /// The protocol took a watch's held document.
-    Delivered { watcher: Token },
+    Delivered {
+        watcher: Token,
+    },
     /// The protocol took one provisional stream delivery.
-    StreamDelivered { watcher: Token },
+    StreamDelivered {
+        watcher: Token,
+    },
     /// A content call with its opaque source identity, independent of text.
     RunCall { run: Token, attempt: Token, call: views::Call },
     /// A main completion's current tool input, before its turn commits.
@@ -499,19 +591,44 @@ pub enum Event {
     /// Task lifecycle or hub work.
     Tasks(tasks::Event),
     /// An application asks for one admitted recurring core procedure.
-    StartRecurring { project: u32, authority: tasks::Authority, template: tasks::RecurringTemplate },
+    StartRecurring {
+        project: u32,
+        authority: tasks::Authority,
+        template: tasks::RecurringTemplate,
+    },
     /// Begin core-owned brief planning for one preparing task.
-    StartBrief { task: u64 },
+    StartBrief {
+        task: u64,
+    },
     /// The notes child supplied the brief's bounded index before connector gathering.
-    BriefNotes { task: u64, lines: List<notes::Line>, more: u32 },
+    BriefNotes {
+        task: u64,
+        lines: List<notes::Line>,
+        more: u32,
+    },
     /// The root assembled all selected connector sections, or found a missing owner.
-    BriefAssembled { task: u64, ready: bool },
+    BriefAssembled {
+        task: u64,
+        ready: bool,
+    },
     /// The root translated the selected connector's workspace writes.
-    WorkspacePrepared { task: u64, attempt: u64, writes: Option<Box<[authority::Write]>>, credentials: Box<[u32]> },
+    WorkspacePrepared {
+        task: u64,
+        attempt: u64,
+        writes: Option<Box<[authority::Write]>>,
+        credentials: Box<[u32]>,
+    },
     /// The root returned translated workspace names after assembling the run assignment.
-    ClaimPrepared { task: u64, attempt: u64, budget: u64, writes: Box<[tasks::Name]> },
+    ClaimPrepared {
+        task: u64,
+        attempt: u64,
+        budget: u64,
+        writes: Box<[tasks::Name]>,
+    },
     /// A connector refused the held names of a pending task claim.
-    ClaimRefused { task: u64 },
+    ClaimRefused {
+        task: u64,
+    },
     /// The root translated the holdings for a core-authorized connector repair.
     ConnectorRepair {
         seed: Box<crate::connector::RepairSeed>,
@@ -521,11 +638,20 @@ pub enum Event {
         holdings: Box<[tasks::Holding]>,
     },
     /// A new deployment funding period, checked against core policy.
-    Period { project: u32, period: u64, budget: u64, next: Option<Wall> },
+    Period {
+        project: u32,
+        period: u64,
+        budget: u64,
+        next: Option<Wall>,
+    },
     /// A required preparation read or connector section could not be assembled.
-    PreparationFailed { task: u64 },
+    PreparationFailed {
+        task: u64,
+    },
     /// The store could not read the current transcript window.
-    TranscriptUnread { task: u64 },
+    TranscriptUnread {
+        task: u64,
+    },
     /// A task continuation for a person's pending proposal.
     PersonProposal(tasks::Event),
     /// A task continuation for a person's pending escalation choice.
@@ -571,19 +697,48 @@ pub enum Event {
         transcript: Box<[u8]>,
     },
     /// Root-translated host payload for a refused task request.
-    RefusedPayload { request: Token, problem: tasks::Problem, payload: Option<PayloadRefusal> },
+    RefusedPayload {
+        request: Token,
+        problem: tasks::Problem,
+        payload: Option<PayloadRefusal>,
+    },
     /// An activation with the root's current journal and connector readiness.
-    Activate { context: Box<tasks::RunContext>, ready: bool },
+    Activate {
+        context: Box<tasks::RunContext>,
+        ready: bool,
+    },
     /// The root's transcript slot reservation for an admitted agent run.
-    PreparedAgent { context: Box<tasks::RunContext>, transcript_waiter: Option<Token>, busy: bool },
+    PreparedAgent {
+        context: Box<tasks::RunContext>,
+        transcript_waiter: Option<Token>,
+        busy: bool,
+    },
     /// Forget a fully read ended task and its read marker in one decision.
-    Forget { owner: crate::forget::Owner },
+    Forget {
+        owner: crate::forget::Owner,
+    },
     /// Return the ended owner header for an authenticated conversation mark.
-    SeenConversationLoaded { request: Token, row: Option<Box<tasks::TaskRecord>>, busy: bool },
+    SeenConversationLoaded {
+        request: Token,
+        row: Option<Box<tasks::TaskRecord>>,
+        busy: bool,
+    },
     /// The ended position loaded for an authenticated mark, zero if absent.
-    EndedReadLoaded { request: Token, task: u64, party: u64, through: u64, busy: bool },
+    EndedReadLoaded {
+        request: Token,
+        task: u64,
+        party: u64,
+        through: u64,
+        busy: bool,
+    },
     /// The proposal loaded from its task proposer's durable history.
-    DecidedProposal { to: ReplyTo, key: CallKey, proposal: u64, row: Option<tasks::Proposal>, busy: bool },
+    DecidedProposal {
+        to: ReplyTo,
+        key: CallKey,
+        proposal: u64,
+        row: Option<tasks::Proposal>,
+        busy: bool,
+    },
     /// One archived proposal decision, translated from the root's store row.
     HistoricalProposal {
         request: Token,
@@ -595,9 +750,17 @@ pub enum Event {
         busy: bool,
     },
     /// One ended task row, loaded without root judgment.
-    EndedTaskLoaded { request: Token, row: Option<Box<tasks::TaskRecord>>, busy: bool },
+    EndedTaskLoaded {
+        request: Token,
+        row: Option<Box<tasks::TaskRecord>>,
+        busy: bool,
+    },
     /// One party input or its ended tree root, loaded without root judgment.
-    PartyInputsLoaded { request: Token, row: Option<Box<tasks::TaskRecord>>, busy: bool },
+    PartyInputsLoaded {
+        request: Token,
+        row: Option<Box<tasks::TaskRecord>>,
+        busy: bool,
+    },
     /// Ended owner row loaded for an authenticated person-task act.
     HistoricalPersonTask {
         request: Token,
@@ -618,23 +781,58 @@ pub enum Event {
         busy: bool,
     },
     /// One root-translated named-call answer that needs a durable core decision.
-    NamedAnswer { to: ReplyTo, key: CallKey, part: CallPart },
+    NamedAnswer {
+        to: ReplyTo,
+        key: CallKey,
+        part: CallPart,
+    },
     /// One generic named-call action translated from the root's host vocabulary.
-    NamedAction { to: ReplyTo, key: CallKey, action: NamedAction },
+    NamedAction {
+        to: ReplyTo,
+        key: CallKey,
+        action: NamedAction,
+    },
     /// Historical inputs have been loaded and validated by the root's store transport.
-    DelegateValidated { to: ReplyTo, key: CallKey, batch: Box<[Delegate]>, stubs: Box<[tasks::Stub]> },
+    DelegateValidated {
+        to: ReplyTo,
+        key: CallKey,
+        batch: Box<[Delegate]>,
+        stubs: Box<[tasks::Stub]>,
+    },
     /// One historical input load failed validation before named delegation.
-    DelegateInputFailed { to: ReplyTo, key: CallKey },
+    DelegateInputFailed {
+        to: ReplyTo,
+        key: CallKey,
+    },
     /// One connector's batch holdings, in the same order as the core's request.
-    DelegateHoldings { request: Token, connector: u16, holdings: Option<Box<[Box<[tasks::Holding]>]>> },
+    DelegateHoldings {
+        request: Token,
+        connector: u16,
+        holdings: Option<Box<[Box<[tasks::Holding]>]>>,
+    },
     /// One connector's procedure batch holdings in requested order.
-    ProcedureHoldings { task: u64, step: u64, connector: u16, holdings: Option<Box<[Box<[tasks::Holding]>]>> },
+    ProcedureHoldings {
+        task: u64,
+        step: u64,
+        connector: u16,
+        holdings: Option<Box<[Box<[tasks::Holding]>]>>,
+    },
     /// A numbered connector's procedure choice in the core's vocabulary.
-    ProcedureStep { task: u64, step: u64, connector: u16, code: u32, decision: ProcedureStep },
+    ProcedureStep {
+        task: u64,
+        step: u64,
+        connector: u16,
+        code: u32,
+        decision: ProcedureStep,
+    },
     /// A gathered section.
     Brief(brief::GatherEvent),
     /// One numbered connector's answer to a task-holdings handoff.
-    Holdings { request: Token, connector: u16, holdings: Option<Box<[tasks::Holding]>> },
+    Holdings {
+        request: Token,
+        connector: u16,
+        holdings: Option<Box<[tasks::Holding]>>,
+    },
     /// An account refresh or grant.
     Account(accounts::Event),
     /// A live view.

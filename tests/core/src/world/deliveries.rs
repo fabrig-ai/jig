@@ -16,6 +16,7 @@ impl World {
                 if feed.closing {
                     self.events.push_back(root::Event::Core(core::Event::ProjectionSettled {
                         goal: feed.goal.number,
+                        generation: feed.generation,
                         connector,
                     }));
                 }

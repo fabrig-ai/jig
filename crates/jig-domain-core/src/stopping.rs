@@ -95,7 +95,10 @@ pub(crate) fn gate(core: &mut Core, event: Event) -> Result<Event, Requests> {
         | Event::ProcedureStep { .. }
         | Event::ProcedureHoldings { .. }
         | Event::StartRecurring { .. }
-        | Event::Period { .. } => Err(empty()),
+        | Event::Period { .. }
+        | Event::ProjectionBegin { .. }
+        | Event::ProjectionFailed { .. }
+        | Event::ProjectionRecover { .. } => Err(empty()),
         event @ (Event::Fill { .. }
         | Event::Marked { .. }
         | Event::ReadLoaded { .. }

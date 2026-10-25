@@ -3640,6 +3640,7 @@ fn projection_readiness_shares_generation_restore_and_pending_connector_rules() 
         pending: Box::new([]),
         changed: true,
         fed_at: None,
+        closing_at: None,
     };
     assert_eq!(restored.restore_core(CoreRecord::Projection(row), &restored_limits), Restored::Live);
     assert!(restored.finish_owed());
@@ -3705,3 +3706,276 @@ fn a_restored_policy_cannot_pass_the_deployments_projects_mark() {
 }
 
 mod ended_watches;
+
+fn begin_projection(core: &mut Core, limits: &Limits, goal: u64, connector: u16, owner: u64) -> Option<u64> {
+    let Requests::Out(mut out) = step(
+        core,
+        &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits },
+        Event::ProjectionBegin { goal, connector, owner: Token::new(owner) },
+    );
+    let mut source = None;
+    for _ in 0..out.len() {
+        if let Request::Ask { ask: Ask::ProjectionBegun { source: got, .. }, .. } = out.pop().expect("Begin output") {
+            source = got;
+        }
+    }
+    source
+}
+
+#[test]
+fn projection_receipts_reserve_before_refusal_and_recover_only_reported_episodes() {
+    let (mut core, limits) = make_tree();
+    core.restart = restart::Restart::Open;
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 800).expect("source reserved");
+    let key = (1, connector);
+    assert_eq!(
+        core.projection_failures.get(&key).expect("receipt").after,
+        source.checked_sub(1).expect("fresh source")
+    );
+    let fence = core.projection_failures.get(&key).expect("receipt").after;
+    let Requests::Out(mut armed) = projection_failures::recover(&mut core, 1, connector, Token::new(801));
+    let mut writes = 0;
+    for _ in 0..armed.len() {
+        if let Request::Write(_) = armed.pop().expect("Armed output") {
+            writes += 1;
+        }
+    }
+    assert_eq!(writes, 0, "Armed retains its old fence without a reset");
+    assert_eq!(core.projection_failures.get(&key).expect("receipt").after, fence);
+    let mut out = Queue::with_capacity(4);
+    projection_failures::failed(&mut core, 1, connector, source, Wall::from_nanos(17), &mut out);
+    let pending = *core.projection_failures.get(&key).expect("pending receipt");
+    projection_failures::failed(&mut core, 1, connector, source, Wall::from_nanos(99), &mut out);
+    assert_eq!(core.projection_failures.get(&key), Some(&pending), "duplicate keeps first receipt time");
+    let Requests::Out(mut busy) = projection_failures::recover(&mut core, 1, connector, Token::new(802));
+    let mut result = None;
+    for _ in 0..busy.len() {
+        if let Request::Held(held) = busy.pop().expect("Pending output") {
+            if let Held::ProjectionRecovery { result: got, .. } = *held {
+                result = Some(got);
+            }
+        }
+    }
+    assert_eq!(result, Some(ProjectionRecovery::Busy));
+    let env = Env { now: Time::ZERO, wall: Wall::from_nanos(100), limits };
+    let mut news = Queue::with_capacity(room_max(&limits).expect("room").writes);
+    projection_failures::deliver(&mut core, &env, &mut news);
+    assert_eq!(
+        core.projection_failures.get(&key).expect("reported").state,
+        ProjectionFailureState::Reported(ProjectionFailureSource { source, at: Wall::from_nanos(17) })
+    );
+    let latest = begin_projection(&mut core, &limits, 1, connector, 803).expect("later source");
+    let Requests::Out(mut recovered) = projection_failures::recover(&mut core, 1, connector, Token::new(804));
+    let mut reset = None;
+    let mut receipt = false;
+    for _ in 0..recovered.len() {
+        let request = recovered.pop().expect("recovery output");
+        if let Request::Ask { connector: number, ask: Ask::CommitProjectionRecovery { goal, owner, after } } = &request
+        {
+            reset = Some((*number, *goal, *owner, *after));
+        }
+        if let Request::Write(Write::Save(Record::Core(CoreRecord::Projection(ProjectionRecord::Failure(row))))) =
+            request
+        {
+            receipt = row.after == latest && row.state == ProjectionFailureState::Armed;
+        }
+    }
+    assert_eq!(reset, Some((connector, 1, Token::new(804), latest)));
+    assert!(receipt, "connector reset and core fence are one decision");
+    let mut stale = Queue::with_capacity(4);
+    projection_failures::failed(&mut core, 1, connector, source, Wall::EPOCH, &mut stale);
+    assert!(stale.is_empty(), "late source below recovery fence is harmless");
+    assert!(begin_projection(&mut core, &limits, 999, connector, 805).is_none(), "no header means no receipt");
+    assert!(!core.projection_failures.contains_key(&(999, connector)));
+}
+
+#[test]
+fn projection_pending_news_waits_through_stopping_restart_full_and_number_exhaustion() {
+    let (mut core, limits) = make_tree();
+    core.restart = restart::Restart::Open;
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 810).expect("source");
+    let mut out = Queue::with_capacity(4);
+    projection_failures::failed(&mut core, 1, connector, source, Wall::EPOCH, &mut out);
+    assert!(projection_failures::owed(&core));
+    core.stopping = true;
+    assert!(!projection_failures::owed(&core));
+    core.stopping = false;
+    core.restart = restart::Restart::Waiting(RestartStep::LoadInbox);
+    assert!(!projection_failures::owed(&core));
+    core.restart = restart::Restart::Open;
+    core.counters.deployment.messages = u64::MAX;
+    assert!(!projection_failures::owed(&core));
+    core.counters.deployment.messages = 0;
+    core.projection_task_limits.inbox_bytes = 1;
+    assert!(!projection_failures::owed(&core), "full never asks the root to spin");
+    core.projection_task_limits = limits.tasks;
+    assert!(projection_failures::owed(&core), "room restored retries Pending");
+}
+
+#[test]
+fn projection_sources_fence_none_entries_and_duplicate_flights() {
+    let (mut core, limits) = make_tree();
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 820).expect("source");
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    drop(step(
+        &mut core,
+        &env,
+        Event::EffectStart {
+            owner: Token::new(821),
+            connector,
+            origin: EffectOrigin::Projection { goal: 1, source, entry: None },
+        },
+    ));
+    let flights = core.effect_flights.len();
+    drop(step(
+        &mut core,
+        &env,
+        Event::EffectStart {
+            owner: Token::new(822),
+            connector,
+            origin: EffectOrigin::Projection { goal: 1, source, entry: None },
+        },
+    ));
+    assert_eq!(core.effect_flights.len(), flights, "a source cannot have two flights");
+    let newer = begin_projection(&mut core, &limits, 1, connector, 823).expect("new source");
+    drop(step(
+        &mut core,
+        &env,
+        Event::EffectStart {
+            owner: Token::new(824),
+            connector,
+            origin: EffectOrigin::Projection { goal: 1, source: newer, entry: Some(source) },
+        },
+    ));
+    assert_eq!(core.effect_flights.len(), flights, "Some(entry) must equal its reserved source");
+    core.projection_failures.get_mut(&(1, connector)).expect("receipt").after = newer;
+    drop(step(&mut core, &env, Event::EffectConnector(connector::Event::DescribeRefused { owner: Token::new(821) })));
+    assert_eq!(
+        core.projection_failures.get(&(1, connector)).expect("receipt").state,
+        ProjectionFailureState::Armed,
+        "a stale None-entry description cannot create news"
+    );
+}
+
+#[test]
+fn projection_final_generations_reject_stale_members_and_wait_for_pending_news() {
+    let (mut core, limits) = make_tree();
+    core.connectors = Box::new([1, 2]);
+    core.restart = restart::Restart::Waiting(RestartStep::LoadInbox);
+    let first = begin_projection(&mut core, &limits, 1, 1, 830).expect("first source");
+    let second = begin_projection(&mut core, &limits, 1, 2, 831).expect("second source");
+    let mut out = Queue::with_capacity(core.room_max.writes);
+    projection_failures::failed(&mut core, 1, 1, first, Wall::from_nanos(19), &mut out);
+    projection_failures::failed(&mut core, 1, 2, second, Wall::from_nanos(20), &mut out);
+    let mut amendment = fixtures::unchanged(b"untrack");
+    amendment.tracked = Some(tasks::Tracking::Untracked);
+    send_task(
+        &mut core,
+        &limits,
+        tasks::Event::Amend {
+            places: Box::new([]),
+            funder: None,
+            reply_to: ReplyTo::new(Token::new(832)),
+            by: tasks::Party::Person(1),
+            task: 1,
+            message: 22,
+            stop_run: false,
+            amendment,
+        },
+    );
+    drop(finish_watch_outputs(&mut core, &limits));
+    core.counters.deployment.messages = core.tasks.task(1).unwrap().last_message;
+    let generation = core.projections.get(&1).unwrap().closing_at.expect("final generation");
+    assert_eq!(generation, core.counters.deployment().commits + 1);
+    assert!(core.projections.get(&1).unwrap().milestones.is_empty());
+    projections::settled(&mut core, 1, 1, generation + 1, &mut out);
+    projections::settled(&mut core, 1, 99, generation, &mut out);
+    assert_eq!(core.projections.get(&1).unwrap().pending.as_ref(), &[1, 2]);
+    projections::settled(&mut core, 1, 1, generation, &mut out);
+    projections::settled(&mut core, 1, 1, generation, &mut out);
+    assert_eq!(core.projections.get(&1).unwrap().pending.as_ref(), &[2]);
+    projections::settled(&mut core, 1, 2, generation, &mut out);
+    assert!(core.projections.get(&1).unwrap().pending.is_empty());
+    assert!(!projections::owed(&core) && !projection_failures::owed(&core), "restart-closed Pending debt never spins");
+    core.counters.next_commit();
+    core.restart = restart::Restart::Open;
+    let env = Env { now: Time::ZERO, wall: Wall::from_nanos(99), limits };
+    projection_failures::deliver(&mut core, &env, &mut out);
+    assert!(core.projections.contains_key(&1), "the second connector still owes news");
+    let heard =
+        core.tasks.task(1).unwrap().inbox.iter().find(|word| word.words.as_ref() == b"Projection 1 failed").unwrap();
+    assert_eq!(heard.at, Wall::from_nanos(19));
+    projection_failures::deliver(&mut core, &env, &mut out);
+    assert!(core.projections.contains_key(&1), "at most one news per decision");
+    core.counters.next_commit();
+    projection_failures::deliver(&mut core, &env, &mut out);
+    assert!(!core.projections.contains_key(&1));
+    assert!(core.projection_failures.is_empty(), "forget erases both receipt pairs");
+}
+
+#[test]
+fn projection_retracking_invalidates_the_final_cohort_but_preserves_its_failure_fence() {
+    let (mut core, limits) = make_tree();
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 840).unwrap();
+    let receipt = *core.projection_failures.get(&(1, connector)).unwrap();
+    let mut out = Queue::with_capacity(core.room_max.writes);
+    let state = core.projections.get_mut(&1).unwrap();
+    state.closing_at = Some(1);
+    state.fed_at = Some(0);
+    state.pending = Box::new([connector]);
+    let tracked = core.tasks.task(1).unwrap().clone();
+    projections::save(&mut core, &limits, &tracked, &mut out);
+    assert_eq!(core.projections.get(&1).unwrap().closing_at, None);
+    assert!(core.projections.get(&1).unwrap().pending.is_empty());
+    assert_eq!(core.projection_failures.get(&(1, connector)), Some(&receipt));
+    projections::settled(&mut core, 1, connector, 1, &mut out);
+    assert!(core.projections.contains_key(&1), "old final cannot forget the retracked goal");
+    assert!(source > receipt.after);
+}
+
+#[test]
+fn projection_restore_rejects_invalid_fences_sources_and_final_owners() {
+    let (mut core, limits) = make_tree();
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 850).unwrap();
+    core.projection_failures.remove(&(1, connector));
+    let good = ProjectionFailure {
+        goal: 1,
+        connector,
+        after: source - 1,
+        state: ProjectionFailureState::Pending(ProjectionFailureSource { source, at: Wall::EPOCH }),
+    };
+    for row in [
+        ProjectionFailure { after: source, ..good },
+        ProjectionFailure { connector: u16::MAX, ..good },
+        ProjectionFailure { goal: 999, ..good },
+        ProjectionFailure {
+            state: ProjectionFailureState::Pending(ProjectionFailureSource { source: source + 1, at: Wall::EPOCH }),
+            ..good
+        },
+    ] {
+        assert!(!projection_failures::restore(&mut core, row));
+    }
+    assert!(projection_failures::restore(&mut core, good));
+    assert!(!projection_failures::restore(&mut core, good), "duplicate pair refused");
+    let goal = core.projections.remove(&1).unwrap().goal;
+    core.counters.next_commit();
+    assert!(
+        !projections::restore(
+            &mut core,
+            &limits,
+            ProjectionRecord::Goal {
+                goal,
+                pending: Box::new([connector]),
+                changed: false,
+                fed_at: Some(0),
+                closing_at: Some(1),
+            }
+        ),
+        "a live tracked owner cannot restore a final header"
+    );
+}

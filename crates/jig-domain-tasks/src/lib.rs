@@ -159,3 +159,5 @@ pub use value::{
 };
 
 pub use run::run_attempt;
+
+pub use subscriptions::{ProjectionNewsResult, projection_news};

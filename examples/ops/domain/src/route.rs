@@ -424,6 +424,7 @@ fn core_held(
         other @ (core::Held::CallAnswer { .. }
         | core::Held::ReadLoad { .. }
         | core::Held::Read { .. }
+        | core::Held::ProjectionRecovery { .. }
         | core::Held::Delivery { .. }
         | core::Held::WatchEnded { .. }
         | core::Held::PeopleReply { .. }
@@ -676,7 +677,11 @@ fn core_ask(
             // These two connectors have no goal projection. Their closing
             // hand-off has no pending writes to settle.
             if feed.closing {
-                work.push(Work::Core(core::Event::ProjectionSettled { goal: feed.goal.number, connector: number }));
+                work.push(Work::Core(core::Event::ProjectionSettled {
+                    goal: feed.goal.number,
+                    generation: feed.generation,
+                    connector: number,
+                }));
             }
         }
         core::Ask::SubscriptionDone { request, key, subscription } => {
@@ -714,6 +719,8 @@ fn core_ask(
         // application fills these arms when its connectors expose it.
         core::Ask::StepMade { first: None, .. }
         | core::Ask::ForgetProjection { .. }
+        | core::Ask::ProjectionBegun { .. }
+        | core::Ask::CommitProjectionRecovery { .. }
         | core::Ask::Adopt { .. }
         | core::Ask::Hold { .. }
         | core::Ask::EndTopic { .. }

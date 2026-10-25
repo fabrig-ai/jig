@@ -17,7 +17,7 @@ use jig_domain_tasks as tasks;
 use skein_lib::{Env, List, Queue, ReplyTo, Token};
 
 #[expect(clippy::too_many_lines, reason = "one exhaustive task vocabulary routes its bounded child decision")]
-pub(super) fn tag_tasks(
+pub(crate) fn tag_tasks(
     core: &mut Core,
     env: &Env<Limits>,
     mut child: Queue<tasks::Request>,
@@ -764,6 +764,8 @@ pub(super) fn tag_tasks(
                                 | Ask::Effect(_)
                                 | Ask::Document { .. }
                                 | Ask::Read { .. }
+                                | Ask::ProjectionBegun { .. }
+                                | Ask::CommitProjectionRecovery { .. }
                                 | Ask::DropDocument { .. } => unreachable!("subscription handoff"),
                             },
                         });

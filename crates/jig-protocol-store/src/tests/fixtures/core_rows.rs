@@ -76,6 +76,7 @@ pub fn goal() -> core::ProjectionRecord {
         pending: Box::new([2, 3]),
         changed: true,
         fed_at: Some(19),
+        closing_at: None,
     }
 }
 pub fn projection_task(requester: tasks::Party) -> core::ProjectionRecord {

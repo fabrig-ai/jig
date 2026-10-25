@@ -270,9 +270,10 @@ pub(super) const IO: skein_io::Limits = skein_io::Limits {
 // raise fleet max_out 21 -> 25 and core room by 8 * 4 = 32 positions.
 // Close cancels each of Small's two pending sign-ins (protocol/llm.md, 5.2).
 // Account moves add 18 core route positions (accounts::max_out: 58 -> 76).
-// Held room covers three decisions: 3 * 18,608 = 55,824.
+// Projection news and receipt erases add 8T + 4U + 1 + tasks*connectors = 8,981.
+// Candidate held room covers three decisions: 3 * 27,589 = 82,767.
 pub(super) const JOURNAL: skein_lib::JournalLimits =
-    skein_lib::JournalLimits { commits: 3, writes: 18_608, held: 55_824, now: 256, release: 256 };
+    skein_lib::JournalLimits { commits: 3, writes: 27_589, held: 82_767, now: 256, release: 256 };
 pub(super) const LIMITS: Limits = Limits {
     core: CORE,
     store: STORE,
@@ -381,16 +382,16 @@ pub(super) const DRIVER: skein_oauth_accounts::Limits = skein_oauth_accounts::Li
 pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     key: 2079,
     value: 1_567_829,
-    // Two operations per journal write, three creation rows and an orphan erase: 2 * 18,608 + 4.
-    ops: 37_220,
-    // 256 MiB values + 37,220 operations * (2,079 key + 9 framing) + 26 frame bytes.
-    commit: 346_150_842,
+    // Two operations per journal write, three creation rows and an orphan erase: 2 * 27,589 + 4.
+    ops: 55_182,
+    // 256 MiB values + 55,182 operations * (2,079 key + 9 framing) + 26 frame bytes.
+    commit: 383_655_498,
     queued: 3,
     // Three queued commits; segment holds two, snapshot follows one.
-    queued_bytes: 1_038_452_526,
+    queued_bytes: 1_150_966_494,
     budget: 268_435_456,
-    segment: 692_301_684,
-    snapshot_after: 346_150_842,
+    segment: 767_310_996,
+    snapshot_after: 383_655_498,
     chunk: 1_569_928,
     // Accounting ceiling for applications' derived pages: the shipped largest
     // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
@@ -398,10 +399,19 @@ pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     page: skein_kv::Page { rows: 2, bytes: 1_590_110 },
     deadline: Duration::from_secs(30),
 };
+// Projection receipts do not change credential admission or patching batches.
+const SECRETS_KV: skein_kv::Limits = skein_kv::Limits {
+    ops: 37_220,
+    commit: 346_150_842,
+    queued_bytes: 1_038_452_526,
+    segment: 692_301_684,
+    snapshot_after: 346_150_842,
+    ..STORE_KV
+};
 pub(super) const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {
     core: CORE,
     store: STORE_KV,
-    secrets: STORE_KV,
+    secrets: SECRETS_KV,
     journal: JOURNAL,
     joins: 4,
     queue: 3,

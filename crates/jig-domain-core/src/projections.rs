@@ -60,6 +60,7 @@ pub struct ProjectionFeed {
     pub plan: Box<[ProjectionTask]>,
     pub milestones: Box<[ProjectionMilestone]>,
     pub closing: bool,
+    pub generation: u64,
 }
 
 /// Durable feed state retained until every connector settles the closing feed.
@@ -71,6 +72,7 @@ pub struct Projection {
     pub pending: Box<[u16]>,
     pub changed: bool,
     pub fed_at: Option<u64>,
+    pub closing_at: Option<u64>,
 }
 
 /// Ordered durable projection families: header before its plan and pending history.
@@ -79,22 +81,50 @@ pub enum ProjectionKey {
     /// A goal's feed metadata and final settlement cohort.
     Goal(u64),
     /// One task retained in the complete plan.
-    Task { goal: u64, task: u64 },
+    Task {
+        goal: u64,
+        task: u64,
+    },
     /// One unread lifecycle milestone.
-    Lifecycle { goal: u64, task: u64, position: u64 },
+    Lifecycle {
+        goal: u64,
+        task: u64,
+        position: u64,
+    },
     /// One unread semantic history milestone.
-    Revision { goal: u64, task: u64, revision: u64 },
+    Revision {
+        goal: u64,
+        task: u64,
+        revision: u64,
+    },
+    Failure {
+        goal: u64,
+        connector: u16,
+    },
 }
 
 /// One bounded row of a projection; the whole tree is never one journal row.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ProjectionRecord {
     /// Feed metadata, retained through the last closing settlement.
-    Goal { goal: ProjectionGoal, pending: Box<[u16]>, changed: bool, fed_at: Option<u64> },
+    Goal {
+        goal: ProjectionGoal,
+        pending: Box<[u16]>,
+        changed: bool,
+        fed_at: Option<u64>,
+        closing_at: Option<u64>,
+    },
+    Failure(crate::ProjectionFailure),
     /// One current task in the bounded tree.
-    Task { goal: u64, task: ProjectionTask },
+    Task {
+        goal: u64,
+        task: ProjectionTask,
+    },
     /// History recorded since the last feed.
-    Milestone { goal: u64, milestone: ProjectionMilestone },
+    Milestone {
+        goal: u64,
+        milestone: ProjectionMilestone,
+    },
 }
 
 impl ProjectionRecord {
@@ -103,6 +133,7 @@ impl ProjectionRecord {
     pub fn key(&self) -> ProjectionKey {
         match self {
             Self::Goal { goal, .. } => ProjectionKey::Goal(goal.number),
+            Self::Failure(row) => ProjectionKey::Failure { goal: row.goal, connector: row.connector },
             Self::Task { goal, task } => ProjectionKey::Task { goal: *goal, task: task.number },
             Self::Milestone { goal, milestone } => milestone_key(*goal, milestone.identity),
         }
@@ -122,6 +153,7 @@ fn header(state: &Projection) -> ProjectionRecord {
         pending: state.pending.clone(),
         changed: state.changed,
         fed_at: state.fed_at,
+        closing_at: state.closing_at,
     }
 }
 
@@ -151,6 +183,7 @@ pub(crate) fn save(core: &mut Core, limits: &Limits, row: &tasks::TaskRecord, ou
                     pending: Box::new([]),
                     changed: true,
                     fed_at: None,
+                    closing_at: None,
                 }),
             )
             .expect("tracked projection room admitted");
@@ -162,6 +195,16 @@ pub(crate) fn save(core: &mut Core, limits: &Limits, row: &tasks::TaskRecord, ou
         number
     };
     let Some(state) = core.projections.get_mut(&number) else { return };
+    let ended = match row.phase {
+        tasks::Phase::Ended(_) => true,
+        tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => false,
+    };
+    if row.number == number && row.tracked.is_some() && !ended && state.closing_at.is_some() {
+        state.closing_at = None;
+        state.pending = Box::new([]);
+        state.changed = true;
+    }
+    let final_header = state.closing_at.is_some();
     if row.number == number {
         let mut next = state.goal.clone();
         next.words.clone_from(&row.spec.words);
@@ -189,11 +232,15 @@ pub(crate) fn save(core: &mut Core, limits: &Limits, row: &tasks::TaskRecord, ou
             plan.push(old.clone()).expect("bounded tree plan");
         }
     }
-    if !found {
+    if !found && !final_header {
         plan.push(next).expect("lifetime tree task room admitted");
         state.changed = true;
     }
     state.plan = plan.into_boxed();
+    if final_header && !found {
+        write(out, header(state));
+        return;
+    }
     write(
         out,
         ProjectionRecord::Task {
@@ -242,6 +289,9 @@ pub(crate) fn history(
         save(core, limits, &goal, out);
     }
     let Some(state) = core.projections.get_mut(&root) else { return };
+    if state.closing_at.is_some() {
+        return;
+    }
     let saved = milestone.clone();
     let mut milestones = List::with_capacity(core.room_max.writes);
     for old in &state.milestones {
@@ -258,11 +308,16 @@ pub(crate) fn history(
 }
 
 fn eligible(core: &Core, number: u64, state: &Projection) -> bool {
+    if state.closing_at.is_some() || core.counters.deployment().commits == u64::MAX {
+        return false;
+    }
     let untracked = match core.tasks.task(number) {
         Some(task) => task.tracked.is_none(),
         None => false,
     };
-    if untracked && !state.pending.is_empty() {
+    if untracked
+        && (state.fed_at == Some(core.counters.deployment().commits) && !state.changed || !state.pending.is_empty())
+    {
         return false;
     }
     untracked
@@ -282,11 +337,12 @@ pub(crate) fn owed(core: &Core) -> bool {
 /// Complete a composed root decision's projection handoffs. Repeated calls
 /// retain subsequent changes but never feed a goal twice under one commit.
 pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
-    if !owed(core) {
+    if !owed(core) && !crate::projection_failures::owed(core) {
         return crate::routing::finish_watches(core, env);
     }
     let room = core.room_max.writes;
     let mut out = Queue::with_capacity(room.checked_add(1).expect("feed mark"));
+    crate::projection_failures::deliver(core, env, &mut out);
     let commit = core.counters.deployment().commits;
     let mut goals = List::with_capacity(core.projections.len());
     for (number, _) in &core.projections {
@@ -312,7 +368,9 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
                 | tasks::Phase::Closing(_)
                 | tasks::Phase::Held { .. } => false,
             } || untracked;
-            if closing && state.pending.is_empty() {
+            let generation = commit.checked_add(1).expect("feed generation checked by eligibility");
+            if closing {
+                state.closing_at = Some(generation);
                 state.pending.clone_from(&core.connectors);
             }
             let feed = ProjectionFeed {
@@ -320,6 +378,7 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
                 plan: state.plan.clone(),
                 milestones: state.milestones.clone(),
                 closing,
+                generation,
             };
             for milestone in &state.milestones {
                 out.push(Request::Write(Write::Erase(crate::Key::Core(CoreKey::Projection(milestone_key(
@@ -343,7 +402,7 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
                 false
             }
         };
-        if (ended || untracked) && core.connectors.is_empty() {
+        if (ended || untracked) && core.connectors.is_empty() && !crate::projection_failures::pending(core, *number) {
             forget(core, *number, &mut out);
         }
     }
@@ -366,9 +425,10 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
     Requests::Out(out)
 }
 
-pub(crate) fn settled(core: &mut Core, goal: u64, connector: u16, out: &mut Queue<Request>) {
+pub(crate) fn settled(core: &mut Core, goal: u64, connector: u16, generation: u64, out: &mut Queue<Request>) {
+    let news_pending = crate::projection_failures::pending(core, goal);
     let Some(state) = core.projections.get_mut(&goal) else { return };
-    if !state.pending.contains(&connector) {
+    if state.closing_at != Some(generation) || !state.pending.contains(&connector) {
         return;
     }
     let mut pending = List::with_capacity(u32::try_from(state.pending.len()).expect("bounded connectors"));
@@ -378,15 +438,26 @@ pub(crate) fn settled(core: &mut Core, goal: u64, connector: u16, out: &mut Queu
         }
     }
     state.pending = pending.into_boxed();
-    if state.pending.is_empty() {
+    if state.pending.is_empty() && !news_pending {
         forget(core, goal, out);
     } else {
         write(out, header(state));
     }
 }
 
+pub(crate) fn finish_forget(core: &mut Core, goal: u64, out: &mut Queue<Request>) {
+    let ready = match core.projections.get(&goal) {
+        Some(state) => state.closing_at.is_some() && state.pending.is_empty(),
+        None => false,
+    };
+    if ready && !crate::projection_failures::pending(core, goal) {
+        forget(core, goal, out);
+    }
+}
+
 fn forget(core: &mut Core, goal: u64, out: &mut Queue<Request>) {
     let state = core.projections.remove(&goal).expect("closing feed state retained");
+    crate::projection_failures::erase(core, goal, out);
     for row in &state.plan {
         out.push(Request::Write(Write::Erase(crate::Key::Core(CoreKey::Projection(ProjectionKey::Task {
             goal,
@@ -437,6 +508,7 @@ pub fn projection_record_bytes(row: &ProjectionRecord) -> Option<u64> {
 
 fn record_bytes(row: &ProjectionRecord) -> Option<u64> {
     match row {
+        ProjectionRecord::Failure(_) => Some(0),
         ProjectionRecord::Goal { goal, pending, .. } => u64::try_from(goal.words.len())
             .ok()?
             .checked_add(tasks::phase_bytes(&goal.phase)?)?
@@ -466,14 +538,16 @@ fn phase_within(phase: &tasks::Phase, limits: &Limits) -> bool {
 
 pub(crate) fn restore(core: &mut Core, limits: &Limits, row: ProjectionRecord) -> bool {
     match row {
-        ProjectionRecord::Goal { goal, pending, changed, fed_at } => {
-            restore_goal(core, limits, goal, pending, changed, fed_at)
+        ProjectionRecord::Goal { goal, pending, changed, fed_at, closing_at } => {
+            restore_goal(core, limits, goal, pending, changed, fed_at, closing_at)
         }
+        ProjectionRecord::Failure(row) => crate::projection_failures::restore(core, row),
         ProjectionRecord::Task { goal, task } => restore_task(core, limits, goal, task),
         ProjectionRecord::Milestone { goal, milestone } => restore_milestone(core, limits, goal, milestone),
     }
 }
 
+#[expect(clippy::too_many_arguments, reason = "restore checks the durable header as one row")]
 fn restore_goal(
     core: &mut Core,
     limits: &Limits,
@@ -481,6 +555,7 @@ fn restore_goal(
     pending: Box<[u16]>,
     changed: bool,
     fed_at: Option<u64>,
+    closing_at: Option<u64>,
 ) -> bool {
     let deployment = core.counters.deployment();
     let fed_after = match fed_at {
@@ -505,8 +580,21 @@ fn restore_goal(
         Some(task) => task.tracked.is_none(),
         None => false,
     };
-    if !closing && !untracked && !pending.is_empty() {
-        return false;
+    match closing_at {
+        Some(generation) => {
+            if generation == 0
+                || generation > deployment.commits
+                || generation.checked_sub(1) != fed_at
+                || (!closing && !untracked)
+            {
+                return false;
+            }
+        }
+        None => {
+            if !pending.is_empty() {
+                return false;
+            }
+        }
     }
     let mut seen = List::with_capacity(limits.connectors);
     for connector in &pending {
@@ -518,7 +606,15 @@ fn restore_goal(
     core.projections
         .insert(
             goal.number,
-            Box::new(Projection { goal, pending, changed, fed_at, plan: Box::new([]), milestones: Box::new([]) }),
+            Box::new(Projection {
+                goal,
+                pending,
+                changed,
+                fed_at,
+                closing_at,
+                plan: Box::new([]),
+                milestones: Box::new([]),
+            }),
         )
         .is_ok()
 }

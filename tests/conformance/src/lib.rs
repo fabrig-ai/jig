@@ -532,6 +532,7 @@ impl Application for Testing {
                 if feed.closing {
                     vec![Input::Event(root::Event::Core(core::Event::ProjectionSettled {
                         goal: feed.goal.number,
+                        generation: feed.generation,
                         connector,
                     }))]
                 } else {

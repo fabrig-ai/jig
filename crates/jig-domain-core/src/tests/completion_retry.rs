@@ -99,7 +99,8 @@ fn has_watch_end(out: &[Request]) -> bool {
         match request {
             Request::Held(held) => match held.as_ref() {
                 Held::WatchEnded { .. } => return true,
-                Held::ApplicationDelivery { .. }
+                Held::ProjectionRecovery { .. }
+                | Held::ApplicationDelivery { .. }
                 | Held::ApplicationWatchEnded { .. }
                 | Held::ReadLoad { .. }
                 | Held::Read { .. }

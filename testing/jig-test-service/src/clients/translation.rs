@@ -20,6 +20,7 @@ pub(crate) fn to_component(held: core::Held) -> Option<kit::Event> {
         | core::Held::ReadLoad { .. }
         | core::Held::Applied { .. }
         | core::Held::MakeEffect { .. }
+        | core::Held::ProjectionRecovery { .. }
         | core::Held::SettledCall { .. }
         | core::Held::Assign { .. }
         | core::Held::Grant { .. }
@@ -143,6 +144,9 @@ pub(crate) fn watcher(value: &core::Event) -> Option<Token> {
         | core::Event::ApplicationPart { .. }
         | core::Event::ApplicationFinished { .. }
         | core::Event::ProjectionSettled { .. }
+        | core::Event::ProjectionBegin { .. }
+        | core::Event::ProjectionFailed { .. }
+        | core::Event::ProjectionRecover { .. }
         | core::Event::SettledCall { .. }
         | core::Event::EffectStart { .. }
         | core::Event::EffectConnector(..)
@@ -227,6 +231,9 @@ pub(crate) fn starting(value: core::Event) -> Option<kit::Event> {
         | core::Event::ApplicationPart { .. }
         | core::Event::ApplicationFinished { .. }
         | core::Event::ProjectionSettled { .. }
+        | core::Event::ProjectionBegin { .. }
+        | core::Event::ProjectionFailed { .. }
+        | core::Event::ProjectionRecover { .. }
         | core::Event::SettledCall { .. }
         | core::Event::EffectStart { .. }
         | core::Event::EffectConnector(..)

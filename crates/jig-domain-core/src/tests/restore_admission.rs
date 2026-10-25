@@ -208,6 +208,7 @@ fn record_key_rows() -> [(CoreRecord, CoreKey); 8] {
                 pending: Box::new([]),
                 changed: false,
                 fed_at: None,
+                closing_at: None,
             }),
             CoreKey::Projection(ProjectionKey::Goal(7)),
         ),

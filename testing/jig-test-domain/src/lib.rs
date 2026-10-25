@@ -350,6 +350,12 @@ fn remember_outbox(domain: &mut Domain, number: u16, row: &connector::OutboxEntr
 
 /// The root's live components and one commit barrier.
 #[derive(Debug)]
+struct ProjectionPayload {
+    effect: connector::Effect,
+    goal: Option<u64>,
+}
+
+#[derive(Debug)]
 pub struct Domain {
     pieces_dropped: u64,
     core: core::Core,
@@ -365,7 +371,7 @@ pub struct Domain {
     workspace_writes: Map<u64, Box<[tasks::Name]>>,
     procedure_steps: Map<u64, (u64, u16)>,
     topic_calls: Map<Token, (ReplyTo, core::CallKey, u16)>,
-    effects: Map<Token, connector::Effect>,
+    effects: Map<Token, ProjectionPayload>,
     effect_procedures: Map<Token, u64>,
     outbox_procedures: Map<u64, u16>,
     judges: Map<Token, (Token, jig_domain_authority::Judge, [u8; 32])>,
@@ -792,11 +798,8 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
 
             Work::ProjectionEffect { goal, number, effect } => {
                 let owner = effect_payload(domain, effect);
-                work.push(Work::Core(core::Event::EffectStart {
-                    owner,
-                    connector: number,
-                    origin: core::EffectOrigin::Projection { goal, entry: None },
-                }));
+                domain.effects.get_mut(&owner).expect("staged projection payload").goal = Some(goal);
+                work.push(Work::Core(core::Event::ProjectionBegin { goal, connector: number, owner }));
             }
             Work::TopicCall { to, key, number, topic } => topics::start(domain, to, key, number, topic, &mut work),
             Work::EffectCall { to, key, number, effect, deadline, proposal } => {
@@ -885,7 +888,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
 fn effect_payload(domain: &mut Domain, effect: connector::Effect) -> Token {
     let token = Token::new(domain.next_payload);
     domain.next_payload = domain.next_payload.checked_add(1).expect("bounded owner numbers");
-    assert!(domain.effects.insert(token, effect).is_ok(), "admitted effect room");
+    assert!(domain.effects.insert(token, ProjectionPayload { effect, goal: None }).is_ok(), "admitted effect room");
     token
 }
 

@@ -128,6 +128,7 @@ pub(crate) fn document(
                 | core::Held::Delivery { .. }
                 | core::Held::WatchEnded { .. }
                 | core::Held::MakeEffect { .. }
+                | core::Held::ProjectionRecovery { .. }
                 | core::Held::SettledCall { .. }
                 | core::Held::Assign { .. }
                 | core::Held::Grant { .. }
