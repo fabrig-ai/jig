@@ -83,6 +83,7 @@ impl World {
                 if feed.closing && !self.hold_projection_settlements {
                     self.events.push_back(root::Event::Core(core::Event::ProjectionSettled {
                         goal: feed.goal.number,
+                        generation: feed.generation,
                         connector,
                     }));
                 }
@@ -220,7 +221,8 @@ impl World {
                 | core::Held::SignOutSource { .. }
                 | core::Held::SourceSignedOut { .. }
                 | core::Held::Refuse { .. }
-                | core::Held::MakeEffect { .. },
+                | core::Held::MakeEffect { .. }
+                | core::Held::ProjectionRecovery { .. },
             ) => {}
             root::Delivery::Fleet(_) => panic!("root releases its fleet continuations internally"),
         }

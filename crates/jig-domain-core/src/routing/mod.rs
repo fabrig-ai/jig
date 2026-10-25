@@ -77,7 +77,7 @@ mod topics;
 mod turns;
 use turns::route_accepted_turn;
 #[path = "tasks.rs"]
-mod task_routes;
+pub(crate) mod task_routes;
 #[path = "views.rs"]
 pub(crate) mod view_routes;
 mod vocabulary;
@@ -305,20 +305,24 @@ fn route_room_checked(limits: &Limits) -> Option<u32> {
     let people = people::max_out(&limits.people).checked_mul(8)?;
     let fleet = fleet::max_out(&limits.fleet).checked_mul(8)?;
     let brief = brief::gather_max_out(&limits.brief).checked_mul(4)?;
-    let bound = tasks
-        .checked_add(people)?
-        .checked_add(limits.people.inbox_tasks)?
-        .checked_add(fleet)?
-        .checked_add(brief)?
-        .checked_add(accounts::max_out(&limits.accounts))?
-        .checked_add(limits.people.pending.checked_mul(2)?)?
-        .checked_add(limits.authority.projects.checked_mul(2)?)?
-        .checked_add(limits.people.initial_owners)?
-        .checked_add(
-            limits.tasks.tasks.checked_mul(limits.tasks.tree_tasks.checked_add(limits.connectors)?.checked_add(4)?)?,
-        )?
-        .checked_add(limits.views.watchers.checked_mul(4)?)?
-        .checked_add(8)?;
+    let bound =
+        tasks
+            .checked_add(people)?
+            .checked_add(limits.people.inbox_tasks)?
+            .checked_add(fleet)?
+            .checked_add(brief)?
+            .checked_add(accounts::max_out(&limits.accounts))?
+            .checked_add(limits.people.pending.checked_mul(2)?)?
+            .checked_add(limits.authority.projects.checked_mul(2)?)?
+            .checked_add(limits.people.initial_owners)?
+            .checked_add(limits.tasks.tasks.checked_mul(
+                limits.tasks.tree_tasks.checked_add(limits.connectors.checked_mul(2)?)?.checked_add(4)?,
+            )?)?
+            .checked_add(limits.views.watchers.checked_mul(4)?)?
+            .checked_add(8)?
+            .checked_add(tasks::max_out(&limits.tasks).checked_mul(8)?)?
+            .checked_add(people::max_out(&limits.people).checked_mul(4)?)?
+            .checked_add(1)?;
     Some(bound.max(settings::room(limits)?.writes))
 }
 
@@ -412,7 +416,10 @@ pub fn room(limits: &Limits, event: &Event) -> Option<JournalRoom> {
         | Event::View(_)
         | Event::Notes(_)
         | Event::SettledCall { .. }
-        | Event::ProjectionSettled { .. } => Some(room),
+        | Event::ProjectionSettled { .. }
+        | Event::ProjectionBegin { .. }
+        | Event::ProjectionFailed { .. }
+        | Event::ProjectionRecover { .. } => Some(room),
     }
 }
 
@@ -505,7 +512,21 @@ fn step_one(core: &mut Core, env: &Env<Limits>, event: Event, work: &mut Queue<E
         Event::ApplicationFinished { request, outcome } => {
             application_routes::finished(core, env, work, request, outcome)
         }
-        Event::ProjectionSettled { goal, connector } => route_projection_settled(core, env, goal, connector),
+        Event::ProjectionSettled { goal, connector, generation } => {
+            route_projection_settled(core, env, goal, connector, generation)
+        }
+        Event::ProjectionBegin { goal, connector, owner } => {
+            crate::projection_failures::begin(core, goal, connector, owner)
+        }
+        Event::ProjectionFailed { goal, connector, source } => {
+            let mut out = Queue::with_capacity(2);
+            crate::projection_failures::failed(core, goal, connector, source, env.wall, &mut out);
+            out.push(Request::Decided);
+            Requests::Out(out)
+        }
+        Event::ProjectionRecover { goal, connector, owner } => {
+            crate::projection_failures::recover(core, goal, connector, owner)
+        }
         Event::SettledCall { to, key, call } => crate::conversation::settle(core, &env.limits, to, key, call),
         Event::EffectStart { owner, connector, origin } => crate::effects::start(core, env, owner, connector, origin),
         Event::EffectConnector(event) => crate::effects::connector(core, env, work, event),

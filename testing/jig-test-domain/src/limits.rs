@@ -65,7 +65,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         )?
         .checked_add(Map::<u64, Box<[tasks::Name]>>::worst_case(limits.core.tasks.tasks)?)?
         .checked_add(Map::<u64, (u64, u16)>::worst_case(limits.core.tasks.tasks)?)?
-        .checked_add(Map::<Token, connector::Effect>::worst_case(
+        .checked_add(Map::<Token, crate::ProjectionPayload>::worst_case(
             limits.core.call_records.checked_add(limits.core.tasks.tasks)?,
         )?)?
         .checked_add(Map::<Token, u64>::worst_case(limits.core.tasks.tasks)?)?

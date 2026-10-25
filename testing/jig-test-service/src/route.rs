@@ -51,9 +51,11 @@ fn deliver(engine: &mut Engine, delivery: root::Delivery) {
         }
         root::Delivery::Projection { connector, feed } => {
             if feed.closing {
-                engine
-                    .events
-                    .push(root::Event::Core(core::Event::ProjectionSettled { goal: feed.goal.number, connector }));
+                engine.events.push(root::Event::Core(core::Event::ProjectionSettled {
+                    goal: feed.goal.number,
+                    generation: feed.generation,
+                    connector,
+                }));
             }
         }
         root::Delivery::Fleet(event) => engine.events.push(root::Event::Core(core::Event::Fleet(event))),
@@ -213,6 +215,7 @@ fn immediate(engine: &mut Engine, now: core::Now) {
 
 fn core_held(engine: &mut Engine, held: core::Held) {
     match held {
+        core::Held::ProjectionRecovery { .. } => stop::unavailable(engine, b"projection recovery"),
         core::Held::Sources { .. } | core::Held::CheckSource { .. } | core::Held::SignOutSource { .. } => {
             unreachable!("link translates host-wide source commands")
         }

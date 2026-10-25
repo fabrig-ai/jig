@@ -207,16 +207,7 @@ pub(crate) fn notice(domain: &mut Domain, env: &Env<Limits>, number: u64, word: 
     let Some(subscription_number) = hint_of(&word.kind) else { return };
     let subscription = match find(task, subscription_number) {
         Some(subscription) => subscription,
-        None => {
-            if subscription_number != 0
-                || task.tracked.is_none()
-                || word.kind != (MessageKind::News { subscription: 0, class: NewsClass::Kept })
-                || word.words.len() > usize::try_from(env.limits.message_bytes).expect("u32 fits usize")
-            {
-                return;
-            }
-            Subscription { number: 0, kind: SubscriptionKind::Topic { connector: 0, topic: 0 } }
-        }
+        None => return,
     };
     let matching = match word.kind {
         MessageKind::Notice { target, .. } => match subscription.kind {
@@ -359,4 +350,64 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>) {
             arm(domain, env, subscription);
         }
     }
+}
+
+/// Admission result for durable projection failure news (domain/tasks.md, 8.2).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ProjectionNewsResult {
+    Delivered,
+    Full,
+    Missing,
+    Invalid,
+}
+
+impl Domain {
+    /// The same live destination and credit checks used by `projection_news`.
+    #[must_use]
+    pub fn projection_news_room(&self, limits: &Limits, task: u64, bytes: u32) -> bool {
+        let Some(row) = record(self, task) else { return false };
+        if !self.ready() || row.activity == u64::MAX || bytes == 0 || bytes > limits.message_bytes {
+            return false;
+        }
+        match row.phase {
+            Phase::Ended(_) => return false,
+            Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } => {}
+        }
+        crate::inbox::projection_room(self, limits, task, bytes)
+    }
+}
+
+/// Admit and publish quiet core news in the caller's decision, without a wake.
+pub fn projection_news(
+    domain: &mut Domain,
+    env: &Env<Limits>,
+    task: u64,
+    word: Word,
+    out: &mut Queue<Request>,
+) -> ProjectionNewsResult {
+    let Some(row) = record(domain, task) else { return ProjectionNewsResult::Missing };
+    if word.kind != (MessageKind::News { subscription: 0, class: NewsClass::Kept })
+        || word.from != crate::Party::Task(task)
+        || word.number == 0
+        || word.number <= row.last_message
+        || word.words.is_empty()
+        || word.words.len() > usize::try_from(env.limits.message_bytes).expect("u32 fits usize")
+    {
+        return ProjectionNewsResult::Invalid;
+    }
+    let Ok(bytes) = u32::try_from(word.words.len()) else { return ProjectionNewsResult::Invalid };
+    if !domain.projection_news_room(&env.limits, task, bytes) {
+        return ProjectionNewsResult::Full;
+    }
+    let admission =
+        if row.tracked.is_some() { crate::inbox::Admission::Merged } else { crate::inbox::Admission::Refusable };
+    let Some(prepared) = crate::inbox::prepare(domain, &env.limits, task, word, admission) else {
+        return ProjectionNewsResult::Full;
+    };
+    let row = task_mut(domain, task).expect("admitted live projection destination");
+    row.record.last_message = prepared.word.number;
+    row.record.inbox = prepared.inbox;
+    crate::activity::message(&mut row.record, &prepared.activity_word, env.limits.inbox_messages, out);
+    publish(domain, env, task, out);
+    ProjectionNewsResult::Delivered
 }

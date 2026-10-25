@@ -101,10 +101,13 @@ record MilestoneRevision { task: u64 revision: u64 }
 enum MilestoneId { lifecycle: MilestoneLifecycle, revision: MilestoneRevision }
 record ProjectionMilestone { identity: MilestoneId phase: option PhaseBytes change: option ChangeBytes words: bytes 65536 }
 record Connector { value: u16 }
-record ProjectionGoalRow { goal: ProjectionGoal pending: list 1024 Connector changed: bool fed_at: option u64 }
+record ProjectionGoalRow { goal: ProjectionGoal pending: list 1024 Connector changed: bool fed_at: option u64 closing_at: option u64 }
 record ProjectionTaskRow { goal: u64 task: ProjectionTask }
 record ProjectionMilestoneRow { goal: u64 milestone: ProjectionMilestone }
-enum ProjectionRecord { goal: ProjectionGoalRow, task: ProjectionTaskRow, milestone: ProjectionMilestoneRow }
+record ProjectionFailureSource { source: u64 at: u64 }
+enum ProjectionFailureState { armed, pending: ProjectionFailureSource, reported: ProjectionFailureSource }
+record ProjectionFailure { goal: u64 connector: u16 after: u64 state: ProjectionFailureState }
+enum ProjectionRecord { goal: ProjectionGoalRow, task: ProjectionTaskRow, milestone: ProjectionMilestoneRow, failure: ProjectionFailure }
 record TerminalRecord { task: u64 attempt: u64 cumulative: u64 end: EndBytes }
 record TurnProof { turn: u32 cumulative: u64 read: option u64 }
 record Window { attempt: u64 turn: u32 closed: bool }

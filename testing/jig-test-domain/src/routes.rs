@@ -77,6 +77,7 @@ pub(super) fn route_core(
                 }
                 other @ (core::Held::ReadLoad { .. }
                 | core::Held::Read { .. }
+                | core::Held::ProjectionRecovery { .. }
                 | core::Held::Delivery { .. }
                 | core::Held::WatchEnded { .. }
                 | core::Held::Relay { .. }
@@ -284,6 +285,19 @@ fn route_ask(
                 }
             }
         }
+        core::Ask::ProjectionBegun { owner, source } => {
+            if let Some(source) = source {
+                let goal = domain.effects.get(&owner).expect("projection payload").goal.expect("projection goal");
+                work.push(Work::Core(core::Event::EffectStart {
+                    owner,
+                    connector: number,
+                    origin: core::EffectOrigin::Projection { goal, source, entry: None },
+                }));
+            } else {
+                drop(domain.effects.remove(&owner));
+            }
+        }
+        core::Ask::CommitProjectionRecovery { .. } => {}
         core::Ask::ProjectGoal { feed } => hold(decision, Delivery::Projection { connector: number, feed }),
         core::Ask::EndTopic { task, .. } => crate::topics::sync(domain, number, task, work),
         core::Ask::SubscriptionDone { request, key, subscription } => {
@@ -749,6 +763,22 @@ pub(super) fn route_connector(
                     core::connector::Event::Outbox { connector: number, entry, task: owner.task, outcome }
                 };
                 work.push(Work::Core(core::Event::EffectConnector(event)));
+                if owner.projection
+                    && match outcome {
+                        core::connector::OutboxOutcome::Failed
+                        | core::connector::OutboxOutcome::Held { .. }
+                        | core::connector::OutboxOutcome::Withdrawn => true,
+                        core::connector::OutboxOutcome::Made
+                        | core::connector::OutboxOutcome::NotMade
+                        | core::connector::OutboxOutcome::Uncertain => false,
+                    }
+                {
+                    work.push(Work::Core(core::Event::ProjectionFailed {
+                        goal: owner.task,
+                        connector: number,
+                        source: entry,
+                    }));
+                }
             }
             connector::Request::Slots { pool, slots } => {
                 let name = tasks::Name { connector: number, path: name(pool).segments };
@@ -779,7 +809,7 @@ fn route_effect_ask(domain: &mut Domain, number: u16, ask: core::connector::Ask,
         core::connector::Ask::ResolveUncertain { entry, again } => connector::Event::Resolve { entry, repeat: again },
         core::connector::Ask::Describe { owner } => connector::Event::Describe {
             token: owner,
-            effect: domain.effects.remove(&owner).expect("connector-owned decoded effect"),
+            effect: domain.effects.remove(&owner).expect("connector-owned decoded effect").effect,
         },
         core::connector::Ask::DescribeProposal { owner, proposal } => {
             connector::Event::DescribeProposal { token: owner, number: proposal }

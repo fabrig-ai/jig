@@ -78,7 +78,7 @@ pub(crate) fn prepare_staged(
             }
             if (word.kind == MessageKind::Question
                 && unanswered >= usize::try_from(limits.inbox_messages).expect("u32 fits usize"))
-                || !room_staged(domain, staged, limits, number, 1, word.words.len())
+                || !room_staged(domain, staged, limits, number, 1, word.words.len(), false)
             {
                 return None;
             }
@@ -141,9 +141,23 @@ pub(crate) fn prepare_staged(
 /// Account for messages already waiting and the result credit reserved for
 /// every live direct delegate (domain/tasks.md, section 8.2).
 pub(crate) fn room(domain: &Domain, limits: &Limits, task: u64, count: u32, bytes: usize) -> bool {
-    room_staged(domain, &crate::compound::Staged::new(0), limits, task, count, bytes)
+    room_staged(domain, &crate::compound::Staged::new(0), limits, task, count, bytes, false)
 }
 
+pub(crate) fn projection_room(domain: &Domain, limits: &Limits, task: u64, bytes: u32) -> bool {
+    let Some(row) = record(domain, task) else { return false };
+    room_staged(
+        domain,
+        &crate::compound::Staged::new(0),
+        limits,
+        task,
+        1,
+        usize::try_from(bytes).expect("u32 fits usize"),
+        row.tracked.is_some(),
+    )
+}
+
+#[expect(clippy::too_many_arguments, reason = "the shared credit calculation admits the reserved core hint")]
 fn room_staged(
     domain: &Domain,
     staged: &crate::compound::Staged,
@@ -151,6 +165,7 @@ fn room_staged(
     task: u64,
     count: u32,
     bytes: usize,
+    projection: bool,
 ) -> bool {
     let Some(record) = staged.record(domain, task) else {
         return false;
@@ -169,10 +184,33 @@ fn room_staged(
     let Some(reserved) = delegates.checked_add(stall_credits) else { return false };
     let Some(reserved) = reserved.checked_add(record.questions.len()) else { return false };
     let Some(reserved) = reserved.checked_add(usize::from(record.proposal.is_some())) else { return false };
-    let Some((subscription_count, subscription_bytes)) = crate::subscriptions::credit(&record, limits) else {
+    let Some((mut subscription_count, mut subscription_bytes)) = crate::subscriptions::credit(&record, limits) else {
         return false;
     };
-    let Some(total_count) = record.inbox.len().checked_add(reserved) else {
+    let mut core_count = 0_usize;
+    let mut core_bytes = 0_usize;
+    if projection {
+        for word in record.inbox {
+            if merge_key(&word.kind) == Some((1, 0)) {
+                let Some(next) = core_count.checked_add(1) else { return false };
+                core_count = next;
+                let Some(bytes) = word.payload_bytes() else { return false };
+                let Some(next) = core_bytes.checked_add(bytes) else { return false };
+                core_bytes = next;
+            }
+        }
+        if core_count == 0 {
+            let Some(next) = subscription_count.checked_sub(1) else { return false };
+            subscription_count = next;
+            let Some(next) =
+                subscription_bytes.checked_sub(usize::try_from(limits.message_bytes).expect("u32 fits usize"))
+            else {
+                return false;
+            };
+            subscription_bytes = next;
+        }
+    }
+    let Some(total_count) = record.inbox.len().saturating_sub(core_count).checked_add(reserved) else {
         return false;
     };
     // Amendment, grace and Met each have a separately priced slot. A notice
@@ -223,7 +261,11 @@ fn room_staged(
     else {
         return false;
     };
-    let total_bytes = total_bytes.checked_sub(extra_bytes).expect("separate slots included");
+    let total_bytes = total_bytes
+        .checked_sub(extra_bytes)
+        .expect("separate slots included")
+        .checked_sub(core_bytes)
+        .expect("core hint counted");
     let Some(total_bytes) = total_bytes.checked_add(result_bytes) else { return false };
     let Some(total_bytes) = total_bytes.checked_add(answer_bytes) else {
         return false;

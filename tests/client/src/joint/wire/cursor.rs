@@ -669,6 +669,11 @@ fn take_core_key(r: &mut Reader<'_>) -> Option<CoreKey> {
 
 fn put_projection_key(w: &mut Writer, value: &ProjectionKey) -> Option<()> {
     match value {
+        ProjectionKey::Failure { goal, connector } => {
+            w.byte(4)?;
+            w.u64(*goal)?;
+            w.u16(*connector)?;
+        }
         ProjectionKey::Goal(value) => {
             w.byte(0)?;
             w.u64(*value)?;
@@ -699,6 +704,7 @@ fn take_projection_key(r: &mut Reader<'_>) -> Option<ProjectionKey> {
         1 => ProjectionKey::Task { goal: r.u64()?, task: r.u64()? },
         2 => ProjectionKey::Lifecycle { goal: r.u64()?, task: r.u64()?, position: r.u64()? },
         3 => ProjectionKey::Revision { goal: r.u64()?, task: r.u64()?, revision: r.u64()? },
+        4 => ProjectionKey::Failure { goal: r.u64()?, connector: r.u16()? },
         _ => return None,
     })
 }

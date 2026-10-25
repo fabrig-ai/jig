@@ -57,6 +57,11 @@ pub(super) fn write(writer: &mut KeyWriter, key: &CoreKey) {
 }
 fn projection(writer: &mut KeyWriter, key: &ProjectionKey) {
     match key {
+        ProjectionKey::Failure { goal, connector } => {
+            writer.tag(4);
+            writer.u64(*goal);
+            writer.u64(u64::from(*connector));
+        }
         ProjectionKey::Goal(goal) => {
             writer.tag(0);
             writer.u64(*goal);
@@ -110,6 +115,7 @@ pub(super) fn read(reader: &mut KeyReader<'_>) -> Option<CoreKey> {
 fn read_projection(reader: &mut KeyReader<'_>) -> Option<ProjectionKey> {
     Some(match reader.tag()? {
         0 => ProjectionKey::Goal(reader.u64()?),
+        4 => ProjectionKey::Failure { goal: reader.u64()?, connector: u16::try_from(reader.u64()?).ok()? },
         1 => ProjectionKey::Task { goal: reader.u64()?, task: reader.u64()? },
         2 => ProjectionKey::Lifecycle { goal: reader.u64()?, task: reader.u64()?, position: reader.u64()? },
         3 => ProjectionKey::Revision { goal: reader.u64()?, task: reader.u64()?, revision: reader.u64()? },

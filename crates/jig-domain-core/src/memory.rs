@@ -323,6 +323,9 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     total = total.checked_add(List::<u64>::worst_case(limits.documents.chips)?)?;
     total = total
         .checked_add(u64::from(limits.views.watchers).checked_mul(List::<u64>::worst_case(limits.documents.chips)?)?)?;
+    total = total.checked_add(Map::<(u64, u16), crate::ProjectionFailure>::worst_case(
+        limits.tasks.tasks.checked_mul(limits.connectors)?,
+    )?)?;
     total = total.checked_add(Map::<u64, Box<crate::Projection>>::worst_case(limits.tasks.tasks)?)?;
     total = total.checked_add(bytes(
         limits.tasks.tasks.checked_mul(limits.connectors.checked_add(2)?)?,

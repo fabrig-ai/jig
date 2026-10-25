@@ -59,7 +59,9 @@ pub use policy::{
     authority_to_authority, authority_to_people, grants_to_authority, pattern_to_people, requirement_to_authority,
     snapshot as policy_snapshot,
 };
+mod projection_failures;
 mod projections;
+pub use projection_failures::{ProjectionFailure, ProjectionFailureSource, ProjectionFailureState, ProjectionRecovery};
 pub use projections::{
     MilestoneId, Projection, ProjectionFeed, ProjectionGoal, ProjectionKey, ProjectionMilestone, ProjectionRecord,
     ProjectionTask, finish_decision, projection_bytes, projection_record_bytes,
@@ -277,6 +279,7 @@ pub type Delegating = (CallKey, Box<[tasks::Stub]>, Option<people::Given>);
 pub struct Core {
     room_max: skein_lib::JournalRoom,
     run_inbox: u32,
+    projection_task_limits: tasks::Limits,
     pub(crate) run_now: skein_lib::Time,
     pub(crate) run_wall: Wall,
     /// Last reported store map bytes (protocol/store.md, 11.2).
@@ -376,6 +379,8 @@ pub struct Core {
     /// Connectors whose outboxes must finish before a task closes.
     pub(crate) closing_connectors: Map<(u64, u16), ()>,
     pub(crate) projections: Map<u64, Box<Projection>>,
+    pub(crate) projection_failures: Map<(u64, u16), ProjectionFailure>,
+    pub(crate) projection_news_at: Option<u64>,
     /// Connector payloads awaiting the task hub's proposal admission.
     pub(crate) proposing_effects: Map<Token, (u16, Token)>,
     pub(crate) procedure_proposals: Map<Token, effects::ProcedureProposal>,
@@ -627,6 +632,7 @@ impl Core {
         Ok(Core {
             room_max,
             run_inbox: limits.tasks.run_inbox,
+            projection_task_limits: limits.tasks,
             fill: 0,
             workers_in_process: config.workers_in_process,
             stopping: false,
@@ -706,6 +712,10 @@ impl Core {
                 limits.tasks.tasks.checked_mul(limits.connectors).expect("bounded closing connectors"),
             ),
             projections: Map::with_capacity(limits.tasks.tasks),
+            projection_failures: Map::with_capacity(
+                limits.tasks.tasks.checked_mul(limits.connectors).expect("validated projection pairs"),
+            ),
+            projection_news_at: None,
             proposing_effects: Map::with_capacity(limits.call_records),
             procedure_proposals: Map::with_capacity(limits.tasks.tasks),
             note_routes: Map::with_capacity(2),
@@ -798,6 +808,7 @@ impl Core {
             || (self.draining == Some(true) && self.view_subjects.is_empty())
             || !self.changed_views.is_empty()
             || projections::owed(self)
+            || projection_failures::owed(self)
             || routing::watch_marks::retention_owed(self)
             || routing::watch_marks::endings_owed(self)
     }

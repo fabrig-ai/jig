@@ -94,6 +94,7 @@ impl ClientPeer {
                 | core::Held::Applied { .. }
                 | core::Held::ReadLoad { .. }
                 | core::Held::MakeEffect { .. }
+                | core::Held::ProjectionRecovery { .. }
                 | core::Held::SettledCall { .. }
                 | core::Held::Assign { .. }
                 | core::Held::Grant { .. }

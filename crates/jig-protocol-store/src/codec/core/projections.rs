@@ -109,7 +109,16 @@ pub(super) fn encode_projection_record(
     limits: &Limits,
 ) -> Result<wire::ProjectionRecord, wire::Problem> {
     Ok(match source {
-        domain::ProjectionRecord::Goal { goal, pending, changed, fed_at } => {
+        domain::ProjectionRecord::Failure(row) => wire::ProjectionRecord::Failure(wire::ProjectionFailure::new(
+            &limits.core,
+            wire::ProjectionFailureParts {
+                goal: row.goal,
+                connector: row.connector,
+                after: row.after,
+                state: encode_failure_state(row.state, limits)?,
+            },
+        )?),
+        domain::ProjectionRecord::Goal { goal, pending, changed, fed_at, closing_at } => {
             wire::ProjectionRecord::Goal(wire::ProjectionGoalRow::new(
                 &limits.core,
                 wire::ProjectionGoalRowParts {
@@ -117,6 +126,7 @@ pub(super) fn encode_projection_record(
                     pending: encode_pending(pending, limits)?,
                     changed: *changed,
                     fed_at: *fed_at,
+                    closing_at: *closing_at,
                 },
             )?)
         }
@@ -140,13 +150,23 @@ pub(super) fn decode_projection_record(
     limits: &Limits,
 ) -> Result<domain::ProjectionRecord, wire::Problem> {
     Ok(match source {
+        wire::ProjectionRecord::Failure(row) => {
+            let wire::ProjectionFailureParts { goal, connector, after, state } = row.into_parts();
+            domain::ProjectionRecord::Failure(domain::ProjectionFailure {
+                goal,
+                connector,
+                after,
+                state: decode_failure_state(state),
+            })
+        }
         wire::ProjectionRecord::Goal(value) => {
-            let wire::ProjectionGoalRowParts { goal, pending, changed, fed_at } = value.into_parts();
+            let wire::ProjectionGoalRowParts { goal, pending, changed, fed_at, closing_at } = value.into_parts();
             domain::ProjectionRecord::Goal {
                 goal: decode_projection_goal(goal, limits)?,
                 pending: decode_pending(pending),
                 changed,
                 fed_at,
+                closing_at,
             }
         }
         wire::ProjectionRecord::Task(value) => {
@@ -241,5 +261,45 @@ fn decode_party(value: wire::Party) -> jig_domain_tasks::Party {
         wire::Party::Task(value) => jig_domain_tasks::Party::Task(value.into_parts().value),
         wire::Party::Person(value) => jig_domain_tasks::Party::Person(value.into_parts().value),
         wire::Party::Deployment(value) => jig_domain_tasks::Party::Deployment { project: value.into_parts().project },
+    }
+}
+
+fn encode_failure_state(
+    state: domain::ProjectionFailureState,
+    limits: &Limits,
+) -> Result<wire::ProjectionFailureState, wire::Problem> {
+    Ok(match state {
+        domain::ProjectionFailureState::Armed => wire::ProjectionFailureState::Armed,
+        domain::ProjectionFailureState::Pending(source) => {
+            wire::ProjectionFailureState::Pending(wire::ProjectionFailureSource::new(
+                &limits.core,
+                wire::ProjectionFailureSourceParts { source: source.source, at: source.at.as_nanos() },
+            )?)
+        }
+        domain::ProjectionFailureState::Reported(source) => {
+            wire::ProjectionFailureState::Reported(wire::ProjectionFailureSource::new(
+                &limits.core,
+                wire::ProjectionFailureSourceParts { source: source.source, at: source.at.as_nanos() },
+            )?)
+        }
+    })
+}
+fn decode_failure_state(state: wire::ProjectionFailureState) -> domain::ProjectionFailureState {
+    match state {
+        wire::ProjectionFailureState::Armed => domain::ProjectionFailureState::Armed,
+        wire::ProjectionFailureState::Pending(source) => {
+            let row = source.into_parts();
+            domain::ProjectionFailureState::Pending(domain::ProjectionFailureSource {
+                source: row.source,
+                at: skein_lib::Wall::from_nanos(row.at),
+            })
+        }
+        wire::ProjectionFailureState::Reported(source) => {
+            let row = source.into_parts();
+            domain::ProjectionFailureState::Reported(domain::ProjectionFailureSource {
+                source: row.source,
+                at: skein_lib::Wall::from_nanos(row.at),
+            })
+        }
     }
 }

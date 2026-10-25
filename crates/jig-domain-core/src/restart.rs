@@ -198,7 +198,10 @@ impl Core {
         }
         let next = match done {
             RestartStep::LoadCore => {
-                if !self.restoring_proofs.is_empty() || !self.settings_proposals_consistent() {
+                if !self.restoring_proofs.is_empty()
+                    || !self.settings_proposals_consistent()
+                    || !crate::projection_failures::consistent(self)
+                {
                     return self.restart_refuse();
                 }
                 self.counters.finish_restore();
