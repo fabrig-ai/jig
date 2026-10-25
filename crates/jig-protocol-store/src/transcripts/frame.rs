@@ -5,6 +5,8 @@ use alloc::boxed::Box;
 use jig_domain_core as core;
 pub(crate) use patch::{Decode, Patch, Progress};
 use skein_lib::{Reader, Writer};
+// Leading length, CRC-32C and trailing length, each four bytes (store.md 8.1).
+pub(crate) const WRAPPER_BYTES: u32 = 12;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Unread {
     Short,
@@ -15,7 +17,7 @@ pub enum Unread {
 #[must_use]
 pub fn encode(turn: &core::TurnRecord, limits: &codec::Limits) -> Option<Box<[u8]>> {
     let body = codec::core::turn(turn, &codec::core_limits(limits)).ok()?;
-    let length = u32::try_from(body.len()).ok()?.checked_add(12)?;
+    let length = u32::try_from(body.len()).ok()?.checked_add(WRAPPER_BYTES)?;
     let mut writer = Writer::new(usize::try_from(length).ok()?);
     writer.put(&length.to_be_bytes()).ok()?;
     writer.put(&body).ok()?;
@@ -37,7 +39,7 @@ pub(crate) fn body(bytes: &[u8]) -> Result<&[u8], Unread> {
     }
     let mut reader = Reader::new(bytes);
     let length = reader.u32().ok_or(Unread::Short)?;
-    let body_length = length.checked_sub(12).ok_or(Unread::Lengths)?;
+    let body_length = length.checked_sub(WRAPPER_BYTES).ok_or(Unread::Lengths)?;
     let body = reader.bytes(body_length).ok_or(Unread::Short)?;
     let checksum = reader.u32().ok_or(Unread::Short)?;
     let trailing = reader.u32().ok_or(Unread::Short)?;

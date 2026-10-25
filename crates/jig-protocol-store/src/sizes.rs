@@ -2,6 +2,20 @@
 use crate::{accounts_v2, codec, component_v3, core_v6, notes_v1, people_v13, tasks_v9};
 use jig_domain_core as core;
 
+/// Largest current full turn frame for the admitted transcript byte bound,
+/// including metadata and framing (protocol/store.md, 8.1 and 8.6).
+/// Reject an out-of-codec bound or arithmetic overflow; never clamp it.
+#[must_use]
+pub fn frame(domain: &core::Limits, transcript_bytes: u32) -> Option<u32> {
+    let mut limits = codec::limits(domain)?.core;
+    if transcript_bytes > limits.turn_record_transcript {
+        return None;
+    }
+    limits.turn_record_transcript = transcript_bytes;
+    let body = u32::try_from(core_v6::TurnRecord::worst_case_bytes(&limits)?).ok()?;
+    body.checked_add(crate::transcripts::frame::WRAPPER_BYTES)
+}
+
 /// Largest whole manifest: 88 fixed bytes, plus a length and two counts
 /// beside each family's name (protocol/store.md, 2, 10.3 and 13).
 pub const MANIFEST_BYTES: u32 = {

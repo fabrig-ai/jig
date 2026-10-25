@@ -254,7 +254,7 @@ the application's part with the application's codecs.
 
 | Down, to the component | Up, from it |
 |---|---|
-| **commit** n: jig's writes, typed (the core's saves and erases of its records and its children's, and a task's transcript dropped whole); the application's writes, each a key's bytes and a value's bytes, or an erase | **committed** n, with the store's fill (11.2); **failed** n |
+| **commit** n: jig's writes, typed (the core's saves and erases of its records and its children's, and a task's transcript dropped whole); the application's writes, each a key's bytes and a value's bytes, or an erase | **committed** n, with the store's fill (11.2); **failed** n; or **FrameTooLarge** n, with task, full encoded bytes and page limit (section 6) |
 | **restore** a restart step's range: jig's (the core's live families, 7.2), or the application's, as byte intervals under its tag | jig's records, typed, then done; the application's rows as bytes, then done |
 | **load** a page of a child's range: jig's, or the application's intervals | the page's rows, typed or as bytes, and a cursor if more remain |
 | **read** a party's read: its scope, position, direction, rows and bytes (`../domain/engine.md`, 5.3) | the page, each row with its joins, and its cursor; or busy, or gone |
@@ -575,6 +575,16 @@ schema remains v4. These are the versions the format row requires.
 
 ### 5.4 Sizes
 
+`jig_protocol_store::sizes::frame(domain, transcript_bytes) -> Option<u32>`
+returns the maximum complete current TurnRecord frame for an admitted
+ordinary transcript byte bound. It copies the current codec limits,
+changes only that field's bound, uses the generated current record sizing
+and adds the actual frame wrapper shared with the encoder. A bound past
+the existing codec ceiling or an arithmetic overflow is refused, never
+clamped. Applications deriving page room combine it with the checked
+map key-plus-value bound; row, queue, read-slot and decoder ceilings are
+separate and need not grow with this admission counter.
+
 The component computes, from the domain's limits and the application's,
 the largest encoded key, value and commit, and refuses to start when
 skein-kv's limits are smaller (its key, value, operations and commit;
@@ -630,6 +640,20 @@ refused as too large.
   refuses (too large, the map full) would be a decision already made and
   not kept, so it stops the engine as a failure does. Section 11 keeps
   the map from filling.
+- **An oversized transcript frame refuses the whole commit before data
+  IO.** Each actual encoded current frame, including all metadata, payload
+  and its wrapper, must fit the store's page byte bound `P`; equality is
+  admitted. All frames and map operations are prepared before any of that
+  commit's data is written, so a later oversized turn leaves none of the
+  refused batch on disk. Its one terminal is
+  `FrameTooLarge { number, task, bytes, limit }`, where `bytes` is the full
+  encoded frame length and `limit` is `P`. There is no additional `Failed`
+  for that number. This terminal comes first, followed by the existing
+  failures of earlier pending commits, and the component stops as for an
+  ordinary commit failure. Previously durable data remains recoverable.
+  The event is strictly in-process: no journal record, stored family or
+  wire message carries it. An application feeds the rejected number to its
+  existing uncommitted-commit policy and may report the named cause.
 - **A commit's operations are bounded,** as skein-kv applies each commit
   in one step (skein's `kv.md`, section 7). Where removing a record would
   erase an unbounded number of rows (a transcript's attempts' places,
@@ -885,7 +909,11 @@ first by time is keyed reversed. skein-kv's load runs forwards only
 The core commits a turn with its spend, its run proof and the messages it
 read, in one decision, and acknowledges the host once that commit is
 durable (`../domain/engine.md`, 7.2). For a commit with turns, the
-component:
+component takes the following steps.
+
+Before step 1, it encodes and checks every frame against `P` as described
+in section 6, retaining each accepted encoding once for the pending batch.
+No frame from a refused commit is placed on the file IO queue.
 
 1. writes each turn's frame at its file's end, opening the file
    (`OpenWrite`), or creating it where it is missing. The end is the

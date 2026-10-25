@@ -31,9 +31,19 @@ pub(crate) fn begin(
         transcripts::failed(store, Some(number), above);
         return;
     }
-    let Some(pending) = commits::operations(store, number, writes, due) else {
-        transcripts::failed(store, Some(number), above);
-        return;
+    let pending = match commits::operations(store, number, writes, due) {
+        Ok(pending) => pending,
+        Err(commits::Refusal::Failed) => {
+            transcripts::failed(store, Some(number), above);
+            return;
+        }
+        Err(commits::Refusal::FrameTooLarge { task, bytes, limit }) => {
+            // Match ordinary failure ordering: this terminal first, then all
+            // earlier pending commits. Never also fail this number generically.
+            above.push(Event::FrameTooLarge { number, task, bytes, limit });
+            transcripts::failed(store, None, above);
+            return;
+        }
     };
     store.phase = Phase::Ready { next: number.checked_add(1).unwrap_or(number), format_due: false };
     if store.transcripts.current.is_none() {

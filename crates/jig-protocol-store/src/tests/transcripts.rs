@@ -232,6 +232,144 @@ fn the_transcript_queue_refuses_before_a_later_commit_is_submitted() {
     assert_eq!(store.phase, Phase::Stopped);
 }
 
+#[test]
+fn a_frame_exactly_the_page_bound_commits_and_reads_back() {
+    let (mut store, _) = fixtures::opened_with_transcripts();
+    let turn = fixtures::turn(LIVE, 1, 1, b"one");
+    let encoded = crate::transcripts::frame::encode(&turn, &store.codec).expect("tiny frame");
+    store.limits.store.page.bytes = u32::try_from(encoded.len()).expect("bounded tiny frame fixture");
+    let (events, below) = submit(&mut store, 2, core::slice::from_ref(&turn));
+    assert!(events.is_empty());
+    let disk = fixtures::written(&mut store, below, core::slice::from_ref(&turn));
+    assert_eq!(disk, encoded);
+    assert_eq!(store.stores.store.last(), 2);
+    let (turns, next) =
+        read_turns(&mut store, &disk, crate::TranscriptRead::Page { task: LIVE, backwards: false, after: None }, 1);
+    assert_eq!(turns.as_ref(), &[turn]);
+    assert_eq!(next, None);
+}
+
+#[test]
+fn a_frame_one_past_the_page_bound_refuses_before_any_data_io() {
+    let (mut store, _) = fixtures::opened_with_transcripts();
+    let turn = fixtures::turn(LIVE, 1, 1, b"one");
+    let bytes = u32::try_from(
+        crate::transcripts::frame::encode(&turn, &store.codec).expect("bounded tiny frame fixture").len(),
+    )
+    .expect("bounded tiny frame fixture");
+    let limit = bytes.checked_sub(1).expect("bounded tiny frame fixture");
+    store.limits.store.page.bytes = limit;
+    let (events, below) = submit(&mut store, 2, &[turn]);
+    let [Event::FrameTooLarge { number: 2, task: LIVE, bytes: found, limit: bound }] = &*events else {
+        panic!("one named refusal, no generic failure: {events:?}");
+    };
+    assert_eq!((*found, *bound), (bytes, limit));
+    assert!(below.store.is_empty() && below.secrets.is_empty() && below.transcripts.is_empty());
+    assert_eq!(store.stores.store.last(), 1);
+    assert_eq!(store.phase, Phase::Stopped);
+    assert!(submit(&mut store, 2, &[]).0.is_empty());
+}
+
+#[test]
+fn an_oversized_later_turn_refuses_the_whole_batch_and_prior_data_survives_crash() {
+    use super::fixtures::disk::Disk;
+    let mut disk = Disk::new(&[]);
+    let mut store = disk.store();
+    let opened = disk.open(&mut store);
+    assert!(matches!(&*opened, [Event::Opened { last: 0, .. }]));
+    let prior = fixtures::turn(LIVE, 1, 1, b"old");
+    let committed = disk.request(
+        &mut store,
+        fixtures::commit(
+            1,
+            Box::new([
+                fixtures::header(1),
+                fixtures::save(fixtures::live_task(LIVE)),
+                fixtures::save(Record::Core(CoreRecord::Turn(prior.clone()))),
+            ]),
+        ),
+    );
+    assert!(matches!(&*committed, [Event::Committed { number: 1, .. }]));
+    let first = fixtures::turn(LIVE, 1, 2, b"new");
+    let oversized = fixtures::turn(23, 1, 1, b"long");
+    let limit = u32::try_from(
+        crate::transcripts::frame::encode(&first, &store.codec).expect("bounded tiny frame fixture").len(),
+    )
+    .expect("bounded tiny frame fixture");
+    let bytes = u32::try_from(
+        crate::transcripts::frame::encode(&oversized, &store.codec).expect("bounded tiny frame fixture").len(),
+    )
+    .expect("bounded tiny frame fixture");
+    assert_eq!(bytes, limit.checked_add(1).expect("bounded tiny frame fixture"));
+    store.limits.store.page.bytes = limit;
+    let before = disk.requests().len();
+    let refused = disk.request(
+        &mut store,
+        fixtures::commit(
+            2,
+            Box::new([
+                fixtures::header(2),
+                fixtures::save(Record::Core(CoreRecord::Turn(first))),
+                fixtures::save(Record::Core(CoreRecord::Turn(oversized))),
+                crate::Write::Put { key: Box::new([41]), value: Box::new([42]) },
+            ]),
+        ),
+    );
+    let [Event::FrameTooLarge { number: 2, task: 23, bytes: found, limit: bound }] = &*refused else {
+        panic!("later turn refuses complete batch: {refused:?}");
+    };
+    assert_eq!((*found, *bound), (bytes, limit));
+    assert_eq!(disk.requests().len(), before, "no batch data IO, including its first frame or map rows");
+    assert_eq!(store.stores.store.last(), 1);
+    disk.crash(17);
+    let mut reopened = disk.store();
+    let opened = disk.open(&mut reopened);
+    assert!(matches!(&*opened, [Event::Opened { last: 1, .. }]));
+    let read = disk.request(
+        &mut reopened,
+        crate::Request::Transcript {
+            owner: Token::new(801),
+            read: crate::TranscriptRead::Page { task: LIVE, backwards: false, after: None },
+            rows: 2,
+            bytes: 4096,
+        },
+    );
+    let (_, turns, next) = page(&read);
+    assert_eq!(turns, &[prior]);
+    assert_eq!(next, None);
+    let row = disk.request(
+        &mut reopened,
+        crate::Request::Get { owner: Token::new(802), key: crate::Get::Application(Box::new([41])) },
+    );
+    assert!(matches!(&*row, [Event::Got { row: None, .. }]));
+}
+
+#[test]
+fn a_named_frame_refusal_precedes_failures_of_earlier_pending_commits() {
+    let (mut store, _) = writing();
+    assert!(submit(&mut store, 3, &[]).0.is_empty());
+    let turn = fixtures::turn(LIVE, 1, 2, b"long");
+    let bytes = u32::try_from(
+        crate::transcripts::frame::encode(&turn, &store.codec).expect("bounded tiny frame fixture").len(),
+    )
+    .expect("bounded tiny frame fixture");
+    let limit = bytes.checked_sub(1).expect("bounded tiny frame fixture");
+    store.limits.store.page.bytes = limit;
+    let (events, below) = submit(&mut store, 4, &[turn]);
+    let [
+        Event::FrameTooLarge { number: 4, task: LIVE, bytes: found, limit: bound },
+        Event::Failed { number: 2 },
+        Event::Failed { number: 3 },
+    ] = &*events
+    else {
+        panic!("named terminal then earlier pending failures: {events:?}")
+    };
+    assert_eq!((*found, *bound), (bytes, limit));
+    assert_eq!(store.phase, Phase::Stopped);
+    assert!(store.transcripts.current.is_none() && store.transcripts.queue.is_empty());
+    assert!(below.store.is_empty() && below.secrets.is_empty() && below.transcripts.is_empty());
+}
+
 fn readable(turns: &[TurnRecord]) -> (Store, Box<[u8]>) {
     let (mut store, _) = fixtures::opened_with_transcripts();
     let (_, below) = submit(&mut store, 2, turns);
