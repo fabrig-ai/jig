@@ -287,7 +287,8 @@ fn route_ask(
         }
         core::Ask::ProjectionBegun { owner, source } => {
             if let Some(source) = source {
-                let goal = domain.effects.get(&owner).expect("projection payload").goal.expect("projection goal");
+                let Some(goal) = domain.effects.get(&owner).and_then(|payload| payload.goal) else { return };
+
                 work.push(Work::Core(core::Event::EffectStart {
                     owner,
                     connector: number,

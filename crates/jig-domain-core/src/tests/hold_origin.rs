@@ -289,3 +289,70 @@ fn ordinary_writer_outcomes_still_hold_agents_and_wake_procedures() {
         assert_eq!(core.tasks.writer(&resources[0]).is_none(), outcome == OutboxOutcome::Failed);
     }
 }
+
+#[test]
+fn reported_projection_recovery_fences_stale_none_callbacks_and_releases_only_the_covered_writer() {
+    let ProjectionWriterFixture { mut core, limits, resources, entries } = projection_writers(true);
+    let mut goal = core.tasks.task(1).unwrap().clone();
+    goal.tracked = Some(1);
+    let mut saved = Queue::with_capacity(core.room_max.writes);
+    projections::save(&mut core, &limits, &goal, &mut saved);
+    assert!(projection_failures::restore(
+        &mut core,
+        ProjectionFailure {
+            goal: 1,
+            connector: 2,
+            after: 0,
+            state: ProjectionFailureState::Reported(ProjectionFailureSource { source: entries[0], at: Wall::EPOCH })
+        }
+    ));
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    let owner = Token::new(901);
+    drop(step(
+        &mut core,
+        &env,
+        Event::EffectStart {
+            owner,
+            connector: 2,
+            origin: EffectOrigin::Projection { goal: 1, source: entries[0], entry: None },
+        },
+    ));
+    assert_eq!(core.tasks.writer(&resources[0]).unwrap().writer, tasks::Writer::Effect { entry: entries[0] });
+    assert_eq!(core.tasks.writer(&resources[1]).unwrap().writer, tasks::Writer::Effect { entry: entries[1] });
+    let phase = core.tasks.task(1).unwrap().phase.clone();
+    let Requests::Out(mut recovered) =
+        step(&mut core, &env, Event::ProjectionRecover { goal: 1, connector: 2, owner: Token::new(902) });
+    let mut reset = false;
+    while let Some(request) = recovered.pop() {
+        if let Request::Ask { connector: 2, ask: Ask::CommitProjectionRecovery { goal: 1, after, .. } } = request {
+            assert_eq!(after, entries[1]);
+            reset = true;
+            // This is the reset's existing writer-only callback. The paired
+            // root world proves its writes share the actual fence commit.
+            drop(step(
+                &mut core,
+                &env,
+                Event::EffectConnector(connector::Event::ProjectionOutbox {
+                    connector: 2,
+                    entry: entries[0],
+                    outcome: connector::OutboxOutcome::NotMade,
+                }),
+            ));
+        }
+    }
+    assert!(reset);
+    assert!(core.tasks.writer(&resources[0]).is_none());
+    assert_eq!(core.tasks.writer(&resources[1]).unwrap().writer, tasks::Writer::Effect { entry: entries[1] });
+    assert_eq!(core.tasks.task(1).unwrap().phase, phase, "writer-only reset does not hold or wake its task");
+    drop(step(&mut core, &env, Event::EffectConnector(connector::Event::DescribeRefused { owner })));
+    assert_eq!(
+        *core.projection_failures.get(&(1, 2)).unwrap(),
+        ProjectionFailure { goal: 1, connector: 2, after: entries[1], state: ProjectionFailureState::Armed }
+    );
+    let fresh = begin_projection(&mut core, &limits, 1, 2, 903).unwrap();
+    assert!(fresh > entries[1]);
+    drop(step(&mut core, &env, Event::ProjectionFailed { goal: 1, connector: 2, source: fresh }));
+    assert!(
+        matches!(core.projection_failures.get(&(1, 2)).unwrap().state, ProjectionFailureState::Pending(source) if source.source == fresh)
+    );
+}

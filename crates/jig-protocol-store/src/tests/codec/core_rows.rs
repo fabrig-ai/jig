@@ -181,3 +181,32 @@ fn outstanding_offers_use_the_run_inbox_bound_on_write_and_read() {
         skein_codec::Reason::Bound
     );
 }
+
+#[test]
+fn projection_failure_states_and_final_generations_round_trip() {
+    let source = core::ProjectionFailureSource { source: u64::MAX, at: skein_lib::Wall::from_nanos(u64::MAX) };
+    for state in [
+        core::ProjectionFailureState::Armed,
+        core::ProjectionFailureState::Pending(source),
+        core::ProjectionFailureState::Reported(source),
+    ] {
+        core_round_trip(core::CoreRecord::Projection(core::ProjectionRecord::Failure(core::ProjectionFailure {
+            goal: 11,
+            connector: u16::MAX,
+            after: u64::MAX - 1,
+            state,
+        })));
+    }
+    for generation in [None, Some(1), Some(u64::MAX)] {
+        let core::ProjectionRecord::Goal { goal, pending, changed, fed_at, .. } = fixtures::goal() else {
+            panic!("goal fixture")
+        };
+        core_round_trip(core::CoreRecord::Projection(core::ProjectionRecord::Goal {
+            goal,
+            pending,
+            changed,
+            fed_at,
+            closing_at: generation,
+        }));
+    }
+}
