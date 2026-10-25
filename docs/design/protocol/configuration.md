@@ -361,6 +361,11 @@ host's half reports it (`llm.md`, 5.5).
   components take, consistent with one another: a small one for one
   person's machine, a standard one for a team. A deployment names a
   profile and overrides any limit by its name.
+  Small's store page byte ceiling also admits applications deriving a
+  page floor from the largest shipped ordinary transcript's current full
+  frame. Its accounting-only ceiling leaves page rows, chunks, decoder
+  capacity, queues and read slots unchanged; the numeric ceiling and its
+  derivation live beside `STORE_KV` in the profile.
 - **Checked whole at startup.** The root's worst case (`../domain/root.md`,
   section 10), the components' and the journal's, summed, must fit the
   memory the configuration states; the terms of the workers' channel
