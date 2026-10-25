@@ -363,6 +363,13 @@ section 2): its outbox, procedures' states and parameters, what it made
 by key, its projections' states, and its own state. The application's
 root wraps both in its store vocabulary (root.md, section 6).
 
+The core owns projection failure receipts and source fences, separate
+from connector outboxes (connectors.md, 8.1), and final-feed generations
+and cohorts (connectors.md, 8.3). Live receipt delivery and its Reported
+mark are one decision; finishing owes none while stopping, before restart
+opens, without a fresh message number or without inbox room. Restart
+validates receipts against their restored headers and connector counters.
+
 **Times** the store keeps are wall times (`env.wall`), so a record means
 the same after a restart; a wait the core arms is a deadline on its
 monotonic clock (`env.now`), computed from them (programming-model.md,

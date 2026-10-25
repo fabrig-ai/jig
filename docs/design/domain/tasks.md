@@ -934,6 +934,14 @@ are entries of its own (section 9), which always wake it.
 
 ### 8.2 The inbox
 
+Projection failure news uses `projection_news` and its matching
+`projection_news_room` predicate (connectors.md, 8.2). Both check the same
+live destination, slot and byte admission. Tracked news reserves merged
+room; untracked news takes all ordinary refusal credits. A successful
+delivery is quiet Kept news and records Activity, Heard and the durable
+inbox together. Full or missing destinations change nothing. The emitted
+requests stay within the tasks child's declared maximum output.
+
 - **Durable.** A message is in the inbox once the commit that sent it
   is; it is taken once the commit of the run's turn, the procedure's
   step or the party's view that read it is. A run that dies without
