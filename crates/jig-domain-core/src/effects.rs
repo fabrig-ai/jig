@@ -148,12 +148,13 @@ pub(crate) fn start(core: &mut Core, env: &Env<Limits>, owner: Token, number: u1
     let mut out = Queue::with_capacity(5);
     match origin {
         origin @ EffectOrigin::Projection { .. } => {
-            if !origin_current(core, number, &origin)
-                || duplicate_source(core, &origin)
-                || core.effect_flights.len() == core.effect_flights.capacity()
-                || core.effect_flights.contains_key(&owner)
-            {
+            if !origin_current(core, number, &origin) || duplicate_source(core, &origin) {
                 drop_effect(&mut out, number, owner, authority::Answer::Refuse);
+                end(&mut out);
+                return Requests::Out(out);
+            }
+            if core.effect_flights.len() == core.effect_flights.capacity() || core.effect_flights.contains_key(&owner) {
+                drop_effect(&mut out, number, owner, authority::Answer::Wait);
                 end(&mut out);
                 return Requests::Out(out);
             }
@@ -425,7 +426,11 @@ pub(crate) fn connector(
 
 fn describe_busy(core: &mut Core, _env: &Env<Limits>, work: &mut Queue<Event>, out: &mut Queue<Request>, owner: Token) {
     if let Some(flight) = core.effect_flights.remove(&owner) {
-        drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+        let answer = match flight.origin {
+            EffectOrigin::Projection { .. } => authority::Answer::Wait,
+            _ => authority::Answer::Refuse,
+        };
+        drop_effect(out, flight.connector, owner, answer);
         if !origin_current(core, flight.connector, &flight.origin) {
             discard_origin(core, &flight.origin);
             return;

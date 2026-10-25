@@ -578,3 +578,124 @@ fn unresolved_projection_outcomes_keep_their_entry_across_restart_until_connecto
         jig_core_world::fixtures::finish_chat(&mut world, 0, b"projection recovered");
     }
 }
+
+fn failure_row(world: &World, goal: u64, connector: u16) -> core::ProjectionFailure {
+    let key =
+        root::Key::Core(core::Key::Core(core::CoreKey::Projection(core::ProjectionKey::Failure { goal, connector })));
+    let Some(root::Record::Core(core::Record::Core(core::CoreRecord::Projection(core::ProjectionRecord::Failure(
+        row,
+    ))))) = world.store.rows.get(&key)
+    else {
+        panic!("durable receipt")
+    };
+    *row
+}
+fn projection_source(world: &mut World, goal: u64, connector: u16, owner: u64) -> u64 {
+    world.send(root::Event::Core(core::Event::ProjectionBegin { goal, connector, owner: Token::new(owner) }));
+    let root::Record::Core(core::Record::Core(core::CoreRecord::Deployment(header))) =
+        &world.store.rows[&root::Key::Core(core::Key::Core(core::CoreKey::Deployment))]
+    else {
+        panic!("header")
+    };
+    header.connector_rows
+}
+fn projection_heard(world: &World, goal: u64) -> Vec<tasks::Word> {
+    world
+        .store
+        .rows
+        .values()
+        .filter_map(|record| match record {
+            root::Record::Core(core::Record::Tasks(tasks::Stored::Activity(line))) if line.task == goal => {
+                match &line.line {
+                    tasks::Line::Heard(word) if word.words.starts_with(b"Projection ") => Some(word.clone()),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn projection_publication_and_reported_receipt_are_atomic_across_both_commit_crash_cuts() {
+    use jig_core_world::effects::Cut;
+    for durable in [false, true] {
+        let mut world = World::new(991, false);
+        let goal = tracked_goal(&mut world);
+        let source = projection_source(&mut world, goal, 1, 9910);
+        let next = world.store.applied + 1;
+        let cut = if durable { Cut::Durable(next) } else { Cut::Submitted(next) };
+        world.cut = Some(cut);
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+        assert_eq!(world.reached_cut, Some(cut));
+        assert_eq!(projection_heard(&world, goal).len(), usize::from(durable));
+        assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)) == durable);
+        world.restart(991, false);
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+        assert_eq!(projection_heard(&world, goal).len(), 1, "replayed failure never duplicates the episode");
+        world.restart(991, false);
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+        assert_eq!(projection_heard(&world, goal).len(), 1, "restarting cannot rearm a reported receipt");
+    }
+}
+
+#[test]
+fn stopping_with_two_pending_projection_receipts_keeps_them_until_restart_opens() {
+    let mut world = World::new(992, false);
+    let goal = tracked_goal(&mut world);
+    let first = projection_source(&mut world, goal, 1, 9921);
+    let second = projection_source(&mut world, goal, 2, 9922);
+    world.hold_restart_reads = true;
+    world.restart(992, false);
+    assert!(!world.domain.ready());
+    for (connector, source) in [(1, first), (2, second)] {
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector, source }));
+        assert!(matches!(failure_row(&world, goal, connector).state, core::ProjectionFailureState::Pending(_)));
+    }
+    assert!(projection_heard(&world, goal).is_empty());
+    world.stop();
+    assert!(projection_heard(&world, goal).is_empty(), "stopping does not publish news");
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Pending(_)));
+    assert!(matches!(failure_row(&world, goal, 2).state, core::ProjectionFailureState::Pending(_)));
+    world.hold_restart_reads = false;
+    world.restart(992, false);
+    assert!(world.domain.ready());
+    let words = projection_heard(&world, goal);
+    assert_eq!(words.len(), 2);
+    assert!(words.iter().any(|word| word.words.as_ref() == b"Projection 1 failed"));
+    assert!(words.iter().any(|word| word.words.as_ref() == b"Projection 2 failed"));
+    world.restart(992, false);
+    assert_eq!(projection_heard(&world, goal).len(), 2);
+}
+
+#[test]
+fn reading_projection_news_then_restarting_does_not_rearm_the_episode() {
+    let mut world = World::new(991, false);
+    let goal = world.task();
+    let mut amendment = jig_core_world::fixtures::person_unchanged(b"track this active task");
+    amendment.tracked = Some(people::Tracking::Tracked { priority: 1 });
+    let revision = jig_core_world::fixtures::live_row(&world, goal).revisions.spec;
+    world.send(root::Event::Core(core::Event::People(people::Event::Ask {
+        models: Box::new([]),
+        reply_to: ReplyTo::new(Token::new(9911)),
+        sign_in: world.sign_in.unwrap(),
+        key: [41; 16],
+        ask: people::Ask::Amend { project: 1, task: goal, revision, release: None, amendment },
+    })));
+    assert!(jig_core_world::fixtures::live_row(&world, goal).tracked.is_some());
+    let source = projection_source(&mut world, goal, 1, 9940);
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    world.end(tasks::End::Parked, 0);
+    world.say(42);
+    let read = jig_core_world::fixtures::live_row(&world, goal).last_message;
+    world.turn(1, 1, Some(read), b"read failure");
+    assert!(
+        !jig_core_world::fixtures::live_row(&world, goal)
+            .inbox
+            .iter()
+            .any(|word| word.words.starts_with(b"Projection "))
+    );
+    world.restart(991, false);
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    assert_eq!(projection_heard(&world, goal).len(), 1);
+}

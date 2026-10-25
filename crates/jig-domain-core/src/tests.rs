@@ -3979,3 +3979,33 @@ fn projection_restore_rejects_invalid_fences_sources_and_final_owners() {
         "a live tracked owner cannot restore a final header"
     );
 }
+
+#[test]
+fn projection_describe_busy_preserves_the_episode_and_returns_wait_for_normal_retry() {
+    let (mut core, limits) = make_tree();
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 860).unwrap();
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    drop(step(
+        &mut core,
+        &env,
+        Event::EffectStart {
+            owner: Token::new(861),
+            connector,
+            origin: EffectOrigin::Projection { goal: 1, source, entry: None },
+        },
+    ));
+    let Requests::Out(mut out) =
+        step(&mut core, &env, Event::EffectConnector(connector::Event::DescribeBusy { owner: Token::new(861) }));
+    let mut wait = false;
+    while let Some(request) = out.pop() {
+        if let Request::Ask { ask: Ask::Effect(connector::Ask::Drop { answer: authority::Answer::Wait, .. }), .. } =
+            request
+        {
+            wait = true;
+        }
+    }
+    assert!(wait);
+    assert_eq!(core.projection_failures.get(&(1, connector)).unwrap().state, ProjectionFailureState::Armed);
+    assert!(core.effect_flights.is_empty());
+}

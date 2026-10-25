@@ -170,3 +170,26 @@ fn settings_subfamilies_and_history_follow_their_domain_order() {
         previous = bytes;
     }
 }
+
+#[test]
+fn projection_failure_tag_four_follows_every_existing_projection_family() {
+    use jig_domain_core::ProjectionKey;
+    let ordered = [
+        ProjectionKey::Goal(0),
+        ProjectionKey::Task { goal: u64::MAX, task: u64::MAX },
+        ProjectionKey::Lifecycle { goal: u64::MAX, task: u64::MAX, position: u64::MAX },
+        ProjectionKey::Revision { goal: u64::MAX, task: u64::MAX, revision: u64::MAX },
+        ProjectionKey::Failure { goal: 0, connector: 0 },
+        ProjectionKey::Failure { goal: 0, connector: u16::MAX },
+    ];
+    let mut previous = None;
+    for key in ordered {
+        let key = Key::Core(CoreKey::Projection(key));
+        let encoded = keys::encode(&key, fixtures::KEY_LIMIT).unwrap();
+        assert_eq!(keys::decode(&encoded), Some(key.clone()));
+        if let Some((prior_key, prior_bytes)) = previous {
+            assert!(prior_key < key && prior_bytes < encoded);
+        }
+        previous = Some((key, encoded));
+    }
+}
