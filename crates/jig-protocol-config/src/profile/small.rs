@@ -66,6 +66,8 @@ pub(super) const TASKS: tasks::Limits = tasks::Limits {
     saved_resources: 4,
     contract_choices: 1,
     charters: 4,
+    revisions: 4,
+    versions: 8,
     authority_grants: 4,
     authority_segments: 4,
     authority_bytes: 2_048,
@@ -190,7 +192,14 @@ pub(super) const BUDGETS: core::CoreBriefBudgets = core::CoreBriefBudgets {
     notes: 2_048,
 };
 pub(super) const CORE: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits {
+        revisions: 4,
+        versions: 8,
+        history: 64,
+        proposals: 4,
+        alternatives: 16,
+        permissions: 32,
+    },
     templates: 8,
     fill_mark: 268_435_456,
     connectors: 2,

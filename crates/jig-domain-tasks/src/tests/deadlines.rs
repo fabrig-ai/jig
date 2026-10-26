@@ -108,7 +108,7 @@ fn restore(mut h: Harness) -> Harness {
         })
         .cloned()
         .collect();
-    h.domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+    h.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
     h.send(Event::Kinds {
         connector: 7,
         kinds: Box::new([Kind { connector: 7, kind: 1, hold: HoldKind::Exclusive { taken: Taken::Waits } }]),
@@ -134,7 +134,7 @@ fn restore(mut h: Harness) -> Harness {
 #[test]
 fn an_empty_task_scheduler_has_no_deadline_before_or_after_restore() {
     let h = Harness::new();
-    assert_eq!(Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0])).next_deadline(), None);
+    assert_eq!(Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0])).next_deadline(), None);
     assert_eq!(h.domain.next_deadline(), None);
 }
 

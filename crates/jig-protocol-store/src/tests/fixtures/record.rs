@@ -17,6 +17,7 @@ pub fn task_record() -> jig_domain_tasks::TaskRecord {
     use skein_lib::{Duration, Wall};
     let new = task_creation(17);
     task::TaskRecord {
+        settings: task::SettingsRevision { task: 3, run: Some(2) },
         added: Box::new([]),
         hold_bound_since: None,
         kept_account: Some(u32::MAX - 1),
@@ -24,11 +25,7 @@ pub fn task_record() -> jig_domain_tasks::TaskRecord {
         flags: task::Flags { conversation: true, ..task::Flags::PLAIN },
         last_activity: Wall::from_nanos(19),
         ended_below: task::Endings { done: 3, failed: 5, cancelled: 7 },
-        question_lines: Box::new([task::QuestionLine {
-            message: 5,
-            line: 7,
-            answer: Some(task::AnswerLine { task: 19, position: 11 }),
-        }]),
+        question_lines: task_question_lines(),
         hold: 13,
         proposal_rows: Box::new([task::ProposalRow { proposal: 43, revision: 3 }]),
         instructions: Some(Box::from(b"instructions".as_slice())),
@@ -132,4 +129,12 @@ fn task_grace() -> jig_domain_tasks::Grace {
         reason: b"finish".as_slice().into(),
         message: 1,
     }
+}
+
+fn task_question_lines() -> Box<[jig_domain_tasks::QuestionLine]> {
+    Box::new([jig_domain_tasks::QuestionLine {
+        message: 5,
+        line: 7,
+        answer: Some(jig_domain_tasks::AnswerLine { task: 19, position: 11 }),
+    }])
 }

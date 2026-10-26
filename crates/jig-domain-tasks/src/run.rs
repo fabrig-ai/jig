@@ -58,6 +58,7 @@ pub(crate) fn prepare(domain: &mut Domain, env: &Env<Limits>, to: ReplyTo, numbe
     if task.record.phase != Phase::Active(Active::Due) || kept.blocks_claims() {
         return refused(to, Some(number), Refusal::State, out);
     }
+    task.record.settings.run = Some(task.record.settings.task);
     task.record.phase = Phase::Active(Active::Preparing);
     publish(domain, env, number, out);
     out.push(Request::Done { reply_to: to });

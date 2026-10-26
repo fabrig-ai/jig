@@ -199,6 +199,7 @@ pub fn live_task(number: u64) -> Record {
 pub fn ended_task(number: u64) -> Record {
     let mut row = task_record();
     row.number = number;
+    row.settings = jig_domain_tasks::SettingsRevision { task: 5, run: None };
     row.phase = jig_domain_tasks::Phase::Ended(jig_domain_tasks::Ending::Done(jig_domain_tasks::TaskResult::Report {
         words: Box::from(b"result".as_slice()),
     }));

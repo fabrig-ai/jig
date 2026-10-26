@@ -54,7 +54,9 @@ pub(crate) fn models(
     settings: &Settings,
     limits: &Limits,
 ) -> Box<[tasks::CharterModels]> {
-    let mut charters = List::with_capacity(limits.tasks.charters);
+    let mut charters = List::with_capacity(
+        limits.tasks.charters.checked_add(limits.settings.versions).expect("charter version bound"),
+    );
     for setting in &current.offered() {
         let number = match setting {
             crate::settings::Setting::Charter(number) => *number,
@@ -63,13 +65,24 @@ pub(crate) fn models(
             | crate::settings::Setting::Rules => continue,
         };
         let charter = current.charter(number).expect("offered charter");
-        let value = one_models(charter, settings);
+        let (_, origin) = current.lookup(*setting);
+        let (_, revision) = origin.expect("offered charter version");
+        let value = one_models(charter, revision, settings);
         charters.push(value).expect("configured charter count");
+    }
+    for (setting, change) in &current.changes {
+        if let crate::settings::Setting::Charter(number) = setting
+            && change.value.is_none()
+        {
+            charters
+                .push(tasks::CharterModels { number: *number, revision: change.revision, models: None })
+                .expect("removed charter version bound");
+        }
     }
     charters.into_boxed()
 }
 
-pub(crate) fn one_models(charter: &Charter, settings: &Settings) -> tasks::CharterModels {
+pub(crate) fn one_models(charter: &Charter, revision: u32, settings: &Settings) -> tasks::CharterModels {
     let count = charter.policy.alternatives.len().checked_add(1).expect("charter model count");
     let mut models = List::with_capacity(u32::try_from(count).expect("charter model count"));
     if let Some(main) = configured(settings, &charter.policy.model) {
@@ -81,7 +94,7 @@ pub(crate) fn one_models(charter: &Charter, settings: &Settings) -> tasks::Chart
             models.push(index).expect("charter model count");
         }
     }
-    tasks::CharterModels { number: charter.number, models: models.into_boxed() }
+    tasks::CharterModels { number: charter.number, revision, models: Some(models.into_boxed()) }
 }
 
 /// How many efforts each configured model declares, in configuration's order (tasks.md, 3).

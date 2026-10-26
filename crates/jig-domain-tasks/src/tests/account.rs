@@ -65,7 +65,7 @@ fn an_unclaimed_task_cannot_restore_a_kept_account() {
     let h = preparing();
     let mut row = h.domain.task(TASK).unwrap().clone();
     row.kept_account = Some(SELECTED);
-    let mut fresh = crate::Domain::new(&h.env.limits, 91, crate::tests::charters(), Box::new([0]));
+    let mut fresh = crate::Domain::new(&h.env.limits, 91, 1, crate::tests::charters(), Box::new([0]));
     let mut out = skein_lib::Queue::with_capacity(crate::max_out(&h.env.limits));
     crate::step(&mut fresh, &h.env, Event::Restore { record: crate::Stored::Live(Box::new(row)) }, &mut out);
     let Some(crate::Request::RestoreRefused { .. }) = out.pop() else {

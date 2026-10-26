@@ -42,6 +42,7 @@ fn a_live_task_record_reads_back_whole() {
 }
 fn an_ended_task_with_its_result_reads_back() {
     let mut record = fixtures::task_record();
+    record.settings = domain::SettingsRevision { task: 5, run: None };
     record.phase = domain::Phase::Ended(domain::Ending::Done(domain::TaskResult::Report {
         words: Box::from(b"result".as_slice()),
     }));

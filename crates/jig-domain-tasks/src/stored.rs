@@ -666,12 +666,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             if task.recurring.is_some() || task.taken_by.is_some() || task.person_wait.is_some() {
                 return false;
             }
-            for configured in &domain.charters {
-                if configured.number == charter {
-                    return true;
-                }
-            }
-            false
+            domain.charter_models(charter, task.settings.task).is_some()
         }
         Executor::Procedure { code, .. } if code != 0 && task.recurring.is_some() => match &task.recurring {
             Some(state) => {
@@ -774,6 +769,7 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
                 }
                 Executor::Person(_) | Executor::Procedure { .. } => {}
             }
+            crate::settings::hold(domain, &task);
             let id = domain
                 .tasks
                 .insert(Task {

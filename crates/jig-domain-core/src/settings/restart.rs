@@ -205,12 +205,13 @@ impl Core {
             );
             assert!(facts.is_empty(), "rules replacement has no policy lifecycle fact");
         }
-        if charters {
+        if charters || self.tasks.newest() != self.current.newest() {
             let mut tasks_out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
             tasks::step(
                 &mut self.tasks,
-                &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
+                &Env { now: env.now, wall: env.wall, limits: super::task_limits(&env.limits) },
                 tasks::Event::Charters {
+                    newest: self.current.newest(),
                     charters: crate::charters::models(&self.current, &self.settings, &env.limits),
                     efforts: crate::charters::efforts(&self.settings),
                 },

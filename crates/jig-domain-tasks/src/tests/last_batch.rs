@@ -90,7 +90,7 @@ fn cold_restore_rejects_partial_duplicate_zero_self_and_oversized_last_batches()
     for numbers in invalid {
         let mut row = original.clone();
         row.recurring.as_mut().unwrap().last_batch = numbers;
-        let mut domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+        let mut domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
         let mut out = Queue::with_capacity(max_out(&LIMITS));
         step(&mut domain, &test.env, Event::Restore { record: Stored::Live(Box::new(row)) }, &mut out);
         let mut refused = false;

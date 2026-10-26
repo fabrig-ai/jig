@@ -84,6 +84,10 @@ pub struct Limits {
     pub contract_choices: u32,
     /// Maximum retained configured agent-charter numbers.
     pub charters: u32,
+    /// Charter versions held besides the newest view.
+    pub versions: u32,
+    /// Settings revisions held besides the newest.
+    pub revisions: u32,
     /// Maximum resource grants per task authority carrier.
     pub authority_grants: u32,
     /// Maximum base segments per carried grant pattern.
@@ -339,9 +343,10 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         // Live agent count, including alignment room.
         .checked_add(u64::try_from(size_of::<u64>()).ok()?)?
         // Each charter and its models, and each configured model's count of efforts.
-        .checked_add(u64::from(limits.charters).checked_mul(
+        .checked_add(u64::from(limits.charters.checked_add(limits.versions)?).checked_mul(
             u64::try_from(size_of::<crate::CharterModels>()).ok()?.checked_add(u64::from(crate::MODELS))?,
         )?)?
+        .checked_add(Map::<u32, u32>::worst_case(limits.revisions.checked_add(1)?)?)?
         .checked_add(u64::from(crate::MODELS))?
         // Atomic procedure admission saves every live row and finite balance.
         .checked_add(List::<crate::TaskRecord>::worst_case(limits.tasks)?)?

@@ -331,6 +331,10 @@ fn task_history(source: &domain::TaskRecord, limits: &wire::Limits) -> Result<wi
             instructions: source.instructions.clone(),
             refused: refused(&source.refused, limits)?,
             grace: optional_grace(source.grace.as_ref(), limits)?,
+            settings: wire::SettingsRevision::new(
+                limits,
+                wire::SettingsRevisionParts { task: source.settings.task, run: source.settings.run },
+            )?,
             revisions: phase::revisions(&source.revisions, limits)?,
             created_at: source.created_at.as_nanos(),
             changed: source.changed.as_nanos(),
@@ -461,6 +465,7 @@ pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Resu
         instructions: history.instructions,
         refused: phase::read_references(history.refused),
         grace: read_optional_grace(history.grace, limits)?,
+        settings: domain::SettingsRevision { task: history.settings.task(), run: *history.settings.run() },
         revisions: phase::read_revisions(history.revisions, limits)?,
         created_at: Wall::from_nanos(history.created_at),
         changed: Wall::from_nanos(history.changed),

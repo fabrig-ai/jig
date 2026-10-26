@@ -951,11 +951,22 @@ pub struct ReplyHint {
     pub at: Wall,
 }
 
+/// Settings revisions retained live and ended (domain/engine.md, 17.3).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SettingsRevision {
+    /// The newest revision when the task was made, whatever its parent's.
+    pub task: u32,
+    /// The revision its agent run was prepared under; none between attempts.
+    pub run: Option<u32>,
+}
+
 /// Owned durable task state emitted to root storage; root uses `RunContext` for preparation and
 /// does not maintain a mutable copy of this ledger. (domain/tasks.md, sections 3 and 5).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 #[expect(clippy::struct_excessive_bools, reason = "independent durable lifecycle facts are explicit")]
 pub struct TaskRecord {
+    /// Settings read by this task and its run (domain/engine.md, 17.3).
+    pub settings: SettingsRevision,
     /// Opaque application label, immutable after creation.
     pub label: u32,
     /// Immutable engine flags.
@@ -1344,8 +1355,9 @@ pub enum Accepted {
 /// notifications have no reply destination and may be ignored if stale. (domain/tasks.md, sections 4–5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Event {
-    /// Replace the current models after a settings commit (engine.md, 17.2).
-    Charters { charters: Box<[crate::CharterModels]>, efforts: Box<[u8]> },
+    /// Replace held charter versions and name the newest settings after a commit or start
+    /// (engine.md, 17.2 and 17.3).
+    Charters { newest: u32, charters: Box<[crate::CharterModels]>, efforts: Box<[u8]> },
     /// One project's party operations, admitted in order and made whole.
     Compound {
         reply_to: ReplyTo,

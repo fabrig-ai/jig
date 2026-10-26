@@ -554,7 +554,7 @@ pub(crate) fn changed_charters(
             Some(Value::Charter(charter)) => charter,
             Some(Value::Template(_) | Value::Policy(_) | Value::Rules(_)) | None => unreachable!("checked charter"),
         };
-        result.push(crate::charters::one_models(charter, settings)).expect("checked charter count");
+        result.push(crate::charters::one_models(charter, current.newest(), settings)).expect("checked charter count");
     }
     result.into_boxed()
 }
