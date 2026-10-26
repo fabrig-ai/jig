@@ -712,3 +712,19 @@ fn a_first_start_counts_every_kept_family_zero() {
         assert_eq!(manifest.counts, expected);
     }
 }
+
+#[test]
+fn first_start_refuses_invalid_ranges_before_writing() {
+    for &(label, sets, owner) in super::patching::RANGE_FAULTS {
+        let mut disk = Disk::new(&[]);
+        let mut store = disk.store();
+        store.patch_sets(sets);
+        let events = disk.open(&mut store);
+        let [Event::OpenRefused { why, .. }] = events.as_ref() else { panic!("{label}: {events:?}") };
+        assert_eq!(why, &OpenRefusal::Set { owner, patch: 0 }, "{label}");
+        assert!(
+            !disk.contents().iter().any(|(path, ..)| path.as_ref() == b"active" || path.starts_with(b"generations/")),
+            "{label}"
+        );
+    }
+}

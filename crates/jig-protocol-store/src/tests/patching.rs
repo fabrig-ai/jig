@@ -45,7 +45,7 @@ const NOTE: KeptFamily = KeptFamily {
     name: "fixture-note",
     map: KeptMap::Store,
     texts: jig::kept::fixture_note::TEXTS,
-    keys: &[Keys { from: upstream::keys::NOTES_FROM, to: upstream::keys::NOTES_TO, root: upstream::keys::NOTES_ROOT }],
+    keys: &[Keys { from: &[1, b'n'], to: &[1, b'o'], root: upstream::keys::NOTES_ROOT }],
 };
 const APPLICATION: PatchSet = PatchSet {
     fresh: None,
@@ -422,28 +422,28 @@ fn the_plan_honours_dependencies_through_all_four_owners() {
         fresh: None,
         owner: Owner::Skein,
         name: "first",
-        families: &[NOTE],
+        families: &[KeptFamily { keys: &[], ..NOTE }],
         patches: &["patch 1\nowner first 1\n", "patch 1\nowner first 2\n"],
     };
     pub(super) const SMITH: PatchSet = PatchSet {
         fresh: None,
         owner: Owner::Smith,
         name: "second",
-        families: &[NOTE],
+        families: &[KeptFamily { keys: &[], ..NOTE }],
         patches: &["patch 1\nowner second 1 after first 1\n"],
     };
     const THIRD: PatchSet = PatchSet {
         fresh: None,
         owner: Owner::Jig,
         name: "third",
-        families: &[NOTE],
+        families: &[KeptFamily { keys: &[], ..NOTE }],
         patches: &["patch 1\nowner third 1 after second 1\n"],
     };
     const LAST: PatchSet = PatchSet {
         fresh: None,
         owner: Owner::Application,
         name: "last",
-        families: &[NOTE],
+        families: &[KeptFamily { keys: &[], ..NOTE }],
         patches: &["patch 1\nowner last 1 after third 1\n"],
     };
     let sets = PatchSets { sets: &[SKEIN, LAST, SMITH, THIRD] };
@@ -686,4 +686,178 @@ fn an_applied_fresh_mark_does_not_close_for_later_patches() {
     let plan = plan::plan(&LATER, &found, &plan::binary(&LATER)).expect("later plan");
     assert_eq!(plan.steps(), &[Planned { owner: Owner::Smith, patch: 2 }]);
     assert!(!plan.close());
+}
+
+/// One fault per otherwise valid set, shared by both admission paths.
+pub(super) const RANGE_FAULTS: &[(&str, PatchSets, Owner)] = &[
+    (
+        "empty range",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: b"l", to: b"l", root: "Label" }], ..LABEL }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "inverted range",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: b"m", to: b"l", root: "Label" }], ..LABEL }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "overlapping families",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[LABEL, KeptFamily { keys: &[Keys { from: b"l/", to: b"m", root: "Shelf" }], ..SHELF }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "overlapping ranges",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily {
+                    keys: &[
+                        Keys { from: b"l", to: b"m", root: "Label" },
+                        Keys { from: b"l/", to: b"m", root: "Label" },
+                    ],
+                    ..LABEL
+                }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "component format row",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: &[0, 0], to: &[0, 1], root: "Note" }], ..NOTE }],
+                ..BASE.sets[1]
+            }],
+        },
+        Owner::Jig,
+    ),
+    (
+        "component layouts row",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: &[0, 3], to: &[0, 4], root: "Note" }], ..NOTE }],
+                ..BASE.sets[1]
+            }],
+        },
+        Owner::Jig,
+    ),
+    (
+        "installation identifier",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: &[1, 4, 2], to: &[1, 4, 4], root: "Note" }], ..NOTE }],
+                ..BASE.sets[1]
+            }],
+        },
+        Owner::Jig,
+    ),
+    (
+        "jig outside its tag",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: &[2, b'n'], to: &[2, b'o'], root: "Note" }], ..NOTE }],
+                ..BASE.sets[1]
+            }],
+        },
+        Owner::Jig,
+    ),
+    (
+        "application secrets outside its tag",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: &[0x80], to: &[0x81], root: "Token" }], ..TOKEN }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "root only in an older text",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily {
+                    texts: &[
+                        "family fixture-label 1\nversioned record Gone { value: u8 }\n",
+                        app::kept::fixture_label::TEXTS[1],
+                    ],
+                    keys: &[Keys { from: b"l", to: b"m", root: "Gone" }],
+                    ..LABEL
+                }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "missing declaration",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { keys: &[Keys { from: b"l", to: b"m", root: "Absent" }], ..LABEL }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+    (
+        "missing root before baseline still checks ranges",
+        PatchSets {
+            sets: &[PatchSet {
+                families: &[KeptFamily { texts: &[], keys: &[Keys { from: b"l", to: b"l", root: "Absent" }], ..LABEL }],
+                ..BASE.sets[0]
+            }],
+        },
+        Owner::Application,
+    ),
+];
+
+#[test]
+fn invalid_ranges_refuse_the_set_at_patch_zero() {
+    for &(label, sets, owner) in RANGE_FAULTS {
+        assert_eq!(plan::bounds(&sets), Err(Unplanned { owner, patch: 0 }), "{label}");
+    }
+}
+
+#[test]
+fn disjoint_maps_and_adjacent_ranges_are_admitted() {
+    const ADJACENT: PatchSets = PatchSets {
+        sets: &[PatchSet {
+            families: &[
+                KeptFamily {
+                    keys: &[
+                        Keys { from: b"l", to: b"l/", root: "Label" },
+                        Keys { from: b"l/", to: b"m", root: "Label" },
+                    ],
+                    ..LABEL
+                },
+                KeptFamily { keys: &[Keys { from: b"l", to: b"m", root: "Token" }], ..TOKEN },
+            ],
+            ..BASE.sets[0]
+        }],
+    };
+    const BEFORE: PatchSets = PatchSets {
+        sets: &[PatchSet {
+            families: &[KeptFamily { texts: &[], keys: &[Keys { from: b"l", to: b"m", root: "Absent" }], ..LABEL }],
+            ..BASE.sets[0]
+        }],
+    };
+    const SECRETS: PatchSets =
+        PatchSets { sets: &[crate::patching::sets::JIG, PatchSet { families: &[TOKEN], ..BASE.sets[0] }] };
+    for sets in [BASE, SETS, ADJACENT, BEFORE, SECRETS] {
+        assert_eq!(plan::bounds(&sets), Ok(()));
+    }
 }
