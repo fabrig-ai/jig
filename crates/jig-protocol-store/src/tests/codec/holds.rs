@@ -458,6 +458,7 @@ fn policy_rows(limits: &people::Limits) -> [PeopleRow; 4] {
             people::PolicyChange::RoleSpend(_)
             | people::PolicyChange::ProjectSpend(_)
             | people::PolicyChange::Role(_)
+            | people::PolicyChange::Ceiling(_)
             | people::PolicyChange::Templates(_) => panic!("packed policy change fixture"),
         };
         PeopleRow { path, bytes, expected }

@@ -102,6 +102,7 @@ pub fn store_asks() -> List<c::Ask> {
         c::Ask::DeleteNote { project: 7, note: u64::MAX, scope: c::NoteScope::Deployment, revision },
         c::Ask::ChangePolicy { project: 7, edit: policy() },
         c::Ask::ChangePolicy { project: 7, edit: c::PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX } },
+        c::Ask::ChangePolicy { project: 7, edit: c::PolicyEdit::Ceiling { ceiling: read_value_owner_authority() } },
         templates(),
         c::Ask::Amend {
             project: 7,

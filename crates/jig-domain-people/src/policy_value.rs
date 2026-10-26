@@ -25,6 +25,8 @@ pub enum PolicyChange {
     Templates { overrides: Box<[crate::TemplateOverride]> },
     /// Replace one role's spend per period alone (domain/authority.md, 7).
     RoleSpend { role: u32, period_spend: u64 },
+    /// Replace the project ceiling whole, checked against the deployment's rules and existing roles.
+    Ceiling { ceiling: Authority },
 }
 
 /// Whole project policy saved as one full committed value.
@@ -131,6 +133,7 @@ pub fn policy_change_bytes(change: &PolicyChange) -> Option<u64> {
         PolicyChange::ProjectSpend { .. } | PolicyChange::RoleSpend { .. } => Some(0),
         PolicyChange::Templates { overrides } => templates_bytes(overrides),
         PolicyChange::Projections { grants } => grants_bytes(grants),
+        PolicyChange::Ceiling { ceiling } => crate::authority_bytes(ceiling),
         PolicyChange::Role(role) => crate::authority_bytes(&role.authority),
         PolicyChange::Requirements { requirements } => requirements_bytes(requirements),
         PolicyChange::Permissions { mappings } => {

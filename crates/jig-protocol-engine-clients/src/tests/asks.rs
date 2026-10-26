@@ -299,3 +299,34 @@ fn project_records_reach_people_with_their_whole_name_and_policy() {
         assert_eq!(ask(record, &f::models(), &limits), Ok(expected));
     }
 }
+
+#[test]
+fn a_ceiling_edit_translates_the_whole_authority() {
+    let (wire, expected) = f::authority_ask();
+    let w::Ask::ChangePolicy(wire) = wire else { panic!("policy fixture") };
+    let w::PolicyEdit::Role(role) = wire.into_parts().edit else { panic!("role fixture") };
+    let p::Ask::ChangePolicy { project, change: p::PolicyChange::Role(expected) } = expected else {
+        panic!("role fixture")
+    };
+    let limits = f::wire();
+    let wire = w::Ask::ChangePolicy(
+        w::ChangePolicy::new(
+            &limits,
+            w::ChangePolicyParts {
+                project,
+                edit: w::PolicyEdit::Ceiling(
+                    w::PolicyEditCeiling::new(
+                        &limits,
+                        w::PolicyEditCeilingParts { ceiling: role.into_parts().value.into_parts().authority },
+                    )
+                    .unwrap(),
+                ),
+            },
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        ask(wire, &f::models(), &limits),
+        Ok(p::Ask::ChangePolicy { project, change: p::PolicyChange::Ceiling { ceiling: expected.authority } })
+    );
+}

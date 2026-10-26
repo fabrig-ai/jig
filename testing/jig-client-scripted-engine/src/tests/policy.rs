@@ -26,6 +26,18 @@ fn policy_project() -> Project {
 #[test]
 fn each_closed_policy_edit_is_one_durable_keyed_request_and_replays_without_splitting() {
     let edits = [
+        PolicyEdit::Ceiling {
+            ceiling: OwnerAuthority {
+                models: None,
+                tools: u64::MAX,
+                grants: list(vec![]),
+                delegation: OwnerDelegation { kinds: list(vec![]), tasks: u32::MAX, depth: u32::MAX },
+                spend: u64::MAX,
+                deadline: None,
+                notes: u8::MAX,
+                note_resources: list(vec![]),
+            },
+        },
         PolicyEdit::ProjectSpend { period_spend: u64::MAX },
         PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX },
         PolicyEdit::Role(PolicyEditRole {

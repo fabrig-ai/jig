@@ -1031,6 +1031,7 @@ mod tests {
                 people::PolicyChange::Permissions { mappings } => assert!(mappings.is_empty()),
                 people::PolicyChange::Role(_)
                 | people::PolicyChange::RoleSpend { .. }
+                | people::PolicyChange::Ceiling { .. }
                 | people::PolicyChange::ProjectSpend { .. }
                 | people::PolicyChange::Templates { .. } => {
                     panic!("replacement kind retained")

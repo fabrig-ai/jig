@@ -52,7 +52,8 @@ record PolicyChangeRequirements { requirements: bytes 65536 pieces Requirement }
 record PolicyChangeProjections { grants: bytes 65536 pieces Grant }
 record PolicyChangePermissions { mappings: bytes 65536 pieces PermissionRole }
 record PolicyChangeTemplates { overrides: list 16 TemplateOverride }
-enum PolicyChange { project_spend: PolicyChangeProjectSpend, role: PolicyChangeRole, requirements: PolicyChangeRequirements, projections: PolicyChangeProjections, permissions: PolicyChangePermissions, templates: PolicyChangeTemplates, role_spend: PolicyChangeRoleSpend }
+record PolicyChangeCeiling { ceiling: Authority }
+enum PolicyChange { project_spend: PolicyChangeProjectSpend, role: PolicyChangeRole, requirements: PolicyChangeRequirements, projections: PolicyChangeProjections, permissions: PolicyChangePermissions, templates: PolicyChangeTemplates, role_spend: PolicyChangeRoleSpend, ceiling: PolicyChangeCeiling }
 record SeenResults { through: u64 }
 record SeenConversation { task: u64 through: u64 }
 enum Seen { results: SeenResults, conversation: SeenConversation }

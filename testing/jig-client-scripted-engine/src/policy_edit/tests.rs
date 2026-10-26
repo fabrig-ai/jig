@@ -37,6 +37,7 @@ fn policy_edits_price_whole_lists_reserved_capacity_and_every_literal_boundary()
     let mut grants = List::with_capacity(4);
     grants.push(OwnerGrant { connector: u16::MAX, kind: u16::MAX, pattern: pattern() }).unwrap();
     let values = [
+        PolicyEdit::Ceiling { ceiling: authority() },
         PolicyEdit::Requirements { requirements },
         PolicyEdit::Projections { grants },
         PolicyEdit::Permissions { mappings: List::with_capacity(4) },

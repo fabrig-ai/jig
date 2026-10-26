@@ -129,3 +129,21 @@ fn policy_role_projection_permission_and_empty_replacement_reviews_keep_every_su
         assert_eq!(shown(&edit).len(), 3);
     }
 }
+
+#[test]
+fn a_ceiling_review_keeps_the_whole_authority_and_its_label() {
+    let ceiling = OwnerAuthority {
+        models: None,
+        tools: u64::MAX,
+        grants: List::with_capacity(0),
+        delegation: OwnerDelegation { kinds: List::with_capacity(0), tasks: u32::MAX, depth: u32::MAX },
+        spend: u64::MAX,
+        deadline: None,
+        notes: u8::MAX,
+        note_resources: List::with_capacity(0),
+    };
+    let tree = shown(&PolicyEdit::Ceiling { ceiling });
+    assert!(tree.nodes().iter().any(|node| node.name.as_deref() == Some(b"Project ceiling".as_slice())));
+    assert!(contains(&tree, b"18446744073709551615"));
+    assert!(contains(&tree, b"4294967295"));
+}

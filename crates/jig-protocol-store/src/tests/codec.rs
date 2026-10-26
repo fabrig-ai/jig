@@ -1389,3 +1389,18 @@ fn project_asks_answers_and_name_refusals_round_trip() {
 
 mod holds;
 mod settings_proposals;
+
+#[test]
+fn a_stored_ceiling_answer_round_trips_with_its_whole_authority() {
+    use jig_domain_people::{Ask, Outcome, PolicyChange, RequestKey, Stored};
+    people_round_trip(Stored::Answer {
+        key: RequestKey { person: 1, key: [7; 16] },
+        ask: Box::new(Ask::ChangePolicy {
+            project: 3,
+            change: PolicyChange::Ceiling { ceiling: fixtures::people_authority() },
+        }),
+        models: Box::new([]),
+        outcome: Outcome::PolicyChanged { project: 3 },
+        at: skein_lib::Wall::from_nanos(19),
+    });
+}
