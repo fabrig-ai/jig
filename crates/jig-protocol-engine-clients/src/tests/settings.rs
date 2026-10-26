@@ -266,9 +266,17 @@ fn revision_values_past_the_single_read_budget_name_their_encoded_size() {
     let revision = s::Revision {
         head: head(),
         items: Box::new([
-            s::Item { setting: s::Setting::Charter(1), edit: s::Edit::Set(source) },
-            s::Item { setting: s::Setting::Template(2), edit: s::Edit::Removed },
-            s::Item { setting: s::Setting::Policy(3), edit: s::Edit::Reset },
+            s::RevisionItem {
+                setting: s::Setting::Charter(1),
+                edit: s::Edit::Set(source.clone()),
+                replaced: s::Replaced::Value(Box::new(source)),
+            },
+            s::RevisionItem {
+                setting: s::Setting::Template(2),
+                edit: s::Edit::Removed,
+                replaced: s::Replaced::Default,
+            },
+            s::RevisionItem { setting: s::Setting::Policy(3), edit: s::Edit::Reset, replaced: s::Replaced::Removed },
         ]),
     };
     for (budget, large) in [(bytes, false), (bytes - 1, true)] {
@@ -279,6 +287,16 @@ fn revision_values_past_the_single_read_budget_name_their_encoded_size() {
         let c::RevisionAnswer::Revision(document) = restored else { panic!("revision") };
         assert_eq!(document.head.number, 6);
         assert_eq!(document.items.len(), 3);
+        match &document.items.get(0).unwrap().replaced {
+            c::RevisionReplaced::TooLarge(value) => {
+                assert!(large);
+                assert_eq!(value.bytes, bytes);
+            }
+            c::RevisionReplaced::Value(_) => assert!(!large),
+            c::RevisionReplaced::Default | c::RevisionReplaced::Removed | c::RevisionReplaced::NotOffered => {
+                panic!("value or size")
+            }
+        }
         assert_eq!(document.items.get(1).unwrap().edit, c::RevisionEdit::Removed);
         assert_eq!(document.items.get(2).unwrap().edit, c::RevisionEdit::Reset);
         match &document.items.get(0).unwrap().edit {

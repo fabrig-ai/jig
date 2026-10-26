@@ -53,7 +53,8 @@ record SettingsDocument { newest: u32 settings: list 256 SettingLine held: list 
 record SettingDocument { setting: Setting revision: u32 value: SettingValue }
 record Size { bytes: u64 }
 enum RevisionEdit { set: SettingSet, too_large: Size, removed, reset }
-record RevisionItem { setting: Setting edit: RevisionEdit }
+enum RevisionReplaced { value: SettingSet, too_large: Size, default, removed, not_offered }
+record RevisionItem { setting: Setting edit: RevisionEdit replaced: RevisionReplaced }
 record RevisionDocument { head: RevisionHead items: bytes 16777216 }
 record RevisionForgotten { oldest: u32 }
 enum RevisionAnswer { revision: RevisionDocument, forgotten: RevisionForgotten, unknown }

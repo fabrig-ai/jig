@@ -1956,5 +1956,37 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // + placed-hold codec limits and task/value/commit carriers 536,904,728
     // + the aligned settings-refusal limit above.
     let settings_refusal_limit = u64::try_from(settings_refusal_limit).expect("resident limit fits u64");
-    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_545_605_062_293 + settings_refusal_limit));
+    // + wires 16 + pending 17,928 + Mark 16.
+    // engine.md 17.10 replaces the wire's per-item maximum with one framed
+    // payload and keeps two whole value sets in each decoded domain revision.
+    let limits = fixtures::store_limits();
+    let (before, after) = revision_payload_prices(&limits).expect("bounded payload prices");
+    let copies = 2 * (u64::from(limits.store.page.bytes) + u64::from(limits.joins));
+    let expected = 581_545_605_062_293 + settings_refusal_limit - before * copies + after * copies;
+    assert_eq!(crate::worst_case(&limits), Some(expected));
+}
+
+// Independent delta from the previous list encoding: catalogue and head wire
+// heaps are unchanged. Each page position and join owns wire/domain pairs.
+fn revision_payload_prices(limits: &crate::Limits) -> Option<(u64, u64)> {
+    use crate::settings_v1 as wire;
+    use jig_domain_core::settings;
+    let capacity = settings::capacity(&limits.core)?;
+    let count = capacity.checked_mul(2)?;
+    let wire_limits = crate::codec::settings::limits(&limits.core)?;
+    let set = settings::set_worst_case(&limits.core)?;
+    let head = u64::try_from(size_of::<settings::Head>()).ok()?;
+    let old_wire = skein_lib::List::<wire::Item>::worst_case(count)?
+        .checked_add(u64::from(count).checked_mul(wire::Item::worst_case_heap(&wire_limits)?)?)?;
+    let old_domain = set.checked_add(skein_lib::List::<settings::Item>::worst_case(count)?)?.checked_add(head)?;
+    let before = old_wire.checked_add(old_domain)?;
+    let values = u64::from(capacity).checked_mul(u64::try_from(size_of::<settings::Value>()).ok()?)?;
+    let history = set
+        .checked_mul(2)?
+        .checked_add(values)?
+        .checked_add(skein_lib::List::<settings::RevisionItem>::worst_case(count)?)?
+        .checked_add(head)?;
+    // The codec's byte bound is the history price: one boxed byte payload,
+    // alongside one domain revision with both whole value sets.
+    Some((before, history.checked_mul(2)?))
 }

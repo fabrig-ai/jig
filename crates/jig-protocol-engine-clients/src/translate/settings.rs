@@ -351,8 +351,24 @@ pub fn revision(
                     s::Edit::Removed => w::RevisionEdit::Removed,
                     s::Edit::Reset => w::RevisionEdit::Reset,
                 };
-                let item =
-                    w::RevisionItem::new(limits, w::RevisionItemParts { setting: name(item.setting, limits)?, edit })?;
+                let replaced = match &item.replaced {
+                    s::Replaced::Value(v) => {
+                        let value = value(v, models, limits)?;
+                        let bytes = u64::from(value.measure());
+                        if bytes > (*value_bytes).min(u64::from(limits.owned_record)) {
+                            w::RevisionReplaced::TooLarge(w::Size::new(limits, w::SizeParts { bytes })?)
+                        } else {
+                            w::RevisionReplaced::Value(w::SettingSet::new(limits, w::SettingSetParts { value })?)
+                        }
+                    }
+                    s::Replaced::Default => w::RevisionReplaced::Default,
+                    s::Replaced::Removed => w::RevisionReplaced::Removed,
+                    s::Replaced::NotOffered => w::RevisionReplaced::NotOffered,
+                };
+                let item = w::RevisionItem::new(
+                    limits,
+                    w::RevisionItemParts { setting: name(item.setting, limits)?, edit, replaced },
+                )?;
                 let mut out = Writer::new(usize::try_from(item.measure()).expect("measured item"));
                 item.encode(&mut out).expect("measured item");
                 pieces.push(out.finish()).expect("item count");

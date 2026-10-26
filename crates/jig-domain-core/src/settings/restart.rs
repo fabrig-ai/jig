@@ -399,6 +399,24 @@ impl Core {
         items
     }
 
+    fn restored_revision_items(&self, items: List<Item>) -> Box<[super::RevisionItem]> {
+        let mut result = List::with_capacity(items.len());
+        for item in items.into_boxed() {
+            result
+                .push(super::RevisionItem {
+                    setting: item.setting,
+                    edit: item.edit,
+                    replaced: if self.current.default_value(item.setting).is_some() {
+                        super::Replaced::Default
+                    } else {
+                        super::Replaced::NotOffered
+                    },
+                })
+                .expect("release item count");
+        }
+        result.into_boxed()
+    }
+
     fn release_restored_heads(&mut self, env: &Env<Limits>, after: &Map<u32, ()>, out: &mut Queue<Request>) {
         for _ in 0..self.held.heads.len() {
             let mut orphan = None;
@@ -467,6 +485,7 @@ impl Core {
         if keep_previous {
             self.held.heads.insert(previous, self.current.head.clone()).expect("release heads preflighted");
         }
+        let revision_items = self.restored_revision_items(items);
         core::mem::swap(&mut self.current.defaults, &mut self.settings_restore.defaults);
         if release {
             self.current.head = Head {
@@ -490,7 +509,7 @@ impl Core {
             defaults.push(write).expect("default differences");
         }
         let revision =
-            if release { Some(Revision { head: self.current.head.clone(), items: items.into_boxed() }) } else { None };
+            if release { Some(Revision { head: self.current.head.clone(), items: revision_items }) } else { None };
         let (writes, oldest) = revision_writes_with_hold(
             revision,
             defaults,

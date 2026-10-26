@@ -220,10 +220,20 @@ pub enum RevisionEdit {
     Removed,
     Reset,
 }
+/// The choice a revision replaced, with whole values bounded as its edit is.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RevisionReplaced {
+    Value(SettingSet),
+    TooLarge(Size),
+    Default,
+    Removed,
+    NotOffered,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RevisionItem {
     pub setting: Setting,
     pub edit: RevisionEdit,
+    pub replaced: RevisionReplaced,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RevisionDocument {

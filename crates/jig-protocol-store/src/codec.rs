@@ -13,6 +13,7 @@ use jig_domain_core as domain;
 /// All store families' bounds, validated once by their owners.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
+    pub settings_domain: domain::Limits,
     pub settings: crate::settings_v1::Limits,
     pub core: crate::core_v6::Limits,
     pub tasks: crate::tasks_v9::Limits,
@@ -23,7 +24,14 @@ pub struct Limits {
 #[must_use]
 pub fn limits(domain: &domain::Limits) -> Option<Limits> {
     let core::Limits { core, tasks, notes } = core::limits(domain)?;
-    Some(Limits { core, tasks, notes, settings: settings::limits(domain)?, people: people::limits(domain)? })
+    Some(Limits {
+        settings_domain: *domain,
+        core,
+        tasks,
+        notes,
+        settings: settings::limits(domain)?,
+        people: people::limits(domain)?,
+    })
 }
 
 /// The configured models' names in the configuration's order: settings and the people family keep a role's
@@ -65,7 +73,7 @@ pub fn decode(
 ) -> Option<domain::Record> {
     match key {
         domain::Key::Core(domain::CoreKey::Settings(key)) => Some(domain::Record::Core(domain::CoreRecord::Settings(
-            settings::decode(key, bytes, &limits.settings, names).ok()?,
+            settings::decode(key, bytes, &limits.settings, names, &limits.settings_domain).ok()?,
         ))),
         domain::Key::Core(_) => Some(domain::Record::Core(core::decode(bytes, &core_limits(limits)).ok()?)),
         domain::Key::Tasks(_) => {
