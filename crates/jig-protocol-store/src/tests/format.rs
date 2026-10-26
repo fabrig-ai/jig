@@ -49,35 +49,18 @@ fn the_current_format_row_is_accepted() {
 #[test]
 fn another_family_is_refused_naming_the_first_difference() {
     let wanted = wanted();
-    for (family, found) in [
-        (Family::Component, codec::component::Format { component: 2, core: 6, ..wanted }),
-        (Family::Core, codec::component::Format { core: 5, tasks: 4, ..wanted }),
-        (Family::People, codec::component::Format { people: 10, notes: 2, ..wanted }),
-        (Family::Notes, codec::component::Format { notes: 2, accounts: 2, ..wanted }),
-        (Family::Accounts, codec::component::Format { accounts: 1, application: 2, ..wanted }),
-        (Family::Settings, codec::component::Format { settings: 0, ..wanted }),
-        (Family::Application, codec::component::Format { application: 2, deployment: [9; 16], ..wanted }),
+    for (family, found, version, expected) in [
+        (Family::Component, codec::component::Format { component: 2, core: 6, ..wanted }, 2, 3),
+        (Family::Core, codec::component::Format { core: 5, tasks: 4, ..wanted }, 5, 6),
+        (Family::People, codec::component::Format { people: 10, notes: 2, ..wanted }, 10, 13),
+        (Family::Notes, codec::component::Format { notes: 2, accounts: 2, ..wanted }, 2, 1),
+        (Family::Accounts, codec::component::Format { accounts: 1, application: 2, ..wanted }, 1, 2),
+        (Family::Settings, codec::component::Format { settings: 0, ..wanted }, 0, 1),
+        (Family::Application, codec::component::Format { application: 2, deployment: [9; 16], ..wanted }, 2, 1),
     ] {
         assert_eq!(
             format::check(&found, &wanted),
-            Err(OpenRefusal::Format {
-                family,
-                found: match family {
-                    Family::Core => 5,
-                    Family::People => 10,
-                    Family::Settings => 0,
-                    Family::Accounts => 1,
-                    Family::Component | Family::Tasks | Family::Notes | Family::Application => 2,
-                },
-                wanted: match family {
-                    Family::Core => 6,
-                    Family::Tasks => 9,
-                    Family::People => 13,
-                    Family::Component => 3,
-                    Family::Accounts => 2,
-                    Family::Settings | Family::Notes | Family::Application => 1,
-                }
-            })
+            Err(OpenRefusal::Format { family, found: version, wanted: expected })
         );
     }
 }
@@ -256,8 +239,8 @@ fn table<const N: usize>(cases: [Case; N]) {
 }
 
 #[test]
-#[expect(clippy::disallowed_macros, reason = "ordinary tests embed the seven schema fixtures independently")]
-fn current_layouts_are_the_seven_distinct_runtime_schema_fingerprints() {
+#[expect(clippy::disallowed_macros, reason = "ordinary tests embed the eight schema fixtures independently")]
+fn current_layouts_are_the_eight_distinct_runtime_schema_fingerprints() {
     let layouts = format::layouts();
     let current = wanted();
     let families = [
@@ -268,26 +251,36 @@ fn current_layouts_are_the_seven_distinct_runtime_schema_fingerprints() {
         (layouts.notes, current.notes, include_bytes!("../../schema/notes-v1.schema").as_slice()),
         (layouts.accounts, current.accounts, include_bytes!("../../schema/accounts-v2.schema").as_slice()),
         (layouts.settings, current.settings, include_bytes!("../../schema/settings-v1.schema").as_slice()),
+        (layouts.secrets, 1, include_bytes!("../../schema/secrets-v1.schema").as_slice()),
     ];
-    let mut digests = skein_lib::Set::with_capacity(u32::try_from(families.len()).expect("seven families"));
+    let mut digests = skein_lib::Set::with_capacity(u32::try_from(families.len()).expect("eight families"));
     for (digest, version, text) in families {
         let schema = skein_codec::schema::parse(text).expect("current schema parses");
         assert_eq!(schema.version(), version);
         assert_eq!(digest, schema.fingerprints().family().digest());
-        assert!(digests.insert(digest).expect("seven families fit"), "families have distinct layouts");
+        assert!(digests.insert(digest).expect("eight families fit"), "families have distinct layouts");
     }
 }
 
 #[test]
 fn differing_layouts_name_the_first_family_in_family_order() {
     let wanted = format::layouts();
-    let mut found = wanted;
-    found.settings[0] ^= 1;
-    found.component[0] ^= 1;
-    assert_eq!(
-        format::check_layouts(&found, &wanted),
-        Err(OpenRefusal::OlderBuild { why: crate::Older::Layout(Family::Settings) })
-    );
+    let mut settings = wanted;
+    settings.settings[0] ^= 1;
+    settings.component[0] ^= 1;
+    let mut secrets = wanted;
+    secrets.secrets[0] ^= 1;
+    secrets.skein_oauth[0] ^= 1;
+    secrets.smith_transcript[0] ^= 1;
+    let mut oauth = wanted;
+    oauth.skein_oauth[0] ^= 1;
+    oauth.smith_transcript[0] ^= 1;
+    for (found, family) in [(settings, Family::Settings), (secrets, Family::Secrets), (oauth, Family::SkeinOauth)] {
+        assert_eq!(
+            format::check_layouts(&found, &wanted),
+            Err(OpenRefusal::OlderBuild { why: crate::Older::Layout(family) })
+        );
+    }
 }
 
 #[test]
@@ -342,4 +335,14 @@ fn whole_file_admission_checks_the_manifests_exact_bound() {
     ] {
         assert_eq!(sizes::whole(bound), expected, "whole-file bound {bound}");
     }
+}
+
+#[test]
+#[expect(clippy::disallowed_macros, reason = "the kept schema copy is pinned against smith's generated code")]
+fn upstream_layouts_equal_the_kept_families_fingerprints() {
+    let layouts = format::layouts();
+    assert_eq!(layouts.skein_oauth, skein_oauth::FINGERPRINT);
+    let smith = skein_codec::schema::parse(include_bytes!("fixtures/smith-transcript-v6.schema"))
+        .expect("checked smith schema");
+    assert_eq!(layouts.smith_transcript, smith.fingerprints().family().digest());
 }

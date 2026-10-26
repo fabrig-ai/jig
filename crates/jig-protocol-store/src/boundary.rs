@@ -234,7 +234,7 @@ pub enum Row {
     Application { key: Box<[u8]>, value: Box<[u8]> },
 }
 
-/// Whose format the format row disagrees on (store.md 5.3).
+/// Whose stored version or layout disagrees with this build (store.md 5.3).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Family {
     Settings,
@@ -244,6 +244,9 @@ pub enum Family {
     People,
     Notes,
     Accounts,
+    Secrets,
+    SkeinOauth,
+    SmithTranscript,
     Application,
 }
 
@@ -337,6 +340,44 @@ macro_rules! older {
     };
 }
 
+impl Family {
+    fn version_words(self) -> &'static [&'static str] {
+        match self {
+            Family::Settings => {
+                older!(" holds a store whose ", "settings family is at another version than this build's")
+            }
+            Family::Component => {
+                older!(" holds a store whose ", "component family is at another version than this build's")
+            }
+            Family::Core => older!(" holds a store whose ", "core family is at another version than this build's"),
+            Family::Tasks => {
+                older!(" holds a store whose ", "tasks family is at another version than this build's")
+            }
+            Family::People => {
+                older!(" holds a store whose ", "people family is at another version than this build's")
+            }
+            Family::Notes => {
+                older!(" holds a store whose ", "notes family is at another version than this build's")
+            }
+            Family::Accounts => {
+                older!(" holds a store whose ", "accounts family is at another version than this build's")
+            }
+            Family::Secrets => {
+                older!(" holds a store whose ", "secrets family is at another version than this build's")
+            }
+            Family::SkeinOauth => {
+                older!(" holds a store whose ", "kept skein-oauth records are at another version than this build's")
+            }
+            Family::SmithTranscript => {
+                older!(" holds a store whose ", "kept smith turns are at another version than this build's")
+            }
+            Family::Application => {
+                older!(" holds a store whose ", "application family is at another version than this build's")
+            }
+        }
+    }
+}
+
 impl OpenRefusal {
     /// The refusal's text in pieces, in order: the deployment's directory goes
     /// between each two consecutive pieces, wherever store.md has `<deployment>`.
@@ -344,30 +385,7 @@ impl OpenRefusal {
     #[must_use]
     pub fn words(&self) -> &'static [&'static str] {
         match self {
-            Self::Format { family, .. } => match family {
-                Family::Settings => {
-                    older!(" holds a store whose ", "settings family is at another version than this build's")
-                }
-                Family::Component => {
-                    older!(" holds a store whose ", "component family is at another version than this build's")
-                }
-                Family::Core => older!(" holds a store whose ", "core family is at another version than this build's"),
-                Family::Tasks => {
-                    older!(" holds a store whose ", "tasks family is at another version than this build's")
-                }
-                Family::People => {
-                    older!(" holds a store whose ", "people family is at another version than this build's")
-                }
-                Family::Notes => {
-                    older!(" holds a store whose ", "notes family is at another version than this build's")
-                }
-                Family::Accounts => {
-                    older!(" holds a store whose ", "accounts family is at another version than this build's")
-                }
-                Family::Application => {
-                    older!(" holds a store whose ", "application family is at another version than this build's")
-                }
-            },
+            Self::Format { family, .. } => family.version_words(),
             Self::Deployment => &[
                 "The store in ",
                 " names another deployment than its header does, so its files come from two deployments, and this start has changed nothing in it. Restore ",
@@ -413,6 +431,9 @@ impl OpenRefusal {
                 Family::People => older!("whose people family's layout differs from this build's"),
                 Family::Notes => older!("whose notes family's layout differs from this build's"),
                 Family::Accounts => older!("whose accounts family's layout differs from this build's"),
+                Family::Secrets => older!("whose secrets family's layout differs from this build's"),
+                Family::SkeinOauth => older!("whose kept skein-oauth records' layout differs from this build's"),
+                Family::SmithTranscript => older!("whose kept smith turns' layout differs from this build's"),
                 Family::Application => older!("whose application family's layout differs from this build's"),
             },
             Self::OlderBuild { why: Older::Directory } => &[

@@ -109,6 +109,12 @@ pub enum Path {
     LayoutsAccounts,
     /// The `settings` field of `Layouts`.
     LayoutsSettings,
+    /// The `secrets` field of `Layouts`.
+    LayoutsSecrets,
+    /// The `skein_oauth` field of `Layouts`.
+    LayoutsSkeinOauth,
+    /// The `smith_transcript` field of `Layouts`.
+    LayoutsSmithTranscript,
     /// The version of `Layouts`.
     LayoutsVersion,
     /// Bytes after `Layouts`.
@@ -505,6 +511,12 @@ pub struct LayoutsParts {
     pub accounts: [u8; 32],
     /// The `settings` field.
     pub settings: [u8; 32],
+    /// The `secrets` field.
+    pub secrets: [u8; 32],
+    /// The `skein_oauth` field.
+    pub skein_oauth: [u8; 32],
+    /// The `smith_transcript` field.
+    pub smith_transcript: [u8; 32],
 }
 
 /// `Layouts` in this codec family.
@@ -517,13 +529,16 @@ pub struct Layouts {
     notes: [u8; 32],
     accounts: [u8; 32],
     settings: [u8; 32],
+    secrets: [u8; 32],
+    skein_oauth: [u8; 32],
+    smith_transcript: [u8; 32],
 }
 
 impl Layouts {
     /// Makes a value within the given limits.
     pub fn new(_limits: &Limits, parts: LayoutsParts) -> Result<Self, Problem> {
-        let LayoutsParts { component, core, tasks, people, notes, accounts, settings } = parts;
-        let value = Self { component, core, tasks, people, notes, accounts, settings };
+        let LayoutsParts { component, core, tasks, people, notes, accounts, settings, secrets, skein_oauth, smith_transcript } = parts;
+        let value = Self { component, core, tasks, people, notes, accounts, settings, secrets, skein_oauth, smith_transcript };
         Ok(value)
     }
 
@@ -555,9 +570,21 @@ impl Layouts {
     #[must_use]
     pub fn settings(&self) -> &[u8; 32] { &self.settings }
 
+    /// Reads the `secrets` field.
+    #[must_use]
+    pub fn secrets(&self) -> &[u8; 32] { &self.secrets }
+
+    /// Reads the `skein_oauth` field.
+    #[must_use]
+    pub fn skein_oauth(&self) -> &[u8; 32] { &self.skein_oauth }
+
+    /// Reads the `smith_transcript` field.
+    #[must_use]
+    pub fn smith_transcript(&self) -> &[u8; 32] { &self.smith_transcript }
+
     /// Moves the fields out without copying.
     #[must_use]
-    pub fn into_parts(self) -> LayoutsParts { LayoutsParts { component: self.component, core: self.core, tasks: self.tasks, people: self.people, notes: self.notes, accounts: self.accounts, settings: self.settings } }
+    pub fn into_parts(self) -> LayoutsParts { LayoutsParts { component: self.component, core: self.core, tasks: self.tasks, people: self.people, notes: self.notes, accounts: self.accounts, settings: self.settings, secrets: self.secrets, skein_oauth: self.skein_oauth, smith_transcript: self.smith_transcript } }
 
 }
 
@@ -925,6 +952,9 @@ impl Layouts {
         size = size.checked_add(32).expect("schema ceilings fit u32");
         size = size.checked_add(32).expect("schema ceilings fit u32");
         size = size.checked_add(32).expect("schema ceilings fit u32");
+        size = size.checked_add(32).expect("schema ceilings fit u32");
+        size = size.checked_add(32).expect("schema ceilings fit u32");
+        size = size.checked_add(32).expect("schema ceilings fit u32");
         size
     }
 
@@ -945,6 +975,12 @@ impl Layouts {
         writer.put(field_accounts)?;
         let field_settings = &self.settings;
         writer.put(field_settings)?;
+        let field_secrets = &self.secrets;
+        writer.put(field_secrets)?;
+        let field_skein_oauth = &self.skein_oauth;
+        writer.put(field_skein_oauth)?;
+        let field_smith_transcript = &self.smith_transcript;
+        writer.put(field_smith_transcript)?;
         Ok(())
     }
 
@@ -965,7 +1001,10 @@ impl Layouts {
         let decoded_notes = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsNotes, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
         let decoded_accounts = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsAccounts, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
         let decoded_settings = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsSettings, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
-        Ok(Self { component: decoded_component, core: decoded_core, tasks: decoded_tasks, people: decoded_people, notes: decoded_notes, accounts: decoded_accounts, settings: decoded_settings })
+        let decoded_secrets = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsSecrets, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
+        let decoded_skein_oauth = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsSkeinOauth, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
+        let decoded_smith_transcript = { let bytes = reader.bytes(32).ok_or(Problem { path: Path::LayoutsSmithTranscript, reason: skein_codec::Reason::Short })?; bytes.try_into().expect("fixed length checked") };
+        Ok(Self { component: decoded_component, core: decoded_core, tasks: decoded_tasks, people: decoded_people, notes: decoded_notes, accounts: decoded_accounts, settings: decoded_settings, secrets: decoded_secrets, skein_oauth: decoded_skein_oauth, smith_transcript: decoded_smith_transcript })
     }
 }
 
@@ -1168,7 +1207,8 @@ impl Layouts {
         size = size.checked_add(u64::from(32_u32))?.checked_add(u64::from(32_u32))?;
         size = size.checked_add(u64::from(32_u32))?.checked_add(u64::from(32_u32))?;
         size = size.checked_add(u64::from(32_u32))?.checked_add(u64::from(32_u32))?;
-        size = size.checked_add(u64::from(32_u32))?;
+        size = size.checked_add(u64::from(32_u32))?.checked_add(u64::from(32_u32))?;
+        size = size.checked_add(u64::from(32_u32))?.checked_add(u64::from(32_u32))?;
         size.checked_add(0)
     }
 
@@ -1184,7 +1224,8 @@ impl Layouts {
         heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
         heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
         heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
-        heap = heap.checked_add(0_u64)?;
+        heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
+        heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
         heap.checked_add(0)
     }
 }
@@ -1287,8 +1328,8 @@ mod golden_tests {
         ("record_transcript_full", || { let value = Transcript::new(&CEILINGS, TranscriptParts { length: u64::MAX, window: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Transcript::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_attempt_smallest", || { let value = Attempt::new(&CEILINGS, AttemptParts { first: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Attempt::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_attempt_full", || { let value = Attempt::new(&CEILINGS, AttemptParts { first: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Attempt::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_layouts_smallest", || { let value = Layouts::new(&CEILINGS, LayoutsParts { component: [0_u8; 32], core: [0_u8; 32], tasks: [0_u8; 32], people: [0_u8; 32], notes: [0_u8; 32], accounts: [0_u8; 32], settings: [0_u8; 32] }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Layouts::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_layouts_full", || { let value = Layouts::new(&CEILINGS, LayoutsParts { component: [165_u8; 32], core: [165_u8; 32], tasks: [165_u8; 32], people: [165_u8; 32], notes: [165_u8; 32], accounts: [165_u8; 32], settings: [165_u8; 32] }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Layouts::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_layouts_smallest", || { let value = Layouts::new(&CEILINGS, LayoutsParts { component: [0_u8; 32], core: [0_u8; 32], tasks: [0_u8; 32], people: [0_u8; 32], notes: [0_u8; 32], accounts: [0_u8; 32], settings: [0_u8; 32], secrets: [0_u8; 32], skein_oauth: [0_u8; 32], smith_transcript: [0_u8; 32] }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Layouts::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_layouts_full", || { let value = Layouts::new(&CEILINGS, LayoutsParts { component: [165_u8; 32], core: [165_u8; 32], tasks: [165_u8; 32], people: [165_u8; 32], notes: [165_u8; 32], accounts: [165_u8; 32], settings: [165_u8; 32], secrets: [165_u8; 32], skein_oauth: [165_u8; 32], smith_transcript: [165_u8; 32] }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Layouts::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
     ];
 
     #[test]

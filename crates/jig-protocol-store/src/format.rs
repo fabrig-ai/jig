@@ -109,6 +109,9 @@ pub fn check_layouts(found: &component::Layouts, wanted: &component::Layouts) ->
         (Family::People, found.people, wanted.people),
         (Family::Notes, found.notes, wanted.notes),
         (Family::Accounts, found.accounts, wanted.accounts),
+        (Family::Secrets, found.secrets, wanted.secrets),
+        (Family::SkeinOauth, found.skein_oauth, wanted.skein_oauth),
+        (Family::SmithTranscript, found.smith_transcript, wanted.smith_transcript),
     ] {
         if found != wanted {
             return Err(OpenRefusal::OlderBuild { why: Older::Layout(family) });
