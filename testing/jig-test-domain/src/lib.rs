@@ -561,6 +561,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
                 core::RestartRequest::Idle
                 | core::RestartRequest::Settings { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
+                | core::RestartRequest::Unresolved { .. }
                 | core::RestartRequest::Refused { .. } => {}
             }
         }
@@ -768,6 +769,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 core::RestartRequest::Idle => {}
                 core::RestartRequest::Settings { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
+                | core::RestartRequest::Unresolved { .. }
                 | core::RestartRequest::Refused { .. } => {
                     domain.stopped_reported = false;
                 }

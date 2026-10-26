@@ -287,6 +287,11 @@ impl Domain {
     pub const fn next_number(&self) -> u32 {
         self.next
     }
+    /// Want finished terminal-row restoration and removed empty accounts.
+    #[must_use]
+    pub fn restore_finished(&self) -> bool {
+        self.phase == Phase::Wanted
+    }
     /// Records the store gave that broke a rule, and accounts left with no source, not restored.
     #[must_use]
     pub const fn unrestored(&self) -> u64 {

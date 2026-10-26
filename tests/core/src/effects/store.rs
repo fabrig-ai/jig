@@ -207,11 +207,10 @@ impl World {
     /// Cold start with the same scenario configuration, including its host slots.
     pub fn restart_with(&mut self, config: root::Config) {
         self.observer.observe(self.wall, crate::referee::Observed::Restart);
-        let before = self.store.applied;
         self.store.reconfigure(18, &config.core.settings.models);
-        if self.store.applied > before {
-            self.observer.fresh_mark(self.wall, &self.store);
-        }
+        // The observer may resume A after a crashed pending copy whose
+        // process-local commits were discarded. Its own position is the fence.
+        self.observer.fresh_mark(self.wall, &self.store);
         self.observer.configure_projects(&config);
         if let Some(watches) = &mut self.watches {
             watches.restart(self.store.applied);

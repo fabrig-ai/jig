@@ -232,7 +232,7 @@ pub(super) fn tag_tasks(
             }
             tasks::Request::Stop { task, attempt } => Request::Held(Box::new(Held::StopRun { task, attempt })),
             tasks::Request::RestoreRefused { .. } => {
-                let _request = core.restart_refuse();
+                core.restart_unresolved(crate::RestoreChild::Tasks, 1);
                 Request::Now(Box::new(Now::RestoreRefused))
             }
             tasks::Request::Waiting { .. }

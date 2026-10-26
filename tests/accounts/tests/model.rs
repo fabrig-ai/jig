@@ -424,3 +424,39 @@ fn saving_again_and_restoring_preserve_the_exact_source_wall() {
     assert_eq!(past.domain.source(2).expect("expired source").spent_until, None);
     assert_eq!(past.domain.next_deadline(), None);
 }
+
+const RESTORED_ACCOUNT: u32 = 10;
+const RESTORED_SOURCE: u32 = 11;
+const ABSENT_ACCOUNT: u32 = 12;
+const RESTORED_PROVIDER: u32 = 1;
+
+fn restored_source(account_number: u32) -> World {
+    World::with(
+        providers(vec![provider(RESTORED_PROVIDER, false, true)]),
+        &[
+            account(RESTORED_ACCOUNT, RESTORED_PROVIDER, Holder::Deployment, b""),
+            source(account_number, RESTORED_SOURCE, 0, Kind::Key),
+        ],
+    )
+}
+
+#[test]
+fn a_restored_source_whose_account_is_held_is_admitted() {
+    let mut world = restored_source(RESTORED_ACCOUNT);
+    world.step(Event::Want);
+    assert!(world.domain.source(RESTORED_SOURCE).is_some());
+    assert!(world.domain.account(RESTORED_ACCOUNT).is_some());
+    assert_eq!(world.domain.unrestored(), 0);
+    assert!(world.domain.restore_finished());
+}
+
+#[test]
+fn a_restored_source_whose_account_is_absent_is_left() {
+    let mut world = restored_source(ABSENT_ACCOUNT);
+    world.step(Event::Want);
+    assert_eq!(world.domain.source(RESTORED_SOURCE), None);
+    assert!(world.domain.account(RESTORED_ACCOUNT).is_none());
+    // The unresolved source and its now empty account are both left.
+    assert_eq!(world.domain.unrestored(), 2);
+    assert!(world.domain.restore_finished());
+}
