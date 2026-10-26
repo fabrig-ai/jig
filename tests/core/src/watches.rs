@@ -202,7 +202,8 @@ impl Parties {
             | root::Event::Failed { .. }
             | root::Event::Connector { .. }
             | root::Event::Stop
-            | root::Event::RestartBegin
+            | root::Event::Switched
+            | root::Event::RestartBegin { .. }
             | root::Event::RestartDone(_)
             | root::Event::ConnectorTimer { .. }
             | root::Event::ProjectionEffect { .. }
@@ -227,21 +228,15 @@ impl Parties {
                 ))) => {
                     self.proposal_projects.insert(row.number, row.project);
                 }
-                root::Write::Save(_) | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => {}
+                root::Write::Save(_)
+                | root::Write::Wires
+                | root::Write::Erase(_)
+                | root::Write::CopySettingsRevision(_) => {}
             }
         }
         for consumer in self.consumers.values_mut() {
             let touched = writes.iter().any(|write| match write {
-                root::Write::Save(root::Record::Core(core::Record::Tasks(tasks::Stored::Live(row)))) => {
-                    query_subject(&consumer.subject, row)
-                        || task_subject(&consumer.subject, row.number)
-                        || matches!(&consumer.subject, Watched::Jig(Subject::Project { project }) if *project == row.project)
-                        || match row.requester {
-                            tasks::Party::Person(party) => party_subject(&consumer.subject, party),
-                            tasks::Party::Task(_) | tasks::Party::Deployment { .. } => false,
-                        }
-                }
-                root::Write::Save(root::Record::Core(core::Record::Tasks(tasks::Stored::Ended(row)))) => {
+                root::Write::Save(root::Record::Core(core::Record::Tasks(tasks::Stored::Live(row) | tasks::Stored::Ended(row)))) => {
                     query_subject(&consumer.subject, row)
                         || task_subject(&consumer.subject, row.number)
                         || matches!(&consumer.subject, Watched::Jig(Subject::Project { project }) if *project == row.project)
@@ -308,7 +303,7 @@ impl Parties {
                     | Watched::Jig(_) => false,
                 },
 
-                root::Write::Save(_) | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => false,
+                root::Write::Save(_) | root::Write::Wires | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => false,
             });
             if touched {
                 consumer.fence.changed(number);

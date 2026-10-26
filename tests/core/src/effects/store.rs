@@ -8,6 +8,14 @@ impl World {
             core::RestartStep::LoadCore | core::RestartStep::LoadInbox | core::RestartStep::RestoreConnector { .. } => {
                 self.load_restart(step);
             }
+            core::RestartStep::Switch if self.hold_switch => {}
+            core::RestartStep::Switch => {
+                if self.store.generation_pending {
+                    self.store.ask(StoreOut::Restart { step, census: None });
+                } else {
+                    self.events.push_back(root::Event::Switched);
+                }
+            }
             core::RestartStep::ReadAfresh { connector: number } => {
                 self.restart_reads.insert(number, step);
                 self.events.push_back(root::Event::Connector {
@@ -27,6 +35,14 @@ impl World {
         }
     }
 
+    /// Serve a previously captured Switch after inspecting the restored copy.
+    pub fn finish_switch(&mut self) {
+        self.hold_switch = false;
+        // The request was already recorded when captured.
+        self.restart_steps.pop();
+        self.restart_step(core::RestartStep::Switch);
+        self.drain();
+    }
     fn load_restart(&mut self, step: core::RestartStep) {
         let census = if step == core::RestartStep::LoadInbox {
             Some(root::inbox_census(&mut self.domain, &self.limits))
@@ -182,6 +198,11 @@ impl World {
         self.observer.fresh_mark(self.wall, &self.store);
     }
 
+    /// Restart the root under changed admission limits, over the same store.
+    pub fn restart_with_limits(&mut self, config: root::Config, limits: root::Limits) {
+        self.limits = limits;
+        self.restart_with(config);
+    }
     /// Cold start with the same scenario configuration, including its host slots.
     pub fn restart_with(&mut self, config: root::Config) {
         self.observer.observe(self.wall, crate::referee::Observed::Restart);
@@ -220,7 +241,7 @@ impl World {
             peers.restart();
         }
         self.cut = None;
-        self.events.push_back(root::Event::RestartBegin);
+        self.events.push_back(root::Event::RestartBegin { pending: self.store.generation_pending });
         self.hello_engine();
         self.drain();
         self.lose_answer = false;

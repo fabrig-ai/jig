@@ -20,6 +20,10 @@ struct Driver {
     handles: Map<Token, ()>,
 }
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "generation pending and file-driver adoption are independent of open and close lifecycle"
+)]
 pub(super) struct Store {
     pub(super) component: protocol::Store,
     env: Env<protocol::Limits>,
@@ -33,6 +37,7 @@ pub(super) struct Store {
     drivers: [Driver; 3],
     pub(super) submitted: Queue<Submit>,
     pub(super) opened: bool,
+    pub(super) pending: bool,
     /// The installation's identifier: the drawn one until the store opens,
     /// then the one it keeps (store.md 4.4).
     pub(super) installation: [u8; 16],
@@ -114,6 +119,7 @@ impl Store {
             drivers,
             submitted: Queue::with_capacity(room),
             opened: false,
+            pending: false,
             installation,
             adopted: false,
             root: None,
@@ -490,16 +496,15 @@ pub(super) fn answer(engine: &mut crate::Engine) {
         }
         let event = engine.store.above.pop().expect("store terminals");
         match event {
-            protocol::Event::Opened { installation, pending, owner, .. } => {
+            protocol::Event::Opened { installation, pending, .. } => {
                 engine.store.installation = installation;
-                if pending {
-                    // B2: the root's switch step asks this.
-                    engine.store.ask(protocol::Request::Switch { owner });
-                } else {
-                    engine.store.opened = true;
-                }
+                engine.store.pending = pending;
+                engine.store.opened = true;
             }
-            protocol::Event::Switched { .. } => engine.store.opened = true,
+            event @ protocol::Event::Switched { .. } => {
+                engine.store.pending = false;
+                route::up(&mut engine.store.routes, event, &mut engine.store.routed);
+            }
             // This shell prints no per-open progress lines.
             protocol::Event::Patched { .. } => {}
             protocol::Event::OpenRefused { .. } => crate::stop::unavailable(engine, b"deployment"),

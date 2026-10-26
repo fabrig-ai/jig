@@ -161,14 +161,20 @@ fn a_chat_s_activity_holds_the_person_s_words_its_turns_and_its_delegate_s_resul
             root::Write::Save(root::Record::Core(core::Record::Core(core::CoreRecord::Terminal(row)))) => {
                 row.task == parent.0 && row.attempt == parent.1 && row.cumulative == 6
             }
-            root::Write::Save(_) | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => false,
+            root::Write::Save(_)
+            | root::Write::Wires
+            | root::Write::Erase(_)
+            | root::Write::CopySettingsRevision(_) => false,
         });
         let line = commit.iter().any(|write| match write {
             root::Write::Save(root::Record::Core(core::Record::Tasks(tasks::Stored::Activity(row)))) => {
                 row.task == parent.0
                     && row.line == tasks::Line::RunEnded { attempt: parent.1, end: tasks::EndKind::Finished, spent: 6 }
             }
-            root::Write::Save(_) | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => false,
+            root::Write::Save(_)
+            | root::Write::Wires
+            | root::Write::Erase(_)
+            | root::Write::CopySettingsRevision(_) => false,
         });
         terminal && line
     }));

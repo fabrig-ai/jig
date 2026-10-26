@@ -382,8 +382,8 @@ impl Application for Testing {
         }
     }
 
-    fn start(_: &Config, _: &mut Store) -> Vec<root::Event> {
-        vec![root::Event::RestartBegin]
+    fn start(_: &Config, store: &mut Store) -> Vec<root::Event> {
+        vec![root::Event::RestartBegin { pending: store.generation_pending }]
     }
 
     fn cold(peers: &mut Neighbours, store: &Store, clock: Clock) {
@@ -540,14 +540,14 @@ impl Application for Testing {
             }
             root::Delivery::Restart(step) => {
                 let position = match step {
-                    core::RestartStep::LoadCore | core::RestartStep::LoadInbox => 0,
+                    core::RestartStep::LoadCore | core::RestartStep::LoadInbox | core::RestartStep::Switch => 0,
                     core::RestartStep::RestoreConnector { connector } => u32::from(connector),
                     core::RestartStep::ReadAfresh { connector } => 2 + u32::from(connector),
                     core::RestartStep::AdoptRuns | core::RestartStep::SettleOutbox { .. } | core::RestartStep::Open => {
                         panic!("root performs internal restart phases")
                     }
                 };
-                if step != core::RestartStep::LoadInbox {
+                if !matches!(step, core::RestartStep::LoadInbox | core::RestartStep::Switch) {
                     peers.routes.push(jig_conformance::referee::Observed::RestartStage { position });
                 }
                 peers.restart(store, step, None)

@@ -14,6 +14,14 @@ impl Neighbours {
                 store.ask(StoreOut::Restart { step, census });
                 Vec::new()
             }
+            core::RestartStep::Switch => {
+                if store.generation_pending {
+                    store.ask(StoreOut::Restart { step, census: None });
+                    Vec::new()
+                } else {
+                    vec![Input::Event(root::Event::Switched)]
+                }
+            }
             core::RestartStep::ReadAfresh { connector: number } => {
                 self.restart_reads.insert(number, step);
                 vec![Input::Event(root::Event::Connector {

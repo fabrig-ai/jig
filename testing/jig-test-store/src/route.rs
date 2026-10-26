@@ -55,6 +55,7 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
             let mut translated = List::with_capacity(u32::try_from(writes.len()).ok()?);
             for write in writes {
                 let write = match write {
+                    root::Write::Wires => store::Write::Wires,
                     root::Write::CopySettingsRevision(number) => store::Write::CopySettingsRevision(number),
                     root::Write::Save(root::Record::Core(row)) => store::Write::Save(row),
                     root::Write::Erase(root::Key::Core(key)) => store::Write::Erase(key),
@@ -71,12 +72,17 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
             Request::Commit { number, writes: translated.into_boxed() }
         }
         StoreOut::Restart { step, census } => {
+            if step == core::RestartStep::Switch {
+                let owner = routes.keep(Flight::Restart { step, census })?;
+                return Some(Request::Switch { owner });
+            }
             match &step {
                 core::RestartStep::LoadCore | core::RestartStep::RestoreConnector { .. } => {}
                 core::RestartStep::LoadInbox => {
                     census.as_ref()?;
                 }
-                core::RestartStep::AdoptRuns
+                core::RestartStep::Switch
+                | core::RestartStep::AdoptRuns
                 | core::RestartStep::ReadAfresh { .. }
                 | core::RestartStep::SettleOutbox { .. }
                 | core::RestartStep::Open => return None,
@@ -118,7 +124,8 @@ fn restart(routes: &Routes, owner: Token, after: Option<store::Cursor>) -> Optio
         core::RestartStep::LoadCore => Restore::Jig(Box::new(core::RestoreRange::LIVE)),
         core::RestartStep::LoadInbox => Restore::Jig(Box::new([core::RestoreRange::Census(census.clone()?)])),
         core::RestartStep::RestoreConnector { connector } => Restore::Application(Box::new([live(*connector)])),
-        core::RestartStep::AdoptRuns
+        core::RestartStep::Switch
+        | core::RestartStep::AdoptRuns
         | core::RestartStep::ReadAfresh { .. }
         | core::RestartStep::SettleOutbox { .. }
         | core::RestartStep::Open => return None,
@@ -261,13 +268,13 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
             stop(routes, into);
         }
         Event::OpenRefused { .. } => stop(routes, into),
-        Event::Opened { pending: true, owner, .. } => {
-            // B2: the root's switch step asks this.
-            into.push(Up::Ask(Request::Switch { owner }));
+        Event::Switched { owner } => {
+            if let Some(Flight::Restart { step: core::RestartStep::Switch, .. }) = routes.pending.remove(&owner) {
+                into.push(Up::Root(root::Event::Switched));
+            }
         }
         // The shell driving open owns progress; this root route prints no lines.
         Event::Patched { .. }
-        | Event::Switched { .. }
         | Event::Opened { .. }
         | Event::Kept { .. }
         | Event::Carried { .. }

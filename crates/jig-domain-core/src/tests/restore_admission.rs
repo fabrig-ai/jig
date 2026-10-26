@@ -36,9 +36,9 @@ fn an_empty_load_commits_the_original_bootstrap_only_after_loading_completes() {
     let mut core = Core::new(config(47), &env.limits).expect("fixture core configuration");
     let mut expected = core.counters.deployment();
     assert!(core.counters.dirty(), "ordinary first start still needs its header");
-    assert_eq!(core.restart_begin(), RestartRequest::Step(RestartStep::LoadCore));
+    assert_eq!(core.restart_begin(false), RestartRequest::Step(RestartStep::LoadCore));
     assert!(!core.counters.dirty(), "no header commit while its durable source is unknown");
-    assert_eq!(core.restart_begin(), RestartRequest::Idle);
+    assert_eq!(core.restart_begin(false), RestartRequest::Idle);
     assert_eq!(core.counters.deployment(), expected);
     for token in [7101, 7102] {
         signin(&mut core, &env, token);
@@ -67,7 +67,7 @@ fn a_restored_header_preserves_every_counter_and_refused_signins_allocate_nothin
     expected.connector_rows = 17;
     expected.applications = 18;
     expected.commits = 19;
-    assert_eq!(core.restart_begin(), RestartRequest::Step(RestartStep::LoadCore));
+    assert_eq!(core.restart_begin(false), RestartRequest::Step(RestartStep::LoadCore));
     assert_eq!(core.restore_core(CoreRecord::Deployment(expected), &env.limits), Restored::Deployment { commits: 19 });
     for token in [7103, 7104] {
         signin(&mut core, &env, token);
@@ -89,7 +89,7 @@ fn an_unknown_header_cannot_allocate_any_family_or_become_dirty_on_time() {
     let mut env = env();
     let mut core = Core::new(config(49), &env.limits).expect("fixture core configuration");
     let expected = core.counters.deployment();
-    assert_eq!(core.restart_begin(), RestartRequest::Step(RestartStep::LoadCore));
+    assert_eq!(core.restart_begin(false), RestartRequest::Step(RestartStep::LoadCore));
     for family in [
         Family::Project,
         Family::Task,
@@ -282,7 +282,7 @@ fn census_fixture() -> (Core, Env<Limits>) {
     let mut configuration = config(79);
     configuration.owners = Box::new([]);
     let mut core = Core::new(configuration, &env.limits).expect("fixture core configuration");
-    assert_eq!(core.restart_begin(), RestartRequest::Step(RestartStep::LoadCore));
+    assert_eq!(core.restart_begin(false), RestartRequest::Step(RestartStep::LoadCore));
     let mut header = core.counters.deployment();
     header.tasks = 20;
     header.people = 7;
@@ -537,7 +537,7 @@ fn a_restored_projects_mark_precedes_the_next_project_allocation() {
     let mut core = Core::new(config(50), &limits).expect("fixture core");
     let mut header = core.counters.deployment();
     header.projects = 5;
-    core.restart_begin();
+    core.restart_begin(false);
     assert_eq!(core.restore_core(CoreRecord::Deployment(header), &limits), Restored::Deployment { commits: 0 });
     assert_eq!(fresh(&mut core.counters, Family::Project), Some(6));
 }

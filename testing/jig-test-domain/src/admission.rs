@@ -12,7 +12,8 @@ pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<
             step(domain, env, event);
             Ok(())
         }
-        event @ (Event::RestartDone(_)
+        event @ (Event::Switched
+        | Event::RestartDone(_)
         | Event::TranscriptLoaded { .. }
         | Event::Core(
             core::Event::ReadLoaded { .. }
@@ -34,7 +35,7 @@ pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<
         | Event::Application { .. }
         | Event::ConnectorTimer { .. }
         | Event::WriterRead { .. }
-        | Event::RestartBegin
+        | Event::RestartBegin { .. }
         | Event::ProjectionEffect { .. }
         | Event::TopicCall { .. }
         | Event::EffectCall { .. }
@@ -67,7 +68,8 @@ fn room(env: &Env<Limits>, event: &Event) -> JournalRoom {
         | Event::Application { .. }
         | Event::ConnectorTimer { .. }
         | Event::WriterRead { .. }
-        | Event::RestartBegin
+        | Event::Switched
+        | Event::RestartBegin { .. }
         | Event::RestartDone(_)
         | Event::TranscriptLoaded { .. }
         | Event::Committed { .. }

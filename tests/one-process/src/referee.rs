@@ -457,6 +457,7 @@ impl skein_world::Referee<Proc> for Referee {
             }
             for write in &commit.writes {
                 match write {
+                    root::Write::Wires => {}
                     root::Write::CopySettingsRevision(number) => {
                         use jig_domain_core as core;
                         let key = root::Key::Core(core::Key::Core(core::CoreKey::Settings(core::settings::Key::Held(

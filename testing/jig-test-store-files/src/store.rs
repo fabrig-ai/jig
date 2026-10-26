@@ -32,8 +32,16 @@ struct Delayed {
     delay: u32,
 }
 /// The real component, with a typed mirror of its durable writes.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "generation pending, paused pages, held acknowledgements and failure are independent shell facts"
+)]
 pub struct Store {
     pub applied: u64,
+    /// Whether this open serves a copy awaiting the core’s switch step.
+    pub generation_pending: bool,
+    pub switch_requests: u32,
+    wires: &'static [protocol::Wire],
     pub rows: BTreeMap<root::Key, root::Record>,
     pub pending: VecDeque<Pending>,
     pub held: VecDeque<u64>,
@@ -102,6 +110,9 @@ impl Store {
         routes.configure(limits);
         let mut store = Store {
             applied: 0,
+            generation_pending: false,
+            switch_requests: 0,
+            wires: &[],
             rows: BTreeMap::new(),
             pending: VecDeque::new(),
             held: VecDeque::new(),
@@ -130,6 +141,42 @@ impl Store {
         };
         store.open();
         store
+    }
+    /// Set the shell's wire data for this and subsequent opens.
+    pub fn wires(&mut self, wires: &'static [protocol::Wire]) {
+        assert!(self.component.as_mut().expect("component").wires(wires));
+        self.wires = wires;
+    }
+    /// Inspect the fake machine without changing the component's live handles.
+    pub fn file_bytes(&mut self, name: &[u8]) -> Option<Vec<u8>> {
+        self.disk.as_mut().expect("directory-backed fixture").read(name)
+    }
+    pub fn generation_contents(&mut self, name: &[u8]) -> BTreeMap<Vec<u8>, Vec<u8>> {
+        self.disk.as_mut().expect("directory-backed fixture").contents(name)
+    }
+    /// Consume the shell to inspect the actual component-owned wires row.
+    #[must_use]
+    pub fn into_wires(mut self) -> Box<[u8]> {
+        let mut stores = self.component.take().expect("component").into_stores();
+        let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: self.component_limits.store };
+        let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
+        let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+        let key = protocol::keys::encode_own(&protocol::keys::Own::Wires, env.limits.key).expect("wires key");
+        skein_kv::down(
+            &mut stores.store,
+            &env,
+            skein_kv::Request::Get { owner: Token::new(0), key },
+            &mut above,
+            &mut below,
+        );
+        while let Some(request) = below.pop() {
+            let arrived = self.file(0, request);
+            skein_kv::up(&mut stores.store, &env, arrived.event, &mut above, &mut below);
+        }
+        let Some(skein_kv::Event::Got { value: Some(bytes), .. }) = above.pop() else {
+            panic!("component wires row");
+        };
+        bytes
     }
     /// A fixture binary's host renderer, applied to the component's read bytes.
     /// The ordinary shell uses jig's smith renderer in the store route.
@@ -214,6 +261,7 @@ impl Store {
             protocol::Store::over(&self.component_limits, application, &self.models, stores)
         });
         self.component.as_mut().expect("rebuilt component").patch_sets(self.sets);
+        assert!(self.component.as_mut().expect("rebuilt component").wires(self.wires));
         self.routes = route::Routes::new(self.limits.routes);
         self.routes.configure(&self.limits);
         self.pending.clear();
@@ -231,12 +279,17 @@ impl Store {
     #[must_use]
     pub fn fork(&self) -> Store {
         let mut fresh = Store::with_patch_sets(&self.limits, &self.models, self.initial_sets);
+        fresh.wires(self.wires);
         for index in 0..=self.durable.len() {
             for (_, sets) in self.patches.iter().filter(|(at, _)| *at == index) {
                 fresh.patch_sets(*sets);
                 fresh.crash(0);
             }
             if let Some((number, writes)) = self.durable.get(index) {
+                if fresh.generation_pending && writes.contains(&root::Write::Wires) {
+                    fresh.ask(StoreOut::Restart { step: jig_domain_core::RestartStep::Switch, census: None });
+                    let _answers = fresh.answers();
+                }
                 fresh.submit(*number, writes.clone(), 0);
                 assert_eq!(fresh.tick(false), Ok(Some(*number)));
             }
@@ -274,6 +327,9 @@ impl Store {
         }
     }
     fn request(&mut self, out: StoreOut) {
+        if matches!(out, StoreOut::Restart { step: jig_domain_core::RestartStep::Switch, .. }) {
+            self.switch_requests += 1;
+        }
         let request = route::down(&mut self.routes, out).expect("root has room for its store request");
         self.drive(VecDeque::from([request]), Queue::with_capacity(protocol::MAX_OUT_DOWN));
     }
@@ -305,8 +361,10 @@ impl Store {
             Queue::with_capacity(protocol::MAX_OUT_DOWN),
         );
         assert!(!self.failed, "durable stores reopen after their files are cut");
-        if self.patched > 0 {
+        if !self.rows.is_empty() {
             self.refresh_patched_rows();
+        }
+        if self.patched > 0 {
             self.patches.push((self.durable.len(), self.sets));
         }
     }
@@ -382,18 +440,19 @@ impl Store {
     }
     fn event(&mut self, event: Event, requests: &mut VecDeque<Request>) {
         match event {
-            Event::Opened { last, pending, owner, .. } => {
+            Event::Opened { last, pending, .. } => {
                 self.applied = last;
-                if pending {
-                    // B2: the root's switch step asks this.
-                    requests.push_back(Request::Switch { owner });
-                }
+                self.generation_pending = pending;
             }
-            Event::Switched { .. } => {}
+            event @ Event::Switched { .. } => {
+                self.generation_pending = false;
+                self.route(event, requests);
+            }
             Event::Committed { number, .. } => {
                 let writes = self.inflight.remove(&number).expect("commit belongs to the root");
                 for write in &writes {
                     match write {
+                        root::Write::Wires => {}
                         root::Write::CopySettingsRevision(number) => {
                             use jig_domain_core as core;
                             let key = root::Key::Core(core::Key::Core(core::CoreKey::Settings(
@@ -433,7 +492,16 @@ impl Store {
                 let row = root::Record::Core(row);
                 self.rows.insert(row.key(), row);
             }
-            Event::Failed { .. } | Event::FrameTooLarge { .. } => self.failed = true,
+            event @ (Event::Failed { .. } | Event::FrameTooLarge { .. }) => {
+                self.failed = true;
+                if !self.routes.idle() {
+                    self.route(event, requests);
+                }
+            }
+            event @ Event::OpenRefused { .. } if !self.routes.idle() => {
+                self.failed = true;
+                self.route(event, requests);
+            }
             Event::OpenRefused { why, .. } => panic!("world store open refused: {why:?}"),
             event @ (Event::Restored { .. } | Event::Loaded { .. } | Event::Read { .. })
                 if self.page_delay != 0 || self.pages_paused =>

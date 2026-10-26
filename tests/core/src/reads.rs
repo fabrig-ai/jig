@@ -86,7 +86,8 @@ impl Parties {
             | root::Event::Failed { .. }
             | root::Event::Connector { .. }
             | root::Event::Stop
-            | root::Event::RestartBegin
+            | root::Event::Switched
+            | root::Event::RestartBegin { .. }
             | root::Event::RestartDone(_)
             | root::Event::ConnectorTimer { .. }
             | root::Event::ProjectionEffect { .. }

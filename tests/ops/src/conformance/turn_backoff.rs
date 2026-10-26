@@ -169,6 +169,7 @@ impl World {
                     | root::Output::ApplicationRead { .. }
                     | root::Output::IncidentAssociationRefused { .. }
                     | root::Output::Application { .. }
+                    | root::Output::Switch
                     | root::Output::Load { .. }
                     | root::Output::CoreLoad(_)
                     | root::Output::Core(_)

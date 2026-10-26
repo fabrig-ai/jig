@@ -274,6 +274,10 @@ pub type Delegating = (CallKey, Box<[tasks::Stub]>, Option<people::Given>);
 /// section 10.1); route room is cached only after validating those limits.
 #[derive(Debug)]
 #[expect(clippy::partial_pub_fields, reason = "the keyed escalation route remains private to the core")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "pending generation, worker placement, stopping and role-table fullness are independent facts"
+)]
 pub struct Core {
     room_max: skein_lib::JournalRoom,
     run_inbox: u32,
@@ -300,6 +304,7 @@ pub struct Core {
     pub(crate) settings_holders: u32,
     pub(crate) applications: Map<Token, routing::application_routes::Flight>,
     pub(crate) restart: restart::Restart,
+    pub(crate) restart_pending: bool,
     pub(crate) restart_attempts: u32,
     /// Application connectors addressed only by number.
     pub connectors: Box<[u16]>,
@@ -655,6 +660,7 @@ impl Core {
             settings_holders: 0,
             applications: Map::with_capacity(limits.people.pending),
             restart: restart::Restart::Cold,
+            restart_pending: false,
             restart_attempts: limits.fleet.attempts,
             counters: Counters::bootstrap(config.deployment),
             seed_owners: config.owners.clone(),

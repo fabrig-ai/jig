@@ -81,7 +81,7 @@ fn an_own_subject_names_the_sign_ins_party() {
 fn an_own_subject_after_a_restart_names_the_restored_sign_ins_party() {
     let (original, limits, sign_in, records) = signed_core();
     let mut restored = Core::new(config(42), &limits).expect("fixture core configuration");
-    assert_eq!(restored.restart_begin(), RestartRequest::Step(RestartStep::LoadCore));
+    assert_eq!(restored.restart_begin(false), RestartRequest::Step(RestartStep::LoadCore));
     let header = original.counters.deployment();
     assert_eq!(
         restored.restore_core(CoreRecord::Deployment(header), &limits),

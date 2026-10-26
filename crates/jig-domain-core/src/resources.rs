@@ -244,6 +244,7 @@ impl Core {
                 crate::RestartStep::LoadCore
                 | crate::RestartStep::LoadInbox
                 | crate::RestartStep::RestoreConnector { .. }
+                | crate::RestartStep::Switch
                 | crate::RestartStep::AdoptRuns
                 | crate::RestartStep::ReadAfresh { .. }
                 | crate::RestartStep::SettleOutbox { .. }

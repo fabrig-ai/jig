@@ -274,7 +274,10 @@ fn first_claim_host(world: &World) -> jig_domain_fleet::HostKind {
             {
                 Some(proof.host)
             }
-            root::Write::Save(_) | root::Write::Erase(_) | root::Write::CopySettingsRevision(_) => None,
+            root::Write::Save(_)
+            | root::Write::Wires
+            | root::Write::Erase(_)
+            | root::Write::CopySettingsRevision(_) => None,
         })
         .expect("first claim submitted")
 }

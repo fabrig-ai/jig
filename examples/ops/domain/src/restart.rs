@@ -48,6 +48,7 @@ pub(crate) fn route(
                 };
                 held(decision, Output::Load { step, range });
             }
+            core::RestartStep::Switch => held(decision, Output::Switch),
             core::RestartStep::AdoptRuns => {
                 work.push(Work::Core(core::Event::Tasks(tasks::Event::Restored)));
                 work.push(Work::AdoptClaims);
@@ -89,11 +90,15 @@ pub(crate) fn route(
 pub(crate) fn store(
     domain: &mut Domain,
     env: &Env<Limits>,
-    _decision: &mut Decision<Write, Output>,
+    decision: &mut Decision<Write, Output>,
     store: Store,
     work: &mut Queue<Work>,
 ) {
     match store {
+        Store::Switched => {
+            crate::domain::write(domain, decision, Write::Wires);
+            held(decision, Output::ToChild(crate::Released::RestartDone(core::RestartStep::Switch)));
+        }
         Store::Committed { .. } | Store::Failed { .. } => unreachable!("store terminals belong to the journal"),
         Store::Loaded(event) => work.push(Work::Core(event)),
         Store::Restored(step) => {

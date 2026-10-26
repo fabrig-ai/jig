@@ -22,6 +22,8 @@ pub enum Store {
     Restore(Record),
     /// The store completed this exact restart range.
     Restored(core::RestartStep),
+    /// The generation is active; save the start’s wires.
+    Switched,
     /// Ordered opaque transcript rows for a prepared activation.
     Transcript { task: u64, rows: Box<[core::TranscriptRow]>, done: bool },
     /// A child-specific loaded page in the core's vocabulary.
@@ -46,6 +48,8 @@ pub enum Released {
     Procedure { task: u64, step: u64, connector: u16, code: u32 },
     /// One core-selected stage of cold restart.
     Restart(core::RestartStep),
+    /// The start’s mark is durable.
+    RestartDone(core::RestartStep),
 }
 
 /// Inputs to the reference root; protocol adapters supply typed child values.
@@ -89,7 +93,7 @@ pub enum Event {
     /// A child-addressed output released by the journal.
     Released(Released),
     /// Begin the core's cold-start script.
-    Restart,
+    Restart { pending: bool },
     /// One due core timer.
     Timer(core::Timer),
     /// One observability retry deadline.
@@ -152,6 +156,8 @@ pub enum Output {
     Application { to: ReplyTo, outcome: infrastructure::ApplicationOutcome },
     /// One atomic transaction, numbered by the journal.
     Commit { number: u64, writes: Queue<Write> },
+    /// Make the pending generation active, or answer Switched immediately.
+    Switch,
     /// Load this child's rows for the core-selected restart step.
     Load { step: core::RestartStep, range: Range },
     /// A core-owned store read, routed by its variant.

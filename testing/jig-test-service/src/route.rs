@@ -105,6 +105,13 @@ fn deliver(engine: &mut Engine, delivery: root::Delivery) {
 
 fn restart(engine: &mut Engine, step: core::RestartStep) {
     match step {
+        core::RestartStep::Switch => {
+            if engine.store.pending {
+                crate::store::request(engine, jig_test_store::StoreOut::Restart { step, census: None });
+            } else {
+                engine.events.push(root::Event::Switched);
+            }
+        }
         core::RestartStep::ReadAfresh { connector: number } => {
             let paths = system(engine, number).paths();
             let count = u32::try_from(paths.len()).expect("bounded system resources");

@@ -68,6 +68,8 @@ pub enum RestartStep {
     RestoreConnector {
         connector: u16,
     },
+    /// Make the store active, then commit the start’s wires (domain/engine.md, 6).
+    Switch,
     AdoptRuns,
     ReadAfresh {
         connector: u16,
@@ -131,9 +133,10 @@ impl Core {
     }
 
     /// Begin once; a repeated start cannot repeat loads or open decisions.
-    pub fn restart_begin(&mut self) -> RestartRequest {
+    pub fn restart_begin(&mut self, pending: bool) -> RestartRequest {
         match self.restart {
             Restart::Cold => {
+                self.restart_pending = pending;
                 self.people.end_seeding();
                 self.counters.begin_restore();
                 self.restart_ask(RestartStep::LoadCore)
@@ -211,13 +214,14 @@ impl Core {
                 self.census_progress = skein_lib::Map::with_capacity(self.census_progress.capacity());
                 match self.connectors.first() {
                     Some(&connector) => RestartStep::RestoreConnector { connector },
-                    None => RestartStep::AdoptRuns,
+                    None => RestartStep::Switch,
                 }
             }
             RestartStep::RestoreConnector { connector } => match self.restart_next_connector(connector) {
                 Some(connector) => RestartStep::RestoreConnector { connector },
-                None => RestartStep::AdoptRuns,
+                None => RestartStep::Switch,
             },
+            RestartStep::Switch => RestartStep::AdoptRuns,
             RestartStep::AdoptRuns => {
                 if !self.adopted.is_empty() {
                     return self.restart_refuse();
