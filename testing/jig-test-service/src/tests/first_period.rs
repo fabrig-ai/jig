@@ -207,5 +207,5 @@ fn a_later_start_says_no_period() {
         get(&mut service, core::Key::Tasks(tasks::Key::Ledger(tasks::Funder::Period { project: 2, period: 1 }))),
         None
     );
-    assert_eq!(commits(&mut service), 1, "restart said no Period and made no new commit");
+    assert_eq!(commits(&mut service), 2, "restart said no Period and committed only its start mark");
 }

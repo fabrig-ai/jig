@@ -503,7 +503,7 @@ impl World {
         let heap = crate::observations::Heap::new(&limits);
         let bootstrap = crate::effects::World::first_start_with_accounts(config(seed), &limits);
         let mut observer = crate::observations::Observer::new(&config(seed));
-        observer.durable(0, &bootstrap.store);
+        observer.fresh_mark(0, &bootstrap.store);
         World {
             creating: crate::fixtures::Creating::new(&config(seed).core, limits.core.tasks.tree_tasks),
             domain: bootstrap.domain,

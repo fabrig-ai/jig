@@ -598,6 +598,9 @@ impl Observer {
     /// Compare the cold store with the receipts that outside observers saw.
     pub fn cold(&mut self, now: u64, store: &Store) {
         self.requests.retain(|_, (_, _, seen)| seen.is_none());
+        // An uncommitted forget is lost with the old root. A start's mark may
+        // reuse its number without forgetting the task.
+        self.forgetting.retain(|commit, _| *commit <= store.applied);
         let receipts = store
             .rows
             .values()
@@ -716,8 +719,8 @@ impl Observer {
         self.durable_at(now, store, store.applied);
     }
 
-    /// A mark-only upgrade writes windows and the seal's header. Neither is
-    /// part of the referee's snapshot: each patch commit has the same view.
+    /// Upgrade metadata and the start's mark do not change the referee's
+    /// snapshot. At bootstrap, these repeat the seed's view.
     pub fn fresh_mark(&mut self, now: u64, store: &Store) {
         for number in self.applied + 1..=store.applied {
             self.durable_at(now, store, number);

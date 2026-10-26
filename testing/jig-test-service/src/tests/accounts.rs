@@ -124,16 +124,24 @@ fn signed_out(events: &mut Queue<root::Event>, old: u32) -> Option<bool> {
 
 fn carry_llm_key(engine: &mut crate::Engine, value: &[u8]) -> u64 {
     let _later = engine.store.secrets(Token::new(123), store::Secrets::Carry { value: Secret::new(value.into()) });
-    let Some(store::Event::Carried { number, .. }) = engine.store.above.pop() else { panic!("carried LLM key") };
-    number
+    // The start's mark may still have a terminal here. Preserve unrelated
+    // answers and take only this explicit carry's terminal.
+    for _ in 0..engine.store.above.len() {
+        let event = engine.store.above.pop().expect("store answer");
+        if let store::Event::Carried { owner, number } = &event
+            && *owner == Token::new(123)
+        {
+            return *number;
+        }
+        engine.store.above.push(event);
+    }
+    panic!("carried LLM key")
 }
 fn pump_accounts(accounts: &mut Accounts, engine: &mut crate::Engine) -> List<domain::FromComponent> {
     let mut events = Queue::with_capacity(64);
     let mut heard = List::with_capacity(64);
     for _ in 0_u32..32 {
-        while let Some(event) = engine.store.above.pop() {
-            engine.store.sources.push(event);
-        }
+        crate::store::answer(engine);
         accounts.iterate(Time::from_nanos(1), Wall::from_nanos(1), &mut engine.values, &mut events, &mut engine.store);
         while let Some(event) = events.pop() {
             if let root::Event::Core(core::Event::Account(domain::Event::Component(event))) = event {

@@ -1,6 +1,6 @@
 //! Configuration seeds project policies and first owners once (configuration.md, 3).
 
-use jig_core_world::{client_peer::ClientPeer, effects::World, world};
+use jig_core_world::{client_peer::ClientPeer, effects::World, store_peer::with_start_mark, world};
 use jig_domain_authority as authority;
 use jig_domain_core::{self as core, documents, reads};
 use jig_domain_people as people;
@@ -58,7 +58,7 @@ fn project_at(world: &mut World, sign_in: u64, number: u32) -> documents::Projec
 fn a_first_start_seeds_the_policy_and_owner_before_the_owner_signs_in() {
     let mut world = cold();
     assert!(world.domain.ready());
-    assert_eq!(world.store.applied, 1, "one first-start decision; no account counter changed");
+    assert_eq!(world.store.applied, 2, "one first-start decision and its mark; no account counter changed");
     assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::Accounts(jig_domain_accounts::Key::Next))));
     assert_eq!(
         world.store.rows[&root::Key::Core(core::Key::People(people::Key::Roles(1)))],
@@ -93,9 +93,9 @@ fn a_restart_seeds_nothing_and_keeps_the_saved_policy_and_owner() {
     configuration.core.owners = Box::new([]);
     world.restart_with(configuration);
     assert!(world.domain.ready());
-    assert_eq!(world.store.rows, rows);
-    assert_eq!(world.store.applied, 1, "the restored counter has not moved");
-    assert_eq!(world.commits.len(), commits);
+    assert_eq!(world.store.rows, with_start_mark(&rows));
+    assert_eq!(world.store.applied, 3, "only the start's mark moves the restored counter");
+    assert_eq!(world.commits.len(), commits + 1);
     let (person, sign_in) = sign_in(&mut world, 7);
     assert_eq!(person, 1);
     let project = project(&mut world, sign_in);
@@ -161,8 +161,8 @@ fn all_configured_projects_seed_together_at_or_below_people_capacity() {
         let (configuration, limits) = two_projects(capacity);
         let mut world = World::first_start(configuration, limits);
         assert!(world.domain.ready());
-        assert_eq!(world.store.applied, 1, "the whole seed is one atomic decision");
-        assert_eq!(world.commits.len(), 1);
+        assert_eq!(world.store.applied, 2, "the whole seed is one atomic decision, followed by the start's mark");
+        assert_eq!(world.commits.len(), 2);
         for (project, spend, holdings) in
             [(1, 1000, vec![people::Holding { person: 1, role: people::Role::Owner }]), (2, 700, vec![])]
         {
@@ -189,9 +189,9 @@ fn all_configured_projects_seed_together_at_or_below_people_capacity() {
         changed.core.seed_projects = Box::new([]);
         world.restart_with(changed);
         assert!(world.domain.ready());
-        assert_eq!(world.store.rows, rows, "restart keeps every seeded policy and roster");
-        assert_eq!(world.store.applied, 1, "restart does not reseed");
-        assert_eq!(world.commits.len(), commits);
+        assert_eq!(world.store.rows, with_start_mark(&rows), "restart keeps every seeded policy and roster");
+        assert_eq!(world.store.applied, 3, "restart marks without reseeding");
+        assert_eq!(world.commits.len(), commits + 1);
     }
 }
 
@@ -471,7 +471,7 @@ fn a_project_configured_after_the_first_start_is_not_seeded() {
     changed.core.seed_projects[1].name = Box::from("Later");
     changed.core.owners[1].project = LATER_PROJECT;
     world.restart_with(changed);
-    assert_eq!(world.store.rows, rows, "restart saves nothing for the added seed");
+    assert_eq!(world.store.rows, with_start_mark(&rows), "restart saves nothing for the added seed");
     let (_, signed) = sign_in(&mut world, FIRST_OWNER_SUBJECT);
     assert_eq!(project_names(&mut world, signed), [(1, Box::from(&b"Tally"[..]))]);
     for key in [people::Key::Policy(LATER_PROJECT), people::Key::Roles(LATER_PROJECT)] {

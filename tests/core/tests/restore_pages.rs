@@ -1,5 +1,10 @@
 //! Public cold-restore page scheduling (`domain/testing.md`, sections 4 and 7).
-use jig_core_world::{client_peer::ClientPeer, effects::World, peers::Peers, store_peer::StorePeer};
+use jig_core_world::{
+    client_peer::ClientPeer,
+    effects::World,
+    peers::Peers,
+    store_peer::{StorePeer, with_start_mark},
+};
 use jig_domain_core as core;
 use jig_domain_people as people;
 use jig_test_domain as root;
@@ -96,7 +101,7 @@ fn a_paused_restore_answers_an_ask_not_ready_without_a_commit_or_retained_answer
     assert_eq!(world.store.rows, rows, "no business mutation or retained keyed answer");
     assert!(world.store_peer.as_mut().expect("store peer").take().is_empty());
     world.finish_restore_pages();
-    assert_eq!(world.store.rows, rows, "whole original restored facts");
+    assert_eq!(world.store.rows, with_start_mark(&rows), "whole original restored facts and the start's mark");
     world.send(ask(&world, sign_in, 7101));
     assert!(matches!(reply(&mut world, 7101).1, people::Reply::Outcome(people::Outcome::Created { .. })));
 }
@@ -134,6 +139,7 @@ fn paused_polls_preserve_multiple_whole_pages_and_repeated_release_is_safe() {
     world.finish_restore_pages();
     assert!(!world.store.loading());
     assert_eq!(world.restart_steps.last(), Some(&core::RestartStep::ReadAfresh { connector: 2 }));
+    let rows = with_start_mark(&rows);
     assert_eq!(world.store.rows, rows);
     let pages: Vec<_> =
         world.trace[trace_start..].iter().filter(|line| line.starts_with("store page LoadCore ")).cloned().collect();
@@ -147,7 +153,7 @@ fn paused_polls_preserve_multiple_whole_pages_and_repeated_release_is_safe() {
     assert_eq!(world.store.applied, applied);
     pause(&mut world);
     world.finish_restore_pages();
-    assert_eq!(world.store.rows, rows);
+    assert_eq!(world.store.rows, with_start_mark(&rows));
 }
 
 #[test]
@@ -156,7 +162,7 @@ fn finishing_held_original_pages_restores_real_authentication_and_admission() {
     let rows = world.store.rows.clone();
     pause(&mut world);
     world.finish_restore_pages();
-    assert_eq!(world.store.rows, rows);
+    assert_eq!(world.store.rows, with_start_mark(&rows));
     world.send(ask(&world, sign_in, 7105));
     assert!(matches!(reply(&mut world, 7105).1, people::Reply::Outcome(people::Outcome::Created { .. })));
     assert!(world.store.rows.values().any(|row| matches!(row,
@@ -180,12 +186,13 @@ fn default_restore_replays_the_same_durable_whole_request_without_making_it_twic
     let commits = world.commits.len();
     world.restart_with(jig_core_world::effects::fixture(SEED, false).0);
     assert!(!world.store.loading());
+    let rows = with_start_mark(&rows);
     assert_eq!(world.store.rows, rows);
     world.send(ask(&world, sign_in, 7103));
     assert_eq!(reply(&mut world, 7103), (None, answer));
     assert_eq!(world.store.rows, rows);
-    assert_eq!(world.store.applied, applied);
-    assert_eq!(world.commits.len(), commits);
+    assert_eq!(world.store.applied, applied + 1);
+    assert_eq!(world.commits.len(), commits + 1);
 }
 
 #[test]
@@ -213,14 +220,18 @@ fn a_held_restore_expires_sign_ins_at_the_current_external_wall_time() {
         .expect("whole original deployment header");
     assert_eq!(header.commits, applied);
     header.commits += 1;
-    assert_eq!(world.store.rows, expected, "the actual restored owner erases the expired sign-in only");
+    assert_eq!(world.store.rows, with_start_mark(&expected), "restore erases the expired sign-in, then marks");
     let snapshots = world.store_peer.as_mut().expect("store peer").take();
-    assert_eq!(snapshots.len(), 1);
-    assert_eq!(snapshots[0].rows, world.store.rows);
-    assert_eq!(snapshots[0].commit, world.store.applied);
+    assert_eq!(snapshots.len(), 2);
+    assert_eq!(snapshots[0].rows, expected);
     assert_eq!(snapshots[0].commit, applied + 1);
-    assert!(snapshots[0].at.as_nanos() > release_at.as_nanos());
-    assert!(snapshots[0].at.as_nanos() <= world.wall_time().as_nanos());
+    assert_eq!(snapshots[1].rows, world.store.rows);
+    assert_eq!(snapshots[1].commit, world.store.applied);
+    assert_eq!(snapshots[1].commit, applied + 2);
+    for snapshot in snapshots {
+        assert!(snapshot.at.as_nanos() > release_at.as_nanos());
+        assert!(snapshot.at.as_nanos() <= world.wall_time().as_nanos());
+    }
     world.send(ask(&world, sign_in, 7104));
     assert_eq!(reply(&mut world, 7104).1, people::Reply::SignedOut);
 }

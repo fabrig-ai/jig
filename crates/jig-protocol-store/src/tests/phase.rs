@@ -55,7 +55,7 @@ fn bridge_open(
         && !*switching
     {
         *switching = true;
-        // B2: the root's switch step asks this.
+        // This store-only driver has no engine root to ask for the switch.
         crate::down(store, env, Request::Switch { owner: *owner }, above, below);
     }
     if let Event::Switched { .. } = event { true } else { false }

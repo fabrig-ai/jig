@@ -434,11 +434,11 @@ impl World {
         events
     }
 
-    /// Compatibility bridge while roots gain their switch step.
+    /// Open and switch directly for store-only stories without an engine root.
     pub fn open_switched(&mut self) -> Option<u64> {
         let last = self.open()?;
         if self.pending {
-            // B2: the root's switch step asks this.
+            // This store-only driver has no engine root to ask for the switch.
             self.switch()?;
         }
         Some(last)
