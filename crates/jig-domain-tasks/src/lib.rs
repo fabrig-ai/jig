@@ -152,7 +152,7 @@ pub use periods::PeriodTimes;
 pub use proposals::{
     PROPOSAL_WITHOUT_TASK, PersonAction, PersonProposal, PersonProposalState, Proposal, ProposalAction,
     ProposalDecision, ProposalHolder, ProposalKind, ProposalOutcome, ProposalState, SETTINGS_ITEMS, Setting,
-    SettingEdit, SettingHead,
+    SettingEdit, SettingHead, SettingsDecision, SettingsOutcome,
 };
 pub use runtime::RetryNotice;
 pub use value::{

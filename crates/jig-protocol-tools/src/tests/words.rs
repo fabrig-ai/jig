@@ -31,8 +31,24 @@ fn a_subscribe_call_may_ask_to_hear_a_tasks_holds() {
             assert_eq!(kind, SubscriptionKind::Task { target: TARGET, held: true, result: true });
         }
         other @ (crate::Decoded::Action(_)
+        | crate::Decoded::Settings { .. }
         | crate::Decoded::Delegate(_)
         | crate::Decoded::Problem(_)
         | crate::Decoded::NotMine) => panic!("unexpected subscription {other:?}"),
+    }
+}
+
+#[test]
+fn a_settings_outcome_reads_its_revision_or_stale_newest_and_rejection_words() {
+    use jig_domain_tasks::SettingsOutcome;
+    for (outcome, text) in [
+        (SettingsOutcome::Accepted { revision: 3 }, b"Settings proposal 2 accepted at revision 3:\nHello".as_slice()),
+        (SettingsOutcome::Rejected, b"Settings proposal 2 rejected:\nHello".as_slice()),
+        (SettingsOutcome::Stale { newest: 4 }, b"Settings proposal 2 withdrawn as stale; newest 4:\nHello".as_slice()),
+    ] {
+        assert_eq!(
+            crate::words(&fixtures::word(MessageKind::SettingsDecision { proposal: PROPOSAL, outcome })).as_ref(),
+            text
+        );
     }
 }

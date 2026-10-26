@@ -15,6 +15,7 @@ pub fn words(word: &tasks::Word) -> Box<[u8]> {
                 tasks::Party::Deployment { .. } => 0,
             },
         ),
+        tasks::MessageKind::SettingsDecision { proposal, outcome } => return settings(proposal, outcome, &word.words),
         tasks::MessageKind::ProposalDecision { proposal, accepted } => {
             (if accepted { b"Proposal accepted ".as_slice() } else { b"Proposal rejected ".as_slice() }, proposal)
         }
@@ -60,6 +61,30 @@ fn held(label: &[u8], task: u64, revision: u64, words: &[u8]) -> Box<[u8]> {
     let mut writer = Writer::new(total);
     for part in parts {
         writer.put(part).expect("measured held message");
+    }
+    writer.finish()
+}
+
+fn settings(proposal: u64, outcome: tasks::SettingsOutcome, words: &[u8]) -> Box<[u8]> {
+    let proposal = Decimal::of(proposal);
+    let (label, revision) = match outcome {
+        tasks::SettingsOutcome::Accepted { revision } => (b" accepted at revision ".as_slice(), Some(revision)),
+        tasks::SettingsOutcome::Rejected => (b" rejected".as_slice(), None),
+        tasks::SettingsOutcome::Stale { newest } => (b" withdrawn as stale; newest ".as_slice(), Some(newest)),
+    };
+    let revision = match revision {
+        Some(n) => Decimal::of(u64::from(n)),
+        None => Decimal::of(0),
+    };
+    let revision = if outcome == tasks::SettingsOutcome::Rejected { b"".as_slice() } else { revision.as_bytes() };
+    let parts = [b"Settings proposal ".as_slice(), proposal.as_bytes(), label, revision, b":\n", words];
+    let mut length = 0_usize;
+    for part in parts {
+        length = length.checked_add(part.len()).expect("bounded settings message");
+    }
+    let mut writer = Writer::new(length);
+    for part in parts {
+        writer.put(part).expect("measured settings message");
     }
     writer.finish()
 }

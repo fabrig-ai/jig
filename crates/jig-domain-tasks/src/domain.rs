@@ -604,6 +604,9 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::Propose { reply_to, proposal } => {
             crate::proposals::propose(domain, env, reply_to, proposal, out);
         }
+        Event::DecideSettingsProposal { reply_to, decision } => {
+            crate::proposals::decide_settings(domain, env, reply_to, decision, out);
+        }
         Event::DecideProposal { reply_to, proposer, proposal, message, by, decision } => {
             crate::proposals::decide(domain, env, reply_to, proposer, proposal, message, by, decision, out);
         }
