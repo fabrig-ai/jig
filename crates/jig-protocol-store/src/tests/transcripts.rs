@@ -276,7 +276,7 @@ fn an_oversized_later_turn_refuses_the_whole_batch_and_prior_data_survives_crash
     let mut disk = Disk::new(&[]);
     let mut store = disk.store();
     let opened = disk.open(&mut store);
-    assert!(matches!(&*opened, [Event::Opened { last: 0, .. }]));
+    let [Event::Opened { last: 0, .. }] = &*opened else { panic!("empty store opened: {opened:?}") };
     let prior = fixtures::turn(LIVE, 1, 1, b"old");
     let committed = disk.request(
         &mut store,
@@ -289,7 +289,7 @@ fn an_oversized_later_turn_refuses_the_whole_batch_and_prior_data_survives_crash
             ]),
         ),
     );
-    assert!(matches!(&*committed, [Event::Committed { number: 1, .. }]));
+    let [Event::Committed { number: 1, .. }] = &*committed else { panic!("prior commit durable: {committed:?}") };
     let first = fixtures::turn(LIVE, 1, 2, b"new");
     let oversized = fixtures::turn(23, 1, 1, b"long");
     let limit = u32::try_from(
@@ -324,7 +324,7 @@ fn an_oversized_later_turn_refuses_the_whole_batch_and_prior_data_survives_crash
     disk.crash(17);
     let mut reopened = disk.store();
     let opened = disk.open(&mut reopened);
-    assert!(matches!(&*opened, [Event::Opened { last: 1, .. }]));
+    let [Event::Opened { last: 1, .. }] = &*opened else { panic!("prior commit recovered: {opened:?}") };
     let read = disk.request(
         &mut reopened,
         crate::Request::Transcript {
@@ -341,7 +341,7 @@ fn an_oversized_later_turn_refuses_the_whole_batch_and_prior_data_survives_crash
         &mut reopened,
         crate::Request::Get { owner: Token::new(802), key: crate::Get::Application(Box::new([41])) },
     );
-    assert!(matches!(&*row, [Event::Got { row: None, .. }]));
+    let [Event::Got { row: None, .. }] = &*row else { panic!("refused application row absent: {row:?}") };
 }
 
 #[test]
