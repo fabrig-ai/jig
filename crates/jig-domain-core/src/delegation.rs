@@ -1,5 +1,5 @@
 //! Generic delegate executor and symbolic-grant decisions owned by the core
-//! (domain/engine.md, 4.4).
+//! (domain/engine.md, 4.4 and 17.3).
 #![expect(
     clippy::result_large_err,
     reason = "bounded owner refusal keeps exact revision and capacity facts inline instead of allocating on refusal"
@@ -173,6 +173,11 @@ impl Core {
         }
         let mut asked = List::with_capacity(limits.batch);
         for member in batch {
+            if let tasks::Executor::Agent { charter } = member.executor
+                && self.charter(charter).is_none()
+            {
+                return Err(delegate_refused(None, tasks::Refusal::Executor));
+            }
             if let Err(why) = crate::account_preference::executor(member.executor, member.llm.as_ref()) {
                 return Err(delegate_refused(None, why));
             }
