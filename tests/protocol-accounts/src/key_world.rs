@@ -49,7 +49,12 @@ impl World {
         };
         let root = store::Root { token: Token::new(1), fd: skein_io::kernel::Fd::new(3) };
         world.down(store::Request::Open { owner: Token::new(1), root, installation: [5; 16] });
-        assert!(matches!(world.above.pop(), Some(store::Event::Opened { .. })));
+        let Some(store::Event::Opened { pending, owner, .. }) = world.above.pop() else { panic!("store opens") };
+        if pending {
+            // B2: the root's switch step asks this.
+            world.down(store::Request::Switch { owner });
+            assert!(matches!(world.above.pop(), Some(store::Event::Switched { .. })));
+        }
         world
     }
     fn down(&mut self, request: store::Request) {
@@ -100,7 +105,8 @@ impl World {
                         store::Event::Secret { value, .. } => self.keys.read(exchange, value),
                         store::Event::Kept { .. } => self.keys.kept(exchange, true, Time::ZERO),
                         store::Event::Stale { .. } => self.keys.kept(exchange, false, Time::ZERO),
-                        other @ (store::Event::Opened { .. }
+                        other @ (store::Event::Switched { .. }
+                        | store::Event::Opened { .. }
                         | store::Event::OpenRefused { .. }
                         | store::Event::Site { .. }
                         | store::Event::Patched { .. }

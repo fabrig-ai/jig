@@ -57,7 +57,7 @@ fn ask(read: TranscriptRead, bytes: u64) -> Request {
 fn fixture(sets: PatchSets, transcript: &[u8]) -> World {
     let mut world = World::unopened_observed(41, patches::limits(), None);
     world.patch_sets(sets);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(world.commit(root::first()), Some(1));
     let mut writes = root::turn_commit(2, frames::TASK, frames::TURN, transcript).into_vec();
     for write in &mut writes {
@@ -357,7 +357,7 @@ fn invalid_frame_sets_refuse_before_first_start_writes() {
         world.patch_sets(sets);
         let before = world.contents();
         world.trace_writes();
-        assert_eq!(world.open(), None, "{label}");
+        assert_eq!(world.open_switched(), None, "{label}");
         set_refused(&world, label);
         assert_eq!(world.contents(), before, "{label}");
         assert!(world.changes().is_empty(), "{label}: {:?}", world.changes());
@@ -370,12 +370,12 @@ fn invalid_frame_sets_refuse_at_serving_open_and_behind() {
         for (label, sets) in invalid_sets() {
             let mut world = World::unopened_observed(41, patches::limits(), None);
             world.patch_sets(baseline);
-            assert_eq!(world.open(), Some(0));
+            assert_eq!(world.open_switched(), Some(0));
             assert_eq!(world.commit(Box::new([Write::Save(root::header(1))])), Some(1));
             world.crash(42);
             world.patch_sets(sets);
             let before = world.contents();
-            assert_eq!(world.open(), None, "{label}");
+            assert_eq!(world.open_switched(), None, "{label}");
             set_refused(&world, label);
             patches::kept(&before, &world.contents(), &label);
         }
@@ -421,7 +421,7 @@ fn stray(owner: Token) -> Request {
 fn baseline(sets: PatchSets) -> World {
     let mut world = World::unopened_observed(41, patches::limits(), None);
     world.patch_sets(sets);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(world.commit(Box::new([Write::Save(root::header(1))])), Some(1));
     world.crash(42);
     world
@@ -433,7 +433,7 @@ fn a_stray_site_stops_patching_idle_and_waiting_reads() {
     let mut complete = baseline(BASE);
     complete.patch_sets(frame_reads::SETS);
     complete.trace_writes();
-    assert_eq!(complete.open(), Some(2));
+    assert_eq!(complete.open_switched(), Some(2));
     let copy = complete
         .changes()
         .iter()
@@ -444,7 +444,7 @@ fn a_stray_site_stops_patching_idle_and_waiting_reads() {
     patching.patch_sets(frame_reads::SETS);
     patching.trace_writes();
     patching.cut_at(copy);
-    assert_eq!(patching.open(), None);
+    assert_eq!(patching.open_switched(), None);
     let before = patching.contents();
     let reference = patching.request(stray(OTHER));
     assert!(matches!(reference.as_slice(), [Event::OpenRefused { .. }]), "{reference:?}");
@@ -574,7 +574,7 @@ fn foreign_frames_refuse_when_every_owner_level_compares() {
     first.patch_sets(sets);
     let before = first.contents();
     first.trace_writes();
-    assert_eq!(first.open(), None);
+    assert_eq!(first.open_switched(), None);
     set_refused(&first, "foreign frames at first start");
     assert_eq!(first.contents(), before);
     assert!(first.changes().is_empty());
@@ -582,7 +582,7 @@ fn foreign_frames_refuse_when_every_owner_level_compares() {
         let mut world = baseline(foreign(start, None));
         world.patch_sets(sets);
         let before = world.contents();
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         set_refused(&world, "foreign frames with comparable levels");
         patches::kept(&before, &world.contents(), &"foreign frames");
     }
@@ -597,7 +597,7 @@ fn missing_jig_slot_refuses_levels_before_frame_checks() {
         let mut world = baseline(start);
         world.patch_sets(sets);
         let before = world.contents();
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert!(
             matches!(world.refusal(), Some(store::OpenRefusal::Ahead { owner: Owner::Jig, wanted: None, .. })),
             "{:?}",

@@ -74,6 +74,14 @@ pub struct Store {
     /// kept by an empty store's first commit, or restored from the store.
     installation: [u8; 16],
     patch_sets: PatchSets,
+    wires: &'static [Wire],
+}
+
+/// A worker wire's name and version (protocol/store.md, 5.3).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Wire {
+    pub name: &'static str,
+    pub version: u32,
 }
 
 /// Proof that the store's three file drivers were seeded: io's `Store` names
@@ -128,6 +136,7 @@ impl Store {
             transcripts: transcripts::State::new(limits),
             installation: [0; 16],
             patch_sets: PatchSets::NONE,
+            wires: &[],
         }
     }
 
@@ -149,6 +158,22 @@ impl Store {
     /// sets with `worst_case_with_patches` when checking startup room.
     pub fn patch_sets(&mut self, sets: PatchSets) {
         self.patch_sets = sets;
+    }
+
+    /// The start's wires (store.md 5.3), at most 16 with names of at most
+    /// 32 bytes. Refused input is not retained. No wires means an empty row.
+    #[must_use]
+    pub fn wires(&mut self, wires: &'static [Wire]) -> bool {
+        if wires.len() > 16 {
+            return false;
+        }
+        for wire in wires {
+            if wire.name.len() > 32 {
+                return false;
+            }
+        }
+        self.wires = wires;
+        true
     }
 
     #[must_use]
@@ -209,7 +234,8 @@ fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
         .checked_add(Queue::<skein_io::file::Request>::worst_case(skein_kv::MAX_OUT.below)?)?
         .checked_add(Queue::<Event>::worst_case(MAX_OUT_DOWN)?)?
         .checked_add(question_restore_worst_case(limits)?)?
-        .checked_add(commits::worst_case(limits)?)?;
+        .checked_add(commits::worst_case(limits)?)?
+        .checked_add(patching::switch::worst_case()?)?;
     Some((common, serving))
 }
 
@@ -249,6 +275,7 @@ pub fn down(store: &mut Store, env: &Env<Limits>, request: Request, above: &mut 
         return;
     }
     match request {
+        Request::Switch { owner } => patching::switch::ask(store, env, owner, above, below),
         Request::Open { owner, root, installation } => {
             directory::open(store, env, owner, root, installation, above, below);
         }
@@ -278,6 +305,7 @@ pub fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue<Event>
     if store.phase != Phase::Stopped {
         transcripts::read::fire(store, above, below);
         transcripts::write::fire(store, env, above, below);
+        patching::switch::resume(store, env, below);
     }
 }
 
@@ -288,6 +316,7 @@ pub fn fire(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, belo
         secrets::sweep(store, env, above, below);
         transcripts::read::fire(store, above, below);
         transcripts::write::fire(store, env, above, below);
+        patching::switch::resume(store, env, below);
     }
 }
 

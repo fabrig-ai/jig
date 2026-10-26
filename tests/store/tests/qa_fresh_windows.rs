@@ -66,7 +66,7 @@ fn transcripts(world: &mut World) -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
 }
 fn open(world: &mut World, sets: PatchSets) -> u64 {
     world.patch_sets(sets);
-    world.open().unwrap_or_else(|| panic!("open refused: {:?}", world.refusal()))
+    world.open_switched().unwrap_or_else(|| panic!("open refused: {:?}", world.refusal()))
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn power_loss_at_each_closing_commit_and_seal_recovers_whole() {
         world.trace_writes();
         world.cut_at(cut);
         world.patch_sets(patches::FRESH_AFTER);
-        assert_eq!(world.open(), None, "cut {cut} reached");
+        assert_eq!(world.open_switched(), None, "cut {cut} reached");
         world.crash(SEED);
         assert_eq!(world.active(), b"1\n", "cut {cut} precedes switch");
         // The source binary must still open every window as it stood.
@@ -433,7 +433,7 @@ fn power_loss_around_switch_recovers_all_windows_closed() {
         world.trace_writes();
         world.cut_at(cut);
         world.patch_sets(patches::FRESH_AFTER);
-        assert_eq!(world.open(), None, "switch cut {cut} reached");
+        assert_eq!(world.open_switched(), None, "switch cut {cut} reached");
         world.crash(SEED);
         let active = world.active();
         assert!([b"1\n".as_slice(), b"2\n".as_slice()].contains(&active.as_slice()), "whole active: {cut}");

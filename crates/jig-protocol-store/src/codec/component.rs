@@ -4,6 +4,24 @@ use alloc::boxed::Box;
 use skein_lib::{List, Reader, Writer};
 pub use wire::{Count, CountParts};
 
+/// Encode the shell's validated start wires (store.md 5.3).
+#[must_use]
+pub(crate) fn wires(wires: &[crate::Wire]) -> Box<[u8]> {
+    let mut values = List::with_capacity(wire::CEILINGS.wires_wires);
+    for value in wires {
+        let value = wire::Wire::new(
+            &wire::CEILINGS,
+            wire::WireParts { name: Box::from(value.name.as_bytes()), version: value.version },
+        )
+        .expect("Store::wires validated each name");
+        values.push(value).expect("Store::wires validated the count");
+    }
+    let row = wire::Wires::new(&wire::CEILINGS, wire::WiresParts { wires: values }).expect("validated wires");
+    let mut writer = Writer::new(usize::try_from(row.measure()).expect("bounded wires row"));
+    row.encode(&mut writer).expect("measured wires row");
+    writer.finish()
+}
+
 /// Each owner's applied patch level (store.md 5.3).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Levels {

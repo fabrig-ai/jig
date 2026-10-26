@@ -164,11 +164,8 @@ pub(crate) struct Checking {
 }
 
 impl Checking {
-    pub(crate) fn before(&self) -> Levels {
-        self.before
-    }
-    pub(crate) fn counts(&self) -> &[Count] {
-        self.counts.as_slice()
+    pub(crate) fn into_counts(self) -> (Levels, List<Count>) {
+        (self.before, self.counts)
     }
 }
 

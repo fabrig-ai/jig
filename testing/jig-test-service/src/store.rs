@@ -159,7 +159,8 @@ impl Store {
                     self.above.push(event);
                 }
             }
-            request @ (protocol::Request::Open { .. }
+            request @ (protocol::Request::Switch { .. }
+            | protocol::Request::Open { .. }
             | protocol::Request::Site { .. }
             | protocol::Request::Commit { .. }
             | protocol::Request::Restore { .. }
@@ -489,10 +490,16 @@ pub(super) fn answer(engine: &mut crate::Engine) {
         }
         let event = engine.store.above.pop().expect("store terminals");
         match event {
-            protocol::Event::Opened { installation, .. } => {
-                engine.store.opened = true;
+            protocol::Event::Opened { installation, pending, owner, .. } => {
                 engine.store.installation = installation;
+                if pending {
+                    // B2: the root's switch step asks this.
+                    engine.store.ask(protocol::Request::Switch { owner });
+                } else {
+                    engine.store.opened = true;
+                }
             }
+            protocol::Event::Switched { .. } => engine.store.opened = true,
             // This shell prints no per-open progress lines.
             protocol::Event::Patched { .. } => {}
             protocol::Event::OpenRefused { .. } => crate::stop::unavailable(engine, b"deployment"),

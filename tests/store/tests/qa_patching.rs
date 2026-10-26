@@ -60,7 +60,7 @@ fn pending(records: &Records) -> World {
 fn second_generation() -> World {
     let mut world = Records::story().committed(SEED, BASE);
     world.patch_sets(MID);
-    world.open().expect("intermediate upgrade opens");
+    world.open_switched().expect("intermediate upgrade opens");
     world.crash(SEED);
     world.patch_sets(SETS);
     world
@@ -77,7 +77,7 @@ fn pinned_order_reports_exact_walk_counts() {
     limits.journal.writes = u32::try_from(PAGE_ROWS).expect("two-put page");
     let mut world = World::unopened_observed(SEED, limits, None);
     world.patch_sets(BASE);
-    world.open().expect("first start");
+    world.open_switched().expect("first start");
     // A page holds no more puts than a commit's writes, so the source goes in one record a commit, beside its header.
     for (number, (key, value)) in (1..).zip(Records::story().rows(UNPATCHED)) {
         let writes = [Write::Save(root::header(number)), Write::Put { key, value }];
@@ -85,7 +85,7 @@ fn pinned_order_reports_exact_walk_counts() {
     }
     world.crash(SEED);
     world.patch_sets(SETS);
-    world.open().expect("upgrade opens");
+    world.open_switched().expect("upgrade opens");
     let progress: Vec<_> =
         world.patched().iter().map(|(owner, patch, count)| (*owner, *patch, count.records, count.commits)).collect();
     let app_first = u64::from(patches::STORY_LABELS + patches::STORY_SHELVES);
@@ -112,7 +112,7 @@ fn written_keys_and_held_values_survive_paging() {
     records.shelves[2].key = b"s/z".to_vec();
     records.shelves[1].caption = b"held across a page".to_vec();
     let mut world = pending(&records);
-    world.open().expect("upgrade opens");
+    world.open_switched().expect("upgrade opens");
     records.check(&mut world, PATCHED, &"key context and nested label");
 }
 
@@ -132,12 +132,12 @@ fn wrong_record_version_refuses_with_its_key() {
     }
     let mut world = World::unopened_observed(SEED, patches::limits(), None);
     world.patch_sets(BASE);
-    world.open().expect("first start");
+    world.open_switched().expect("first start");
     world.commit(writes).expect("source commit");
     world.crash(SEED);
     world.patch_sets(SETS);
     let before = patches::source(&mut world);
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert!(
         matches!(world.refusal(), Some(OpenRefusal::Patch { owner: Owner::Application, patch: 1, key: refused, .. }) if refused.as_ref() == key),
         "{:?}",
@@ -154,7 +154,7 @@ fn written_refusal_repeats_and_old_binary_reopens() {
     records.shelves[2].books = 0;
     let mut world = pending(&records);
     let original = patches::source(&mut world);
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     let refusal = world.refusal().expect("written refusal").clone();
     assert!(
         matches!(&refusal, OpenRefusal::Patch { owner: Owner::Application, patch: 2, key, .. } if key.as_ref() == b"s/2"),
@@ -163,11 +163,11 @@ fn written_refusal_repeats_and_old_binary_reopens() {
     assert_eq!(world.active(), b"1\n");
     let after_refusal = patches::source(&mut world);
     world.crash(SEED);
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&refusal));
     world.crash(SEED);
     world.patch_sets(BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
     records.check(&mut world, UNPATCHED, &"old binary rollback");
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
     patches::kept(&original, &after_refusal, &"written refusal");
@@ -180,7 +180,7 @@ fn ahead_chooses_upstream_before_downstream() {
     world.patch_sets(BASE);
     stray(&mut world);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(
         world.refusal(),
         Some(&OpenRefusal::Ahead { owner: Owner::Jig, found: Some(JIG_LEVEL), wanted: Some(0) })
@@ -193,7 +193,7 @@ fn ahead_precedes_another_owners_missing_baseline() {
     // store.md 5.3: first any owner's level past the binary's, then any owner's missing level.
     let mut world = Records::story().committed_at(SEED, APP_ONLY, PATCHED);
     world.patch_sets(BASE);
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(
         world.refusal(),
         Some(&OpenRefusal::Ahead { owner: Owner::Application, found: Some(APPLICATION_LEVEL), wanted: Some(0) })
@@ -206,7 +206,7 @@ fn jig_baseline_does_not_hide_unleveled_application() {
     let mut world = Records::story().committed(SEED, JIG_ONLY);
     world.patch_sets(BASE);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::OlderBuild { why: Older::Unleveled }));
     patches::kept(&before, &world.contents(), &"unleveled application");
 }
@@ -223,7 +223,7 @@ fn manifest_is_opaque_and_unchanged_at_open() {
         Item::file(b"generations/1/manifest", b"deliberately not a manifest"),
         Item::file(b"active", b"1\n"),
     ]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(
         world.contents().get(b"generations/1/manifest".as_slice()).and_then(Option::as_deref),
         Some(b"deliberately not a manifest".as_slice())
@@ -235,7 +235,7 @@ fn stray_cleanup_restarts_listing_and_keeps_previous() {
     // store.md 10.1 step 5: directories are listed again from their first page until empty; active and previous stay.
     const STRAY_FILES: u32 = 35; // More than the world's 32-entry directory page.
     let mut world = pending(&Records::story());
-    world.open().expect("upgrade opens");
+    world.open_switched().expect("upgrade opens");
     world.crash(SEED);
     let previous = patches::source(&mut world);
     world.lay(&[Item::directory(b"generations/9"), Item::directory(b"generations/9/deep")]);
@@ -246,7 +246,7 @@ fn stray_cleanup_restarts_listing_and_keeps_previous() {
         Item::file(b"generations/dropped", b"stray file"),
         Item::file(b"active.skein-0123456789abcdef", b"2\n"),
     ]);
-    world.open().expect("equal-level restart");
+    world.open_switched().expect("equal-level restart");
     patches::whole(&mut world);
     assert_eq!(patches::source(&mut world), previous);
     assert!(world.patched().is_empty());
@@ -272,7 +272,7 @@ fn active_rejects_noncanonical_and_oversize_numbers() {
         let mut world = World::unopened(SEED);
         world.lay(&[Item::file(b"active", bytes)]);
         let before = world.contents();
-        assert_eq!(world.open(), None, "{bytes:?}");
+        assert_eq!(world.open_switched(), None, "{bytes:?}");
         assert_eq!(world.refusal(), Some(&OpenRefusal::Generations { why: Generations::Unreadable }), "{bytes:?}");
         assert_eq!(world.contents(), before, "{bytes:?}");
     }
@@ -284,7 +284,7 @@ fn maximum_active_number_reaches_missing_generation_check() {
     let mut world = World::unopened(SEED);
     world.lay(&[Item::file(b"active", b"18446744073709551615\n"), Item::directory(b"generations")]);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::Generations { why: Generations::Missing { generation: u64::MAX } }));
     assert_eq!(world.contents(), before);
 }
@@ -296,7 +296,7 @@ fn top_level_stores_without_active_refuse_without_writes() {
         let mut world = World::unopened(SEED);
         world.lay(&[Item::directory(directory)]);
         let before = world.contents();
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert_eq!(world.refusal(), Some(&OpenRefusal::OlderBuild { why: Older::Directory }));
         assert_eq!(world.contents(), before, "{directory:?}");
     }
@@ -314,7 +314,7 @@ fn unnamed_generation_with_store_file_is_never_first_start() {
         Item::file(b"generations/1/store/data", b"operator must recover me"),
     ]);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::Generations { why: Generations::Unnamed }));
     assert_eq!(world.contents(), before);
 }
@@ -331,7 +331,7 @@ fn interrupted_first_start_discards_only_empty_generation() {
         Item::file(b"generations/1/manifest.skein-0123456789abcdef", b"partial"),
         Item::file(b"active.skein-0123456789abcdef", b"1\n"),
     ]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(world.active(), b"1\n");
     let paths = world.paths();
     assert!(paths.iter().any(|path| path == b"generations/1/manifest"));
@@ -345,7 +345,7 @@ fn wrong_owner_set_refuses_before_stray_cleanup() {
     world.patch_sets(WRONG_OWNER);
     stray(&mut world);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::Set { owner: Owner::Application, patch: 1 }));
     patches::kept(&before, &world.contents(), &"set refusal before removal");
 }
@@ -356,7 +356,7 @@ fn pin_past_binary_refuses_before_copy() {
     let mut world = pending(&Records::story());
     world.patch_sets(PIN_TOO_FAR);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::Set { owner: Owner::Application, patch: 1 }));
     patches::kept(&before, &world.contents(), &"impossible pin");
 }
@@ -369,7 +369,7 @@ fn pin_already_passed_in_store_refuses_before_copy() {
     let mut world = records.committed(SEED, JIG_APPLIED);
     world.patch_sets(SETS);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert_eq!(world.refusal(), Some(&OpenRefusal::Set { owner: Owner::Application, patch: 1 }));
     patches::kept(&before, &world.contents(), &"already passed pin");
 }
@@ -381,7 +381,7 @@ fn duplicate_owner_sets_refuse_before_copy() {
     let mut world = pending(&Records::story());
     world.patch_sets(DUPLICATE);
     let before = world.contents();
-    assert_eq!(world.open(), None);
+    assert_eq!(world.open_switched(), None);
     assert!(
         matches!(world.refusal(), Some(OpenRefusal::Set { owner: Owner::Application, .. })),
         "{:?}",
@@ -395,14 +395,14 @@ fn first_start_recovers_after_every_disk_mutation() {
     // store.md 10.4: after each first-start write, sync and rename the next start opens one whole generation.
     let mut trace = World::unopened(SEED);
     trace.trace_writes();
-    trace.open().expect("traced first start");
+    trace.open_switched().expect("traced first start");
     for &(operation, change) in trace.changes() {
         let mut world = World::unopened(SEED);
         world.trace_writes();
         world.cut_at(operation);
-        let _ = world.open();
+        let _ = world.open_switched();
         world.crash(SEED);
-        assert_eq!(world.open(), Some(0), "cut {operation} {change:?}: {:?}", world.refusal());
+        assert_eq!(world.open_switched(), Some(0), "cut {operation} {change:?}: {:?}", world.refusal());
         assert_eq!(world.active(), b"1\n", "cut {operation} {change:?}");
         let paths = world.paths();
         assert!(paths.iter().any(|path| path == b"generations/1/manifest"));
@@ -416,16 +416,16 @@ fn drop_copy_and_switch_recover_after_every_mutation() {
     // store.md 10.4: a cut during the previous drop, copy, patch or switch opens the old whole generation or the new.
     let mut trace = second_generation();
     trace.trace_writes();
-    let expected_last = trace.open().expect("traced second upgrade");
+    let expected_last = trace.open_switched().expect("traced second upgrade");
     for &(operation, change) in trace.changes() {
         let mut world = second_generation();
         let source: std::collections::BTreeMap<_, _> =
             world.contents().into_iter().filter(|(path, _)| path.starts_with(b"generations/2/")).collect();
         world.trace_writes();
         world.cut_at(operation);
-        let _ = world.open();
+        let _ = world.open_switched();
         world.crash(SEED);
-        assert_eq!(world.open(), Some(expected_last), "cut {operation} {change:?}: {:?}", world.refusal());
+        assert_eq!(world.open_switched(), Some(expected_last), "cut {operation} {change:?}: {:?}", world.refusal());
         assert_eq!(world.active(), b"3\n", "cut {operation} {change:?}");
         Records::story().check(&mut world, PATCHED, &(operation, change));
         let after = world.contents();

@@ -106,7 +106,9 @@ pub(crate) fn erases(store: &mut Store, ops: &mut List<skein_kv::Op>) -> Option<
                     store.transcripts.drop.orphans.push(orphan);
                 }
             }
-            Some(keys::Own::Format | keys::Own::Layouts | keys::Own::Transcript { .. }) => return None,
+            Some(keys::Own::Format | keys::Own::Layouts | keys::Own::Wires | keys::Own::Transcript { .. }) => {
+                return None;
+            }
             None => {}
         }
     }
@@ -122,7 +124,7 @@ pub(crate) fn restore(store: &mut Store) -> Result<(), ()> {
         let key = keys::decode_own(&row.key).ok_or(())?;
         let task = match key {
             keys::Own::Attempt { task, .. } => task,
-            keys::Own::Format | keys::Own::Layouts | keys::Own::Transcript { .. } => return Err(()),
+            keys::Own::Format | keys::Own::Layouts | keys::Own::Wires | keys::Own::Transcript { .. } => return Err(()),
         };
         let place = keys::encode_own(&keys::Own::Transcript { task }, store.limits.store.key).ok_or(())?;
         let Ok(place) = open::get(store, OWNER, place) else {

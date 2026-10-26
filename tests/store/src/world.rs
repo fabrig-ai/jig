@@ -62,6 +62,7 @@ pub struct World {
     pub drawn: [u8; 16],
     /// The installation's identifier the last open answered (store.md 4.4).
     pub installation: [u8; 16],
+    pub pending: bool,
 }
 
 /// Optional ordinary-Rust observation seam, around store calls only.
@@ -221,6 +222,7 @@ impl World {
             model: Model::default(),
             drawn: [1; 16],
             installation: [0; 16],
+            pending: false,
         }
     }
 
@@ -338,7 +340,7 @@ impl World {
     }
 
     pub fn reopen(&mut self) -> Restored {
-        let last = self.open().expect("reopen settles");
+        let last = self.open_switched().expect("reopen settles");
         self.next = last + 1;
         let mut restored = Restored {
             last,
@@ -385,10 +387,26 @@ impl World {
         self.model.recovered(last);
     }
 
-    pub fn request(&mut self, request: Request) -> Vec<Event> {
+    pub fn enqueue(&mut self, request: Request) {
         self.observe(Step::Begin { input: 0, patching: jig_protocol_store::sizes::is_patching(&self.store) });
         jig_protocol_store::down(&mut self.store, &self.env, request, &mut self.above, &mut self.below);
         self.observe(Step::End { patching: jig_protocol_store::sizes::is_patching(&self.store) });
+    }
+
+    #[must_use]
+    pub fn manifest_queued(&self) -> bool {
+        self.below
+            .transcripts
+            .iter()
+            .any(|request| matches!(request, file::Request::Store { path, .. } if path.ends_with(b"/manifest")))
+    }
+
+    pub fn request(&mut self, request: Request) -> Vec<Event> {
+        self.enqueue(request);
+        self.settle()
+    }
+
+    pub fn settle(&mut self) -> Vec<Event> {
         self.drive();
         let mut events = Vec::new();
         while let Some(event) = self.above.pop() {
@@ -416,6 +434,36 @@ impl World {
         events
     }
 
+    /// Compatibility bridge while roots gain their switch step.
+    pub fn open_switched(&mut self) -> Option<u64> {
+        let last = self.open()?;
+        if self.pending {
+            // B2: the root's switch step asks this.
+            self.switch()?;
+        }
+        Some(last)
+    }
+
+    pub fn switch(&mut self) -> Option<()> {
+        let events = self.request(Request::Switch { owner: OWNER });
+        match events.as_slice() {
+            [Event::Switched { owner: OWNER }] => {
+                self.pending = false;
+                Some(())
+            }
+            [Event::OpenRefused { why, .. }] => {
+                self.refusal = Some(why.clone());
+                None
+            }
+            [] => None,
+            other => panic!("switch terminal: {other:?}"),
+        }
+    }
+
+    pub fn wires(&mut self, wires: &'static [jig_protocol_store::Wire]) -> bool {
+        self.store.wires(wires)
+    }
+
     pub fn open(&mut self) -> Option<u64> {
         self.patched.clear();
         self.refusal = None;
@@ -429,7 +477,8 @@ impl World {
                         answer = Some(answer_site(owner, of, key, site, at, patcher, &mut contexts));
                     }
                     Event::Patched { of, patch, counts, .. } => self.patched.push((of, patch, counts)),
-                    Event::Opened { last, installation, .. } => {
+                    Event::Opened { last, installation, pending, .. } => {
+                        self.pending = pending;
                         self.installation = installation;
                         if !self.patched.is_empty() {
                             self.model.patched(last);
@@ -441,7 +490,8 @@ impl World {
                         self.refusal = Some(why);
                         return None;
                     }
-                    other @ (Event::Committed { .. }
+                    other @ (Event::Switched { .. }
+                    | Event::Committed { .. }
                     | Event::Failed { .. }
                     | Event::FrameTooLarge { .. }
                     | Event::Restored { .. }

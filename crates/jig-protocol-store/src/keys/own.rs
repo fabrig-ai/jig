@@ -6,9 +6,13 @@ pub enum Own {
     Transcript { task: u64 },
     Attempt { task: u64, attempt: u64 },
     Layouts,
+    Wires,
 }
 pub(super) fn write(writer: &mut KeyWriter, key: &Own) {
     match key {
+        Own::Wires => {
+            writer.tag(4);
+        }
         Own::Layouts => {
             writer.tag(3);
         }
@@ -30,6 +34,7 @@ pub(super) fn read(reader: &mut KeyReader<'_>) -> Option<Own> {
     Some(match reader.tag()? {
         0 => Own::Format,
         3 => Own::Layouts,
+        4 => Own::Wires,
         1 => Own::Transcript { task: reader.u64()? },
         2 => Own::Attempt { task: reader.u64()?, attempt: reader.u64()? },
         _ => return None,

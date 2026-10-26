@@ -40,7 +40,7 @@ fn absent_tree(paths: &[Vec<u8>], path: &str) {
 
 fn refused_unchanged(world: &mut World, why: &OpenRefusal) {
     let before = world.paths();
-    assert_eq!(world.open(), None, "open must refuse");
+    assert_eq!(world.open_switched(), None, "open must refuse");
     assert_eq!(world.refusal(), Some(why));
     assert_eq!(world.paths(), before, "refusal changes no paths");
 }
@@ -72,7 +72,7 @@ fn clean_first_start(world: &mut World) {
 fn first_start_is_empty_and_durable() {
     // store.md 2: The first start makes generation 1's manifest; the maps are empty until the root's first commit.
     let mut world = World::unopened(802);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     clean_first_start(&mut world);
     world.crash(803);
     let restored = world.reopen();
@@ -90,7 +90,7 @@ fn empty_interrupted_generation_restarts() {
     world.lay(&[directory("generations")]);
     generation(&mut world, 1);
     world.lay(&[file("active.skein-0123456789abcdef", b"unfinished")]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     clean_first_start(&mut world);
 }
 
@@ -101,7 +101,7 @@ fn interrupted_manifest_is_replaced() {
     world.lay(&[directory("generations")]);
     generation(&mut world, 1);
     world.lay(&[file("generations/1/manifest", b"partial manifest")]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     clean_first_start(&mut world);
 }
 
@@ -186,7 +186,7 @@ fn malformed_active_refuses_before_cleanup() {
 fn largest_generation_fits_the_active_limit() {
     // store.md 10.1.2: active loads up to 21 bytes of decimal digits and a newline.
     let mut world = active_generation(u64::MAX);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(world.active(), b"18446744073709551615\n");
 }
 
@@ -228,7 +228,7 @@ fn previous_is_opaque_and_only_other_generations_are_removed() {
         directory("generations/11"),
         file("generations/11/drop", b"unfinished"),
     ]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert_eq!(world.active(), b"10\n");
     let paths = world.paths();
     for path in [
@@ -255,7 +255,7 @@ fn noncanonical_generation_names_are_strays() {
         directory("generations/007"),
         directory("generations/7-old"),
     ]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     let paths = world.paths();
     assert!(contains(&paths, "generations/6/kept"));
     for path in ["generations/06", "generations/007", "generations/7-old"] {
@@ -299,7 +299,7 @@ fn recursive_cleanup_restarts_directory_pages() {
     for number in 0..160 {
         world.lay(&[file(&format!("generations/4/deep/file-{number:03}"), b"partial")]);
     }
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     strays_gone(&mut world);
 }
 
@@ -319,7 +319,7 @@ fn only_durable_replace_temporaries_are_removed() {
     for name in ["active.skein-0123456789abcdef", "active.skein-fedcba9876543210"] {
         world.lay(&[file(name, b"unfinished")]);
     }
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     let paths = world.paths();
     for name in kept {
         assert!(contains(&paths, name), "unrelated entry removed: {name}");
@@ -333,7 +333,7 @@ fn active_layout_keeps_shared_transcripts() {
     // store.md 2: Transcripts are shared by every generation; today's layout refuses only with no active.
     let mut world = active_generation(2);
     world.lay(&[directory("transcripts"), directory("transcripts/42"), file("transcripts/42/kept", b"turns")]);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert!(contains(&world.paths(), "transcripts/42/kept"));
 }
 
@@ -341,7 +341,7 @@ fn active_layout_keeps_shared_transcripts() {
 fn every_first_start_cut_recovers_one_whole_generation() {
     // store.md 10.4: Before active's rename remove the partial first start; after it open 1 and make transcripts/.
     let mut baseline = World::unopened(811);
-    assert_eq!(baseline.open(), Some(0));
+    assert_eq!(baseline.open_switched(), Some(0));
     let operations = baseline.operation_count();
     assert!(operations > 0);
     let mut failures = Vec::new();
@@ -349,15 +349,15 @@ fn every_first_start_cut_recovers_one_whole_generation() {
         for crash_seed in [812, 813] {
             let mut world = World::unopened(811);
             world.cut_at(cut);
-            let _ = world.open();
+            let _ = world.open_switched();
             world.crash(crash_seed);
-            assert_eq!(world.open(), Some(0), "cut {cut}, crash seed {crash_seed}");
+            assert_eq!(world.open_switched(), Some(0), "cut {cut}, crash seed {crash_seed}");
             let defects = first_start_defects(&mut world);
             if !defects.is_empty() {
                 failures.push((cut, crash_seed, "first restart", defects));
             }
             world.crash(814);
-            assert_eq!(world.open(), Some(0), "second restart after cut {cut}");
+            assert_eq!(world.open_switched(), Some(0), "second restart after cut {cut}");
             let defects = first_start_defects(&mut world);
             if !defects.is_empty() {
                 failures.push((cut, crash_seed, "second restart", defects));
@@ -376,16 +376,16 @@ fn every_first_start_cut_recovers_one_whole_generation() {
 fn every_stray_removal_cut_finishes_cleanup() {
     // store.md 10.4: A cut removing strays leaves part of a stray; the next start removes the rest.
     let mut baseline = stray_fixture();
-    assert_eq!(baseline.open(), Some(0));
+    assert_eq!(baseline.open_switched(), Some(0));
     let operations = baseline.operation_count();
     assert!(operations > 0);
     for cut in 1..=operations {
         for crash_seed in [815, 816] {
             let mut world = stray_fixture();
             world.cut_at(cut);
-            let _ = world.open();
+            let _ = world.open_switched();
             world.crash(crash_seed);
-            assert_eq!(world.open(), Some(0), "cut {cut}, crash seed {crash_seed}");
+            assert_eq!(world.open_switched(), Some(0), "cut {cut}, crash seed {crash_seed}");
             strays_gone(&mut world);
         }
     }

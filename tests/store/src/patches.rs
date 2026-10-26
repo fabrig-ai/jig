@@ -207,7 +207,7 @@ impl Records {
     ) -> World {
         let mut world = World::unopened_observed(seed, limits, None);
         world.patch_sets(sets);
-        assert_eq!(world.open(), Some(0));
+        assert_eq!(world.open_switched(), Some(0));
         let mut writes = self.writes(version).into_vec();
         writes.extend(rows.iter().cloned().map(Write::Save));
         assert_eq!(world.commit(writes.into_boxed_slice()), Some(1));
@@ -415,7 +415,7 @@ pub fn fixture_turn(version: u16, said: &[u8], replay: &[u8], tokens: u32) -> Bo
 pub fn fresh_committed(seed: u64, windows: &[bool], crossed: bool) -> World {
     let mut world = World::unopened_observed(seed, fresh_limits(), None);
     world.patch_sets(FRESH_BEFORE);
-    world.open().expect("fresh fixture open");
+    world.open_switched().expect("fresh fixture open");
     let bytes = fixture_turn(1, FRESH_SAID, FRESH_REPLAY, 0);
     let mut number = 0;
     for (index, window) in windows.iter().enumerate() {

@@ -223,7 +223,7 @@ fn a_committed_store_reopens_at_its_last_number_with_its_kept_installation() {
         &mut restarted,
         Request::Open { owner: Token::new(1), root: fixtures::ROOT, installation: drawn },
     );
-    let [Event::Opened { owner, last, installation }] = &*events else {
+    let [Event::Opened { owner, last, installation, pending: false }] = &*events else {
         panic!("committed store opens: {events:?}");
     };
     assert_eq!(*owner, Token::new(1));

@@ -619,3 +619,8 @@ fn hold(store: &mut Store, owner: Token, value: Secret, above: &mut Queue<Event>
     store.secret_state.next_held = next;
     above.push(Event::Carried { owner, number });
 }
+
+/// A switch waits for the private commits as well as the public ones.
+pub(crate) fn settled(store: &Store) -> bool {
+    store.secret_state.pending.is_empty()
+}

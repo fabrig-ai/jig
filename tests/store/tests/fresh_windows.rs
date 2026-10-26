@@ -139,7 +139,7 @@ fn fresh_windows_close_in_the_copy_and_rollback_opens_them() {
         cut_world.patch_sets(FRESH_AFTER);
         cut_world.trace_writes();
         cut_world.cut_at(cut);
-        assert_eq!(cut_world.open(), None, "cut {cut}");
+        assert_eq!(cut_world.open_switched(), None, "cut {cut}");
         cut_world.crash(u64::from(cut));
         assert_eq!(cut_world.active(), b"1\n");
         patches::kept(&original, &patches::source(&mut cut_world), &cut);

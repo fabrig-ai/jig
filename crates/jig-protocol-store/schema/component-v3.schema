@@ -6,6 +6,8 @@ record Levels {
     jig: option u32
     application: option u32
 }
+record Wire { name: text 32 version: u32 }
+versioned record Wires { wires: list 16 Wire }
 versioned record Format {
     component: u16
     core: u16

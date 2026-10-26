@@ -38,7 +38,7 @@ fn refuses_check(world: &mut World, expected: &Check) {
     let before = patches::source(world);
     world.patch_sets(patches::SETS);
     for attempt in 0..2 {
-        assert_eq!(world.open(), None, "check attempt {attempt}");
+        assert_eq!(world.open_switched(), None, "check attempt {attempt}");
         assert!(
             matches!(world.refusal(), Some(OpenRefusal::Check { why }) if why == expected),
             "expected {expected:?}, got {:?}",
@@ -54,7 +54,7 @@ fn refuses_check(world: &mut World, expected: &Check) {
         world.crash(SEED);
     }
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open(), Some(1), "the build before opens its source");
+    assert_eq!(world.open_switched(), Some(1), "the build before opens its source");
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
     patches::kept(&before, &patches::source(world), &"build before");
 }
@@ -74,7 +74,7 @@ fn tokens_at_bounds_keep_numbers_across_many_pages() {
     let mut world = records.committed_with(SEED, patches::BASE, 1, limits, &[]);
     let before = patches::source(&mut world);
     world.patch_sets(patches::SETS);
-    let last = world.open().expect("tokens patch with their map's bounds");
+    let last = world.open_switched().expect("tokens patch with their map's bounds");
     patches::whole(&mut world);
     patches::kept(&before, &patches::source(&mut world), &"tokens");
     records.check(&mut world, 2, &"both token bounds and number bounds");
@@ -106,7 +106,7 @@ fn empty_families_have_zero_manifest_counts() {
     let records = empty();
     let mut world = records.committed(SEED, patches::BASE);
     world.patch_sets(patches::SETS);
-    world.open().expect("empty families patch");
+    world.open_switched().expect("empty families patch");
     records.check(&mut world, 2, &"no tokens or records");
     assert_eq!(
         patches::counts(&mut world),
@@ -125,7 +125,7 @@ fn sparse_counts_exclude_unkept_opaque_application_rows() {
     records.labels.push((b"l/0".to_vec(), b"kept".to_vec()));
     records.tokens.push((9, b"credential".to_vec()));
     let mut world = records.committed(SEED, patches::BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
     let key: Box<[u8]> = Box::from(b"z/opaque".as_slice());
     let value: Box<[u8]> = Box::from(b"not a versioned record".as_slice());
     let writes = Box::new([
@@ -135,7 +135,7 @@ fn sparse_counts_exclude_unkept_opaque_application_rows() {
     assert_eq!(world.commit(writes), Some(2));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
-    world.open().expect("unkept rows are copied as bytes");
+    world.open_switched().expect("unkept rows are copied as bytes");
     let mut expected = records.rows(2);
     expected.insert(key, value);
     assert_eq!(world.application(false), expected);
@@ -154,7 +154,7 @@ fn sparse_counts_exclude_unkept_opaque_application_rows() {
 fn first_manifest_counts_each_empty_kept_family() {
     let mut world = World::unopened_observed(SEED, patches::limits(), None);
     world.patch_sets(patches::SETS);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     let first = manifest(&mut world, 1);
     let counts: Vec<_> = first.counts.iter().map(|row| (row.family().to_vec(), row.before(), row.after())).collect();
     assert_eq!(
@@ -173,7 +173,7 @@ fn first_manifest_counts_each_empty_kept_family() {
 #[test]
 fn first_manifest_without_sets_has_no_counts() {
     let mut world = World::unopened_observed(SEED, patches::limits(), None);
-    assert_eq!(world.open(), Some(0));
+    assert_eq!(world.open_switched(), Some(0));
     assert!(manifest(&mut world, 1).counts.is_empty());
 }
 
@@ -181,12 +181,12 @@ fn first_manifest_without_sets_has_no_counts() {
 fn carried_counter_and_unwalked_values_survive_switch() {
     let records = empty();
     let mut world = records.committed(SEED, patches::BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"carried".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
-    world.open().expect("patch with carried row");
+    world.open_switched().expect("patch with carried row");
     let found = world.secret(Secrets::Get { owner: SecretOwner::Application, number: CARRIED_FIRST });
     assert!(matches!(found.as_slice(), [Event::Secret { value: Some(value), .. }] if value.expose() == b"carried"));
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
@@ -197,14 +197,14 @@ fn carried_counter_and_unwalked_values_survive_switch() {
 #[test]
 fn erased_carried_number_is_never_drawn_after_switch() {
     let mut world = empty().committed(SEED, patches::BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"erased".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     let erased = world.secret(Secrets::Erase { owner: SecretOwner::Application, number: CARRIED_FIRST });
     assert!(matches!(erased.as_slice(), [Event::Erased { .. }]));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
-    world.open().expect("patch with an erased carried value");
+    world.open_switched().expect("patch with an erased carried value");
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST + 1));
 }
@@ -219,7 +219,7 @@ fn stray_secrets_file_is_copied_before_privacy_check() {
     world.lay(&[stray]);
     let before = patches::source(&mut world);
     world.patch_sets(patches::SETS);
-    world.open().expect("copy makes even a stray regular secrets file private");
+    world.open_switched().expect("copy makes even a stray regular secrets file private");
     patches::kept(&before, &patches::source(&mut world), &"secrets stray");
     assert_eq!(world.contents().get(b"generations/2/secrets/stray".as_slice()), Some(&Some(b"fixture stray".to_vec())));
     records.check(&mut world, 2, &"stray beside secrets map");
@@ -233,7 +233,7 @@ fn token_past_schema_bound_refuses_without_switch() {
     let before = patches::source(&mut world);
     world.patch_sets(patches::SETS);
     for attempt in 0..2 {
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert!(
             matches!(world.refusal(), Some(OpenRefusal::Patch { owner: Owner::Application, key, .. })
             if *key == token_key(0)),
@@ -245,7 +245,7 @@ fn token_past_schema_bound_refuses_without_switch() {
         world.crash(SEED);
     }
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn secrets_record_exactly_at_commit_room_patches() {
     limits.secrets.commit = PATCHED_COMMIT;
     world.restart_with_limits(SEED, limits);
     world.patch_sets(patches::SETS);
-    world.open().expect("single token fits exactly");
+    world.open_switched().expect("single token fits exactly");
     records.check(&mut world, 2, &"commit bound");
 }
 
@@ -315,7 +315,7 @@ fn live_record_exactly_at_decode_bound_switches() {
     let row = task_with_words(root::LIVE, bound);
     let mut world = empty().committed_with(SEED, patches::BASE, 1, patches::limits(), std::slice::from_ref(&row));
     world.patch_sets(patches::SETS);
-    world.open().expect("codec limit is inclusive");
+    world.open_switched().expect("codec limit is inclusive");
     assert_eq!(world.get(row.key()), row);
 }
 
@@ -371,7 +371,7 @@ fn ended_position_with_its_task_passes_join() {
         core::Record::People(jig_domain_people::Stored::EndedRead { task: root::LIVE, party: 1, through: 0 });
     let mut world = empty().committed_with(SEED, patches::BASE, 1, patches::limits(), &[ended, position]);
     world.patch_sets(patches::SETS);
-    world.open().expect("ended read position's task is held");
+    world.open_switched().expect("ended read position's task is held");
     assert_eq!(world.active(), b"2\n");
 }
 
@@ -407,7 +407,7 @@ fn live_sets_past_arena_limits_switch_before_restart() {
     let mut world = records.committed_with(SEED, patches::BASE, 1, patches::limits(), &rows);
     let before = patches::source(&mut world);
     world.patch_sets(patches::SETS);
-    world.open().expect("live set's arena bound is outside the check");
+    world.open_switched().expect("live set's arena bound is outside the check");
     assert_eq!(world.active(), b"2\n");
     world.crash(SEED);
     let restored = world.reopen();
@@ -418,7 +418,7 @@ fn live_sets_past_arena_limits_switch_before_restart() {
     world.crash(SEED);
     world.rewrite(b"active", b"1\n");
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open(), Some(1));
+    assert_eq!(world.open_switched(), Some(1));
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
 }
 
@@ -431,7 +431,7 @@ fn child_semantic_rule_is_outside_pre_switch_check() {
     task.number = 0;
     let mut world = empty().committed_with(SEED, patches::BASE, 1, patches::limits(), &[row]);
     world.patch_sets(patches::SETS);
-    world.open().expect("codec-valid child rule is not checked before switch");
+    world.open_switched().expect("codec-valid child rule is not checked before switch");
     assert_eq!(world.active(), b"2\n");
 }
 
@@ -457,7 +457,7 @@ fn manifest_family_and_name_bounds_hold_at_first_start() {
     let sets = bounded_sets(FAMILY_BOUND, NAME_BOUND);
     let mut world = World::unopened_observed(SEED, patches::limits(), None);
     world.patch_sets(sets);
-    assert_eq!(world.open(), Some(0), "{:?}", world.refusal());
+    assert_eq!(world.open_switched(), Some(0), "{:?}", world.refusal());
     let first = manifest(&mut world, 1);
     assert_eq!(usize::try_from(first.counts.len()).expect("count fits"), FAMILY_BOUND);
     assert!(first.counts.iter().all(|row| row.before() == 0 && row.after() == 0));
@@ -471,7 +471,7 @@ fn each_manifest_bound_fits_without_the_other_at_bound() {
     for (families, name_bytes) in [(FAMILY_BOUND, SHORT_NAME), (SPARSE_FAMILIES, NAME_BOUND)] {
         let mut world = World::unopened_observed(SEED, patches::limits(), None);
         world.patch_sets(bounded_sets(families, name_bytes));
-        assert_eq!(world.open(), Some(0), "{families} families, {name_bytes} bytes: {:?}", world.refusal());
+        assert_eq!(world.open_switched(), Some(0), "{families} families, {name_bytes} bytes: {:?}", world.refusal());
         let first = manifest(&mut world, 1);
         assert_eq!(usize::try_from(first.counts.len()).expect("count fits"), families);
     }
@@ -485,7 +485,7 @@ fn combined_manifest_bounds_fit_with_larger_file_chunks() {
     limits.store.chunk = MANIFEST_CHUNK;
     let mut world = World::unopened_observed(SEED, limits, None);
     world.patch_sets(bounded_sets(FAMILY_BOUND, NAME_BOUND));
-    assert_eq!(world.open(), Some(0), "{:?}", world.refusal());
+    assert_eq!(world.open_switched(), Some(0), "{:?}", world.refusal());
     let first = manifest(&mut world, 1);
     assert_eq!(usize::try_from(first.counts.len()).expect("count fits"), FAMILY_BOUND);
 }
@@ -498,7 +498,7 @@ fn combined_manifest_bounds_patch_with_larger_file_chunks() {
     let mut world = empty().committed(SEED, patches::BASE);
     world.restart_with_limits(SEED, limits);
     world.patch_sets(bounded_sets(FAMILY_BOUND, NAME_BOUND));
-    assert!(world.open().is_some(), "{:?}", world.refusal());
+    assert!(world.open_switched().is_some(), "{:?}", world.refusal());
     assert_eq!(patches::counts(&mut world).len(), FAMILY_BOUND);
 }
 
@@ -507,7 +507,7 @@ fn manifest_family_and_name_bounds_hold_behind() {
     let sets = bounded_sets(FAMILY_BOUND, NAME_BOUND);
     let mut world = empty().committed(SEED, patches::BASE);
     world.patch_sets(sets);
-    assert!(world.open().is_some(), "bounds accepted on the patch path: {:?}", world.refusal());
+    assert!(world.open_switched().is_some(), "bounds accepted on the patch path: {:?}", world.refusal());
     let counts = patches::counts(&mut world);
     assert_eq!(counts.len(), FAMILY_BOUND);
     assert!(counts.iter().all(|(_, before, after)| *before == 0 && *after == 0));
@@ -522,7 +522,7 @@ fn manifest_bounds_refuse_sets_before_any_first_start_write() {
         world.patch_sets(bounded_sets(families, name_bytes));
         let before = world.contents();
         world.trace_writes();
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert!(
             matches!(world.refusal(), Some(OpenRefusal::Set { owner: found, patch: 0 }) if *found == owner),
             "{:?}",
@@ -542,7 +542,7 @@ fn manifest_bounds_refuse_sets_behind_without_removing_strays() {
         world.lay(&[Item::directory(b"generations/9"), Item::file(b"generations/9/stray", b"untouched")]);
         let before = world.contents();
         world.patch_sets(bounded_sets(families, name_bytes));
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert!(
             matches!(world.refusal(), Some(OpenRefusal::Set { owner: found, patch: 0 }) if *found == owner),
             "{:?}",
@@ -559,7 +559,7 @@ fn cuts_across_check_and_switch_recover_whole_maps() {
     let mut complete = records.committed(SEED, patches::BASE);
     complete.patch_sets(patches::SETS);
     complete.trace_writes();
-    complete.open().expect("complete patch to enumerate its cuts");
+    complete.open_switched().expect("complete patch to enumerate its cuts");
     let cuts = patches::cuts(&complete);
     let first = *cuts.first().expect("copy has cut points");
     let after_switch = cuts.last().expect("switch has cut points") + 1;
@@ -572,24 +572,24 @@ fn cuts_across_check_and_switch_recover_whole_maps() {
         world.patch_sets(patches::SETS);
         world.trace_writes();
         world.cut_at(cut);
-        world.open();
+        world.open_switched();
         world.crash(SEED);
         // A build at the source levels either opens the untouched source or refuses the switched copy as ahead.
         world.patch_sets(patches::BASE);
         if world.active() == b"1\n" {
             source_opened = true;
-            assert_eq!(world.open(), Some(1), "cut {cut}");
+            assert_eq!(world.open_switched(), Some(1), "cut {cut}");
             records.check(&mut world, 1, &cut);
             assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
         } else {
             switched = true;
-            assert_eq!(world.open(), None, "cut {cut}");
+            assert_eq!(world.open_switched(), None, "cut {cut}");
             assert!(matches!(world.refusal(), Some(OpenRefusal::Ahead { .. })), "cut {cut}: {:?}", world.refusal());
         }
         patches::kept(&before, &patches::source(&mut world), &cut);
         world.crash(SEED);
         world.patch_sets(patches::SETS);
-        world.open().expect("retry after cut");
+        world.open_switched().expect("retry after cut");
         patches::whole(&mut world);
         records.check(&mut world, 2, &cut);
     }

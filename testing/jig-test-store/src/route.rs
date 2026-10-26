@@ -261,8 +261,13 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
             stop(routes, into);
         }
         Event::OpenRefused { .. } => stop(routes, into),
+        Event::Opened { pending: true, owner, .. } => {
+            // B2: the root's switch step asks this.
+            into.push(Up::Ask(Request::Switch { owner }));
+        }
         // The shell driving open owns progress; this root route prints no lines.
         Event::Patched { .. }
+        | Event::Switched { .. }
         | Event::Opened { .. }
         | Event::Kept { .. }
         | Event::Carried { .. }

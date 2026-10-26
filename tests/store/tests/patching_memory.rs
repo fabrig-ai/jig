@@ -56,10 +56,10 @@ fn observe(step: Step) {
             let measuring = slot.as_mut().expect("constructed");
             let measured = measuring.meter.end();
             // Planning starts when the store retains Pending; the directory's
-            // Patching state lasts through the switch. Check transition calls
+            // Patching state lasts through the check. Check transition calls
             // under the patch term if either side owns that state. Construction,
-            // the ordinary open before planning and the reopen after the switch
-            // use serving's term, including during the SETS open.
+            // the ordinary open before planning and the pending serving steps
+            // use serving's term, including during the SETS open and switch.
             let patching = measuring.patching || patching;
             let phase = &mut measuring.phases[usize::from(patching)];
             let bound = u64::try_from(i64::try_from(phase.bound).expect("finite bound") + measuring.net)
@@ -110,7 +110,7 @@ fn measured(
     let mut world = World::unopened_observed(920, *limits, Some(observe));
     world.lay(items);
     world.patch_sets(sets);
-    assert!(world.open().is_some(), "measured open: {:?}", world.refusal());
+    assert!(world.open_switched().is_some(), "measured open: {:?}", world.refusal());
     let phases = MEASURING.with_borrow(|slot| slot.as_ref().expect("measured").phases);
     MEASURING.with_borrow_mut(|slot| *slot = None);
     phases

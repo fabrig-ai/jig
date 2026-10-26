@@ -6,6 +6,7 @@ pub(crate) mod machines;
 pub(crate) mod phase;
 pub(crate) mod plan;
 pub mod sets;
+pub(crate) mod switch;
 pub(crate) mod walk;
 
 /// Records rewritten and page commits made by one patch (store.md 10.2).

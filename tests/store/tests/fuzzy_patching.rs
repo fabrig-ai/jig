@@ -133,7 +133,7 @@ fn seeded_patch_cuts_keep_one_whole_modeled_generation() {
         let mut completed = valid.committed_with(seed, BEFORE, 1, patches::limits(), &rows);
         completed.patch_sets(AFTER);
         completed.trace_writes();
-        assert!(completed.open().is_some(), "seed {seed}: {:?}", completed.refusal());
+        assert!(completed.open_switched().is_some(), "seed {seed}: {:?}", completed.refusal());
         let cuts = patches::cuts(&completed);
         let cut = cuts[usize::try_from(random.below(u64::try_from(cuts.len()).expect("cuts"))).expect("cut")];
         let mut world = records.committed_with(seed, BEFORE, 1, patches::limits(), &rows);
@@ -141,7 +141,7 @@ fn seeded_patch_cuts_keep_one_whole_modeled_generation() {
         world.patch_sets(AFTER);
         world.trace_writes();
         world.cut_at(cut);
-        assert_eq!(world.open(), None, "seed {seed}, cut {cut}");
+        assert_eq!(world.open_switched(), None, "seed {seed}, cut {cut}");
         let has_empty = records.shelves.iter().any(|shelf| shelf.books == 0);
         if world.refusal().is_some() {
             refused(&mut world, &records, seed, cut);
@@ -157,7 +157,7 @@ fn seeded_patch_cuts_keep_one_whole_modeled_generation() {
         if active == b"1\n" {
             patches::kept(&original, &patches::source(&mut world), &("v1 generation", seed, cut));
         }
-        let opened = world.open();
+        let opened = world.open_switched();
         if has_empty {
             empty += 1;
             assert_eq!(opened, None, "seed {seed}, cut {cut}");
@@ -165,7 +165,7 @@ fn seeded_patch_cuts_keep_one_whole_modeled_generation() {
             // Restart once more to prove the same typed record refusal, even
             // when the drawn power cut preceded the first attempt's site.
             world.crash(random.next_u64());
-            assert_eq!(world.open(), None);
+            assert_eq!(world.open_switched(), None);
             refused(&mut world, &records, seed, cut);
         } else {
             success += 1;
