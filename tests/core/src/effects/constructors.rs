@@ -305,6 +305,7 @@ impl World {
             host_answers: Vec::new(),
             inbound: Vec::new(),
             answers: Vec::new(),
+            settings_answers: Vec::new(),
             assigned: None,
             last_read: None,
             received_grant: None,

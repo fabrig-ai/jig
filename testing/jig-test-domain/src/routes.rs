@@ -566,6 +566,7 @@ fn route_now(
         | core::Now::Call { .. }
         | core::Now::DropCall { .. }
         | core::Now::EffectAnswer { .. }
+        | core::Now::SettingsAnswer { .. }
         | core::Now::SignInRefused { .. }
         | core::Now::WatchRefused { .. }
         | core::Now::Account(_)

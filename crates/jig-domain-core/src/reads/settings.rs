@@ -18,31 +18,133 @@ pub fn may_read(core: &Core, revision: u32) -> bool {
     core.held(revision)
 }
 
+/// Run reads use the same documents and load slots as party reads (engine.md, 7.3).
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum SettingsRead {
+    Inventory,
+    Setting { setting: settings::Setting, revision: u32 },
+    Revision { number: u32 },
+    Revisions { before: Option<u32> },
+}
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum SettingsAnswer {
+    Inventory(crate::documents::Settings),
+    Setting(SettingDocument),
+    Revision(RevisionAnswer),
+    Revisions(RevisionsPage),
+    Unknown,
+}
+
+struct Recipient {
+    destination: super::Destination,
+    sign_in: u64,
+    party: u64,
+}
+
+pub(crate) fn run(
+    core: &mut Core,
+    env: &Env<Limits>,
+    to: ReplyTo,
+    key: crate::CallKey,
+    read: SettingsRead,
+) -> Requests {
+    if let Some(part) = core.authorize_tool(key, crate::ToolKind::Settings) {
+        return refused(to, key, part);
+    }
+    let recipient = Recipient { destination: super::Destination::Settings { to, key }, sign_in: 0, party: 0 };
+    match read {
+        SettingsRead::Inventory => answer(
+            recipient.destination,
+            Answer::Document(Box::new(crate::documents::Document::Settings(Box::new(
+                crate::documents::settings_inventory(core),
+            )))),
+        ),
+        SettingsRead::Setting { setting, revision } => {
+            answer(recipient.destination, setting_value(core, setting, revision))
+        }
+        SettingsRead::Revision { number } => revision_read(core, env, recipient, number),
+        SettingsRead::Revisions { before } => revisions_read(core, env, recipient, before),
+    }
+}
+
+fn refused(to: ReplyTo, key: crate::CallKey, part: crate::CallPart) -> Requests {
+    let mut out = skein_lib::Queue::with_capacity(2);
+    out.push(crate::Request::Now(Box::new(crate::Now::EffectAnswer { to, key, part })));
+    out.push(crate::Request::Decided);
+    Requests::Out(out)
+}
+
+pub(super) fn answer(destination: super::Destination, value: Answer) -> Requests {
+    let super::Destination::Settings { to, key } = destination else {
+        let super::Destination::Read(reply) = destination else { unreachable!("settings read destination") };
+        return terminal(reply, value);
+    };
+    let value = match value {
+        Answer::Document(document) => {
+            let crate::documents::Document::Settings(value) = *document else { unreachable!("settings inventory") };
+            SettingsAnswer::Inventory(*value)
+        }
+        Answer::Setting(value) => SettingsAnswer::Setting(*value),
+        Answer::Revision(value) => SettingsAnswer::Revision(*value),
+        Answer::Revisions(value) => SettingsAnswer::Revisions(*value),
+        Answer::None(Why::Busy) => return refused(to, key, crate::CallPart::Unavailable),
+        Answer::None(_) => SettingsAnswer::Unknown,
+        Answer::Tasks(_) | Answer::Historical(_) | Answer::Page(_) => {
+            unreachable!("settings reads answer settings documents")
+        }
+    };
+    let mut out = skein_lib::Queue::with_capacity(2);
+    out.push(crate::Request::Now(Box::new(crate::Now::SettingsAnswer { to, key, answer: Box::new(value) })));
+    out.push(crate::Request::Decided);
+    Requests::Out(out)
+}
+
+pub(super) fn run_loaded(
+    core: &mut Core,
+    env: &Env<Limits>,
+    name: skein_lib::Id<super::Pending>,
+    result: super::Loaded,
+) -> Requests {
+    let pending = core.reads.get_mut(name).expect("pending settings load");
+    let destination = core::mem::replace(&mut pending.destination, super::Destination::Done);
+    let range = pending.range.clone();
+    core.reads.retire(name);
+    let value = match result {
+        super::Loaded::Busy => Answer::None(Why::Busy),
+        super::Loaded::Gone => Answer::None(Why::Gone),
+        super::Loaded::Page { rows, next } => super::rows::from_store(core, &env.limits, &range, rows, next, env.wall),
+        super::Loaded::TurnProblem { .. } => Answer::None(Why::Unknown),
+    };
+    answer(destination, value)
+}
+
 pub(super) fn setting(core: &Core, reply: ReplyTo, party: u64, setting: settings::Setting, revision: u32) -> Requests {
-    if core.people.role(party, people::DEPLOYMENT).is_none() || !may_read(core, revision) {
+    if core.people.role(party, people::DEPLOYMENT).is_none() {
         return terminal(reply, Answer::None(Why::Unknown));
+    }
+    terminal(reply, setting_value(core, setting, revision))
+}
+fn setting_value(core: &Core, setting: settings::Setting, revision: u32) -> Answer {
+    if !may_read(core, revision) {
+        return Answer::None(Why::Unknown);
     }
     if let settings::Setting::Charter(number) = setting {
-        return terminal(
-            reply,
-            match core.charter_at(number, revision) {
-                Some(charter) => Answer::Setting(Box::new(SettingDocument {
-                    setting,
-                    revision,
-                    value: settings::Value::Charter(Box::new(charter.clone())),
-                })),
-                None => Answer::None(Why::Unknown),
-            },
-        );
+        return match core.charter_at(number, revision) {
+            Some(charter) => Answer::Setting(Box::new(SettingDocument {
+                setting,
+                revision,
+                value: settings::Value::Charter(Box::new(charter.clone())),
+            })),
+            None => Answer::None(Why::Unknown),
+        };
     }
     if revision != core.current.newest() {
-        return terminal(reply, Answer::None(Why::Unknown));
+        return Answer::None(Why::Unknown);
     }
-    let answer = match core.current.value(setting) {
+    match core.current.value(setting) {
         Some(value) => Answer::Setting(Box::new(SettingDocument { setting, revision, value: value.clone() })),
         None => Answer::None(Why::Unknown),
-    };
-    terminal(reply, answer)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -84,15 +186,18 @@ pub(super) fn revision(
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return terminal(reply, Answer::None(Why::Unknown));
     }
+    revision_read(core, env, Recipient { destination: super::Destination::Read(reply), sign_in, party }, number)
+}
+fn revision_read(core: &mut Core, env: &Env<Limits>, recipient: Recipient, number: u32) -> Requests {
     if core.held(number) {
-        return load(core, env, reply, sign_in, party, number, number, true);
+        return load(core, env, recipient, number, number, true);
     }
     match select_revision(core.current.newest(), oldest(core, &env.limits), number) {
-        Selection::Unknown => terminal(reply, Answer::Revision(Box::new(RevisionAnswer::Unknown))),
+        Selection::Unknown => answer(recipient.destination, Answer::Revision(Box::new(RevisionAnswer::Unknown))),
         Selection::Forgotten { oldest } => {
-            terminal(reply, Answer::Revision(Box::new(RevisionAnswer::Forgotten { oldest })))
+            answer(recipient.destination, Answer::Revision(Box::new(RevisionAnswer::Forgotten { oldest })))
         }
-        Selection::Load { first, last } => load(core, env, reply, sign_in, party, first, last, true),
+        Selection::Load { first, last } => load(core, env, recipient, first, last, true),
     }
 }
 pub(super) fn revisions(
@@ -106,6 +211,9 @@ pub(super) fn revisions(
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return terminal(reply, Answer::None(Why::Unknown));
     }
+    revisions_read(core, env, Recipient { destination: super::Destination::Read(reply), sign_in, party }, before)
+}
+fn revisions_read(core: &mut Core, env: &Env<Limits>, recipient: Recipient, before: Option<u32>) -> Requests {
     let cutoff = oldest(core, &env.limits);
     let last = match before {
         Some(before) => core.current.newest().min(before.saturating_sub(1)),
@@ -126,9 +234,9 @@ pub(super) fn revisions(
         (cutoff, before)
     };
     match page_range(core.current.newest(), oldest, before, env.limits.documents.rows) {
-        Some((first, last)) => load(core, env, reply, sign_in, party, first, last, false),
-        None => terminal(
-            reply,
+        Some((first, last)) => load(core, env, recipient, first, last, false),
+        None => answer(
+            recipient.destination,
             Answer::Revisions(Box::new(RevisionsPage {
                 rows: List::with_capacity(0),
                 next: None,
@@ -137,30 +245,30 @@ pub(super) fn revisions(
         ),
     }
 }
-#[expect(clippy::too_many_arguments, reason = "one bounded settings load admission")]
-fn load(
-    core: &mut Core,
-    env: &Env<Limits>,
-    reply: ReplyTo,
-    sign_in: u64,
-    party: u64,
-    first: u32,
-    last: u32,
-    whole: bool,
-) -> Requests {
+fn load(core: &mut Core, env: &Env<Limits>, recipient: Recipient, first: u32, last: u32, whole: bool) -> Requests {
     let rows = last.checked_sub(first).expect("ordered revision range").checked_add(1).expect("nonzero revision range");
     let Some(bytes) = load_bytes(&env.limits, rows) else {
-        return terminal(reply, Answer::None(Why::Busy));
+        return answer(recipient.destination, Answer::None(Why::Busy));
     };
     let range = Range {
-        party,
+        party: recipient.party,
         scope: Scope::SettingsHistory { first, last, newest: core.current.newest(), whole },
         after: None,
         backwards: false,
         rows,
         bytes,
     };
-    super::load_settings(core, env, reply, sign_in, range)
+    super::load_settings(
+        core,
+        env,
+        super::Pending {
+            destination: recipient.destination,
+            sign_in: recipient.sign_in,
+            party: recipient.party,
+            range,
+            tasks: None,
+        },
+    )
 }
 /// A selected revision is decoded whole before its values are admitted separately.
 #[must_use]

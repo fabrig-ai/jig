@@ -18,6 +18,7 @@ pub const NOTE: &[u8] = br#"{"scope":{"kind":"deployment"},"description":"status
 pub const RECALL: &[u8] = br#"{"kind":"name","name":1}"#;
 
 pub const FIELDS: &[(&[u8], &[&[u8]])] = &[
+    (b"settings", &[b"kind", b"setting", b"revision", b"number", b"before"]),
     (b"propose_settings", &[b"against", b"set", b"reason"]),
     (b"delegate", &[b"batch"]),
     (b"message", &[b"target", b"form", b"words", b"question"]),
