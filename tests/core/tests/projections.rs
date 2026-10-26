@@ -608,11 +608,19 @@ fn projection_heard(world: &World, goal: u64) -> Vec<tasks::Word> {
         .filter_map(|record| match record {
             root::Record::Core(core::Record::Tasks(tasks::Stored::Activity(line))) if line.task == goal => {
                 match &line.line {
-                    tasks::Line::Heard(word) if word.words.starts_with(b"Projection ") => Some(word.clone()),
-                    _ => None,
+                    tasks::Line::Heard(message) if message.words.starts_with(b"Projection ") => Some(message.clone()),
+                    tasks::Line::Words { .. }
+                    | tasks::Line::Heard(_)
+                    | tasks::Line::Notified { .. }
+                    | tasks::Line::RunBegan { .. }
+                    | tasks::Line::RunEnded { .. }
+                    | tasks::Line::Turn { .. }
+                    | tasks::Line::Decided { .. }
+                    | tasks::Line::Milestone { .. }
+                    | tasks::Line::Kept { .. } => None,
                 }
             }
-            _ => None,
+            root::Record::Core(_) | root::Record::Connector { .. } => None,
         })
         .collect()
 }
@@ -679,7 +687,7 @@ fn reading_projection_news_then_restarting_does_not_rearm_the_episode() {
     world.send(root::Event::Core(core::Event::People(people::Event::Ask {
         models: Box::new([]),
         reply_to: ReplyTo::new(Token::new(9911)),
-        sign_in: world.sign_in.unwrap(),
+        sign_in: world.sign_in.expect("signed-in owner"),
         key: [41; 16],
         ask: people::Ask::Amend { project: 1, task: goal, revision, release: None, amendment },
     })));
