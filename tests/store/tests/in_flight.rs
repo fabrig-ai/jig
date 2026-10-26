@@ -51,7 +51,7 @@ fn a_flight_under_a_pending_patch_of_its_family_refuses_before_any_write() {
 fn a_flight_in_a_family_no_pending_patch_changes_is_patched_past() {
     let mut world = committed(ONE_FLIGHT);
     world.patch_sets(CHANGES_OTHER);
-    assert!(world.open().is_some(), "opens: {:?}", world.refusal());
+    assert!(world.open_switched().is_some(), "opens: {:?}", world.refusal());
     assert_eq!(world.active(), b"2\n");
     assert_eq!(world.application(true).get(&key(0)).map(AsRef::as_ref), Some(ROW));
 }
@@ -69,7 +69,7 @@ fn in_flight_counts_every_record_and_names_at_most_64() {
 fn a_set_naming_no_flight_range_never_refuses() {
     let mut world = committed(ONE_FLIGHT);
     world.patch_sets(NO_RANGES);
-    assert!(world.open().is_some(), "opens: {:?}", world.refusal());
+    assert!(world.open_switched().is_some(), "opens: {:?}", world.refusal());
     assert_eq!(world.active(), b"2\n");
     assert_eq!(
         world.application(true).get(&key(0)).map(AsRef::as_ref),
@@ -109,6 +109,7 @@ fn secret_committed() -> jig_store_world::World {
     use skein_lib::Secret;
     let mut world = committed(ONE_FLIGHT);
     assert_eq!(world.open(), Some(1));
+    world.mark().expect("start mark before keeping the sent effect");
     let mut value = b"\x00\x01\x00\x00\x00\x03key".to_vec();
     value.extend(SENT.to_be_bytes());
     world.secret(Secrets::Keep {
