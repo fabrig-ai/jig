@@ -4,10 +4,10 @@ use jig_client::contract::{
     OwnerAuthority, OwnerDelegation, OwnerGrant, OwnerKindImplication, OwnerPattern, OwnerPatternEnd, PolicyEditRole,
     PolicyGuard, PolicyJudge, PolicyPermission, PolicyRequirement, ProposalKey, Proposer, Retention, RevisionDecider,
     RevisionDocument, RevisionEdit, RevisionHead, RevisionItem, RevisionItemEdit, RevisionItemHead, RevisionParty,
-    RevisionRow, RevisionsPage, Rules, Running, Setting, SettingEdit, SettingFollows, SettingHosts, SettingItem,
-    SettingLine, SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument, Size,
-    TaskContractDocument, TaskFlags, Template, TemplateBudget, TemplateDeadline, TemplateExecutor, TemplateOverride,
-    Text,
+    RevisionReplaced, RevisionRow, RevisionsPage, Rules, Running, Setting, SettingEdit, SettingFollows, SettingHosts,
+    SettingItem, SettingLine, SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument,
+    Size, TaskContractDocument, TaskFlags, Template, TemplateBudget, TemplateDeadline, TemplateExecutor,
+    TemplateOverride, Text,
 };
 use skein_lib::{Duration, List, Wall};
 fn text(value: &[u8]) -> Text {
@@ -215,10 +215,22 @@ pub fn settings_revision() -> RevisionDocument {
     let mut items = List::with_capacity(7);
     for item in settings_change().items.into_boxed() {
         let SettingEdit::Set(value) = item.edit else { unreachable!("set fixture") };
-        items.push(RevisionItem { setting: item.setting, edit: RevisionEdit::Set(value) }).expect("settings");
+        items
+            .push(RevisionItem {
+                setting: item.setting,
+                edit: RevisionEdit::Set(value.clone()),
+                replaced: RevisionReplaced::Value(value),
+            })
+            .expect("settings");
     }
-    for edit in [RevisionEdit::Removed, RevisionEdit::Reset, RevisionEdit::TooLarge(Size { bytes: 999 })] {
-        items.push(RevisionItem { setting: Setting::Charter(SettingNumber { number: 8 }), edit }).expect("edit");
+    for (edit, replaced) in [
+        (RevisionEdit::Removed, RevisionReplaced::Removed),
+        (RevisionEdit::Reset, RevisionReplaced::NotOffered),
+        (RevisionEdit::TooLarge(Size { bytes: 999 }), RevisionReplaced::TooLarge(Size { bytes: 998 })),
+    ] {
+        items
+            .push(RevisionItem { setting: Setting::Charter(SettingNumber { number: 8 }), edit, replaced })
+            .expect("edit");
     }
     RevisionDocument { head: settings_head(), items }
 }

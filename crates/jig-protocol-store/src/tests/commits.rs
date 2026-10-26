@@ -286,6 +286,9 @@ fn a_put_then_an_erase_of_one_key_is_one_erase() {
 fn archiving_a_settings_revision_copies_its_items_before_erasing_the_held_row() {
     use jig_domain_core::settings as s;
     let mut store = fixtures::opened();
+    let mut template = super::settings::template();
+    template.number = 7;
+    template.llm = None;
     let revision = s::Revision {
         head: s::Head {
             number: 1,
@@ -295,7 +298,11 @@ fn archiving_a_settings_revision_copies_its_items_before_erasing_the_held_row() 
             proposal: None,
             moved: false,
         },
-        items: Box::new([s::Item { setting: s::Setting::Template(7), edit: s::Edit::Removed }]),
+        items: Box::new([s::RevisionItem {
+            setting: s::Setting::Template(7),
+            edit: s::Edit::Removed,
+            replaced: s::Replaced::Value(Box::new(s::Value::Template(Box::new(template)))),
+        }]),
     };
     assert_committed(
         &commit(

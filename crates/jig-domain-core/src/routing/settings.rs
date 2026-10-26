@@ -2,7 +2,7 @@
 use crate::{Core, Event, Limits, Request, Requests, settings as s};
 use alloc::boxed::Box;
 use jig_domain_people as people;
-use skein_lib::{Env, Map, Queue, ReplyTo, Token};
+use skein_lib::{Env, List, Map, Queue, ReplyTo, Token};
 
 #[expect(clippy::too_many_arguments, reason = "the keyed envelope and its value cross admission together")]
 pub(super) fn start(
@@ -152,10 +152,12 @@ pub(super) fn decide(
     if keep_previous {
         core.held.heads.insert(previous, core.current.head.clone()).expect("held heads preflighted");
     }
+    let items = core.current.revision_items(&change.items);
     let writes = s::apply(&mut core.current, &change.items, number);
+    drop(change.items);
     core.current.head =
         s::Head { number, against: previous, at: env.wall, by, proposal, moved: change.running == s::Running::Moves };
-    let revision = s::Revision { head: core.current.head.clone(), items: change.items };
+    let revision = s::Revision { head: core.current.head.clone(), items };
     let (writes, oldest) = s::restart::revision_writes_with_hold(
         Some(revision),
         writes,
@@ -330,7 +332,7 @@ pub(crate) fn withdraw_stale(
     out: &mut Queue<Request>,
     except: Option<(people::Proposer, u32)>,
 ) {
-    let mut pending = skein_lib::List::with_capacity(env.limits.settings.proposals);
+    let mut pending = List::with_capacity(env.limits.settings.proposals);
     for (&key, _) in &core.settings_proposals {
         if Some(key) != except {
             pending.push(key).expect("bounded pending sets");

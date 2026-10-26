@@ -734,3 +734,53 @@ fn a_settings_commit_before_the_first_start_seed_keeps_the_supplied_defaults() {
     assert!(!writes.is_empty());
     assert_eq!(core.current.newest(), 1);
 }
+
+#[test]
+fn revision_validation_bounds_both_value_sets_independently() {
+    let mut limits = limits();
+    limits.tasks.charters = 1;
+    let current = Current::new(config(1).defaults, &limits);
+    let first = current.charter(1).unwrap().clone();
+    let mut second = first.clone();
+    second.number = 2;
+    let mut revision = Revision {
+        head: current.head.clone(),
+        items: Box::new([
+            RevisionItem {
+                setting: Setting::Charter(1),
+                edit: Edit::Set(Value::Charter(Box::new(first.clone()))),
+                replaced: Replaced::Default,
+            },
+            RevisionItem {
+                setting: Setting::Charter(2),
+                edit: Edit::Removed,
+                replaced: Replaced::Value(Box::new(Value::Charter(Box::new(second.clone())))),
+            },
+        ]),
+    };
+    assert!(crate::reads::settings::valid_revision(&revision, &limits), "one value on each side fits independently");
+    revision.items[0].replaced = Replaced::Value(Box::new(Value::Charter(Box::new(first))));
+    assert!(
+        !crate::reads::settings::valid_revision(&revision, &limits),
+        "two replaced charters exceed one charter's payload budget"
+    );
+    revision.items[0].replaced = Replaced::Default;
+    revision.items[1].edit = Edit::Set(Value::Charter(Box::new(second)));
+    assert!(!crate::reads::settings::valid_revision(&revision, &limits), "two set charters also exceed it");
+    revision.items[1].edit = Edit::Removed;
+    revision.items[1].replaced = Replaced::Value(Box::new(Value::Template(Box::new(template()))));
+    assert!(!crate::reads::settings::valid_revision(&revision, &limits), "a replaced value must match its setting");
+    let mut oversized = current.charter(1).unwrap().clone();
+    oversized.number = 2;
+    let count = limits.run_bytes.checked_add(1).unwrap();
+    let mut bytes = List::with_capacity(count);
+    for _ in 0..count {
+        bytes.push(b'x').unwrap();
+    }
+    oversized.policy.instructions = bytes.into_boxed();
+    revision.items[1].replaced = Replaced::Value(Box::new(Value::Charter(Box::new(oversized))));
+    assert!(
+        !crate::reads::settings::valid_revision(&revision, &limits),
+        "a replaced value must fit its kind's byte bound"
+    );
+}

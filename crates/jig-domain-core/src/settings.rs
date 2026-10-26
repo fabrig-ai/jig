@@ -101,10 +101,25 @@ pub fn model_names_worst_case() -> Option<u64> {
         )?,
     )
 }
+/// What a revision did to one setting, and what it replaced (engine.md, 17.10).
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct RevisionItem {
+    pub setting: Setting,
+    pub edit: Edit,
+    pub replaced: Replaced,
+}
+/// A setting as it was before a revision changed it.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Replaced {
+    Value(Box<Value>),
+    Default,
+    Removed,
+    NotOffered,
+}
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Revision {
     pub head: Head,
-    pub items: Box<[Item]>,
+    pub items: Box<[RevisionItem]>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Failure {
@@ -215,6 +230,29 @@ impl Current {
                 Some(default) => (Some(&default.value), Some((false, default.revision))),
                 None => (None, None),
             },
+        }
+    }
+    pub(crate) fn revision_items(&self, items: &[Item]) -> Box<[RevisionItem]> {
+        let mut result = List::with_capacity(u32::try_from(items.len()).expect("checked settings count"));
+        for item in items {
+            result
+                .push(RevisionItem {
+                    setting: item.setting,
+                    edit: item.edit.clone(),
+                    replaced: self.replaced(item.setting),
+                })
+                .expect("checked settings count");
+        }
+        result.into_boxed()
+    }
+    /// Capture the choice before applying an edit; defaults remain choices of the release.
+    #[must_use]
+    pub fn replaced(&self, setting: Setting) -> Replaced {
+        match self.lookup(setting) {
+            (Some(value), Some((true, _))) => Replaced::Value(Box::new(value.clone())),
+            (_, Some((false, _))) => Replaced::Default,
+            (None, Some((true, _))) => Replaced::Removed,
+            (_, None) => Replaced::NotOffered,
         }
     }
     #[must_use]
@@ -355,7 +393,10 @@ pub fn set_worst_case(limits: &crate::Limits) -> Option<u64> {
 #[must_use]
 pub fn revision_worst_case(limits: &crate::Limits) -> Option<u64> {
     set_worst_case(limits)?
-        .checked_add(List::<Item>::worst_case(capacity(limits)?.checked_mul(2)?)?)?
+        .checked_mul(2)?
+        // Replaced values own a boxed Value carrier in addition to the value's payload.
+        .checked_add(u64::from(capacity(limits)?).checked_mul(u64::try_from(size_of::<Value>()).ok()?)?)?
+        .checked_add(List::<RevisionItem>::worst_case(capacity(limits)?.checked_mul(2)?)?)?
         .checked_add(u64::try_from(size_of::<Head>()).ok()?)
 }
 #[must_use]

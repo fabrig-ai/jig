@@ -172,7 +172,7 @@ pub fn load_bytes(limits: &Limits, rows: u32) -> Option<u64> {
 }
 
 /// Validate one decoded history record before it crosses a load boundary.
-/// Its set values occupy at most one whole bounded settings set.
+/// Its set and replaced values each occupy at most one whole bounded settings set.
 #[must_use]
 pub fn valid_revision(revision: &settings::Revision, limits: &Limits) -> bool {
     let Some(capacity) = settings::capacity(limits) else { return false };
@@ -182,44 +182,56 @@ pub fn valid_revision(revision: &settings::Revision, limits: &Limits) -> bool {
         return false;
     }
     let mut seen = Map::with_capacity(count);
-    let mut charters = 0_u32;
-    let mut templates = 0_u32;
-    let mut policies = 0_u32;
     for item in &revision.items {
         if seen.insert(item.setting, ()).ok() != Some(None) {
             return false;
         }
-        match &item.edit {
-            settings::Edit::Set(value) => {
-                if settings::check::shape(item.setting, value, limits).is_err() {
+    }
+    valid_values(revision, limits, false) && valid_values(revision, limits, true)
+}
+
+// Each side owns at most one whole set, independently of the other side.
+fn valid_values(revision: &settings::Revision, limits: &Limits, replaced: bool) -> bool {
+    let mut counts = [0_u32; 3];
+    for item in &revision.items {
+        let value = if replaced {
+            match &item.replaced {
+                settings::Replaced::Value(value) => Some(value.as_ref()),
+                settings::Replaced::Default | settings::Replaced::Removed | settings::Replaced::NotOffered => None,
+            }
+        } else {
+            match &item.edit {
+                settings::Edit::Set(value) => Some(value),
+                settings::Edit::Removed | settings::Edit::Reset => None,
+            }
+        };
+        let Some(value) = value else { continue };
+        if settings::check::shape(item.setting, value, limits).is_err() {
+            return false;
+        }
+        match value {
+            settings::Value::Charter(value) => {
+                counts[0] = counts[0].saturating_add(1);
+                if counts[0] > limits.tasks.charters
+                    || value.policy.alternatives.len()
+                        > usize::try_from(limits.settings.alternatives).expect("alternative count")
+                {
                     return false;
                 }
-                match value {
-                    settings::Value::Charter(value) => {
-                        charters = charters.saturating_add(1);
-                        if charters > limits.tasks.charters
-                            || value.policy.alternatives.len()
-                                > usize::try_from(limits.settings.alternatives).expect("alternative count")
-                        {
-                            return false;
-                        }
-                    }
-                    settings::Value::Template(_) => {
-                        templates = templates.saturating_add(1);
-                        if templates > limits.templates {
-                            return false;
-                        }
-                    }
-                    settings::Value::Policy(_) => {
-                        policies = policies.saturating_add(1);
-                        if policies > limits.authority.projects {
-                            return false;
-                        }
-                    }
-                    settings::Value::Rules(_) => {}
+            }
+            settings::Value::Template(_) => {
+                counts[1] = counts[1].saturating_add(1);
+                if counts[1] > limits.templates {
+                    return false;
                 }
             }
-            settings::Edit::Removed | settings::Edit::Reset => {}
+            settings::Value::Policy(_) => {
+                counts[2] = counts[2].saturating_add(1);
+                if counts[2] > limits.authority.projects {
+                    return false;
+                }
+            }
+            settings::Value::Rules(_) => {}
         }
     }
     true

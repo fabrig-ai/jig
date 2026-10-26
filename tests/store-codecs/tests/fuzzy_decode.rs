@@ -160,6 +160,7 @@ fn mutated_core_goldens_never_panic() {
 fn frames(bytes: &[u8]) {
     use jig_protocol_store::{codec, core_v6, notes_v1, tasks_v9, transcripts::frame};
     let limits = codec::Limits {
+        settings_domain: jig_protocol_config::profile(jig_protocol_config::Profile::Small).core,
         settings: jig_protocol_store::settings_v1::CEILINGS,
         core: core_v6::CEILINGS,
         tasks: tasks_v9::CEILINGS,
@@ -178,6 +179,7 @@ fn arbitrary_frames_never_panic_and_round_trip_when_they_decode() {
 fn mutated_and_short_frames_never_panic() {
     use jig_protocol_store::{codec, core_v6, notes_v1, tasks_v9, transcripts::frame};
     let limits = codec::Limits {
+        settings_domain: jig_protocol_config::profile(jig_protocol_config::Profile::Small).core,
         settings: jig_protocol_store::settings_v1::CEILINGS,
         core: core_v6::CEILINGS,
         tasks: tasks_v9::CEILINGS,

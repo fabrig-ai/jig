@@ -71,10 +71,12 @@ record Head { number: u32 against: u32 at: u64 by: Decider proposal: option Prop
 record Set { value: Value }
 enum Edit { set: Set, removed, reset }
 record Item { setting: Setting edit: Edit }
+enum Replaced { value: boxed Set, default, removed, not_offered }
+record RevisionItem { setting: Setting edit: Edit replaced: Replaced }
 
 versioned record Default { models: list 64 ModelName value: Value revision: u32 }
 versioned record Changed { models: list 64 ModelName value: option Value revision: u32 }
-versioned record Revision { models: list 64 ModelName head: Head items: list 128 Item }
+versioned record Revision { models: list 64 ModelName head: Head items: bytes 2147483647 pieces RevisionItem }
 versioned record Extent { oldest: u32 }
 versioned record CharterVersion { charter: option Charter }
 versioned record Proposal { models: list 64 ModelName against: u32 items: list 128 Item }

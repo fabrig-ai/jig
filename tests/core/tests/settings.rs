@@ -67,7 +67,7 @@ fn a_release_changes_the_template_once_and_archives_its_predecessor() {
     assert_eq!(newest.head.by, settings::Decider::Release);
     assert_eq!(newest.head.against, 1);
     assert!(
-        matches!(&newest.items[..], [settings::Item { setting: settings::Setting::Template(1), edit: settings::Edit::Set(settings::Value::Template(value)) }] if value.grace == Some(Duration::from_millis(6000)))
+        matches!(&newest.items[..], [settings::RevisionItem { setting: settings::Setting::Template(1), edit: settings::Edit::Set(settings::Value::Template(value)), replaced: settings::Replaced::Default }] if value.grace == Some(Duration::from_millis(6000)))
     );
     assert_eq!(revision(&world, 1, true).head.by, settings::Decider::FirstStart);
     let signed = sign_in(&mut world);
@@ -1900,4 +1900,100 @@ fn goal_description_review(world: &mut World, signed: u64, goal: u64) -> documen
     );
     let proposal = proposed(&reply);
     proposal_document(world, signed, OWNER, proposal)
+}
+
+#[test]
+fn a_revisions_items_record_what_they_replaced() {
+    let (mut config, limits) = configuration();
+    let mut charter = config.core.defaults.charters[0].clone();
+    charter.number = 2;
+    config.core.defaults.charters = Box::new([config.core.defaults.charters[0].clone(), charter.clone()]);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    charter.policy.instructions = b"First choice".as_slice().into();
+    let first = settings::Value::Charter(Box::new(charter.clone()));
+    charter.policy.instructions = b"Second choice".as_slice().into();
+    let second = settings::Value::Charter(Box::new(charter));
+    let mut template = configuration().0.core.defaults.templates[0].clone();
+    template.number = 99;
+    let mut expected = Vec::new();
+    for (setting, edit, replaced) in [
+        (settings::Setting::Charter(2), settings::Edit::Set(first.clone()), settings::Replaced::Default),
+        (
+            settings::Setting::Charter(2),
+            settings::Edit::Set(second.clone()),
+            settings::Replaced::Value(Box::new(first)),
+        ),
+        (settings::Setting::Charter(2), settings::Edit::Removed, settings::Replaced::Value(Box::new(second))),
+        (settings::Setting::Charter(2), settings::Edit::Reset, settings::Replaced::Removed),
+        (
+            settings::Setting::Template(99),
+            settings::Edit::Set(settings::Value::Template(Box::new(template))),
+            settings::Replaced::NotOffered,
+        ),
+    ] {
+        let against = world.domain.settings().newest();
+        let number = against + 1;
+        let reply = change(
+            &mut world,
+            signed,
+            u8::try_from(number).expect("revision fits request key"),
+            against,
+            Box::new([settings::Item { setting, edit }]),
+        );
+        changed(&reply, number);
+        let stored = revision(&world, number, false).clone();
+        assert_eq!(stored.items[0].replaced, replaced);
+        assert_revision_read(&mut world, signed, &stored);
+        expected.push(stored);
+    }
+    let item = template_edit(&world, 23);
+    changed(&change(&mut world, signed, 10, 6, Box::new([item])), 7);
+    restart(&mut world, {
+        let mut config = configuration().0;
+        let mut charter = config.core.defaults.charters[0].clone();
+        charter.number = 2;
+        config.core.defaults.charters = Box::new([config.core.defaults.charters[0].clone(), charter]);
+        config
+    });
+    let signed = sign_in(&mut world);
+    for stored in expected {
+        assert_eq!(revision(&world, stored.head.number, true), &stored);
+        assert_revision_read(&mut world, signed, &stored);
+    }
+}
+
+fn assert_revision_read(world: &mut World, signed: u64, expected: &settings::Revision) {
+    let reads::Answer::Revision(answer) =
+        client_read(world, signed, reads::Read::Revision { number: expected.head.number })
+    else {
+        panic!("revision answer")
+    };
+    let reads::RevisionAnswer::Revision { revision, .. } = *answer else { panic!("whole revision") };
+    assert_eq!(&revision, expected);
+}
+
+#[test]
+fn a_release_records_the_defaults_it_replaced() {
+    let mut world = start(64);
+    let mut config = configuration().0;
+    config.core.defaults.templates[0].grace = Some(Duration::from_secs(8));
+    config.core.defaults.charters[0].policy.instructions = b"Release instructions".as_slice().into();
+    restart(&mut world, config);
+    let stored = revision(&world, 2, false).clone();
+    assert_eq!(stored.head.by, settings::Decider::Release);
+    assert_eq!(stored.items.len(), 2);
+    for item in &stored.items {
+        assert_eq!(item.replaced, settings::Replaced::Default);
+    }
+    let signed = sign_in(&mut world);
+    assert_revision_read(&mut world, signed, &stored);
+    let mut config = configuration().0;
+    config.core.defaults.charters[0].policy.instructions = b"Release instructions".as_slice().into();
+    config.core.defaults.templates[0].grace = Some(Duration::from_secs(9));
+    restart(&mut world, config);
+    let signed = sign_in(&mut world);
+    assert_eq!(revision(&world, 2, true), &stored);
+    assert_revision_read(&mut world, signed, &stored);
 }

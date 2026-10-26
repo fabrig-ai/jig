@@ -1479,18 +1479,44 @@ fn encode_revision(
     names: &[settings::ModelName],
 ) -> Result<wire::Revision, wire::Problem> {
     let field_head = encode_head(&value.head, limits)?;
-    let mut list_35 = List::with_capacity(limits.revision_items);
-    for entry in &value.items {
-        let element = encode_item(entry, limits)?;
-        if list_35.push(element).is_err() {
-            return Err(bound());
-        }
+    let Ok(count) = u32::try_from(value.items.len()) else {
+        return Err(revision_problem(skein_codec::Reason::Bound));
+    };
+    if count > limits.proposal_items {
+        return Err(revision_problem(skein_codec::Reason::Bound));
     }
-    let field_items = list_35;
-    wire::Revision::new(
-        limits,
-        wire::RevisionParts { models: encode_names(names, limits)?, head: field_head, items: field_items },
-    )
+    let mut pieces = List::with_capacity(count);
+    for entry in &value.items {
+        let replaced = match &entry.replaced {
+            settings::Replaced::Value(value) => wire::Replaced::Value(Box::new(wire::Set::new(
+                limits,
+                wire::SetParts { value: encode_value(value, limits)? },
+            )?)),
+            settings::Replaced::Default => wire::Replaced::Default,
+            settings::Replaced::Removed => wire::Replaced::Removed,
+            settings::Replaced::NotOffered => wire::Replaced::NotOffered,
+        };
+        let item = wire::RevisionItem::new(
+            limits,
+            wire::RevisionItemParts {
+                setting: encode_setting(&entry.setting, limits)?,
+                edit: encode_edit(&entry.edit, limits)?,
+                replaced,
+            },
+        )?;
+        let mut out = Writer::new(usize::try_from(item.measure()).expect("measured item"));
+        item.encode(&mut out).expect("measured item");
+        pieces.push(out.finish()).expect("revision item count");
+    }
+    let items = match super::pieces::join(pieces, limits.revision_items) {
+        Ok(items) => items,
+        Err(reason) => return Err(revision_problem(reason)),
+    };
+    wire::Revision::new(limits, wire::RevisionParts { models: encode_names(names, limits)?, head: field_head, items })
+}
+// Errors name the revision payload instead of an unrelated value field.
+fn revision_problem(reason: skein_codec::Reason) -> wire::Problem {
+    wire::Problem { path: wire::Path::RevisionItems, reason }
 }
 fn decode_revision(
     value: wire::Revision,
@@ -1498,23 +1524,45 @@ fn decode_revision(
     names: &[settings::ModelName],
 ) -> Result<settings::Revision, wire::Problem> {
     let wire::RevisionParts { models, head, items } = value.into_parts();
-    let field_head = decode_head(head, limits);
-    let mut list_36 = List::with_capacity((items).len());
-    for entry in (items).into_boxed() {
-        let element = decode_item(entry, limits)?;
-        list_36.push(element).expect("decoded list bound");
-    }
-    let field_items = list_36.into_boxed();
-    let mut field_items = field_items;
+    let mut input = Reader::new(&items);
+    let mut result = List::with_capacity(limits.proposal_items);
     let moved = model_moves(&models, names);
-    for item in &mut field_items {
-        match &mut item.edit {
-            settings::Edit::Set(value) => remap_value(value, &moved, &models, names),
-            settings::Edit::Removed | settings::Edit::Reset => {}
+    while !input.is_empty() {
+        if result.len() == result.capacity() {
+            return Err(revision_problem(skein_codec::Reason::Bound));
         }
+        let bytes = match skein_codec::piece::split(&mut input) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => unreachable!("nonempty piece reader"),
+            Err(reason) => return Err(revision_problem(reason)),
+        };
+        let mut reader = Reader::new(&bytes);
+        let item = wire::RevisionItem::decode(limits, &mut reader)?;
+        if !reader.is_empty() {
+            return Err(wire::Problem { path: wire::Path::RevisionItems, reason: skein_codec::Reason::Malformed });
+        }
+        let wire::RevisionItemParts { setting, edit, replaced } = item.into_parts();
+        let mut edit = decode_edit(edit, limits)?;
+        if let settings::Edit::Set(value) = &mut edit {
+            remap_value(value, &moved, &models, names);
+        }
+        let replaced = match replaced {
+            wire::Replaced::Value(value) => {
+                let mut value = decode_value(value.into_parts().value, limits)?;
+                remap_value(&mut value, &moved, &models, names);
+                settings::Replaced::Value(Box::new(value))
+            }
+            wire::Replaced::Default => settings::Replaced::Default,
+            wire::Replaced::Removed => settings::Replaced::Removed,
+            wire::Replaced::NotOffered => settings::Replaced::NotOffered,
+        };
+        result
+            .push(settings::RevisionItem { setting: decode_setting(setting, limits), edit, replaced })
+            .expect("checked item count");
     }
-    Ok(settings::Revision { head: field_head, items: field_items })
+    Ok(settings::Revision { head: decode_head(head, limits), items: result.into_boxed() })
 }
+
 fn encode_charter_version(
     value: &settings::CharterVersion,
     limits: &wire::Limits,
@@ -1607,8 +1655,9 @@ pub fn limits(domain: &core::Limits) -> Option<wire::Limits> {
     limits.approval_state = domain.tasks.result_bytes;
     limits.verdict_choices_choices = domain.tasks.contract_choices;
     limits.template_name = domain.documents.text_bytes;
-    limits.revision_items = settings::capacity(domain)?.checked_mul(2)?;
-    limits.proposal_items = limits.revision_items;
+    // Revision items are framed under a byte sum; proposal_items retains their shared count bound.
+    limits.revision_items = u32::try_from(settings::revision_worst_case(domain)?).ok()?;
+    limits.proposal_items = settings::capacity(domain)?.checked_mul(2)?;
     if wire::check_limits(&limits).is_err() {
         return None;
     }
@@ -1664,9 +1713,10 @@ pub fn decode(
     bytes: &[u8],
     limits: &wire::Limits,
     names: &[settings::ModelName],
+    domain: &core::Limits,
 ) -> Result<settings::Record, wire::Problem> {
     let mut reader = Reader::new(bytes);
-    Ok(match key {
+    let record = match key {
         settings::Key::Default(setting) => settings::Record::Default {
             setting: *setting,
             default: decode_default(wire::Default::decode(limits, &mut reader)?, limits, names)?,
@@ -1703,7 +1753,16 @@ pub fn decode(
             proposal: *proposal,
             value: decode_proposal(wire::Proposal::decode(limits, &mut reader)?, limits, names)?,
         },
-    })
+    };
+    if let settings::Record::Revision { revision, .. } = &record {
+        if !core::reads::settings::valid_revision(revision, domain) {
+            return Err(revision_problem(skein_codec::Reason::Bound));
+        }
+        if !reader.is_empty() {
+            return Err(revision_problem(skein_codec::Reason::Malformed));
+        }
+    }
+    Ok(record)
 }
 
 // Like the people family's live policy rows, settings remember the catalogue's
