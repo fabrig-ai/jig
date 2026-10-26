@@ -287,7 +287,8 @@ record TemplateSpan { value: duration }
 enum TemplateDeadline { none, span: TemplateSpan, given }
 record TemplateOverride { template: u32 executor: option TemplateExecutor budget: option TemplateBudget deadline: option TemplateDeadline priority: option u32 }
 record PolicyEditTemplates { overrides: list 16 TemplateOverride }
-enum PolicyEdit { project_spend: PolicyEditProjectSpend, role: PolicyEditRoleValue, requirements: PolicyEditRequirements, projections: PolicyEditProjections, permissions: PolicyEditPermissions, templates: PolicyEditTemplates }
+record PolicyEditCeiling { ceiling: OwnerAuthority }
+enum PolicyEdit { project_spend: PolicyEditProjectSpend, role: PolicyEditRoleValue, requirements: PolicyEditRequirements, projections: PolicyEditProjections, permissions: PolicyEditPermissions, templates: PolicyEditTemplates, ceiling: PolicyEditCeiling }
 record HeldRolePolicy { role: u32 }
 enum HeldRole { owner, maintainer, member, observer, policy: HeldRolePolicy }
 record Holding { party: u64 role: HeldRole }

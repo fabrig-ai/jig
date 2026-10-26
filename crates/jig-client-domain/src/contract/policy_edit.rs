@@ -6,12 +6,27 @@ use skein_lib::{Duration, List};
 /// One mutable part of project policy, sent in one request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PolicyEdit {
-    ProjectSpend { period_spend: u64 },
+    ProjectSpend {
+        period_spend: u64,
+    },
     Role(PolicyEditRole),
-    Requirements { requirements: List<PolicyRequirement> },
-    Projections { grants: List<OwnerGrant> },
-    Permissions { mappings: List<PolicyPermission> },
-    Templates { overrides: List<TemplateOverride> },
+    Requirements {
+        requirements: List<PolicyRequirement>,
+    },
+    Projections {
+        grants: List<OwnerGrant>,
+    },
+    Permissions {
+        mappings: List<PolicyPermission>,
+    },
+    Templates {
+        overrides: List<TemplateOverride>,
+    },
+    /// Replace the project's ceiling whole within the deployment's rules (authority.md, 6).
+    /// Roles are unchanged; admission refuses a ceiling below an existing role.
+    Ceiling {
+        ceiling: OwnerAuthority,
+    },
 }
 
 /// A role's actual authority, period allotment and decision flags.

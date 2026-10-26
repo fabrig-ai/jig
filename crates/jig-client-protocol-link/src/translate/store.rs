@@ -32,6 +32,9 @@ fn person_answer(value: &w::PersonAnswer, limits: &Limits) -> Result<c::PersonAn
 }
 fn policy_edit(value: &w::PolicyEdit, limits: &Limits) -> Result<c::PolicyEdit, w::Problem> {
     Ok(match value {
+        w::PolicyEdit::Ceiling(value) => {
+            c::PolicyEdit::Ceiling { ceiling: documents::owner_authority_fields(value.ceiling(), limits)? }
+        }
         w::PolicyEdit::Templates(value) => super::operations::restore_templates(value.overrides()),
         w::PolicyEdit::ProjectSpend(value) => c::PolicyEdit::ProjectSpend { period_spend: value.period_spend() },
         w::PolicyEdit::Role(value) => {

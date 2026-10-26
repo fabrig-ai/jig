@@ -492,6 +492,10 @@ pub(crate) fn wire_policy_permission(
 
 pub(crate) fn wire_policy_edit(value: &c::PolicyEdit, limits: &w::Limits) -> Result<w::PolicyEdit, w::Problem> {
     Ok(match value {
+        c::PolicyEdit::Ceiling { ceiling } => w::PolicyEdit::Ceiling(w::PolicyEditCeiling::new(
+            limits,
+            w::PolicyEditCeilingParts { ceiling: wire_owner_authority(ceiling, limits)? },
+        )?),
         c::PolicyEdit::Templates { overrides } => super::operations::templates(overrides, limits)?,
         c::PolicyEdit::ProjectSpend { period_spend } => w::PolicyEdit::ProjectSpend(w::PolicyEditProjectSpend::new(
             limits,

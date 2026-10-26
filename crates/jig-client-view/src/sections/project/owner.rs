@@ -47,7 +47,8 @@ pub fn edit(before: &Ask, field: Field, bytes: Box<[u8]>, text: u32) -> Option<A
                 Field::Decides => role.decides = u8::try_from(skein_ui::number(&bytes)?).ok()?,
                 Field::Name => return None,
             },
-            PolicyEdit::Requirements { .. }
+            PolicyEdit::Ceiling { .. }
+            | PolicyEdit::Requirements { .. }
             | PolicyEdit::Projections { .. }
             | PolicyEdit::Permissions { .. }
             | PolicyEdit::Templates { .. } => {
@@ -264,6 +265,7 @@ fn region(b: &mut Builder, words: &Words, phrase: P, holes: &[Hole]) {
 }
 fn policy(b: &mut Builder, value: &OwnerProjectPolicy, words: &Words, text_limit: u32, rows: u32) {
     region(b, words, P::Policy, &[]);
+    words.text(b, JigPhrase::PolicyCeiling, &[]);
     crate::owner_authority::document_words(b, &value.ceiling, words, text_limit, rows);
     words.text(b, JigPhrase::PolicyPeriodSpend, &[Hole::Amount(value.period_spend)]);
     match value.escalation_role {
@@ -669,6 +671,7 @@ fn role_request(ask: &Ask) -> Option<&PolicyEditRole> {
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
+        | PolicyEdit::Ceiling { .. }
         | PolicyEdit::Templates { .. } => None,
     }
 }
@@ -679,6 +682,7 @@ fn spend_request(ask: &Ask) -> Option<u64> {
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
+        | PolicyEdit::Ceiling { .. }
         | PolicyEdit::Templates { .. } => None,
     }
 }
@@ -689,6 +693,7 @@ fn requirements_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contra
         | PolicyEdit::Role(_)
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
+        | PolicyEdit::Ceiling { .. }
         | PolicyEdit::Templates { .. } => None,
     }
 }
@@ -699,6 +704,7 @@ fn projections_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contrac
         | PolicyEdit::Role(_)
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Permissions { .. }
+        | PolicyEdit::Ceiling { .. }
         | PolicyEdit::Templates { .. } => None,
     }
 }
@@ -709,6 +715,7 @@ fn permissions_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contrac
         | PolicyEdit::Role(_)
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
+        | PolicyEdit::Ceiling { .. }
         | PolicyEdit::Templates { .. } => None,
     }
 }

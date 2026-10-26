@@ -111,6 +111,7 @@ pub fn service_offered(doc: &OwnerProject) -> bool {
 }
 fn policy_complete(doc: &OwnerProject, edit: &PolicyEdit) -> bool {
     match edit {
+        PolicyEdit::Ceiling { .. } => !doc.cut && !doc.policy.cut && !doc.policy.ceiling.cut,
         PolicyEdit::Templates { .. } => false,
         PolicyEdit::ProjectSpend { .. } => true,
         PolicyEdit::Role(role) => {
@@ -139,6 +140,7 @@ pub fn baseline(doc: &OwnerProject, ask: &Ask) -> Option<Ask> {
     match ask {
         Ask::ChangePolicy { edit, .. } => {
             let edit = match edit {
+                PolicyEdit::Ceiling { .. } => PolicyEdit::Ceiling { ceiling: doc.policy.ceiling.whole()? },
                 PolicyEdit::Templates { .. } => return None,
                 PolicyEdit::ProjectSpend { .. } => PolicyEdit::ProjectSpend { period_spend: doc.policy.period_spend },
                 PolicyEdit::Role(role) => {

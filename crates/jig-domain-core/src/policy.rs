@@ -155,6 +155,13 @@ fn requirement_to_people(value: &authority::Requirement) -> people::Requirement 
     }
 }
 
+fn models_within(models: Option<people::Models>, ceiling: authority::Models) -> bool {
+    match models {
+        Some(models) => authority::Models::from_parts(models.bits(), models.is_all()).at_most(ceiling),
+        None => true,
+    }
+}
+
 fn role_exists(policy: &authority::Policy, number: u32) -> bool {
     for role in &policy.roles {
         if role.number == number {
@@ -178,7 +185,7 @@ fn map_valid(policy: &authority::Policy, mappings: &[people::PermissionRole]) ->
     true
 }
 
-/// Apply one mutable edit, keeping the ceiling and deployment rules.
+/// Apply one mutable edit; authority admission checks the resulting policy against the rules.
 pub(crate) fn apply(
     policy: &mut authority::Policy,
     permissions: &mut Box<[people::PermissionRole]>,
@@ -188,6 +195,7 @@ pub(crate) fn apply(
     roles_limit: u32,
 ) -> Option<()> {
     match change {
+        people::PolicyChange::Ceiling { ceiling } => policy.ceiling = authority_to_authority(ceiling)?,
         people::PolicyChange::Templates { overrides } => *templates = overrides,
         people::PolicyChange::Projections { grants } => policy.projections = grants_to_authority(grants)?,
         people::PolicyChange::ProjectSpend { period_spend } => policy.period_spend = period_spend,
@@ -343,21 +351,22 @@ impl Core {
         let Some(mut policy) = self.authority.policy(project).cloned() else {
             return Err(people::Refusal::Unknown);
         };
-        match &change {
+        let models_allowed = match &change {
             people::PolicyChange::Role(role) => {
-                if let Some(models) = role.authority.models {
-                    let models = authority::Models::from_parts(models.bits(), models.is_all());
-                    if !models.at_most(policy.ceiling.models) || !models.at_most(self.authority.rules().ceiling.models)
-                    {
-                        return Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Models });
-                    }
-                }
+                models_within(role.authority.models, policy.ceiling.models)
+                    && models_within(role.authority.models, self.authority.rules().ceiling.models)
+            }
+            people::PolicyChange::Ceiling { ceiling } => {
+                models_within(ceiling.models, self.authority.rules().ceiling.models)
             }
             people::PolicyChange::Templates { .. }
             | people::PolicyChange::Projections { .. }
             | people::PolicyChange::ProjectSpend { .. }
             | people::PolicyChange::Requirements { .. }
-            | people::PolicyChange::Permissions { .. } => {}
+            | people::PolicyChange::Permissions { .. } => true,
+        };
+        if !models_allowed {
+            return Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Models });
         }
         let mut permissions = match self.permission_roles.get(&project) {
             Some(mappings) => mappings.clone(),

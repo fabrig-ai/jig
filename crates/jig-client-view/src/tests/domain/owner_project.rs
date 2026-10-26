@@ -206,6 +206,7 @@ fn owner_project_whole_role_review_keeps_raw_flags_authority_and_other_edited_ch
 fn owner_project_policy_scalar_and_complete_lists_are_offered_without_inferred_permissions_or_cut_replacements() {
     let mut value = source(0);
     for edit in [
+        PolicyEdit::Ceiling { ceiling: value.policy.ceiling.whole().unwrap() },
         PolicyEdit::ProjectSpend { period_spend: 0 },
         PolicyEdit::Requirements { requirements: value.policy.requirements.clone() },
         PolicyEdit::Projections { grants: value.policy.projections.clone() },

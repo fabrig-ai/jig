@@ -555,6 +555,9 @@ impl Observer {
     fn policy_change(&mut self, project: u32, change: &people::PolicyChange) {
         self.policy_generation = self.policy_generation.checked_add(1).expect("policy generation fits");
         match change {
+            people::PolicyChange::Ceiling { ceiling } => {
+                self.referee.policy.projects.insert(project, person_scope(ceiling));
+            }
             people::PolicyChange::Projections { grants } => {
                 self.referee.policy.projections.insert(
                     project,

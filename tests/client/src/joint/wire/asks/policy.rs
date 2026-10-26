@@ -6,6 +6,9 @@ pub(super) fn policy_edit(
     names: &mut skein_lib::List<Box<[u8]>>,
 ) -> Result<people::PolicyChange, super::Invalid> {
     Ok(match value {
+        client::PolicyEdit::Ceiling { ceiling } => {
+            people::PolicyChange::Ceiling { ceiling: authority(ceiling, names)? }
+        }
         client::PolicyEdit::Templates { overrides } => {
             people::PolicyChange::Templates { overrides: overrides.iter().map(request_arguments::template).collect() }
         }

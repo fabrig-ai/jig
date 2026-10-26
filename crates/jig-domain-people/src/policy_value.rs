@@ -23,6 +23,8 @@ pub enum PolicyChange {
     Permissions { mappings: Box<[PermissionRole]> },
     /// Replace the project's template overrides.
     Templates { overrides: Box<[crate::TemplateOverride]> },
+    /// Replace the project ceiling whole, checked against the deployment's rules and existing roles.
+    Ceiling { ceiling: Authority },
 }
 
 /// Whole project policy saved as one full committed value.
@@ -129,6 +131,7 @@ pub fn policy_change_bytes(change: &PolicyChange) -> Option<u64> {
         PolicyChange::ProjectSpend { .. } => Some(0),
         PolicyChange::Templates { overrides } => templates_bytes(overrides),
         PolicyChange::Projections { grants } => grants_bytes(grants),
+        PolicyChange::Ceiling { ceiling } => crate::authority_bytes(ceiling),
         PolicyChange::Role(role) => crate::authority_bytes(&role.authority),
         PolicyChange::Requirements { requirements } => requirements_bytes(requirements),
         PolicyChange::Permissions { mappings } => {

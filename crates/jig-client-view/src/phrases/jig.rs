@@ -114,6 +114,7 @@ pub enum JigPhrase {
     FrameProjectsCut,
     FramePoolUnopened,
     PolicyPeriodSpend,
+    PolicyCeiling,
     PolicyEditRole,
     PolicyRequests,
     PolicyDecides,
@@ -1158,6 +1159,7 @@ impl JigPhrase {
             Self::FrameProjectsCut => 616,
             Self::FramePoolUnopened => 618,
             Self::PolicyPeriodSpend => 590,
+            Self::PolicyCeiling => 619,
             Self::PolicyEditRole => 591,
             Self::RequestNotKept => 7404,
             Self::RequestUnconfirmed => 7405,
@@ -1768,6 +1770,7 @@ impl JigPhrase {
             | Self::FrameService
             | Self::FrameProjectsCut
             | Self::FramePoolUnopened
+            | Self::PolicyCeiling
             | Self::PolicyRequirements
             | Self::PolicyProjections
             | Self::PolicyPermissions
@@ -2401,7 +2404,7 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 639] = [
+pub const ALL: [JigPhrase; 640] = [
     JigPhrase::SettingsChanged,
     JigPhrase::MovedToNewest,
     JigPhrase::SettingsStale,
@@ -2489,6 +2492,7 @@ pub const ALL: [JigPhrase; 639] = [
     JigPhrase::FrameProjectsCut,
     JigPhrase::FramePoolUnopened,
     JigPhrase::PolicyPeriodSpend,
+    JigPhrase::PolicyCeiling,
     JigPhrase::PolicyEditRole,
     JigPhrase::RequestNotKept,
     JigPhrase::RequestUnconfirmed,
