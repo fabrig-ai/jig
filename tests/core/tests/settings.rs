@@ -1644,3 +1644,184 @@ fn remove_second_charter(world: &World, first: settings::Item) -> Box<[settings:
         },
     ])
 }
+
+#[test]
+fn a_conversation_moves_at_its_next_turn_and_one_whose_charter_is_removed_stays() {
+    let (config, limits) = two_story_charters();
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let mut conversations = Vec::new();
+    for charter in 1..=2 {
+        let mut chat = fixtures::chat(&world, 1, b"First turn".as_slice().into());
+        let people::Ask::Create { batch, .. } = &mut chat else { panic!("chat") };
+        batch[0].executor = people::TaskExecutor::Agent { charter };
+        batch[0].flags.ended_by = people::EndedBy::Requester;
+        batch[0].budget = people::Budget::Named;
+        batch[0].authority.spend = 40;
+        let reply = ask(&mut world, signed, 100 + u8::try_from(charter).expect("charter"), chat);
+        let people::Reply::Outcome(people::Outcome::Created { first, .. }) = reply else {
+            panic!("conversation created: {reply:?}")
+        };
+        assert_eq!(world.assigned.as_ref().expect("first turn").task, first);
+        assert_eq!(fixtures::live_row(&world, first).settings.run, Some(1));
+        conversations.push(first);
+        conversation_answer(&mut world, b"First answer");
+    }
+    let item = instructions_edit(&world, b"The first conversation's new instructions.");
+    let items = remove_second_charter(&world, item);
+    changed(&change(&mut world, signed, 103, 1, items), 2);
+    for (index, (revision, instructions)) in [
+        (2, b"The first conversation's new instructions.".as_slice()),
+        (1, b"The second charter's original instructions.".as_slice()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let task = conversations[index];
+        let previous_attempt = fixtures::live_row(&world, task).attempt;
+        let reply = ask(
+            &mut world,
+            signed,
+            104 + u8::try_from(index).expect("index"),
+            people::Ask::Say { project: 1, task, words: b"Next turn".as_slice().into() },
+        );
+        assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+        let assignment = world.assigned.as_ref().expect("next turn");
+        assert_eq!(assignment.task, task);
+        assert!(assignment.attempt > previous_attempt);
+        assert_eq!(assignment.run.policy.instructions.as_ref(), instructions);
+        assert_eq!(
+            fixtures::live_row(&world, task).settings,
+            jig_domain_tasks::SettingsRevision { task: revision, run: Some(revision) }
+        );
+        conversation_answer(&mut world, b"Second answer");
+    }
+}
+
+fn conversation_answer(world: &mut World, words: &[u8]) {
+    let read = world.assigned.as_ref().expect("conversation run").messages.last().map(|word| word.number);
+    world.turn(1, 0, read, words);
+    fixtures::finish_chat(world, 0, words);
+}
+
+fn settings_task_document(world: &mut World, signed: u64, task: u64) -> documents::Task {
+    let reads::Answer::Document(document) = client_read(world, signed, reads::Read::Task { task }) else {
+        panic!("live task document")
+    };
+    let documents::Document::Task(document) = *document else { panic!("task document") };
+    *document
+}
+
+#[test]
+fn a_held_versions_documents_show_its_charter_and_nothing_once_released() {
+    let (mut world, signed, goal) = held_run();
+    let old_instructions = world.assigned.as_ref().expect("goal run").run.policy.instructions.clone();
+    let llm = fixtures::live_row(&world, goal).llm.clone();
+    let mut charter = world.domain.settings().charter(1).expect("charter").clone();
+    assert_eq!(charter.hosts, fleet::Kinds::Workers);
+    charter.hosts = fleet::Kinds::Engine;
+    charter.policy.instructions = b"The newest instructions are different.".as_slice().into();
+    changed(
+        &change(
+            &mut world,
+            signed,
+            102,
+            1,
+            Box::new([settings::Item {
+                setting: settings::Setting::Charter(1),
+                edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+            }]),
+        ),
+        2,
+    );
+    let document = settings_task_document(&mut world, signed, goal);
+    assert_eq!(document.instructions.as_ref().expect("held instructions").bytes, old_instructions);
+    assert_eq!(document.llm, llm);
+    assert_eq!(document.settings, Some(documents::TaskSettings { task: 1, run: None, newest: 2 }));
+    let review = goal_description_review(&mut world, signed, goal);
+    let documents::ProposalAction::Amend { before, after, .. } = review.action else { panic!("amendment review") };
+    assert_eq!(before.instructions.as_ref().expect("current fallback").bytes, old_instructions);
+    assert_eq!(after.instructions.as_ref().expect("proposed fallback").bytes, old_instructions);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Lost { channel: Token::new(7) })));
+    world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(8),
+        hello: fleet::Hello {
+            bounds: fixtures::bounds(),
+            stop_bound: Duration::from_secs(3600),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([]),
+        },
+    })));
+    let reply = ask(
+        &mut world,
+        signed,
+        104,
+        people::Ask::Say { project: 1, task: goal, words: b"Continue when a host is ready".as_slice().into() },
+    );
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let document = settings_task_document(&mut world, signed, goal);
+    assert!(
+        matches!(
+            document.run_wait,
+            Some(documents::TaskRunWait::Refused(documents::TaskWaitRefused::Hello {
+                kind: fleet::HostKind::Worker,
+                why: fleet::HelloRefusal::StopBound { .. },
+                ..
+            }))
+        ),
+        "the held charter explains the worker refusal: {:?}",
+        document.run_wait
+    );
+    assert_eq!(world.domain.settings().charter(1).expect("newest charter").hosts, fleet::Kinds::Engine);
+    let reply = ask(
+        &mut world,
+        signed,
+        105,
+        people::Ask::Cancel {
+            project: 1,
+            task: goal,
+            reason: b"The goal is no longer needed".as_slice().into(),
+            grace: None,
+        },
+    );
+    assert_eq!(reply, people::Reply::Outcome(people::Outcome::Cancelled { task: goal }));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 1 })));
+    let reads::Answer::Historical(past) = client_read(&mut world, signed, reads::Read::Task { task: goal }) else {
+        panic!("ended task")
+    };
+    let reads::Past::Task { document, .. } = past.value else { panic!("ended task document") };
+    assert_eq!(document.executor, jig_domain_tasks::Executor::Agent { charter: 1 });
+    assert_eq!(document.settings, Some(documents::TaskSettings { task: 1, run: None, newest: 2 }));
+    assert!(document.instructions.is_none());
+    assert!(document.run_wait.is_none());
+    assert_eq!(document.llm, llm, "the LLM choice is retained task data");
+}
+
+fn goal_description_review(world: &mut World, signed: u64, goal: u64) -> documents::Proposal {
+    let revision = fixtures::live_row(world, goal).revisions.spec;
+    let mut amendment = fixtures::person_unchanged(b"Review the goal's description");
+    amendment.spec = Some(people::Spec {
+        words: b"Proposed goal description".as_slice().into(),
+        parameters: Box::new([]),
+        inputs: Box::new([]),
+    });
+    let reply = ask(
+        world,
+        signed,
+        103,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::Amend { task: goal, revision, amendment: Box::new(amendment) },
+            reason: b"Review without replacing instructions".as_slice().into(),
+        },
+    );
+    let proposal = proposed(&reply);
+    proposal_document(world, signed, OWNER, proposal)
+}

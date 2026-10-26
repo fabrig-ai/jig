@@ -1417,3 +1417,94 @@ fn the_last_holder_moving_releases_its_revision() {
     assert_eq!(h.domain.holders(1), 0);
     assert_eq!(h.domain.holders(2), 2);
 }
+
+#[test]
+fn a_recurring_tasks_period_batch_and_an_accepted_proposals_tasks_are_made_on_the_newest() {
+    let mut h = Harness::new();
+    let mut master = task(100, &[]);
+    master.executor = Executor::Procedure { connector: 1, code: 1 };
+    master.contract = Contract::Report { words: 0 };
+    master.numbers = Numbers { budget: 0, spent: 0, spent_below: 0, reserved: 0 };
+    master.recurring = Some(Box::new(crate::RecurringTemplate {
+        key: 1,
+        batch: Box::new([task(1, &[])]),
+        overlap: crate::RecurringOverlap::Skip,
+    }));
+    let out =
+        h.send(Event::Make { reply_to: to(), creator: Party::Deployment { project: 1 }, batch: Box::new([master]) });
+    assert!(
+        out.iter().any(|request| match request {
+            Request::Made { .. } => true,
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    assert_eq!(h.domain.task(100).expect("template made").settings.task, 1);
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    h.send(Event::OpenPeriod { reply_to: to(), project: 1, period: 1, budget: 1000 });
+    let due = h.send(Event::TickRecurring { task: 100, period: 1 });
+    assert!(due.contains(&Request::RecurringDue { task: 100, period: 1, members: 1 }), "{due:?}");
+    h.send(Event::RecurringBatch { task: 100, period: 1, numbers: Box::new([101]) });
+    let Stored::Live(row) = &h.stored[&Key::Live(101)] else { panic!("period task saved") };
+    assert_eq!(row.settings, crate::SettingsRevision { task: 2, run: None });
+    assert_eq!(row.funder, Funder::Recurring { project: 1, task: 100, period: 1 });
+    assert_eq!(h.domain.task(100).expect("template retained").settings.task, 1);
+
+    let mut proposer = task(200, &[]);
+    proposer.funder = Funder::Period { project: 1, period: 1 };
+    h.make(vec![proposer]);
+    let mut member = task(201, &[]);
+    member.funder = Funder::Task(200);
+    let batch = Box::new([member]);
+    let out = h.send(Event::Propose {
+        reply_to: to(),
+        proposal: crate::Proposal {
+            number: 300,
+            proposer: 200,
+            project: 1,
+            action: crate::ProposalAction::Batch(batch.clone()),
+            reason: b"Please make this delegate".as_slice().into(),
+            as_holder: false,
+            state: crate::ProposalState::Pending { holder: crate::ProposalHolder::Person(9), since: h.env.wall },
+        },
+    });
+    assert!(
+        out.iter().any(|request| match request {
+            Request::Done { .. } => true,
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    assert!(h.domain.task(200).expect("pending proposer").proposal.is_some());
+    assert!(!h.stored.contains_key(&Key::Live(201)));
+    settings_charters(&mut h, 3, &[(1, 1, Some(&[0]))]);
+    // As at the parent boundary, acceptance applies its action before deciding the proposal.
+    let made = h.send(Event::Make { reply_to: to(), creator: Party::Task(200), batch });
+    assert!(
+        made.iter().any(|request| match request {
+            Request::Made { .. } => true,
+            _ => false,
+        }),
+        "{made:?}"
+    );
+    let accepted = h.send(Event::DecideProposal {
+        reply_to: to(),
+        proposer: 200,
+        proposal: 300,
+        message: Some(301),
+        by: Party::Person(9),
+        decision: crate::ProposalDecision::Accept,
+    });
+    assert!(
+        accepted.iter().any(|request| match request {
+            Request::ProposalDecided {
+                proposer: 200, number: 300, outcome: crate::ProposalOutcome::Accepted, ..
+            } => true,
+            _ => false,
+        }),
+        "{accepted:?}"
+    );
+    let Stored::Live(row) = &h.stored[&Key::Live(201)] else { panic!("accepted task saved") };
+    assert_eq!(row.settings, crate::SettingsRevision { task: 3, run: None });
+    assert_eq!(h.domain.task(200).expect("proposer kept its revision").settings.task, 2);
+}

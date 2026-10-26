@@ -239,3 +239,66 @@ fn a_persons_standing_procedure_renews_from_the_project_after_its_first_period()
     world.restart();
     assert_eq!(world.record(30).funder, Funder::Period { project: 1, period: 1 });
 }
+
+#[test]
+fn recurring_and_accepted_creation_revisions_are_checked_by_the_world_referee() {
+    let mut world = World::new(218, LIMITS);
+    assert_eq!(
+        world.make(Party::Deployment { project: 1 }, vec![recurring(9, RecurringOverlap::Skip)]),
+        Reply::Made(vec![9])
+    );
+    assert_eq!(world.record(9).settings.task, 1);
+    world.send(Event::Charters {
+        newest: 2,
+        charters: jig_tasks_world::charters(),
+        efforts: Box::new(jig_tasks_world::EFFORTS),
+    });
+    world.open_period(1, 1000);
+    batch(&mut world, 9, 1, 10);
+    assert_eq!(world.record(10).settings.task, 2);
+    assert_eq!(world.record(9).settings.task, 1);
+
+    let mut proposer = task(20, &[]);
+    proposer.funder = Funder::Period { project: 1, period: 1 };
+    assert_eq!(world.make(Party::Person(9), vec![proposer]), Reply::Made(vec![20]));
+    let mut member = task(21, &[]);
+    member.funder = Funder::Task(20);
+    member.numbers.budget = 30;
+    member.authority.budget.spend = 30;
+    let proposed_batch = Box::new([member]);
+    let reply_to = world.to();
+    world.send(Event::Propose {
+        reply_to,
+        proposal: tasks::Proposal {
+            number: 100,
+            proposer: 20,
+            project: 1,
+            action: tasks::ProposalAction::Batch(proposed_batch.clone()),
+            reason: b"Please make this delegate".as_slice().into(),
+            as_holder: false,
+            state: tasks::ProposalState::Pending { holder: tasks::ProposalHolder::Person(9), since: world.env.wall },
+        },
+    });
+    assert!(world.record(20).proposal.is_some());
+    assert!(!world.records.contains_key(&Key::Live(21)));
+    world.send(Event::Charters {
+        newest: 3,
+        charters: jig_tasks_world::charters(),
+        efforts: Box::new(jig_tasks_world::EFFORTS),
+    });
+    // The scripted parent applies the accepted action before deciding the proposal.
+    let reply_to = world.to();
+    world.send(Event::Make { reply_to, creator: Party::Task(20), batch: proposed_batch });
+    let reply_to = world.to();
+    world.send(Event::DecideProposal {
+        reply_to,
+        proposer: 20,
+        proposal: 100,
+        message: Some(101),
+        by: Party::Person(9),
+        decision: tasks::ProposalDecision::Accept,
+    });
+    assert!(world.record(20).proposal.is_none());
+    assert_eq!(world.record(21).settings.task, 3);
+    assert_eq!(world.record(20).settings.task, 2);
+}
