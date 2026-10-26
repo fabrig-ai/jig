@@ -9,6 +9,28 @@ use skein_lib::{List, Writer};
 mod change;
 pub(crate) use change::{change, proposed};
 
+/// A field that could not be decoded or resolved against deployment models.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InputError {
+    pub field: w::Path,
+}
+
+/// Decode the length-prefixed settings items carried by `ChangeSettings` and
+/// `ProposeSettings`, sharing the client entrance's value and model translation.
+pub fn items(items: Box<[u8]>, models: &[crate::Model], limits: &w::Limits) -> Result<Box<[s::Item]>, InputError> {
+    let value = match w::ChangeSettings::new(
+        limits,
+        w::ChangeSettingsParts { against: 0, items, running: w::Running::Stays },
+    ) {
+        Ok(value) => value,
+        Err(problem) => return Err(InputError { field: problem.path }),
+    };
+    match change(value, models, limits) {
+        Ok(value) => Ok(value.items),
+        Err(problem) => Err(InputError { field: problem.path }),
+    }
+}
+
 #[must_use]
 pub fn setting(value: &w::Setting) -> s::Setting {
     match value {
