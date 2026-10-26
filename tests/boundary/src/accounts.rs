@@ -8,7 +8,8 @@ fn protocol_accounts_link_only_their_child_and_skein() {
         let Some(name) = key.strip_suffix(".workspace") else { continue };
         if name.starts_with("jig-") || name.starts_with("skein-") || name.starts_with("smith-") {
             assert!(
-                ["skein-lib", "skein-oauth", "skein-oauth-accounts", "jig-domain-accounts"].contains(&name),
+                ["skein-lib", "skein-codec", "skein-oauth", "skein-oauth-accounts", "jig-domain-accounts"]
+                    .contains(&name),
                 "{line}"
             );
         }
