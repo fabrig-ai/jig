@@ -710,13 +710,9 @@ fn fixture_baseline_with_secret(bad: Option<(u32, u16, u32)>, secret: bool) -> V
     let mut rows = vec![
         Write::Put { key: fixture_key(b'l', 0), value: label(1) },
         Write::Put { key: fixture_key(b'l', 1), value: label(1) },
-        // keys::application adds exactly tag 2, so this lands inside the
-        // fixture-jig family's whole-map range [02 6e, 02 6f).
+        // The fixture commit below moves this row under jig's tag.
         Write::Put { key: Box::from(b"n/0".as_slice()), value: label(1) },
     ];
-    let note_key = crate::keys::application(b"n/0", store.limits.store.key).expect("tag");
-    assert!(note_key.as_ref() >= jig_test_patches_jig::keys::NOTES_FROM);
-    assert!(note_key.as_ref() < jig_test_patches_jig::keys::NOTES_TO);
     for number in 0..SHELVES {
         let (version, books) = match bad {
             Some((index, version, books)) if index == number => (version, books),
@@ -729,7 +725,22 @@ fn fixture_baseline_with_secret(bad: Option<(u32, u16, u32)>, secret: bool) -> V
     for number in 1..=FIXTURE_LAST {
         let mut writes: Vec<_> = rows.by_ref().take(3).collect();
         writes.push(fixtures::header(number));
-        let events = disk.request(&mut store, fixtures::commit(number, writes.into_boxed_slice()));
+        let format_due = number == 1;
+        let mut pending = crate::commits::operations(&mut store, number, writes.into_boxed_slice(), format_due)
+            .expect("fixture operations");
+        for op in &mut pending.ops {
+            if let skein_kv::Op::Put { key, .. } = op
+                && key.as_ref() == b"\x02n/0"
+            {
+                key[0] = 1;
+            }
+        }
+        let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+        let mut below = fixtures::below();
+        crate::commits::submit(&mut store, &fixtures::env(), number, pending.ops, &mut above, &mut below);
+        disk.drive(&mut below, |io, below| crate::up(&mut store, &fixtures::env(), io, &mut above, below));
+        store.phase = Phase::Ready { next: number.checked_add(1).expect("fixture commits"), format_due: false };
+        let events = fixtures::events(&mut above);
         assert!(
             match events.as_ref() {
                 [Event::Committed { number: found, .. }] => *found == number,
@@ -999,8 +1010,8 @@ fn fixture_rows(store: &mut Store, shelf_version: u16, note_version: u16) -> Vec
         }
         rows.push(bytes);
     }
-    let key = crate::keys::application(b"n/0", store.limits.store.key).expect("key");
-    let bytes = fixtures::get_kv(store, &key).expect("note");
+    let key = b"\x01n/0";
+    let bytes = fixtures::get_kv(store, key).expect("note");
     let text =
         jig::kept::fixture_note::TEXTS.get(usize::from(note_version.checked_sub(1).expect("version"))).expect("text");
     let (_, value, root) = decoded(text, "Note", &bytes);

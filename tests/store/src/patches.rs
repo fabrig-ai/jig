@@ -39,7 +39,7 @@ const NOTE: KeptFamily = KeptFamily {
     name: "fixture-note",
     map: KeptMap::Store,
     texts: jig::kept::fixture_note::TEXTS,
-    keys: &[Keys { from: upstream::keys::NOTES_FROM, to: upstream::keys::NOTES_TO, root: upstream::keys::NOTES_ROOT }],
+    keys: &[Keys { from: &[1, b'n'], to: &[1, b'o'], root: upstream::keys::NOTES_ROOT }],
 };
 const APPLICATION: PatchSet = PatchSet {
     fresh: None,
@@ -214,7 +214,55 @@ impl Records {
         assert_eq!(world.open(), Some(0));
         let mut writes = self.writes(version).into_vec();
         writes.extend(rows.iter().cloned().map(Write::Save));
-        assert_eq!(world.commit(writes.into_boxed_slice()), Some(1));
+        let codec = jig_protocol_store::codec::limits(&limits.core).expect("fixture limits");
+        let mut ops = Vec::new();
+        for write in &writes {
+            match write {
+                Write::Save(record) => ops.push(skein_kv::Op::Put {
+                    key: jig_protocol_store::keys::encode(&record.key(), limits.store.key).expect("key"),
+                    value: jig_protocol_store::codec::encode(record, &codec, &[]).expect("record"),
+                }),
+                Write::Put { key, value } => {
+                    let mut full = vec![if key.starts_with(b"n/") { 1 } else { 2 }];
+                    full.extend_from_slice(key);
+                    ops.push(skein_kv::Op::Put { key: full.into_boxed_slice(), value: value.clone() });
+                }
+                Write::CopySettingsRevision(_)
+                | Write::Erase(_)
+                | Write::DropTranscript { .. }
+                | Write::Remove { .. } => panic!("fixture writes save or put"),
+            }
+        }
+        let mut format = jig_protocol_store::format::current(root::APPLICATION.version, root::DEPLOYMENT);
+        for set in sets.sets {
+            if set.families.iter().all(|family| family.texts.is_empty()) {
+                continue;
+            }
+            let level = Some(u32::try_from(set.patches.len()).expect("fixture patches"));
+            match set.owner {
+                Owner::Skein => format.levels.skein = level,
+                Owner::Smith => format.levels.smith = level,
+                Owner::Jig => format.levels.jig = level,
+                Owner::Application => format.levels.application = level,
+            }
+        }
+        let own = |key| jig_protocol_store::keys::encode_own(&key, limits.store.key).expect("own key");
+        ops.extend([
+            skein_kv::Op::Put {
+                key: own(jig_protocol_store::keys::Own::Format),
+                value: format.encode().expect("format"),
+            },
+            skein_kv::Op::Put {
+                key: own(jig_protocol_store::keys::Own::Layouts),
+                value: jig_protocol_store::format::layouts().encode(),
+            },
+            skein_kv::Op::Put {
+                key: jig_protocol_store::keys::installation(limits.store.key).expect("installation"),
+                value: jig_protocol_store::codec::accounts::Installation { id: world.drawn }.encode(),
+            },
+        ]);
+        world.model.stage(1, &writes);
+        world.model.acknowledge(1);
         for (number, bytes) in &self.tokens {
             assert!(*number < (1_u64 << 63));
             let events = world.secret(Secrets::Keep {
@@ -226,6 +274,7 @@ impl Records {
             });
             assert!(matches!(events.as_slice(), [Event::Kept { .. }]), "token kept: {events:?}");
         }
+        world.fixture_commit(ops.into_boxed_slice());
         world.crash(seed);
         world
     }
@@ -247,7 +296,8 @@ impl Records {
             let mut decoded = skein_codec::value::Value::with_room(16);
             decoded.decode(&schema, root, Box::from(value.expose())).expect("token decodes at its level");
         }
-        let rows = world.application(false);
+        let mut rows = world.application(false);
+        rows.extend(world.fixture_notes());
         assert_eq!(rows, self.rows(version), "all records belong to one whole level: {context:?}");
         for (key, bytes) in rows {
             let (texts, root) = match key[0] {

@@ -3,7 +3,6 @@ use jig_protocol_store::{Generations, Older, OpenRefusal, Owner, PatchSet, Patch
 use jig_store_world::{
     World,
     patches::{self, BASE, Records, SETS},
-    root,
 };
 use skein_fake_machine::Item;
 
@@ -75,15 +74,9 @@ fn pinned_order_reports_exact_walk_counts() {
     // store.md 10.2 step 4 and 10.3: each page is one commit within skein-kv's bounds (5.4), in the plan's pinned order.
     let mut limits = patches::limits();
     limits.journal.writes = u32::try_from(PAGE_ROWS).expect("two-put page");
-    let mut world = World::unopened_observed(SEED, limits, None);
-    world.patch_sets(BASE);
-    world.open().expect("first start");
-    // A page holds no more puts than a commit's writes, so the source goes in one record a commit, beside its header.
-    for (number, (key, value)) in (1..).zip(Records::story().rows(UNPATCHED)) {
-        let writes = [Write::Save(root::header(number)), Write::Put { key, value }];
-        assert_eq!(world.commit(Box::new(writes)), Some(number), "source commit");
-    }
-    world.crash(SEED);
+    let mut records = Records::story();
+    records.tokens.clear();
+    let mut world = records.committed_with(SEED, BASE, UNPATCHED, limits, &[]);
     world.patch_sets(SETS);
     world.open().expect("upgrade opens");
     let progress: Vec<_> =

@@ -1,5 +1,5 @@
 //! Order across owners, using four explicit stack frames (protocol/store.md 10.3).
-use super::sets::{Owner, PatchSet, PatchSets};
+use super::sets::{KeptMap, Keys, Owner, PatchSet, PatchSets};
 use alloc::boxed::Box;
 use skein_codec::patch::{Header, header};
 use skein_lib::List;
@@ -124,8 +124,101 @@ pub(crate) fn bounds(sets: &PatchSets) -> Result<(), Unplanned> {
             }
         }
     }
+    ranges(sets)?;
     frames(sets)?;
     holds(sets)
+}
+
+/// Admission checks the binary's ranges even without pending patches (store.md 10.3).
+pub(crate) fn ranges(sets: &PatchSets) -> Result<(), Unplanned> {
+    for (set_ix, set) in sets.sets.iter().enumerate() {
+        let refusal = Unplanned { owner: set.owner, patch: 0 };
+        for (family_ix, family) in set.families.iter().enumerate() {
+            // Before the baseline there is no last text to check roots against.
+            let schema = match family.texts.last() {
+                Some(text) => {
+                    let Ok(schema) = skein_codec::schema::parse(text.as_bytes()) else { return Err(refusal) };
+                    Some(schema)
+                }
+                None => None,
+            };
+            for (key_ix, key) in family.keys.iter().enumerate() {
+                if key.from >= key.to || !owned(set.owner, family.map, key) {
+                    return Err(refusal);
+                }
+                if let Some(schema) = &schema
+                    && schema.find(key.root.as_bytes()).is_none()
+                {
+                    return Err(refusal);
+                }
+                for (other_set_ix, other_set) in sets.sets.iter().enumerate() {
+                    if other_set_ix > set_ix {
+                        break;
+                    }
+                    for (other_family_ix, other) in other_set.families.iter().enumerate() {
+                        if other_set_ix == set_ix && other_family_ix > family_ix {
+                            break;
+                        }
+                        if other.map != family.map {
+                            continue;
+                        }
+                        for (other_key_ix, other_key) in other.keys.iter().enumerate() {
+                            if other_set_ix == set_ix && other_family_ix == family_ix && other_key_ix >= key_ix {
+                                break;
+                            }
+                            let own_prefix = prefix(set.owner, family.map);
+                            let other_prefix = prefix(other_set.owner, other.map);
+                            if own_prefix.iter().chain(key.from).cmp(other_prefix.iter().chain(other_key.to)).is_lt()
+                                && other_prefix
+                                    .iter()
+                                    .chain(other_key.from)
+                                    .cmp(own_prefix.iter().chain(key.to))
+                                    .is_lt()
+                            {
+                                return Err(refusal);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn prefix(owner: Owner, map: KeptMap) -> &'static [u8] {
+    match (owner, map) {
+        (Owner::Application, KeptMap::Store) => &[crate::keys::APPLICATION],
+        (Owner::Application, KeptMap::Secrets) => &[2, 0],
+        (Owner::Skein | Owner::Smith | Owner::Jig, KeptMap::Store | KeptMap::Secrets) => &[],
+    }
+}
+
+fn within(key: &Keys, from: &[u8], to: &[u8]) -> bool {
+    key.from >= from && key.to <= to
+}
+
+fn owned(owner: Owner, map: KeptMap, key: &Keys) -> bool {
+    match (owner, map) {
+        (Owner::Application, KeptMap::Store) => true, // Relative bytes are always prefixed with tag 2.
+        // Applications number their secrets below CARRIED (store.md 9).
+        (Owner::Application, KeptMap::Secrets) => key.to <= &[0x80],
+        (Owner::Jig, KeptMap::Store) => {
+            // Tag 0 holds all component rows; the
+            // installation identifier is the one component row under tag 1.
+            let installation = &[crate::keys::JIG, crate::keys::ACCOUNTS, 3][..];
+            within(key, &[crate::keys::JIG], &[crate::keys::APPLICATION])
+                && !(key.from <= installation && installation < key.to)
+        }
+        (Owner::Jig, KeptMap::Secrets) => {
+            within(key, &[1, 0], &[1, 2])
+                || within(key, &[3, 0], &[3, 1])
+                || within(key, &[2, 0, 0x80], &[2, 0, 0xc0])
+                || within(key, &[2, 1], &[2, 2])
+        }
+        // Upstream families are held values or transcript frames, not map rows.
+        (Owner::Skein | Owner::Smith, KeptMap::Store | KeptMap::Secrets) => false,
+    }
 }
 fn validate(sets: &PatchSets, found: &Levels, wanted: &Levels) -> Result<u32, Unplanned> {
     bounds(sets)?;
@@ -480,8 +573,8 @@ pub(crate) fn flights_worst_case(limits: &crate::Limits, sets: &PatchSets) -> Op
                 continue;
             }
             let map = match family.map {
-                super::sets::KeptMap::Store => &limits.store,
-                super::sets::KeptMap::Secrets => &limits.secrets,
+                KeptMap::Store => &limits.store,
+                KeptMap::Secrets => &limits.secrets,
             };
             let key = u64::from(map.key).checked_add(1)?;
             let named = List::<Box<[u8]>>::worst_case(FLIGHT_KEYS)?
