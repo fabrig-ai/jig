@@ -671,6 +671,12 @@ pub enum PayloadRefusal {
 /// Connector-free work a named host call asks the core to route.
 #[derive(Debug)]
 pub enum NamedAction {
+    /// A run proposes settings against the revision it read (engine.md, 17.6).
+    ProposeSettings {
+        against: u32,
+        items: Box<[crate::settings::Item]>,
+        reason: Box<[u8]>,
+    },
     Message {
         target: u64,
         kind: tasks::MessageKind,
@@ -745,6 +751,7 @@ pub enum NamedAction {
 /// One engine-tool family and any condition the authority check needs.
 #[derive(Debug)]
 pub enum ToolKind {
+    Settings,
     Delegate,
     Message { target: u64 },
     Control,

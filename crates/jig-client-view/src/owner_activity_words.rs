@@ -76,6 +76,9 @@ pub enum ActivityPhrase {
     Release,
     PersonStalled,
     ProposalDecision,
+    SettingsDecision,
+    SettingsStale,
+    Newest,
     Accepted,
     Rejected,
     MessageWords,
@@ -114,7 +117,7 @@ pub enum ActivityPhrase {
     ResultFailed,
     ResultCancelled,
 }
-pub const ALL: [ActivityPhrase; 104] = [
+pub const ALL: [ActivityPhrase; 107] = [
     ActivityPhrase::Activity,
     ActivityPhrase::Task,
     ActivityPhrase::Position,
@@ -182,6 +185,9 @@ pub const ALL: [ActivityPhrase; 104] = [
     ActivityPhrase::Release,
     ActivityPhrase::PersonStalled,
     ActivityPhrase::ProposalDecision,
+    ActivityPhrase::SettingsDecision,
+    ActivityPhrase::SettingsStale,
+    ActivityPhrase::Newest,
     ActivityPhrase::Accepted,
     ActivityPhrase::Rejected,
     ActivityPhrase::MessageWords,
@@ -295,6 +301,9 @@ impl ActivityPhrase {
             Self::Release => 7264,
             Self::PersonStalled => 7265,
             Self::ProposalDecision => 7266,
+            Self::SettingsDecision => 7304,
+            Self::SettingsStale => 7305,
+            Self::Newest => 7306,
             Self::Accepted => 7267,
             Self::Rejected => 7268,
             Self::MessageWords => 7269,
@@ -382,6 +391,8 @@ impl ActivityPhrase {
             | Self::Widen
             | Self::Release
             | Self::PersonStalled
+            | Self::SettingsDecision
+            | Self::SettingsStale
             | Self::ProposalDecision
             | Self::Accepted
             | Self::Rejected
@@ -430,6 +441,7 @@ impl ActivityPhrase {
             | Self::Reply
             | Self::TurnNumber
             | Self::Read
+            | Self::Newest
             | Self::Revision
             | Self::Proposer
             | Self::ProposalNumber
@@ -517,6 +529,9 @@ impl ActivityPhrase {
             Self::Release => b"Proposal kind: release",
             Self::PersonStalled => b"Kind: person stalled",
             Self::ProposalDecision => b"Kind: proposal decision",
+            Self::SettingsDecision => b"Kind: settings decision",
+            Self::SettingsStale => b"Withdrawn as stale",
+            Self::Newest => b"Newest revision: ",
             Self::Accepted => b"Accepted",
             Self::Rejected => b"Rejected",
             Self::MessageWords => b"Kind: words",
@@ -559,7 +574,7 @@ impl ActivityPhrase {
 }
 #[must_use]
 pub fn shapes() -> Box<[PhraseShape]> {
-    let mut result = List::with_capacity(104);
+    let mut result = List::with_capacity(107);
     for phrase in ALL {
         let holes: Box<[HoleShape]> = match phrase.hole() {
             Some(kind) => Box::new([HoleShape { kind, bytes: 0 }]),
@@ -571,7 +586,7 @@ pub fn shapes() -> Box<[PhraseShape]> {
 }
 #[must_use]
 pub fn language() -> Language {
-    let mut result = List::with_capacity(104);
+    let mut result = List::with_capacity(107);
     for phrase in ALL {
         let segments: Box<[Segment]> = match phrase.hole() {
             Some(kind) => Box::new([Segment::Text(copy_of(phrase.label())), Segment::Hole { index: 0, kind }]),

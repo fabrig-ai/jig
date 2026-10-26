@@ -12,12 +12,20 @@ type Envelope = (Box<[u8]>, Box<[u8]>);
 pub struct Stand {
     limits: tools::Limits,
     calls: BTreeMap<core::CallKey, Envelope>,
+    settings_limits: jig_protocol_store::settings_v1::Limits,
+    models: Box<[core::settings::ModelName]>,
 }
 
 impl Stand {
     #[must_use]
     pub fn new(limits: core::Limits) -> Self {
+        Self::with_models(limits, &crate::world::config(0).core.settings.models)
+    }
+    #[must_use]
+    pub fn with_models(limits: core::Limits, models: &[core::Model]) -> Self {
         Self {
+            settings_limits: jig_protocol_store::codec::settings::limits(&limits).expect("settings codec limits"),
+            models: core::settings::model_names(models),
             limits: tools::Limits {
                 input_bytes: 8192,
                 words: limits.tasks.message_bytes,
@@ -44,6 +52,33 @@ impl Stand {
             position: name.position,
         };
         let event = match decoded {
+            tools::Decoded::Settings { against, set, reason } => {
+                let settings_key = core::settings::Key::Proposal {
+                    proposer: jig_domain_people::Proposer::Task(key.task),
+                    proposal: 1,
+                };
+                let decoded = jig_protocol_store::codec::settings::decode(
+                    &settings_key,
+                    &set,
+                    &self.settings_limits,
+                    &self.models,
+                );
+                let Ok(core::settings::Record::Proposal { value, .. }) = decoded else {
+                    return Some(unreadable(to, call, &tools::Problem { field: b"set", why: tools::Why::Malformed }));
+                };
+                if value.against != against {
+                    return Some(unreadable(
+                        to,
+                        call,
+                        &tools::Problem { field: b"against", why: tools::Why::Malformed },
+                    ));
+                }
+                core::Event::NamedAction {
+                    to,
+                    key,
+                    action: core::NamedAction::ProposeSettings { against, items: value.items, reason },
+                }
+            }
             tools::Decoded::Action(action) => core::Event::NamedAction { to, key, action },
             tools::Decoded::Delegate(batch) => core::Event::DelegateValidated { to, key, batch, stubs: Box::new([]) },
             tools::Decoded::Problem(problem) => return Some(unreadable(to, call, &problem)),
