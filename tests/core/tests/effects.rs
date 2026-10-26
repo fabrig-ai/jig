@@ -57,7 +57,7 @@ fn a_tool_call_whose_answer_is_lost_with_the_channel_and_the_engine_is_asked_aga
         core::CallPart::Effect { outcome: Some(core::connector::OutboxOutcome::Made), .. }
     ));
     assert_eq!(world.systems[0].observed().iter().filter(|row| row.applied).count(), 1);
-    assert_eq!(world.store.applied, commits, "replay decides nothing again");
+    assert_eq!(world.store.applied, commits + 1, "only the start's mark commits; replay decides nothing again");
     assert_eq!(world.spent(), 3, "replay cannot charge the effect twice");
 }
 

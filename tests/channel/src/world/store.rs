@@ -211,6 +211,7 @@ impl Store {
     fn apply(&mut self, commit: &Commit, limits: &codec::Limits) {
         for write in &commit.writes {
             match write {
+                root::Write::Wires => {}
                 root::Write::CopySettingsRevision(number) => {
                     let key =
                         root::Key::Core(core::Key::Core(core::CoreKey::Settings(core::settings::Key::Held(*number))));

@@ -161,3 +161,27 @@ fn a_failed_mark_never_adopts_the_runs() {
     assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
     assert_eq!(world.restart_steps, RESTORES);
 }
+
+#[test]
+fn stopping_before_the_mark_does_not_commit_it() {
+    let mut world = at_switch(f::BEFORE);
+    let before = world.store.applied;
+    world.send(root::Event::Stop);
+    world.finish_switch();
+    assert!(world.domain.stopping());
+    assert_eq!(world.store.applied, before);
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
+}
+
+#[test]
+fn stopping_with_the_mark_held_does_not_adopt_runs() {
+    let mut world = at_switch(f::BEFORE);
+    world.store.fault(Fault::Hold { commits: 1 });
+    world.finish_switch();
+    let mark = world.store.applied;
+    world.send(root::Event::Stop);
+    world.release_commits();
+    assert!(world.domain.stopping());
+    assert_eq!(world.store.applied, mark);
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
+}

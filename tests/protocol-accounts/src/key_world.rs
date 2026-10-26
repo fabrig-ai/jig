@@ -51,7 +51,7 @@ impl World {
         world.down(store::Request::Open { owner: Token::new(1), root, installation: [5; 16] });
         let Some(store::Event::Opened { pending, owner, .. }) = world.above.pop() else { panic!("store opens") };
         if pending {
-            // B2: the root's switch step asks this.
+            // This store-only driver has no engine root to ask for the switch.
             world.down(store::Request::Switch { owner });
             assert!(matches!(world.above.pop(), Some(store::Event::Switched { .. })));
         }

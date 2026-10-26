@@ -370,7 +370,7 @@ impl Owner {
             panic!("the memory store opens at once");
         };
         if pending {
-            // B2: the root's switch step asks this.
+            // This store-only driver has no engine root to ask for the switch.
             self.ask(Time::ZERO, Wall::EPOCH, store::Request::Switch { owner: OPEN });
             assert!(matches!(self.store_above.pop(), Some(store::Event::Switched { owner: OPEN })));
         }

@@ -128,7 +128,7 @@ fn first_owners_hold_the_deployments_roles_across_start_and_restart() {
     let mut first_saves = Vec::new();
     for row in rows() {
         let mut core = Core::new(core_config(&row.document), &env.limits).expect("real Small core");
-        let _load = core.restart_begin();
+        let _load = core.restart_begin(false);
         if row.restart {
             for record in &first_saves {
                 match record {

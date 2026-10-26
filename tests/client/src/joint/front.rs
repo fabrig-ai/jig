@@ -573,15 +573,15 @@ mod tests {
         assert!(!front.session.driver.world.store.loading());
         assert_eq!(front.session.driver.transport.sign_in(ClientId(0)), None);
         assert_eq!(front.session.sign_in_again(ClientId(0)), Some(people::Again::NotReady));
-        assert_eq!(front.session.driver.world.store.rows, rows);
-        assert_eq!(front.session.driver.world.store.applied, applied);
-        assert_eq!(front.session.driver.world.commits.len(), commits);
+        assert_eq!(front.session.driver.world.store.rows, jig_core_world::store_peer::with_start_mark(&rows));
+        assert_eq!(front.session.driver.world.store.applied, applied + 1);
+        assert_eq!(front.session.driver.world.commits.len(), commits + 1);
         Front::<Test>::sign_in(&mut front, ClientId(0), later, clock(later));
         assert!(take_signed_in(ClientId(0), Front::<Test>::poll(&mut front, later, clock(later))).is_empty());
         assert!(front.session.driver.transport.sign_in(ClientId(0)).is_some());
         assert_eq!(front.session.sign_in_again(ClientId(0)), None);
         assert!(front.session.driver.world.store.applied > applied);
-        assert_eq!(front.session.driver.world.commits.len(), commits + 1);
+        assert_eq!(front.session.driver.world.commits.len(), commits + 2);
     }
 
     #[test]
@@ -635,9 +635,9 @@ mod tests {
         assert!(Front::<Test>::poll(&mut front, later, clock(later)).is_empty(), "page release is not a final reply");
         assert!(!front.session.driver.world.store.loading());
         assert!(!front.session.driver.world.hold_restore_pages);
-        assert_eq!(front.session.driver.world.store.rows, rows);
-        assert_eq!(front.session.driver.world.store.applied, applied);
-        assert!(Front::<Test>::observed(&mut front).is_empty());
+        assert_eq!(front.session.driver.world.store.rows, jig_core_world::store_peer::with_start_mark(&rows));
+        assert_eq!(front.session.driver.world.store.applied, applied + 1);
+        assert_eq!(Front::<Test>::observed(&mut front), vec![Observed::Durable { commit: applied + 1, at: later }]);
         Front::<Test>::wire(&mut front, ClientId(0), later, clock(later), request(Token::new(42)));
         let callbacks = Front::<Test>::poll(&mut front, later, clock(later));
         assert!(

@@ -155,8 +155,10 @@ fn event_in(
             Released::Infrastructure(event) => work.push(Work::Infrastructure(event)),
             Released::Observability(event) => work.push(Work::Observability(event)),
             Released::RestartDone(step) => {
-                let request = domain.core.restart_done(step);
-                work.push(Work::Restart(request));
+                if !domain.core.stopping() {
+                    let request = domain.core.restart_done(step);
+                    work.push(Work::Restart(request));
+                }
             }
             Released::Restart(step) => work.push(Work::Restart(core::RestartRequest::Step(step))),
             Released::Procedure { task, step: _, connector, code: _ } => {

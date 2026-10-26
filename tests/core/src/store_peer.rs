@@ -5,6 +5,20 @@ use jig_test_domain::{Key, Record};
 use skein_lib::Time;
 use std::collections::BTreeMap;
 
+/// The start's mark changes only the deployment counter in the typed row mirror
+/// (`domain/engine.md`, 6); its wires belong to the component map.
+#[must_use]
+pub fn with_start_mark(rows: &BTreeMap<Key, Record>) -> BTreeMap<Key, Record> {
+    let mut rows = rows.clone();
+    let Some(Record::Core(jig_domain_core::Record::Core(jig_domain_core::CoreRecord::Deployment(header)))) =
+        rows.get_mut(&Key::Core(jig_domain_core::Key::Core(jig_domain_core::CoreKey::Deployment)))
+    else {
+        panic!("whole original deployment header");
+    };
+    header.commits += 1;
+    rows
+}
+
 /// One complete applied transaction, before its acknowledgement need arrive.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DurableSnapshot {

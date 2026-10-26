@@ -902,3 +902,17 @@ fn a_loaded_transcript_passes_its_protocol_rendered_text_to_the_brief() {
         b"assistant: conversation before restart\n"
     );
 }
+
+#[test]
+fn stopping_ignores_the_starts_mark_continuations() {
+    let (mut domain, env) = fixture();
+    step(&mut domain, &env, name(1));
+    settle(&mut domain, &env);
+    step(&mut domain, &env, Event::Core(core::Event::Stopping));
+    settle(&mut domain, &env);
+    for event in [Event::Store(Store::Switched), Event::Released(Released::RestartDone(core::RestartStep::Switch))] {
+        step(&mut domain, &env, event);
+        assert!(take(&mut domain, &env).is_empty());
+        assert_eq!(domain.core.restart_failure(), None);
+    }
+}
