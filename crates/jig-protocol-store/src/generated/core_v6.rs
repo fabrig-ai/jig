@@ -8,7 +8,6 @@ use skein_lib::List;
 pub struct Limits {
     pub escalation_decision_reject_reason: u32,
     pub settled_answer_host_body: u32,
-    pub settled_answer_delivery_evidence: u32,
     pub settled_call_tool: u32,
     pub call_part_effect_denied_findings: u32,
     pub call_part_tool_denied_findings: u32,
@@ -34,7 +33,6 @@ pub struct Limits {
 pub const CEILINGS: Limits = Limits {
     escalation_decision_reject_reason: 8_192,
     settled_answer_host_body: 1_048_576,
-    settled_answer_delivery_evidence: 1_048_576,
     settled_call_tool: 1_048_576,
     call_part_effect_denied_findings: 1_024,
     call_part_tool_denied_findings: 1_024,
@@ -181,8 +179,6 @@ pub enum Path {
     SettledAnswerHostTail,
     /// The `outcome` field of `SettledAnswerDelivery`.
     SettledAnswerDeliveryOutcome,
-    /// The `evidence` field of `SettledAnswerDelivery`.
-    SettledAnswerDeliveryEvidence,
     /// Bytes after `SettledAnswerDelivery`.
     SettledAnswerDeliveryTail,
     /// The tag of `SettledAnswer`.
@@ -719,7 +715,6 @@ pub fn check_limits(limits: &Limits) -> Result<(), Problem> {
 fn check_limits_0(limits: &Limits) -> Result<(), Problem> {
     if limits.escalation_decision_reject_reason > CEILINGS.escalation_decision_reject_reason { return Err(Problem { path: Path::EscalationDecisionRejectReason, reason: skein_codec::Reason::Bound }); }
     if limits.settled_answer_host_body > CEILINGS.settled_answer_host_body { return Err(Problem { path: Path::SettledAnswerHostBody, reason: skein_codec::Reason::Bound }); }
-    if limits.settled_answer_delivery_evidence > CEILINGS.settled_answer_delivery_evidence { return Err(Problem { path: Path::SettledAnswerDeliveryEvidence, reason: skein_codec::Reason::Bound }); }
     if limits.settled_call_tool > CEILINGS.settled_call_tool { return Err(Problem { path: Path::SettledCallTool, reason: skein_codec::Reason::Bound }); }
     if limits.call_part_effect_denied_findings > CEILINGS.call_part_effect_denied_findings { return Err(Problem { path: Path::CallPartEffectDeniedFindings, reason: skein_codec::Reason::Bound }); }
     if limits.call_part_tool_denied_findings > CEILINGS.call_part_tool_denied_findings { return Err(Problem { path: Path::CallPartToolDeniedFindings, reason: skein_codec::Reason::Bound }); }
@@ -1689,23 +1684,19 @@ impl SettledAnswerHost {
 pub struct SettledAnswerDeliveryParts {
     /// The `outcome` field.
     pub outcome: DeliveryOutcome,
-    /// The `evidence` field.
-    pub evidence: Box<[u8]>,
 }
 
 /// `SettledAnswerDelivery` in this codec family.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SettledAnswerDelivery {
     outcome: DeliveryOutcome,
-    evidence: Box<[u8]>,
 }
 
 impl SettledAnswerDelivery {
     /// Makes a value within the given limits.
-    pub fn new(limits: &Limits, parts: SettledAnswerDeliveryParts) -> Result<Self, Problem> {
-        let SettledAnswerDeliveryParts { outcome, evidence } = parts;
-        let value = Self { outcome, evidence };
-        value.check(limits)?;
+    pub fn new(_limits: &Limits, parts: SettledAnswerDeliveryParts) -> Result<Self, Problem> {
+        let SettledAnswerDeliveryParts { outcome } = parts;
+        let value = Self { outcome };
         Ok(value)
     }
 
@@ -1713,18 +1704,10 @@ impl SettledAnswerDelivery {
     #[must_use]
     pub fn outcome(&self) -> &DeliveryOutcome { &self.outcome }
 
-    /// Reads the `evidence` field.
-    #[must_use]
-    pub fn evidence(&self) -> &[u8] { &self.evidence }
-
     /// Moves the fields out without copying.
     #[must_use]
-    pub fn into_parts(self) -> SettledAnswerDeliveryParts { SettledAnswerDeliveryParts { outcome: self.outcome, evidence: self.evidence } }
+    pub fn into_parts(self) -> SettledAnswerDeliveryParts { SettledAnswerDeliveryParts { outcome: self.outcome } }
 
-    fn check(&self, limits: &Limits) -> Result<(), Problem> {
-        if self.evidence.len() > usize::try_from(limits.settled_answer_delivery_evidence.min(CEILINGS.settled_answer_delivery_evidence)).expect("u32 fits usize") { return Err(Problem { path: Path::SettledAnswerDeliveryEvidence, reason: skein_codec::Reason::Bound }); }
-        Ok(())
-    }
 }
 
 /// `SettledAnswer` in this codec family.
@@ -1746,7 +1729,7 @@ impl SettledAnswer {
     fn check(&self, limits: &Limits) -> Result<(), Problem> {
         match self {
             Self::Host(record) => SettledAnswerHost::check(record, limits),
-            Self::Delivery(record) => SettledAnswerDelivery::check(record, limits),
+            Self::Delivery(_) => Ok(()),
         }?;
         Ok(())
     }
@@ -6389,9 +6372,6 @@ impl SettledAnswerDelivery {
         let mut size = 0_u32;
         let field_outcome = &self.outcome;
         size = size.checked_add(field_outcome.measure()).expect("schema ceilings fit u32");
-        let field_evidence = &self.evidence;
-        size = size.checked_add(4).expect("schema ceilings fit u32");
-        size = size.checked_add(u32::try_from(field_evidence.len()).expect("field ceiling fits u32")).expect("schema ceilings fit u32");
         size
     }
 
@@ -6399,9 +6379,6 @@ impl SettledAnswerDelivery {
     pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
         let field_outcome = &self.outcome;
         field_outcome.encode(writer)?;
-        let field_evidence = &self.evidence;
-        writer.put(&u32::try_from(field_evidence.len()).expect("field ceiling fits u32").to_be_bytes())?;
-        writer.put(field_evidence.as_ref())?;
         Ok(())
     }
 
@@ -6414,8 +6391,7 @@ impl SettledAnswerDelivery {
 
     fn decode_from(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
         let decoded_outcome = DeliveryOutcome::decode_from(limits, reader)?;
-        let decoded_evidence = { let length = match skein_codec::read_len(reader, limits.settled_answer_delivery_evidence.min(CEILINGS.settled_answer_delivery_evidence)) { Ok(length) => length, Err(reason) => return Err(Problem { path: Path::SettledAnswerDeliveryEvidence, reason }), }; Box::from(reader.bytes(length).ok_or(Problem { path: Path::SettledAnswerDeliveryEvidence, reason: skein_codec::Reason::Short })?) };
-        Ok(Self { outcome: decoded_outcome, evidence: decoded_evidence })
+        Ok(Self { outcome: decoded_outcome })
     }
 }
 
@@ -10695,7 +10671,7 @@ impl SettledAnswerDelivery {
 
     pub(crate) fn worst_case_bytes_within(limits: &Limits) -> Option<u64> {
         let mut size = 0_u64;
-        size = size.checked_add(DeliveryOutcome::worst_case_bytes_within(limits)?)?.checked_add(4_u64.checked_add(u64::from(limits.settled_answer_delivery_evidence))?)?;
+        size = size.checked_add(DeliveryOutcome::worst_case_bytes_within(limits)?)?;
         size.checked_add(0)
     }
 
@@ -10708,7 +10684,7 @@ impl SettledAnswerDelivery {
 
     pub(crate) fn worst_case_heap_within(limits: &Limits) -> Option<u64> {
         let mut heap = 0_u64;
-        heap = heap.checked_add(DeliveryOutcome::worst_case_heap_within(limits)?)?.checked_add(u64::from(limits.settled_answer_delivery_evidence))?;
+        heap = heap.checked_add(DeliveryOutcome::worst_case_heap_within(limits)?)?;
         heap.checked_add(0)
     }
 }
@@ -13713,12 +13689,12 @@ mod golden_tests {
         ("enum_delivery_outcome_failed_full", || { let value = DeliveryOutcome::Failed; let bytes: &[u8] = &[5]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, DeliveryOutcome::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_settled_answer_host_smallest", || { let value = SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: false, body: Box::from([].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerHost::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_settled_answer_host_full", || { let value = SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: true, body: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[1, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerHost::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_settled_answer_delivery_smallest", || { let value = SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered, evidence: Box::from([].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerDelivery::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_settled_answer_delivery_full", || { let value = SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered, evidence: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerDelivery::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_settled_answer_delivery_smallest", || { let value = SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered }).expect("golden within ceilings"); let bytes: &[u8] = &[0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerDelivery::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_settled_answer_delivery_full", || { let value = SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered }).expect("golden within ceilings"); let bytes: &[u8] = &[0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswerDelivery::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_settled_answer_host_smallest", || { let value = SettledAnswer::Host(SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: false, body: Box::from([].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_settled_answer_host_full", || { let value = SettledAnswer::Host(SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: true, body: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[0, 1, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_settled_answer_delivery_smallest", || { let value = SettledAnswer::Delivery(SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered, evidence: Box::from([].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[1, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_settled_answer_delivery_full", || { let value = SettledAnswer::Delivery(SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered, evidence: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[1, 0, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_settled_answer_delivery_smallest", || { let value = SettledAnswer::Delivery(SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered }).expect("golden within ceilings")); let bytes: &[u8] = &[1, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_settled_answer_delivery_full", || { let value = SettledAnswer::Delivery(SettledAnswerDelivery::new(&CEILINGS, SettledAnswerDeliveryParts { outcome: DeliveryOutcome::Delivered }).expect("golden within ceilings")); let bytes: &[u8] = &[1, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledAnswer::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_settled_call_smallest", || { let value = SettledCall::new(&CEILINGS, SettledCallParts { serial: 0_u64, tool: Box::from([].as_slice()), answer: SettledAnswer::Host(SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: false, body: Box::from([].as_slice()) }).expect("golden within ceilings")) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledCall::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_settled_call_full", || { let value = SettledCall::new(&CEILINGS, SettledCallParts { serial: u64::MAX, tool: Box::from([0_u8, 127_u8, 255_u8].as_slice()), answer: SettledAnswer::Host(SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: true, body: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings")) }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 3, 0, 127, 255, 0, 1, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettledCall::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_call_key_smallest", || { let value = CallKey::new(&CEILINGS, CallKeyParts { task: 0_u64, attempt: 0_u64, completion: 0_u32, position: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallKey::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -14058,10 +14034,9 @@ mod golden_tests {
         table(&GOLDEN_0);
     }
 
-    static BOUNDS_0: [Case; 22] = [
+    static BOUNDS_0: [Case; 21] = [
         ("bound_escalation_decision_reject_reason", || bound((Path::EscalationDecisionRejectReason, skein_codec::Reason::Bound), &Limits { escalation_decision_reject_reason: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match EscalationDecisionReject::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_settled_answer_host_body", || bound((Path::SettledAnswerHostBody, skein_codec::Reason::Bound), &Limits { settled_answer_host_body: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match SettledAnswerHost::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
-        ("bound_settled_answer_delivery_evidence", || bound((Path::SettledAnswerDeliveryEvidence, skein_codec::Reason::Bound), &Limits { settled_answer_delivery_evidence: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match SettledAnswerDelivery::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_settled_call_tool", || bound((Path::SettledCallTool, skein_codec::Reason::Bound), &Limits { settled_call_tool: 3, ..CEILINGS }, &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match SettledCall::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_call_part_effect_denied_findings", || bound((Path::CallPartEffectDeniedFindings, skein_codec::Reason::Bound), &Limits { call_part_effect_denied_findings: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match CallPartEffectDenied::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_call_part_tool_denied_findings", || bound((Path::CallPartToolDeniedFindings, skein_codec::Reason::Bound), &Limits { call_part_tool_denied_findings: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match CallPartToolDenied::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),

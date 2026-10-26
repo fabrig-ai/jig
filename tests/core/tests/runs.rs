@@ -73,8 +73,9 @@ fn settled_delivery_evidence_survives_restart_and_resume_until_a_turn_carries_it
     let settled = core::SettledCall {
         serial: 0,
         tool: b"deliver".as_slice().into(),
-        answer: core::SettledAnswer::Delivery { outcome: core::DeliveryOutcome::Delivered, evidence: evidence.clone() },
+        answer: core::SettledAnswer::Delivery { outcome: core::DeliveryOutcome::Delivered },
     };
+    world.keep_delivery_evidence(key, evidence.clone());
     world.send(root::Event::Core(core::Event::SettledCall {
         to: ReplyTo::new(right),
         key,
@@ -101,11 +102,17 @@ fn settled_delivery_evidence_survives_restart_and_resume_until_a_turn_carries_it
     let read = world.say(74);
     assert!(!world.assigned.as_ref().expect("resumed chat").answered.is_empty(), "{:?}", world.trace);
     assert_eq!(world.assigned.as_ref().expect("resumed chat").answered.as_ref(), [core::Settled { key, call: saved }]);
+    assert_eq!(world.assigned_answers.len(), 1);
+    assert_eq!(
+        world.assigned_answers[0].answer,
+        jig_domain_host::SettledAnswer::Delivery { outcome: jig_domain_host::DeliveryOutcome::Delivered, evidence }
+    );
     world.turn(1, 1, Some(read), b"answers carried by this turn");
     assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::Core(core::CoreKey::Call(key)))));
     world.end(tasks::End::Parked, 1);
     world.say(75);
     assert!(world.assigned.as_ref().expect("resumed again").answered.is_empty());
+    assert!(world.assigned_answers.is_empty());
 }
 
 fn a_chat_past_the_resume_limit_starts_fresh() {

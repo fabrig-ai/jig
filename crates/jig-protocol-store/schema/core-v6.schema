@@ -30,7 +30,7 @@ record OutboxOutcomeHeld { entry: u64 }
 enum OutboxOutcome { made, failed, withdrawn, not_made, uncertain, held: OutboxOutcomeHeld }
 enum DeliveryOutcome { delivered, nothing, stale, refused, invalid, failed }
 record SettledAnswerHost { error: bool body: bytes 1048576 }
-record SettledAnswerDelivery { outcome: DeliveryOutcome evidence: bytes 1048576 }
+record SettledAnswerDelivery { outcome: DeliveryOutcome }
 enum SettledAnswer { host: SettledAnswerHost, delivery: SettledAnswerDelivery }
 record SettledCall { serial: u64 tool: bytes 1048576 answer: SettledAnswer }
 record CallKey { task: u64 attempt: u64 completion: u32 position: u32 }

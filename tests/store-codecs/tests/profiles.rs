@@ -14,28 +14,29 @@ fn both_shipped_profiles_admit_the_tasks_and_people_families() {
 #[test]
 fn both_shipped_profiles_round_trip_the_settled_call_sum() {
     use jig_domain_core as core;
+    // The shipped call-answer bound is shared by the tool and the host body.
+    const ANSWER_BYTES: usize = 32_768;
+    const HALF_ANSWER: usize = ANSWER_BYTES / 2;
     let answers = [
-        ("host", core::SettledAnswer::Host { error: false, body: vec![1; 16_384].into_boxed_slice() }),
         (
-            "delivery",
-            core::SettledAnswer::Delivery {
-                outcome: core::DeliveryOutcome::Delivered,
-                evidence: vec![2; 16_384].into_boxed_slice(),
-            },
+            "host",
+            core::SettledAnswer::Host { error: false, body: vec![1; HALF_ANSWER].into_boxed_slice() },
+            HALF_ANSWER,
         ),
+        ("delivery", core::SettledAnswer::Delivery { outcome: core::DeliveryOutcome::Delivered }, ANSWER_BYTES),
     ];
     for profile_name in [Profile::Small, Profile::Standard] {
         let domain = profile(profile_name);
         let limits = codec::limits(&domain.core).expect("shipped profile within codec ceilings");
         assert_eq!(domain.core.call_answer_bytes, 32_768, "{profile_name:?}");
         let core_limits = codec::core::Limits { core: limits.core, tasks: limits.tasks, notes: limits.notes };
-        for (label, answer) in &answers {
+        for (label, answer, tool_bytes) in &answers {
             let row = core::CoreRecord::Call(core::CallRecord {
                 key: core::CallKey { task: 1, attempt: 2, completion: 3, position: 4 },
                 part: core::CallPart::Unavailable,
                 settled: Some(core::SettledCall {
                     serial: 1,
-                    tool: vec![3; 16_384].into_boxed_slice(),
+                    tool: vec![3; *tool_bytes].into_boxed_slice(),
                     answer: answer.clone(),
                 }),
             });
