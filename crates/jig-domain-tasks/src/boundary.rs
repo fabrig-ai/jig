@@ -1211,7 +1211,7 @@ pub enum Refusal {
     PersonRevision { revision: u64 },
     /// A required resource is unavailable in this project.
     ResourceUnavailable,
-    /// Startup is restoring or failed; no mutation is admitted.
+    /// Startup is restoring, checked or failed; no mutation is admitted.
     NotReady,
     /// Named creator/task is not in the live arena.
     Unknown,
@@ -1700,8 +1700,15 @@ pub enum Event {
         /// invalid/duplicate rows fail restoration.
         record: Stored,
     },
-    /// Validate complete requester/dependency/financial links and combined acyclicity, then emit
-    /// bounded activations/adoptions/closing outputs. Repetition after ready/failed is ignored.
+    /// From the parent, once every record its checks read is restored,
+    /// the connectors' among them, and before the store switches
+    /// (domain/engine.md, 6): the whole set's checks, its links, stubs,
+    /// writers, waits and funders. A broken set fails the start; a
+    /// waiter left on a circle of waits is held, its writes landing in
+    /// the copy (tasks.md, 6.7).
+    Check,
+    /// Replay bounded activations/adoptions/closing outputs after `Check` passed.
+    /// Before `Check`, refuses as out of order. Repetition after ready/failed is ignored.
     Restored,
 }
 

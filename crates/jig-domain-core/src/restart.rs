@@ -106,6 +106,18 @@ pub(crate) enum Restart {
 }
 
 impl Core {
+    /// At the switch step, after the children's checks were stepped:
+    /// false refuses the start at `Switch`, before anything switches.
+    pub fn restart_checked(&mut self) -> bool {
+        match self.restart {
+            Restart::Waiting(RestartStep::Switch) if self.tasks.checked() => true,
+            Restart::Cold | Restart::Waiting(_) | Restart::Open | Restart::Failed(_) => {
+                let _request = self.restart_refuse();
+                false
+            }
+        }
+    }
+
     /// Check all loaded claims together before the fleet can settle any of
     /// them. Engine claims settle immediately and need no recovered slot.
     pub fn restart_admit_claims(&mut self) -> bool {

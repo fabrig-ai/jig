@@ -48,7 +48,10 @@ pub(crate) fn route(
                 };
                 held(decision, Output::Load { step, range });
             }
-            core::RestartStep::Switch => held(decision, Output::Switch),
+            core::RestartStep::Switch => {
+                work.push(Work::Core(core::Event::Tasks(tasks::Event::Check)));
+                work.push(Work::SwitchChecked);
+            }
             core::RestartStep::AdoptRuns => {
                 work.push(Work::Core(core::Event::Tasks(tasks::Event::Restored)));
                 work.push(Work::AdoptClaims);

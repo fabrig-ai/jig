@@ -37,6 +37,7 @@ fn settings_heads_restore_without_a_task_or_funding() {
     let row = h.stored[&Key::PersonProposal(PROPOSAL)].clone();
     h.domain = Domain::new(&LIMITS, 91, super::charters(), Box::new([0]));
     h.send(Event::Restore { record: row });
+    h.send(Event::Check);
     h.send(Event::Restored);
     assert_eq!(h.domain.person_proposal(PROPOSER, PROPOSAL), Some(proposal(1)));
     assert_eq!(h.domain.person_proposal(PROPOSER, PROPOSAL).unwrap().first(), 0);

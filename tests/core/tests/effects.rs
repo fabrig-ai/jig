@@ -233,6 +233,7 @@ fn retained_effect_core(seed: u64) -> (core::Core, core::Limits, core::CallKey) 
             assert_eq!(domain.restore_core(record.clone(), &limits.core), core::Restored::Live);
         }
     }
+    tasks::step(&mut domain.tasks, &env, tasks::Event::Check, &mut out);
     tasks::step(&mut domain.tasks, &env, tasks::Event::Restored, &mut out);
     assert!(domain.current_proof(key.task, key.attempt));
     assert!(matches!(domain.tasks.task(key.task).expect("restored caller").phase,

@@ -235,6 +235,7 @@ pub(crate) enum Work {
     Observability(observability::Event),
     Host(host::Event),
     Restart(core::RestartRequest),
+    SwitchChecked,
     AdoptClaims,
     AdoptDone,
 }
@@ -297,6 +298,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
         | Work::Observability(_)
         | Work::Host(_)
         | Work::Restart(_)
+        | Work::SwitchChecked
         | Work::AdoptClaims
         | Work::AdoptDone => crate::limits::room(&env.limits).expect("validated route room"),
     };
@@ -314,6 +316,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
         | Work::Observability(_)
         | Work::Host(_)
         | Work::Restart(_)
+        | Work::SwitchChecked
         | Work::AdoptClaims
         | Work::AdoptDone => false,
     };

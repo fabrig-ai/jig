@@ -231,7 +231,10 @@ pub(super) fn tag_tasks(
                 continue;
             }
             tasks::Request::Stop { task, attempt } => Request::Held(Box::new(Held::StopRun { task, attempt })),
-            tasks::Request::RestoreRefused { .. } => Request::Now(Box::new(Now::RestoreRefused)),
+            tasks::Request::RestoreRefused { .. } => {
+                let _request = core.restart_refuse();
+                Request::Now(Box::new(Now::RestoreRefused))
+            }
             tasks::Request::Waiting { .. }
             | tasks::Request::WriterWaiting { task: None, .. }
             | tasks::Request::EscalationsInspected { .. }

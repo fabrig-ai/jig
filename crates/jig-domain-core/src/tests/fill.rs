@@ -25,6 +25,7 @@ fn signed_in(core: &mut Core, env: &Env<Limits>) {
             kind: people::Kind::Person,
         }),
     ));
+    drop(step(core, env, Event::Tasks(tasks::Event::Check)));
     drop(step(core, env, Event::Tasks(tasks::Event::Restored)));
     drop(step(core, env, Event::Period { project: 1, period: 1, budget: 1000, next: None }));
 }

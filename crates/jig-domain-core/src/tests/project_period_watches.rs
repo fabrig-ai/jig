@@ -29,6 +29,7 @@ fn period_core(configured: u64) -> (Core, Limits) {
     config.seed_projects = Box::new([seed(1, "Project 1"), seed(2, "Project 2")]);
     let mut core = seeded_core(config, &limits).expect("fixture core configuration");
     core.people = auth.people;
+    send_task(&mut core, &limits, tasks::Event::Check);
     send_task(&mut core, &limits, tasks::Event::Restored);
     let opened = watch_outputs(
         &mut core,

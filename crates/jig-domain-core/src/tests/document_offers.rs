@@ -113,6 +113,7 @@ fn cancellation_during_closing_and_release_of_a_held_closing_task_keep_the_owner
         }
         send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Live(Box::new(row)) });
     }
+    send_task(&mut core, &limits, tasks::Event::Check);
     send_task(&mut core, &limits, tasks::Event::Restored);
     let Document::Task(value) = make(&core, &limits, 1, &Subject::Task { task: 3 }, &window(), Wall::EPOCH).unwrap()
     else {

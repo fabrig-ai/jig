@@ -394,6 +394,11 @@ impl Domain {
     pub fn restart_step(&self) -> Option<core::RestartStep> {
         self.core.restart_step()
     }
+    /// The step that refused this start, including the pre-switch checks.
+    #[must_use]
+    pub fn restart_failure(&self) -> Option<core::RestartStep> {
+        self.core.restart_failure()
+    }
     #[must_use]
     pub fn restore_failure(&self) -> Option<core::RestartRequest> {
         self.core.restore_failure()
@@ -662,6 +667,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
         | Work::Application { .. }
         | Work::Switched
         | Work::Restart(_)
+        | Work::SwitchChecked
         | Work::AdoptRestored
         | Work::AdoptDone
         | Work::Timer(_)
@@ -766,6 +772,10 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                     domain.stopped_reported = false;
                 }
                 core::RestartRequest::Step(step) => match step {
+                    core::RestartStep::Switch => {
+                        work.push(Work::Core(core::Event::Tasks(tasks::Event::Check)));
+                        work.push(Work::SwitchChecked);
+                    }
                     core::RestartStep::AdoptRuns => {
                         work.push(Work::Core(core::Event::Tasks(tasks::Event::Restored)));
                         work.push(Work::AdoptRestored);
@@ -786,11 +796,15 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                         hold(&mut decision, Delivery::Restart(step));
                     }
                     core::RestartStep::LoadCore
-                    | core::RestartStep::Switch
                     | core::RestartStep::RestoreConnector { .. }
                     | core::RestartStep::ReadAfresh { .. } => hold(&mut decision, Delivery::Restart(step)),
                 },
             },
+            Work::SwitchChecked => {
+                if domain.core.restart_checked() {
+                    hold(&mut decision, Delivery::Restart(core::RestartStep::Switch));
+                }
+            }
             Work::AdoptRestored => {
                 if domain.core.restart_admit_claims() {
                     for _ in 0..domain.core.adopted.len() {

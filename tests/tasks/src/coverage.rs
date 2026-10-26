@@ -44,7 +44,7 @@ impl Coverage {
         }
     }
     pub fn input(&mut self, event: &Event) {
-        if matches!(event, Event::Restore { .. } | Event::Restored) {
+        if matches!(event, Event::Restore { .. } | Event::Check | Event::Restored) {
             self.0.insert(Reached::Restore);
         }
         if matches!(event, Event::Turn { .. }) {

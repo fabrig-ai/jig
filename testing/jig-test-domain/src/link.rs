@@ -485,6 +485,7 @@ pub(super) enum Work {
         to: ReplyTo,
         call: core::SettledCall,
     },
+    SwitchChecked,
     AdoptRestored,
     AdoptDone,
     WriterRead {

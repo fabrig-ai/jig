@@ -41,6 +41,7 @@ fn recovered_with(
             assert_eq!(core.restore_core(row.clone(), &env.limits), core::Restored::Live);
         }
     }
+    core::step(&mut core, &env, core::Event::Tasks(tasks::Event::Check));
     let _requests = core::step(&mut core, &env, core::Event::Tasks(tasks::Event::Restored));
     (core, env)
 }
