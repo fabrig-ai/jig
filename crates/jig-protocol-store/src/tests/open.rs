@@ -293,6 +293,12 @@ fn each_different_family_layout_refuses_before_decoding_its_header() {
     accounts.accounts[0] ^= 1;
     let mut settings = layouts;
     settings.settings[0] ^= 1;
+    let mut secrets = layouts;
+    secrets.secrets[0] ^= 1;
+    let mut skein_oauth = layouts;
+    skein_oauth.skein_oauth[0] ^= 1;
+    let mut smith_transcript = layouts;
+    smith_transcript.smith_transcript[0] ^= 1;
     for (family, changed) in [
         (Family::Settings, settings),
         (Family::Component, component),
@@ -301,6 +307,9 @@ fn each_different_family_layout_refuses_before_decoding_its_header() {
         (Family::People, people),
         (Family::Notes, notes),
         (Family::Accounts, accounts),
+        (Family::Secrets, secrets),
+        (Family::SkeinOauth, skein_oauth),
+        (Family::SmithTranscript, smith_transcript),
     ] {
         let mut store = planted(&[fixtures::format_put(fixtures::DEPLOYMENT), layouts_put(&changed), corrupt_header()]);
         assert_refusal(&open(&mut store), OpenRefusal::OlderBuild { why: Older::Layout(family) });
@@ -389,4 +398,41 @@ fn a_build_before_held_turns_and_closed_windows_is_refused() {
     let key = keys::encode_own(&keys::Own::Layouts, fixtures::KEY_LIMIT).expect("layouts key");
     let mut store = replacing(skein_kv::Op::Put { key, value: layouts.encode() });
     assert_refusal(&open(&mut store), OpenRefusal::OlderBuild { why: Older::Layout(Family::Core) });
+}
+
+#[test]
+fn seven_field_layouts_refuse_before_a_secret_read() {
+    // The former row was version u16 followed by seven fixed 32-byte digests.
+    const BEFORE_BYTES: usize = 226;
+    let current = crate::format::layouts();
+    let mut bytes = skein_lib::Writer::new(BEFORE_BYTES);
+    bytes.put(&3_u16.to_be_bytes()).expect("component version");
+    for digest in [
+        current.component,
+        current.core,
+        current.tasks,
+        current.people,
+        current.notes,
+        current.accounts,
+        current.settings,
+    ] {
+        bytes.put(&digest).expect("former digest");
+    }
+    let mut store = replacing(skein_kv::Op::Put {
+        key: keys::encode_own(&keys::Own::Layouts, fixtures::KEY_LIMIT).expect("layouts key"),
+        value: bytes.finish(),
+    });
+    // A secret request would fail key admission if it reached the reader.
+    store.limits.secrets.key = 0;
+    assert_refusal(&open(&mut store), OpenRefusal::OlderBuild { why: Older::Layout(Family::Component) });
+    assert!(
+        fixtures::run(
+            &mut store,
+            Request::Secrets {
+                owner: Token::new(1),
+                request: crate::Secrets::Get { owner: crate::SecretOwner::SignIn, number: 1 }
+            }
+        )
+        .is_empty()
+    );
 }

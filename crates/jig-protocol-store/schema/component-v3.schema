@@ -39,4 +39,7 @@ versioned record Layouts {
     notes: fixed 32
     accounts: fixed 32
     settings: fixed 32
+    secrets: fixed 32
+    skein_oauth: fixed 32
+    smith_transcript: fixed 32
 }

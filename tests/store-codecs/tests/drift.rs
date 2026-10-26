@@ -94,7 +94,7 @@ fn the_settings_familys_code_and_goldens_have_no_drift() {
 /// The layouts' fingerprints the store keeps (store.md 5.3), from the schemas.
 fn layouts() -> String {
     let mut code = String::from(
-        "//! Each jig family's layout fingerprint in this build's schemas (store.md 5.3).\n\
+        "//! Each kept family's layout fingerprint in this build's schemas (store.md 5.3).\n\
          //! Written and checked by `SKEIN_CODEGEN_WRITE=1 cargo nextest run -p jig-store-codecs-world --test drift`.\n\
          use crate::codec::component::Layouts;\n\
          \n\
@@ -108,9 +108,16 @@ fn layouts() -> String {
         ("notes", "notes", 1),
         ("accounts", "accounts", 2),
         ("settings", "settings", 1),
+        ("secrets", "secrets", 1),
     ] {
         let source = fs::read(store().join(format!("schema/{family}-v{version}.schema"))).expect("schema readable");
         let digest = skein_codec::schema::parse(&source).expect("schema valid").fingerprints().family().digest();
+        let bytes: Vec<String> = digest.iter().map(|byte| format!("0x{byte:02x}")).collect();
+        writeln!(code, "    {field}: [{}],", bytes.join(", ")).expect("a String takes the line");
+    }
+    let smith = fs::read(store().join("src/tests/fixtures/smith-transcript-v6.schema")).expect("checked smith schema");
+    let smith = skein_codec::schema::parse(&smith).expect("smith schema valid").fingerprints().family().digest();
+    for (field, digest) in [("skein_oauth", skein_oauth::FINGERPRINT), ("smith_transcript", smith)] {
         let bytes: Vec<String> = digest.iter().map(|byte| format!("0x{byte:02x}")).collect();
         writeln!(code, "    {field}: [{}],", bytes.join(", ")).expect("a String takes the line");
     }

@@ -97,17 +97,20 @@ fn a_layout_refusal_names_its_family_and_says_to_move_the_generations() {
         "\n\n### 5.4",
     );
     let settings = unwrapped("(the others name theirs):\n\n  > ", "\n\n### 5.4");
-    for (family, name) in [
-        (Family::Component, "component"),
-        (Family::Core, "core"),
-        (Family::Tasks, "tasks"),
-        (Family::People, "people"),
-        (Family::Notes, "notes"),
-        (Family::Accounts, "accounts"),
-        (Family::Application, "application"),
+    for (family, clause) in [
+        (Family::Component, "whose component family's"),
+        (Family::Core, "whose core family's"),
+        (Family::Tasks, "whose tasks family's"),
+        (Family::People, "whose people family's"),
+        (Family::Notes, "whose notes family's"),
+        (Family::Accounts, "whose accounts family's"),
+        (Family::Secrets, "whose secrets family's"),
+        (Family::SkeinOauth, "whose kept skein-oauth records'"),
+        (Family::SmithTranscript, "whose kept smith turns'"),
+        (Family::Application, "whose application family's"),
     ] {
         let words = OpenRefusal::OlderBuild { why: Older::Layout(family) }.words().join("`<deployment>`");
-        assert_eq!(words, settings.replacen("whose settings", &["whose ", name].concat(), 1), "{family:?}");
+        assert_eq!(words, settings.replacen("whose settings family's", clause, 1), "{family:?}");
     }
 }
 

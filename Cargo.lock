@@ -1262,6 +1262,7 @@ dependencies = [
  "skein-io",
  "skein-kv",
  "skein-lib",
+ "skein-oauth",
  "skein-sim",
  "smith-transcript",
 ]
