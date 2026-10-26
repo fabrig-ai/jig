@@ -1,4 +1,7 @@
 //! The store alone encodes secrets envelopes; held bytes remain opaque (store.md 9).
+#[cfg(test)]
+mod tests;
+
 use crate::{CARRIED, CarriedKind, HELD, SecretOwner, SecretValue, secrets_v1 as w};
 use alloc::boxed::Box;
 use skein_lib::{Reader, Secret, Writer, sha256};
@@ -35,6 +38,53 @@ pub(super) fn digest(value: &SecretValue) -> [u8; 32] {
         | SecretValue::Carried { value, .. } => sha256::digest(value.expose()),
     }
 }
+
+/// Hash a durable row's payload without allocating a decoded secret. The
+/// fixed-prefix reader is checked against the generated decoder for every
+/// kind, bound and malformed prefix by this module's tests.
+pub(super) fn durable_digest(owner: SecretOwner, number: u64, bytes: &[u8]) -> Option<[u8; 32]> {
+    match owner {
+        SecretOwner::SignIn | SecretOwner::Service => {
+            let w::DigestParts { expiry, digest: hash } =
+                w::Digest::decode(&w::CEILINGS, &mut Reader::new(bytes)).ok()?.into_parts();
+            let value = SecretValue::Digest { expiry, digest: hash };
+            if !accepts(owner, number, &value) {
+                return None;
+            }
+            Some(digest(&value))
+        }
+        SecretOwner::Source => envelope_digest(bytes, &[w::CEILINGS.source_record_record, w::CEILINGS.source_key_key]),
+        SecretOwner::Application => {
+            if number < CARRIED {
+                return Some(sha256::digest(bytes));
+            }
+            if number >= HELD {
+                return None;
+            }
+            envelope_digest(
+                bytes,
+                &[w::CEILINGS.carried_key_key, w::CEILINGS.carried_value_value, w::CEILINGS.carried_moved_moved],
+            )
+        }
+    }
+}
+
+// Source and Carried in secrets-v1: version, enum tag, bounded secret length,
+// then the opaque payload. No borrow escapes this call or enters store state.
+fn envelope_digest(bytes: &[u8], bounds: &[u32]) -> Option<[u8; 32]> {
+    let mut reader = Reader::new(bytes);
+    if reader.u16()? != 1 {
+        return None;
+    }
+    let bound = *bounds.get(usize::from(reader.u8()?))?;
+    let length = skein_codec::read_len(&mut reader, bound).ok()?;
+    let payload = reader.bytes(length)?;
+    if !reader.is_empty() {
+        return None;
+    }
+    Some(sha256::digest(payload))
+}
+
 pub(crate) fn encode(value: SecretValue, limit: u32) -> Option<Box<[u8]>> {
     let limits = &w::CEILINGS;
     match value {
