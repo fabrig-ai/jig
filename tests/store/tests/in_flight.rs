@@ -105,7 +105,7 @@ const SECRET_FLIGHT: jig_protocol_store::PatchSets = jig_protocol_store::PatchSe
 };
 
 fn secret_committed() -> jig_store_world::World {
-    use jig_protocol_store::{SecretOwner, Secrets};
+    use jig_protocol_store::{SecretOwner, SecretValue, Secrets};
     use skein_lib::Secret;
     let mut world = committed(ONE_FLIGHT);
     assert_eq!(world.open(), Some(1));
@@ -114,7 +114,7 @@ fn secret_committed() -> jig_store_world::World {
     world.secret(Secrets::Keep {
         owner: SecretOwner::Application,
         number: SENT,
-        value: Secret::new(value.into_boxed_slice()),
+        value: SecretValue::Application(Secret::new(value.into_boxed_slice())),
     });
     world.crash(SEED);
     world

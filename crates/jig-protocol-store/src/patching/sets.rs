@@ -68,6 +68,7 @@ pub const JIG: PatchSet = PatchSet {
         texts: &[],
         map: KeptMap::Secrets,
         frames: None,
+        flights: &[],
         keys: &[
             Keys { from: &[1, 0], to: &[1, 2], root: "Digest" },
             Keys { from: &[3, 0], to: &[3, 1], root: "Source" },
