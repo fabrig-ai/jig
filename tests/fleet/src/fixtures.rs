@@ -58,7 +58,7 @@ pub fn model_needs() -> jig_domain_fleet::Needs {
         charters: charters
             .into_iter()
             .map(|(charter, models)| CharterNeeds {
-                charter,
+                version: jig_domain_fleet::Version { charter, revision: 1 },
                 kinds: Kinds::Both,
                 models: models
                     .into_iter()

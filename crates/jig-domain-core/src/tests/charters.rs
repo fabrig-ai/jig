@@ -87,7 +87,7 @@ fn startup_needs_own_models_and_preserve_charter_requirements() {
 
     assert_eq!(needs.charters.len(), 2);
     let worker = &needs.charters[0];
-    assert_eq!(worker.charter, 1);
+    assert_eq!(worker.version, fleet::Version { charter: 1, revision: 1 });
     assert_eq!(worker.kinds, fleet::Kinds::Workers);
     assert_eq!(worker.turns, 8);
     assert_eq!(worker.time, Duration::from_secs(60));
@@ -101,7 +101,7 @@ fn startup_needs_own_models_and_preserve_charter_requirements() {
         ]
     );
     let engine = &needs.charters[1];
-    assert_eq!(engine.charter, 73);
+    assert_eq!(engine.version, fleet::Version { charter: 73, revision: 1 });
     assert_eq!(engine.kinds, fleet::Kinds::Engine);
     assert_eq!(engine.change_reserve, None);
 }

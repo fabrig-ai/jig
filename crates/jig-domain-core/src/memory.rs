@@ -202,7 +202,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         tasks::worst_case(&crate::settings::task_limits(limits))?,
         authority::worst_case(&limits.authority)?,
         people::worst_case(&limits.people)?,
-        fleet::worst_case(&limits.fleet)?,
+        fleet::worst_case(&crate::settings::fleet_limits(limits))?,
         brief::gather_worst_case(&limits.brief)?,
         accounts::worst_case(&limits.accounts)?,
         notes::worst_case(&limits.notes)?,

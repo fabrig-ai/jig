@@ -203,6 +203,7 @@ const fn core_fleet_limits() -> jig_domain_fleet::Limits {
         program_sources: 12,
         source_detail_bytes: 4096,
         needs_bytes: 4096,
+        versions: 0,
         engine_slots: 0,
         slots: 1,
         workstreams: 1,

@@ -15,6 +15,7 @@ const LIMITS: Limits = Limits {
     program_sources: 12,
     source_detail_bytes: 4096,
     needs_bytes: 4096,
+    versions: 0,
     workers: 3,
     engine_slots: 0,
     slots: 2,
@@ -177,7 +178,7 @@ impl Harness {
     fn start(&mut self, run: Token, attempt: Token, workstream: u64) -> Box<[Request]> {
         self.step(Event::Start {
             placement: None,
-            charter: 1,
+            version: crate::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: to(attempt),
             run,
@@ -283,7 +284,7 @@ fn a_assignment_keeps_its_turn_and_answer_references_through_placement() {
     assert!(
         h.step(Event::Start {
             placement: None,
-            charter: 1,
+            version: crate::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: to(A1),
             run: R1,
@@ -1368,18 +1369,18 @@ fn free_kind_follows_the_placement_rule() {
     let mut limits = LIMITS;
     limits.engine_slots = 1;
     let mut h = Harness::new(limits);
-    assert_eq!(h.domain.free_kind(Kinds::Both, 7, 1), Some(HostKind::Engine));
-    assert_eq!(h.domain.free_kind(Kinds::Workers, 7, 1), None);
+    assert_eq!(h.domain.free_kind(Kinds::Both, 7, crate::Version { charter: 1, revision: 1 }), Some(HostKind::Engine));
+    assert_eq!(h.domain.free_kind(Kinds::Workers, 7, crate::Version { charter: 1, revision: 1 }), None);
     h.hello(C1, 2, &[], &[]);
-    assert_eq!(h.domain.free_kind(Kinds::Both, 7, 1), Some(HostKind::Worker));
+    assert_eq!(h.domain.free_kind(Kinds::Both, 7, crate::Version { charter: 1, revision: 1 }), Some(HostKind::Worker));
     h.place(R1, A1, 8);
-    assert_eq!(h.domain.free_kind(Kinds::Both, 7, 1), Some(HostKind::Engine));
+    assert_eq!(h.domain.free_kind(Kinds::Both, 7, crate::Version { charter: 1, revision: 1 }), Some(HostKind::Engine));
     h.hello(C2, 1, &[7], &[]);
-    assert_eq!(h.domain.free_kind(Kinds::Both, 7, 1), Some(HostKind::Worker));
+    assert_eq!(h.domain.free_kind(Kinds::Both, 7, crate::Version { charter: 1, revision: 1 }), Some(HostKind::Worker));
     h.place(R2, A2, 7);
     h.place(R3, A3, 8);
-    assert_eq!(h.domain.free_kind(Kinds::Workers, 7, 1), None);
-    assert_eq!(h.domain.free_kind(Kinds::Both, 7, 1), Some(HostKind::Engine));
+    assert_eq!(h.domain.free_kind(Kinds::Workers, 7, crate::Version { charter: 1, revision: 1 }), None);
+    assert_eq!(h.domain.free_kind(Kinds::Both, 7, crate::Version { charter: 1, revision: 1 }), Some(HostKind::Engine));
 }
 mod grants;
 

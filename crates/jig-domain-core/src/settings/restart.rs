@@ -205,7 +205,8 @@ impl Core {
             );
             assert!(facts.is_empty(), "rules replacement has no policy lifecycle fact");
         }
-        if charters || self.tasks.newest() != self.current.newest() {
+        let versions = charters || self.tasks.newest() != self.current.newest();
+        if versions {
             let charters = crate::charters::held_models(self, &env.limits);
             let mut tasks_out = Queue::with_capacity(crate::settings::task_room(&env.limits));
             tasks::step(
@@ -220,14 +221,14 @@ impl Core {
             );
             assert!(tasks_out.is_empty(), "charter table replacement emits nothing");
         }
-        if !charters && !rules {
+        if !versions && !rules {
             return;
         }
         let needs = crate::fleet_needs::current(self, &env.limits);
         let mut fleet_out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
         fleet::step(
             &mut self.fleet,
-            &Env { now: env.now, wall: env.wall, limits: env.limits.fleet },
+            &Env { now: env.now, wall: env.wall, limits: super::fleet_limits(&env.limits) },
             fleet::Event::Needs(needs),
             &mut fleet_out,
         );

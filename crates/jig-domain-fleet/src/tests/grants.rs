@@ -9,7 +9,7 @@ impl Harness {
         assert!(
             self.step(Event::Start {
                 placement: None,
-                charter: 1,
+                version: crate::Version { charter: 1, revision: 1 },
                 reply_to: to(attempt),
                 run,
                 attempt,

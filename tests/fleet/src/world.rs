@@ -24,6 +24,7 @@ pub const LIMITS: Limits = Limits {
     program_sources: 12,
     source_detail_bytes: 4096,
     needs_bytes: 4096,
+    versions: 0,
     workers: 4,
     engine_slots: 0,
     slots: 3,
@@ -1122,7 +1123,7 @@ impl World {
         self.observe(Seen::Started { run, attempt });
         self.stage.push(Event::Start {
             placement: None,
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             grants: Box::new([crate::fixtures::ANALYST]),
             reply_to: ReplyTo::new(Token::new(attempt)),
             run: Token::new(run),

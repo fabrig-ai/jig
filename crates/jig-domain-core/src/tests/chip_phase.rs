@@ -81,7 +81,7 @@ fn chip_live_observation_uses_receipt_time_and_drops_after_loss() {
         &env,
         fleet::Event::Start {
             placement: None,
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: ReplyTo::new(Token::new(1)),
             run: Token::new(2),
@@ -234,7 +234,7 @@ fn long_operation_work(operation: fleet::Operation) -> ChipWork {
         &env,
         fleet::Event::Start {
             placement: None,
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: ReplyTo::new(Token::new(1)),
             run: Token::new(2),

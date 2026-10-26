@@ -47,7 +47,7 @@ fn hosted() -> Domain {
     assert!(step(&mut domain, hello(WORKER)).is_empty());
     let start = Event::Start {
         placement: None,
-        charter: 1,
+        version: jig_domain_fleet::Version { charter: 1, revision: 1 },
         grants: Box::new([]),
         reply_to: ReplyTo::new(ATTEMPT),
         run: RUN,

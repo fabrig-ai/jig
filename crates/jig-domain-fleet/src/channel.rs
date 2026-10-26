@@ -293,7 +293,7 @@ pub(crate) fn drain(domain: &mut Domain, channel: Id<Channel>) {
 
 /// A host declaring every model of `charter`: one with a free slot that holds
 /// the workstream's workspace, or else the one with the most free slots.
-pub(crate) fn choose(domain: &Domain, workstream: u64, kinds: Kinds, charter: u32) -> Option<Id<Channel>> {
+pub(crate) fn choose(domain: &Domain, workstream: u64, kinds: Kinds, version: crate::Version) -> Option<Id<Channel>> {
     let mut best: Option<(Id<Channel>, u32)> = None;
     for (_, &id) in &domain.tokens {
         let channel = domain.channels.get(id).expect("a named channel is in contact");
@@ -302,7 +302,8 @@ pub(crate) fn choose(domain: &Domain, workstream: u64, kinds: Kinds, charter: u3
             || channel.draining
             || free == 0
             || !kinds.allows(channel.kind)
-            || !crate::needs::allows(&domain.needs, &channel.eligible, charter)
+            || !crate::needs::fits(&domain.needs, version, &channel.evidence, channel.kind)
+            || !crate::needs::allows(&domain.needs, &channel.eligible, version)
         {
             continue;
         }
@@ -323,6 +324,7 @@ pub(crate) fn probe(
     domain: &Domain,
     workstream: u64,
     kinds: Kinds,
+    version: crate::Version,
     models: &[crate::ModelNeed],
     excluded: &[Token],
 ) -> Option<crate::PlacementConstraint> {
@@ -334,6 +336,7 @@ pub(crate) fn probe(
             || free == 0
             || channel.draining
             || !kinds.allows(channel.kind)
+            || !crate::needs::fits(&domain.needs, version, &channel.evidence, channel.kind)
             || excluded.contains(&channel.token)
             || !crate::needs::allows_models(&domain.needs, &channel.declarations, models)
         {

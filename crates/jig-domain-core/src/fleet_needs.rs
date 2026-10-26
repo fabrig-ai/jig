@@ -17,27 +17,7 @@ use skein_lib::List;
 pub fn configured(config: &Config, limits: &Limits) -> Needs {
     let mut charters = List::with_capacity(limits.tasks.charters);
     for charter in &config.defaults.charters {
-        let policy = &charter.policy;
-        let count = u32::try_from(policy.alternatives.len())
-            .expect("configured alternatives")
-            .checked_add(1)
-            .expect("main model");
-        let mut models = List::with_capacity(count);
-        models.push(model(&policy.model)).expect("main model reserved");
-        for alternative in &policy.alternatives {
-            models.push(model(alternative)).expect("configured alternative count");
-        }
-        charters
-            .push(CharterNeeds {
-                charter: charter.number,
-                kinds: charter.hosts,
-                models: models.into_boxed(),
-                turns: policy.turns,
-                time: policy.time,
-                waiting: policy.waiting,
-                change_reserve: if policy.modify { Some(policy.reserve_time) } else { None },
-            })
-            .expect("configured charter count");
+        charters.push(one(charter, 1)).expect("configured charter count");
     }
     Needs {
         charters: charters.into_boxed(),
@@ -48,36 +28,19 @@ pub fn configured(config: &Config, limits: &Limits) -> Needs {
     }
 }
 pub(crate) fn current(core: &crate::Core, limits: &Limits) -> Needs {
-    let mut charters = List::with_capacity(limits.tasks.charters);
+    let capacity = limits.tasks.charters.checked_add(limits.settings.versions).expect("charter version bound");
+    let mut charters = List::with_capacity(capacity);
     for setting in &core.current.offered() {
-        let number = match setting {
-            crate::settings::Setting::Charter(number) => *number,
-            crate::settings::Setting::Template(_)
-            | crate::settings::Setting::Policy(_)
-            | crate::settings::Setting::Rules => continue,
-        };
+        let crate::settings::Setting::Charter(number) = *setting else { continue };
         let charter = core.charter(number).expect("offered charter");
-        let policy = &charter.policy;
-        let count = u32::try_from(policy.alternatives.len())
-            .expect("configured alternatives")
-            .checked_add(1)
-            .expect("main model");
-        let mut models = List::with_capacity(count);
-        models.push(model(&policy.model)).expect("main model reserved");
-        for alternative in &policy.alternatives {
-            models.push(model(alternative)).expect("configured alternative count");
+        let (_, origin) = core.current.lookup(*setting);
+        let (_, revision) = origin.expect("offered charter version");
+        charters.push(one(charter, revision)).expect("configured charter count");
+    }
+    for (&key, value) in &core.held.versions {
+        if let Some(charter) = &value.charter {
+            charters.push(one(charter, key.revision)).expect("held charter version count");
         }
-        charters
-            .push(CharterNeeds {
-                charter: charter.number,
-                kinds: charter.hosts,
-                models: models.into_boxed(),
-                turns: policy.turns,
-                time: policy.time,
-                waiting: policy.waiting,
-                change_reserve: if policy.modify { Some(policy.reserve_time) } else { None },
-            })
-            .expect("configured charter count");
     }
     Needs {
         charters: charters.into_boxed(),
@@ -89,4 +52,24 @@ pub(crate) fn current(core: &crate::Core, limits: &Limits) -> Needs {
 }
 pub(crate) fn model(value: &crate::Model) -> ModelNeed {
     ModelNeed { name: value.name.clone(), window: value.window, output: value.output }
+}
+
+fn one(charter: &crate::Charter, revision: u32) -> CharterNeeds {
+    let policy = &charter.policy;
+    let count =
+        u32::try_from(policy.alternatives.len()).expect("configured alternatives").checked_add(1).expect("main model");
+    let mut models = List::with_capacity(count);
+    models.push(model(&policy.model)).expect("main model reserved");
+    for alternative in &policy.alternatives {
+        models.push(model(alternative)).expect("configured alternative count");
+    }
+    CharterNeeds {
+        version: jig_domain_fleet::Version { charter: charter.number, revision },
+        kinds: charter.hosts,
+        models: models.into_boxed(),
+        turns: policy.turns,
+        time: policy.time,
+        waiting: policy.waiting,
+        change_reserve: if policy.modify { Some(policy.reserve_time) } else { None },
+    }
 }

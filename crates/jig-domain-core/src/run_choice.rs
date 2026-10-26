@@ -66,12 +66,13 @@ impl Core {
         let mut host_wait = false;
         let kinds = self.charter_of(task).hosts;
         let main = crate::fleet_needs::model(&policy.model);
+        let models = core::slice::from_ref(&main);
+        let version = self.charter_version(task);
         let mut facts = List::with_capacity(self.host_fact_capacity());
         for account in &candidates {
             let mut tried = List::with_capacity(self.fleet.host_capacity());
             for _ in 0..=self.fleet.host_capacity() {
-                let Some(placement) = self.fleet.probe(kinds, task, core::slice::from_ref(&main), tried.as_slice())
-                else {
+                let Some(placement) = self.fleet.probe(kinds, task, version, models, tried.as_slice()) else {
                     host_wait = true;
                     break;
                 };

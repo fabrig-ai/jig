@@ -61,7 +61,7 @@ impl World {
         })
     }
     fn available(&self) -> bool {
-        self.domain.free_kind(fleet::Kinds::Workers, 1, 0).is_some()
+        self.domain.free_kind(fleet::Kinds::Workers, 1, jig_domain_fleet::Version { charter: 0, revision: 1 }).is_some()
     }
 }
 fn source(name: &[u8]) -> fleet::SourceName {
@@ -133,7 +133,12 @@ fn a_kept_login_no_longer_withholds_a_probe() {
         let mut world = World::new(&[b"a"]);
         world.hello(CHANNEL);
         world.step(Event::Logins { channel: CHANNEL, logins: Box::new([fleet::Login { name: source(b"a"), state }]) });
-        assert!(world.domain.probe(fleet::Kinds::Workers, 1, &[], &[]).is_some());
+        assert!(
+            world
+                .domain
+                .probe(fleet::Kinds::Workers, 1, jig_domain_fleet::Version { charter: 0, revision: 1 }, &[], &[])
+                .is_some()
+        );
         assert!(
             world
                 .domain
@@ -475,7 +480,10 @@ fn an_unconstrained_choice_avoids_kept_logins() {
         channel: CHANNEL,
         logins: Box::new([fleet::Login { name: source(b"a"), state: fleet::LoginState::Usable }]),
     });
-    assert_eq!(world.domain.free_kind(fleet::Kinds::Workers, 1, 0), None);
+    assert_eq!(
+        world.domain.free_kind(fleet::Kinds::Workers, 1, jig_domain_fleet::Version { charter: 0, revision: 1 }),
+        None
+    );
 }
 
 #[test]
@@ -488,5 +496,10 @@ fn a_held_retired_name_still_withholds_its_host() {
     });
     world.step(Event::Sources { sources: Box::new([]) });
     world.inventory(&[]);
-    assert!(world.domain.probe(fleet::Kinds::Workers, 1, &[], &[]).is_none());
+    assert!(
+        world
+            .domain
+            .probe(fleet::Kinds::Workers, 1, jig_domain_fleet::Version { charter: 0, revision: 1 }, &[], &[])
+            .is_none()
+    );
 }

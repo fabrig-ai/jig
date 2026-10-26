@@ -745,7 +745,7 @@ impl Core {
                 config.grants,
             ),
             fleet: {
-                let mut fleet = fleet::Domain::new(&limits.fleet, fleet_needs, {
+                let mut fleet = fleet::Domain::new(&settings::fleet_limits(limits), fleet_needs, {
                     let mut names = List::with_capacity(tasks::MODELS);
                     for model in &config.settings.models {
                         names.push(model.name.clone()).expect("catalogue bound");

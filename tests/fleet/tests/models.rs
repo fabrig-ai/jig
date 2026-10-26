@@ -52,7 +52,7 @@ impl Fleet {
     fn start(&mut self, charter: u32) {
         self.send(Event::Start {
             placement: None,
-            charter,
+            version: jig_domain_fleet::Version { charter, revision: 1 },
             grants: Box::new([]),
             reply_to: ReplyTo::new(ATTEMPT),
             run: RUN,
@@ -120,7 +120,14 @@ fn every_charter_model_is_required_before_slot_preferences_apply() {
         fleet.send(Event::Hello { worker: 0, channel: FIRST, hello: unsuitable });
         fleet.hello(SUITABLE, &[b"main", b"alternative"]);
         fleet.start(MODEL_CHARTER);
-        assert_eq!(fleet.domain.free_kind(Kinds::Both, WORKSTREAM, MODEL_CHARTER), Some(HostKind::Worker));
+        assert_eq!(
+            fleet.domain.free_kind(
+                Kinds::Both,
+                WORKSTREAM,
+                jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 }
+            ),
+            Some(HostKind::Worker)
+        );
         assert_eq!(fleet.settle(), vec![SUITABLE], "host declares only {missing:?}");
     }
 }
@@ -167,7 +174,14 @@ fn the_engine_hello_supplies_its_model_eligibility() {
     fleet.start(MODEL_CHARTER);
     fleet.settle();
     fleet.hello(ENGINE, &[b"main", b"alternative"]);
-    assert_eq!(fleet.domain.free_kind(Kinds::Both, WORKSTREAM, MODEL_CHARTER), Some(HostKind::Engine));
+    assert_eq!(
+        fleet.domain.free_kind(
+            Kinds::Both,
+            WORKSTREAM,
+            jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 }
+        ),
+        Some(HostKind::Engine)
+    );
     assert_eq!(fleet.settle(), vec![ENGINE]);
 }
 
@@ -181,14 +195,29 @@ fn a_probe_requires_only_the_models_retained_for_this_run() {
     fleet.hello(FIRST, &[b"main"]);
     let main = [main_need()];
     assert_eq!(
-        fleet.domain.probe(Kinds::Workers, WORKSTREAM, &main, &[]),
+        fleet.domain.probe(
+            Kinds::Workers,
+            WORKSTREAM,
+            jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 },
+            &main,
+            &[]
+        ),
         Some(fleet::PlacementConstraint { channel: FIRST, kind: HostKind::Worker })
     );
     let retained = [
         main_need(),
         fleet::ModelNeed { name: b"alternative".as_slice().into(), window: MODEL_WINDOW, output: MODEL_OUTPUT },
     ];
-    assert_eq!(fleet.domain.probe(Kinds::Workers, WORKSTREAM, &retained, &[]), None);
+    assert_eq!(
+        fleet.domain.probe(
+            Kinds::Workers,
+            WORKSTREAM,
+            jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 },
+            &retained,
+            &[]
+        ),
+        None
+    );
 }
 
 #[test]
@@ -196,11 +225,20 @@ fn a_pending_assignment_keeps_its_checked_host_when_room_is_lost() {
     let mut fleet = Fleet::new();
     fleet.hello(FIRST, &[b"main"]);
     fleet.hello(SECOND, &[b"main", b"alternative"]);
-    let placement = fleet.domain.probe(Kinds::Workers, WORKSTREAM, &[main_need()], &[]).expect("free main-model host");
+    let placement = fleet
+        .domain
+        .probe(
+            Kinds::Workers,
+            WORKSTREAM,
+            jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 },
+            &[main_need()],
+            &[],
+        )
+        .expect("free main-model host");
     // A different attempt takes the last slot after the read-only probe.
     fleet.send(Event::Start {
         placement: Some(placement),
-        charter: MODEL_CHARTER,
+        version: jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 },
         grants: Box::new([]),
         reply_to: ReplyTo::new(Token::new(31)),
         run: Token::new(30),
@@ -212,7 +250,7 @@ fn a_pending_assignment_keeps_its_checked_host_when_room_is_lost() {
     fleet.settle();
     fleet.send(Event::Start {
         placement: Some(placement),
-        charter: MODEL_CHARTER,
+        version: jig_domain_fleet::Version { charter: MODEL_CHARTER, revision: 1 },
         grants: Box::new([]),
         reply_to: ReplyTo::new(ATTEMPT),
         run: RUN,

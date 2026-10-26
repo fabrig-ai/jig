@@ -4,7 +4,7 @@ use crate::{AgentShortfall, Bounds, CharterNeeds, ModelBound, ModelNeed, Needs};
 fn needs_window(window: u32) -> Needs {
     Needs {
         charters: Box::new([CharterNeeds {
-            charter: 1,
+            version: crate::Version { charter: 1, revision: 1 },
             kinds: Kinds::Workers,
             models: Box::new([ModelNeed { name: b"model".as_slice().into(), window, output: 1024 }]),
             turns: 8,
@@ -191,16 +191,16 @@ fn a_smaller_alternative_names_its_position() {
 fn each_per_charter_shortfall_names_the_second_applicable_charter() {
     let mut needs = needs_window(8192);
     let mut first = needs.charters[0].clone();
-    first.charter = 17;
+    first.version.charter = 17;
     first.turns = 7;
     first.time = Duration::from_secs(59);
     first.waiting = Duration::from_secs(9);
     first.change_reserve = Some(Duration::from_secs(6));
     let mut second = needs.charters[0].clone();
-    second.charter = 73;
+    second.version.charter = 73;
     second.change_reserve = Some(Duration::from_secs(5));
     let mut unrelated = second.clone();
-    unrelated.charter = 99;
+    unrelated.version.charter = 99;
     unrelated.kinds = Kinds::Engine;
     unrelated.turns = 100;
     needs.charters = Box::new([unrelated, first, second]);
@@ -300,4 +300,129 @@ fn replacing_needs_keeps_running_attempts_and_rebuilds_placement_from_the_catalo
         "evidence for a previously unused catalogue model survives"
     );
     assert!(!h.settle().is_empty(), "the waiting attempt can now be placed");
+}
+
+fn versioned_needs() -> Needs {
+    let mut needs = needs_window(8192);
+    let mut old = needs.charters[0].clone();
+    old.kinds = Kinds::Engine;
+    let mut newest = old.clone();
+    newest.version.revision = 2;
+    newest.kinds = Kinds::Workers;
+    needs.charters = Box::new([old, newest]);
+    needs
+}
+
+fn start_version(run: Token, attempt: Token, revision: u32) -> Event {
+    Event::Start {
+        reply_to: to(attempt),
+        run,
+        attempt,
+        workstream: run.raw(),
+        kinds: Kinds::Both,
+        version: crate::Version { charter: 1, revision },
+        placement: None,
+        assignment: references(),
+        grants: Box::new([]),
+    }
+}
+
+#[test]
+fn a_run_of_an_older_version_is_placed_by_its_own_needs() {
+    let limits = Limits { engine_slots: 1, versions: 1, ..LIMITS };
+    let mut h = Harness::with_needs(limits, versioned_needs());
+    let engine = Token::new(0);
+    assert!(h.step(Event::Hello { worker: 0, channel: engine, hello: hello(bounds_window(8192)) }).is_empty());
+    assert!(h.step(Event::Hello { worker: 0, channel: C1, hello: hello(bounds_window(8192)) }).is_empty());
+    for (run, attempt, revision, channel, kind) in
+        [(R1, A1, 1, engine, HostKind::Engine), (R2, A2, 2, C1, HostKind::Worker)]
+    {
+        let version = crate::Version { charter: 1, revision };
+        assert_eq!(
+            h.domain.probe(Kinds::Both, 1, version, &[], &[]),
+            Some(crate::PlacementConstraint { channel, kind })
+        );
+        assert!(h.step(start_version(run, attempt, revision)).is_empty());
+        let placed = h.settle();
+        let [Request::Assign { channel: actual, run: assigned, .. }, Request::Placed { .. }] = &placed[..] else {
+            panic!("placed: {placed:?}");
+        };
+        assert_eq!((*actual, *assigned), (channel, run));
+    }
+}
+
+#[test]
+fn a_dropped_version_leaves_the_table_and_live_attempts_keep_theirs() {
+    let limits = Limits { engine_slots: 1, versions: 1, ..LIMITS };
+    let mut h = Harness::with_needs(limits, versioned_needs());
+    let engine = Token::new(0);
+    h.step(Event::Hello { worker: 0, channel: engine, hello: hello(bounds_window(8192)) });
+    h.step(start_version(R1, A1, 1));
+    assert!(!h.settle().is_empty());
+    let mut needs = versioned_needs();
+    needs.charters = Box::new([needs.charters[1].clone()]);
+    assert!(h.step(Event::Needs(needs)).is_empty());
+    assert_eq!(h.domain.needs.charters.len(), 1);
+    assert_eq!(h.domain.needs.charters[0].version, crate::Version { charter: 1, revision: 2 });
+    let id = h.domain.names.get(&(R1, A1)).expect("live attempt");
+    let crate::attempt::State::Claimed { version, .. } = &h.domain.attempts.get(*id).unwrap().state else {
+        panic!("live attempt stays claimed");
+    };
+    assert_eq!(*version, crate::Version { charter: 1, revision: 1 });
+    h.step(Event::Hello { worker: 0, channel: C1, hello: hello(bounds_window(8192)) });
+    h.step(start_version(R2, A2, 2));
+    let placed = h.settle();
+    let [Request::Assign { channel, .. }, Request::Placed { .. }] = &placed[..] else {
+        panic!("placed: {placed:?}");
+    };
+    assert_eq!(*channel, C1);
+}
+
+#[test]
+fn probes_check_the_selected_versions_turn_time_and_waiting_bounds() {
+    let mut old = needs_window(8192).charters[0].clone();
+    let mut newest = old.clone();
+    newest.version.revision = 2;
+    for dimension in 0_u32..3 {
+        old.turns = 8;
+        old.time = Duration::from_secs(60);
+        old.waiting = Duration::from_secs(10);
+        let mut h = Harness::with_needs(LIMITS, Needs { charters: Box::new([old.clone()]), ..needs_window(8192) });
+        h.step(Event::Hello { worker: 0, channel: C1, hello: hello(bounds_window(8192)) });
+        match dimension {
+            0 => newest.turns = 9,
+            1 => newest.time = Duration::from_secs(61),
+            2 => newest.waiting = Duration::from_secs(11),
+            _ => unreachable!(),
+        }
+        h.step(Event::Needs(Needs { charters: Box::new([old.clone(), newest.clone()]), ..needs_window(8192) }));
+        assert!(h.domain.probe(Kinds::Workers, 1, old.version, &[], &[]).is_some());
+        assert!(h.domain.probe(Kinds::Workers, 1, newest.version, &[], &[]).is_none());
+        newest = old.clone();
+        newest.version.revision = 2;
+    }
+}
+
+#[test]
+fn a_queued_old_version_keeps_its_models_when_the_newest_changes() {
+    let mut old = needs_window(8192).charters[0].clone();
+    old.models[0].name = b"old".as_slice().into();
+    let needs = Needs { charters: Box::new([old.clone()]), ..needs_window(8192) };
+    let mut h = Harness::with_catalogue(LIMITS, needs, Box::new([b"old".as_slice().into(), b"new".as_slice().into()]));
+    h.step(start_version(R1, A1, 1));
+    assert!(h.settle().is_empty());
+    let mut newest = old.clone();
+    newest.version.revision = 2;
+    newest.models[0].name = b"new".as_slice().into();
+    h.step(Event::Needs(Needs { charters: Box::new([old, newest]), ..needs_window(8192) }));
+    let mut bounds = bounds_window(8192);
+    bounds.models[0].name = b"old".as_slice().into();
+    h.step(Event::Hello { worker: 0, channel: C1, hello: hello(bounds) });
+    let placed = h.settle();
+    let [Request::Assign { channel, run, .. }, Request::Placed { .. }] = &placed[..] else {
+        panic!("placed: {placed:?}");
+    };
+    assert_eq!((*channel, *run), (C1, R1));
+    h.step(start_version(R2, A2, 2));
+    assert!(h.settle().is_empty(), "the old host cannot run the new version");
 }

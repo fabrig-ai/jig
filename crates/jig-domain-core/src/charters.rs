@@ -145,10 +145,22 @@ impl Core {
             fleet::HostKind::Engine => fleet::Kinds::Engine,
             fleet::HostKind::Worker => fleet::Kinds::Workers,
         };
-        let charter = self.charter_of(task).number;
+        let version = self.charter_version(task);
         for &connector in self.connectors.as_ref() {
-            out.push(crate::Request::Ask { connector, ask: crate::Ask::ClaimDone { task, attempt, kinds, charter } });
+            out.push(crate::Request::Ask { connector, ask: crate::Ask::ClaimDone { task, attempt, kinds, version } });
         }
+    }
+
+    /// The value read by this live agent's run, or its task before preparation.
+    pub(crate) fn charter_version(&self, task: u64) -> fleet::Version {
+        let row = self.tasks.task(task).expect("live agent task");
+        let charter = match row.executor {
+            tasks::Executor::Agent { charter } => charter,
+            tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => unreachable!("agent version"),
+        };
+        let revision = row.settings.run.unwrap_or(row.settings.task);
+        let key = self.held.selected(&self.current, charter, revision).expect("run charter version");
+        fleet::Version { charter: key.charter, revision: key.revision }
     }
 
     /// The newest charter, for work about to be made (engine.md, 17.3).

@@ -247,6 +247,7 @@ fn set_fleet(limits: &mut jig_domain_fleet::Limits, name: &[u8], value: u64) -> 
         source_detail_bytes,
         workers,
         needs_bytes,
+        versions: _,
         engine_slots,
         slots,
         workstreams,
@@ -496,7 +497,7 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
         tasks,
         authority: _,
         people: _,
-        fleet: _,
+        fleet,
         brief: _,
         brief_parts,
         brief_core_budgets,
@@ -523,6 +524,7 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
             } else {
                 settings.versions = count(value)?;
                 tasks.versions = count(value)?;
+                fleet.versions = count(value)?;
             }
         }
         b"settings.history" => {

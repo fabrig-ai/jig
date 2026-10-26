@@ -147,7 +147,7 @@ impl Domain {
     pub fn new(limits: &Limits, needs: crate::Needs, catalogue: Box<[Box<[u8]>]>) -> Domain {
         assert!(
             match crate::needs::owned_bytes(&needs) {
-                Some(bytes) => bytes <= limits.needs_bytes,
+                Some(bytes) => bytes <= limits::needs_bytes(limits).expect("needs bound"),
                 None => false,
             },
             "configured agent needs fit their byte bound"
@@ -250,8 +250,8 @@ impl Domain {
 
     /// The kind placement would choose now for this charter; None without an eligible free slot.
     #[must_use]
-    pub fn free_kind(&self, kinds: crate::Kinds, workstream: u64, charter: u32) -> Option<HostKind> {
-        let id = channel::choose(self, workstream, kinds, charter)?;
+    pub fn free_kind(&self, kinds: crate::Kinds, workstream: u64, version: crate::Version) -> Option<HostKind> {
+        let id = channel::choose(self, workstream, kinds, version)?;
         Some(self.channels.get(id).expect("chosen channel is connected").kind)
     }
 
@@ -261,10 +261,11 @@ impl Domain {
         &self,
         kinds: crate::Kinds,
         workstream: u64,
+        version: crate::Version,
         models: &[crate::ModelNeed],
         excluded: &[Token],
     ) -> Option<crate::PlacementConstraint> {
-        channel::probe(self, workstream, kinds, models, excluded)
+        channel::probe(self, workstream, kinds, version, models, excluded)
     }
 
     /// Latest observed refusal of an allowed kind, while no admitted, connected,
@@ -507,9 +508,9 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::SignedOut { channel, name, result } => {
             crate::sources::signed_out(domain, env, channel, name, result, out);
         }
-        Event::Start { reply_to, run, attempt, workstream, kinds, charter, placement, assignment, grants } => {
+        Event::Start { reply_to, run, attempt, workstream, kinds, version, placement, assignment, grants } => {
             if attempt::start(
-                domain, env, reply_to, run, attempt, workstream, kinds, charter, placement, assignment, out,
+                domain, env, reply_to, run, attempt, workstream, kinds, version, placement, assignment, out,
             ) {
                 crate::grants::keep(domain, env, run, attempt, &[], &grants, out);
             }

@@ -18,6 +18,7 @@ const LIMITS: Limits = Limits {
     program_sources: 12,
     source_detail_bytes: 4096,
     needs_bytes: 0,
+    versions: 0,
     workers: 3,
     engine_slots: 0,
     slots: 3,
@@ -140,7 +141,7 @@ impl Measured {
         let workstream = run.raw();
         let asked = self.step(Event::Start {
             placement: None,
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: ReplyTo::new(attempt),
             run,
@@ -184,7 +185,10 @@ fn model_eligibility_on_every_host_stays_within_the_memory_bound() {
     let mut fleet = Measured::with_needs(limits, || jig_domain_fleet::Needs {
         charters: (0..CHARTERS)
             .map(|number| jig_domain_fleet::CharterNeeds {
-                charter: u32::try_from(number).expect("small fixture"),
+                version: jig_domain_fleet::Version {
+                    charter: u32::try_from(number).expect("small fixture"),
+                    revision: 1,
+                },
                 kinds: jig_domain_fleet::Kinds::Both,
                 models: Box::new([]),
                 turns: 0,
@@ -294,7 +298,7 @@ fn a_fleet_full_to_its_limits_stays_within_its_worst_case() {
     let workstream = run.raw();
     let refused = fleet.step(Event::Start {
         placement: None,
-        charter: 1,
+        version: jig_domain_fleet::Version { charter: 1, revision: 1 },
         grants: Box::new([]),
         reply_to: ReplyTo::new(attempt),
         run,
@@ -612,4 +616,49 @@ fn full_endpoint_metadata_including_engine_fits_its_accounted_channels() {
         world.hello(Token::new(u64::from(worker)), Vec::new());
     }
     assert_eq!(world.domain.program_endpoint(Token::new(0), 0), Some(true));
+}
+
+#[test]
+fn retained_versions_on_every_host_stay_within_the_memory_bound() {
+    use jig_domain_fleet::{CharterNeeds, Kinds, ModelNeed, Needs, Version};
+    const VERSIONS: u32 = 2;
+    let limits = Limits {
+        needs_bytes: u64::try_from(size_of::<CharterNeeds>()).expect("charter header fits"),
+        versions: VERSIONS,
+        engine_slots: 1,
+        ..LIMITS
+    };
+    let mut fleet = Measured::with_needs(limits, || {
+        let mut charters = vec![CharterNeeds {
+            version: Version { charter: 1, revision: VERSIONS + 1 },
+            kinds: Kinds::Both,
+            models: Box::new([]),
+            turns: 0,
+            time: Duration::ZERO,
+            waiting: Duration::ZERO,
+            change_reserve: None,
+        }];
+        for revision in 1..=VERSIONS {
+            let mut charter = charters[0].clone();
+            charter.version.revision = revision;
+            charter.models = (0..=jig_domain_fleet::CATALOGUE_MODELS)
+                .map(|_| ModelNeed {
+                    name: vec![
+                        b'm';
+                        usize::try_from(jig_domain_fleet::CATALOGUE_NAME_BYTES).expect("model name bound")
+                    ]
+                    .into_boxed_slice(),
+                    window: 1,
+                    output: 1,
+                })
+                .collect();
+            charters.push(charter);
+        }
+        Needs { charters: charters.into_boxed_slice(), ..jig_fleet_world::fixtures::needs() }
+    });
+    fleet.hello(Token::new(0), Vec::new());
+    for nth in 0..limits.workers {
+        fleet.hello(channel(nth), Vec::new());
+    }
+    assert_eq!(fleet.domain.workers(), limits.workers);
 }

@@ -82,7 +82,15 @@ fn admission_clears_only_its_kind_and_an_ineligible_host_suppresses_both() {
     f.at_hello(2, 14, 0, Fleet::good(), Duration::ZERO);
     assert_eq!(f.refused(Kinds::Both), None, "admitted host suppresses even without requested models");
     assert!(
-        f.domain.probe(Kinds::Workers, 1, &jig_fleet_world::fixtures::model_needs().charters[0].models, &[]).is_none()
+        f.domain
+            .probe(
+                Kinds::Workers,
+                1,
+                jig_domain_fleet::Version { charter: jig_fleet_world::fixtures::MODEL_CHARTER, revision: 1 },
+                &jig_fleet_world::fixtures::model_needs().charters[0].models,
+                &[]
+            )
+            .is_none()
     );
     assert_eq!(f.refused(Kinds::Workers), None);
     assert_eq!(

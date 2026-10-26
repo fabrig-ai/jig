@@ -49,7 +49,7 @@ fn a_run_placed_on_the_engine_slots_is_settled_as_not_started_by_a_restart_befor
             limits,
             Event::Start {
                 placement: None,
-                charter: 1,
+                version: jig_domain_fleet::Version { charter: 1, revision: 1 },
                 grants: Box::new([]),
                 reply_to: ReplyTo::new(attempt),
                 run: task,
@@ -127,7 +127,7 @@ fn a_charter_for_workers_only_waits_while_only_engine_slots_are_free() {
             limits,
             Event::Start {
                 placement: None,
-                charter: 1,
+                version: jig_domain_fleet::Version { charter: 1, revision: 1 },
                 grants: Box::new([]),
                 reply_to: ReplyTo::new(attempt),
                 run: task,
@@ -205,7 +205,7 @@ fn a_worker_holding_the_workstream_is_preferred_over_a_free_engine_slot() {
             limits,
             Event::Start {
                 placement: None,
-                charter: 1,
+                version: jig_domain_fleet::Version { charter: 1, revision: 1 },
                 grants: Box::new([]),
                 reply_to: ReplyTo::new(attempt),
                 run: task,
@@ -301,7 +301,7 @@ fn worker_needs() -> fleet::Needs {
     use fleet::{CharterNeeds, ModelNeed, Needs};
     Needs {
         charters: Box::new([CharterNeeds {
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             kinds: Kinds::Workers,
             models: Box::new([ModelNeed { name: b"model".as_slice().into(), window: 8192, output: 1024 }]),
             turns: 8,
@@ -324,7 +324,7 @@ fn waiting_worker(limits: Limits) -> Domain {
             limits,
             Event::Start {
                 placement: None,
-                charter: 1,
+                version: jig_domain_fleet::Version { charter: 1, revision: 1 },
                 grants: Box::new([]),
                 reply_to: ReplyTo::new(Token::new(2)),
                 run: Token::new(1),

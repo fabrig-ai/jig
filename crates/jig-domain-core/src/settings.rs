@@ -486,3 +486,10 @@ pub(crate) fn task_route_room(limits: &crate::Limits) -> u32 {
         .checked_sub(limits.settings.revisions.checked_add(1).expect("released names"))
         .expect("child room includes released names")
 }
+
+/// The fleet's retained requirements use the core's settings version limit.
+pub(crate) fn fleet_limits(limits: &crate::Limits) -> jig_domain_fleet::Limits {
+    let mut fleet = limits.fleet;
+    fleet.versions = limits.settings.versions;
+    fleet
+}

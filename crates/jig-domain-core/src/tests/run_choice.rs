@@ -349,7 +349,7 @@ fn a_progress_count_leaves_due_task_watches_unmarked() {
         &env,
         fleet::Event::Start {
             placement: None,
-            charter: 1,
+            version: jig_domain_fleet::Version { charter: 1, revision: 1 },
             grants: Box::new([]),
             reply_to: ReplyTo::new(Token::new(1)),
             run: Token::new(2),

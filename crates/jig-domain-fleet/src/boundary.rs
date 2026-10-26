@@ -223,7 +223,7 @@ pub enum Event {
         attempt: Token,
         workstream: u64,
         kinds: Kinds,
-        charter: u32,
+        version: crate::Version,
         placement: Option<PlacementConstraint>,
         assignment: Assignment,
         grants: Box<[Grant]>,

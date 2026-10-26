@@ -153,14 +153,14 @@ pub(crate) struct Run {
 pub(crate) enum State {
     /// Started, or refused as busy: waits for an eligible slot, and for no worker to
     /// host another attempt of its run. `serial` is its place in the queue.
-    Waiting { to: ReplyTo, workstream: u64, kinds: Kinds, charter: u32, serial: u64 },
+    Waiting { to: ReplyTo, workstream: u64, kinds: Kinds, version: crate::Version, serial: u64 },
     /// Adopted after a restart, no worker having listed it yet: until the
     /// grace passes.
     Adopted { to: ReplyTo, until: Time },
     /// The parent's live claim, on a worker or adrift, with its workstream to
     /// be placed again if its worker refuses it as busy (empty when
     /// adopted).
-    Claimed { to: ReplyTo, at: Where, workstream: u64, kinds: Kinds, charter: u32 },
+    Claimed { to: ReplyTo, at: Where, workstream: u64, kinds: Kinds, version: crate::Version },
     /// Cancelled by the parent: its answer still ends the call.
     Cancelled { to: ReplyTo, at: Where },
     /// Restored across a fresh mark (domain/engine.md, 6 step 3 and 7.2):
@@ -292,7 +292,7 @@ pub(crate) fn start(
     attempt: Token,
     workstream: u64,
     kinds: Kinds,
-    charter: u32,
+    version: crate::Version,
     placement: Option<crate::PlacementConstraint>,
     assignment: Assignment,
     out: &mut Queue<Request>,
@@ -312,7 +312,7 @@ pub(crate) fn start(
     }
     replace(domain, run, out);
     let serial = next_serial(&mut domain.serial);
-    insert(domain, run, attempt, false, assignment, State::Waiting { to, workstream, kinds, charter, serial });
+    insert(domain, run, attempt, false, assignment, State::Waiting { to, workstream, kinds, version, serial });
     let id = *domain.names.get(&(run, attempt)).expect("inserted attempt");
     domain.attempts.get_mut(id).expect("inserted attempt").placement = placement;
     true
@@ -377,7 +377,16 @@ pub(crate) fn adopt(
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Stray { at, until: _ } => located(to, at, 0, Kinds::Workers, 0, names, &mut domain.facts, out),
+        State::Stray { at, until: _ } => located(
+            to,
+            at,
+            0,
+            Kinds::Workers,
+            crate::Version { charter: 0, revision: 0 },
+            names,
+            &mut domain.facts,
+            out,
+        ),
         State::Kept { answer, payload, at, until: _ } => handed(to, answer, payload, at, names, &mut domain.facts, out),
         State::Waiting { .. }
         | State::Adopted { .. }
@@ -479,11 +488,11 @@ pub(crate) fn cancel(domain: &mut Domain, run: Token, attempt: Token, out: &mut 
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Waiting { to, workstream: _, kinds: _, charter: _, serial: _ } => {
+        State::Waiting { to, workstream: _, kinds: _, version: _, serial: _ } => {
             withdrawn(to, Withdrawal::Cancelled, names, out)
         }
         State::Adopted { to, until } => State::Cancelled { to, at: Where::Adrift { until } },
-        State::Claimed { to, at, workstream: _, kinds: _, charter: _ } => {
+        State::Claimed { to, at, workstream: _, kinds: _, version: _ } => {
             cancelled(to, at, names, &domain.channels, out)
         }
         State::Cancelled { to, at } => State::Cancelled { to, at },
@@ -544,11 +553,11 @@ pub(crate) fn place(
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Waiting { to, workstream, kinds, charter, serial: _ } => assigned(
+        State::Waiting { to, workstream, kinds, version, serial: _ } => assigned(
             to,
             workstream,
             kinds,
-            charter,
+            version,
             entry.assignment,
             channel,
             names,
@@ -593,12 +602,21 @@ pub(crate) fn listed(
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Waiting { to, workstream, kinds, charter, serial: _ } => {
-            hosted(to, workstream, kinds, charter, channel, names, env, &mut domain.channels, &mut domain.facts, out)
+        State::Waiting { to, workstream, kinds, version, serial: _ } => {
+            hosted(to, workstream, kinds, version, channel, names, env, &mut domain.channels, &mut domain.facts, out)
         }
-        State::Adopted { to, until: _ } => located(to, on, 0, Kinds::Workers, 0, names, &mut domain.facts, out),
-        State::Claimed { to, at, workstream, kinds, charter } => {
-            moved(to, at, workstream, kinds, charter, channel, &mut domain.facts)
+        State::Adopted { to, until: _ } => located(
+            to,
+            on,
+            0,
+            Kinds::Workers,
+            crate::Version { charter: 0, revision: 0 },
+            names,
+            &mut domain.facts,
+            out,
+        ),
+        State::Claimed { to, at, workstream, kinds, version } => {
+            moved(to, at, workstream, kinds, version, channel, &mut domain.facts)
         }
         State::Cancelled { to, at: _ } => {
             again(on, answered, names, &domain.channels, out);
@@ -654,9 +672,9 @@ pub(crate) fn answer(
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Waiting { to, workstream, kinds, charter, serial } => {
+        State::Waiting { to, workstream, kinds, version, serial } => {
             resent(payload, &mut domain.facts, out);
-            State::Waiting { to, workstream, kinds, charter, serial }
+            State::Waiting { to, workstream, kinds, version, serial }
         }
         State::Adopted { to, until } => match answer {
             Answer::Busy => {
@@ -667,11 +685,11 @@ pub(crate) fn answer(
                 handed(to, answer, payload, on, names, &mut domain.facts, out)
             }
         },
-        State::Claimed { to, at: _, workstream, kinds, charter } => match answer {
+        State::Claimed { to, at: _, workstream, kinds, version } => match answer {
             Answer::Busy => {
                 refused(payload, &mut domain.facts, out);
                 let serial = next_serial(&mut domain.serial);
-                State::Waiting { to, workstream, kinds, charter, serial }
+                State::Waiting { to, workstream, kinds, version, serial }
             }
             Answer::Ended | Answer::Parked | Answer::Failed { .. } | Answer::Invalid => {
                 handed(to, answer, payload, on, names, &mut domain.facts, out)
@@ -725,8 +743,8 @@ pub(crate) fn adrift(domain: &mut Domain, id: Id<Attempt>, channel: Token, until
     let state = mem::replace(&mut entry.state, State::Closed);
     let at = Where::Adrift { until };
     entry.state = match state {
-        State::Claimed { to, at: _, workstream, kinds, charter } => {
-            State::Claimed { to, at, workstream, kinds, charter }
+        State::Claimed { to, at: _, workstream, kinds, version } => {
+            State::Claimed { to, at, workstream, kinds, version }
         }
         State::Cancelled { to, at: _ } => State::Cancelled { to, at },
         State::Crossed { to, at: _, listed, worked } => State::Crossed { to, at, listed, worked },
@@ -838,8 +856,8 @@ pub(crate) fn resume(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Req
         if held > 0 {
             continue;
         }
-        let (workstream, charter) = match &entry.state {
-            State::Waiting { workstream, charter, .. } => (*workstream, *charter),
+        let (workstream, version) = match &entry.state {
+            State::Waiting { workstream, version, .. } => (*workstream, *version),
             State::Adopted { .. }
             | State::Claimed { .. }
             | State::Cancelled { .. }
@@ -867,8 +885,20 @@ pub(crate) fn resume(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Req
             }
         };
         let channel = match entry.placement {
-            Some(placement) => channel::constrained(domain, placement, kinds),
-            None => channel::choose(domain, workstream, kinds, charter),
+            Some(placement) => match channel::constrained(domain, placement, kinds) {
+                Some(id)
+                    if crate::needs::fits(
+                        &domain.needs,
+                        version,
+                        &domain.channels.get(id).expect("connected host").evidence,
+                        placement.kind,
+                    ) =>
+                {
+                    Some(id)
+                }
+                Some(_) | None => None,
+            },
+            None => channel::choose(domain, workstream, kinds, version),
         };
         if let Some(channel) = channel {
             chosen = Some((id, channel));
@@ -933,11 +963,11 @@ fn replace(domain: &mut Domain, run: Token, out: &mut Queue<Request>) {
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
-        State::Waiting { to, workstream: _, kinds: _, charter: _, serial: _ } => {
+        State::Waiting { to, workstream: _, kinds: _, version: _, serial: _ } => {
             withdrawn(to, Withdrawal::Replaced, names, out)
         }
         State::Adopted { to, until } => superseded(to, Where::Adrift { until }, names, out),
-        State::Claimed { to, at, workstream: _, kinds: _, charter: _ } => {
+        State::Claimed { to, at, workstream: _, kinds: _, version: _ } => {
             again(at, false, names, &domain.channels, out);
             superseded(to, at, names, out)
         }
@@ -1066,14 +1096,14 @@ fn located(
     at: Where,
     workstream: u64,
     kinds: Kinds,
-    charter: u32,
+    version: crate::Version,
     names: Names,
     facts: &mut Facts,
     out: &mut Queue<Request>,
 ) -> State {
     facts.push(Fact::Found);
     out.push(Request::Placed { run: names.run, attempt: names.attempt });
-    State::Claimed { to, at, workstream, kinds, charter }
+    State::Claimed { to, at, workstream, kinds, version }
 }
 
 /// A claim listed again: on its worker's channel from now on.
@@ -1082,7 +1112,7 @@ fn moved(
     at: Where,
     workstream: u64,
     kinds: Kinds,
-    charter: u32,
+    version: crate::Version,
     channel: Id<Channel>,
     facts: &mut Facts,
 ) -> State {
@@ -1090,7 +1120,7 @@ fn moved(
         Where::On(_) => {}
         Where::Adrift { .. } => facts.push(Fact::Found),
     }
-    State::Claimed { to, at: Where::On(channel), workstream, kinds, charter }
+    State::Claimed { to, at: Where::On(channel), workstream, kinds, version }
 }
 
 /// Waiting, placed: assigned to the worker of `channel`, which holds its
@@ -1100,7 +1130,7 @@ fn assigned(
     to: ReplyTo,
     workstream: u64,
     kinds: Kinds,
-    charter: u32,
+    version: crate::Version,
     assignment: Assignment,
     channel: Id<Channel>,
     names: Names,
@@ -1123,7 +1153,7 @@ fn assigned(
     });
     out.push(Request::Placed { run: names.run, attempt: names.attempt });
     facts.push(Fact::Placed);
-    State::Claimed { to, at: Where::On(channel), workstream, kinds, charter }
+    State::Claimed { to, at: Where::On(channel), workstream, kinds, version }
 }
 
 /// Waiting, listed: a worker hosts it already, so it is not assigned again.
@@ -1132,7 +1162,7 @@ fn hosted(
     to: ReplyTo,
     workstream: u64,
     kinds: Kinds,
-    charter: u32,
+    version: crate::Version,
     channel: Id<Channel>,
     names: Names,
     env: &Env<Limits>,
@@ -1142,7 +1172,7 @@ fn hosted(
 ) -> State {
     let entry = channels.get_mut(channel).expect("a worker saying hello is in contact");
     channel::cache(entry, &env.limits, workstream);
-    located(to, Where::On(channel), workstream, kinds, charter, names, facts, out)
+    located(to, Where::On(channel), workstream, kinds, version, names, facts, out)
 }
 
 /// Listed, and not tracked: fenced off at once if its run is claimed by

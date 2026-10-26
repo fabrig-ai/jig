@@ -77,6 +77,7 @@ pub(super) const FLEET: fleet::Limits = fleet::Limits {
     program_sources: 12,
     source_detail_bytes: 4096,
     needs_bytes: 262_144,
+    versions: 16,
     grants: 32,
     slots: 4,
     workstreams: 64,

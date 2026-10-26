@@ -3,6 +3,13 @@ use crate::{Bounds, HostKind, Kinds};
 use alloc::boxed::Box;
 use skein_lib::{Duration, List};
 
+/// A charter version's name (engine.md, 17.3).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct Version {
+    pub charter: u32,
+    pub revision: u32,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Needs {
     pub charters: Box<[CharterNeeds]>,
@@ -13,7 +20,7 @@ pub struct Needs {
 }
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CharterNeeds {
-    pub charter: u32,
+    pub version: Version,
     pub kinds: Kinds,
     pub models: Box<[ModelNeed]>,
     pub turns: u32,
@@ -81,25 +88,25 @@ pub fn shortfall(needs: &Needs, bounds: &Bounds, kind: HostKind) -> Option<Agent
             }
             let Some(held) = held else { continue };
             if held.window < need.window {
-                return Some(AgentShortfall::Window { charter: charter.charter, model: number });
+                return Some(AgentShortfall::Window { charter: charter.version.charter, model: number });
             }
             if held.output < need.output {
-                return Some(AgentShortfall::Output { charter: charter.charter, model: number });
+                return Some(AgentShortfall::Output { charter: charter.version.charter, model: number });
             }
         }
         if bounds.turns < charter.turns {
-            return Some(AgentShortfall::Turns { charter: charter.charter });
+            return Some(AgentShortfall::Turns { charter: charter.version.charter });
         }
         if bounds.time < charter.time {
-            return Some(AgentShortfall::Time { charter: charter.charter });
+            return Some(AgentShortfall::Time { charter: charter.version.charter });
         }
         if bounds.waiting < charter.waiting {
-            return Some(AgentShortfall::Waiting { charter: charter.charter });
+            return Some(AgentShortfall::Waiting { charter: charter.version.charter });
         }
         if let Some(reserve) = charter.change_reserve
             && bounds.checks > reserve
         {
-            return Some(AgentShortfall::Checks { charter: charter.charter });
+            return Some(AgentShortfall::Checks { charter: charter.version.charter });
         }
     }
     if applicable {
@@ -143,13 +150,15 @@ pub(crate) fn eligibility(needs: &Needs, models: &[crate::ModelBound]) -> Box<[b
     eligible.into_boxed()
 }
 
-pub(crate) fn allows(needs: &Needs, eligible: &[bool], charter: u32) -> bool {
+pub(crate) fn allows(needs: &Needs, eligible: &[bool], version: Version) -> bool {
+    let mut known = false;
     for (index, need) in needs.charters.iter().enumerate() {
-        if need.charter == charter {
+        known |= need.version.charter == version.charter;
+        if need.version == version {
             return *eligible.get(index).expect("one bit per configured charter");
         }
     }
-    true
+    !known
 }
 
 /// Declared models in the configured needs' order, without retaining peer-owned names.
@@ -239,7 +248,7 @@ pub(crate) fn evidence(catalogue: &[Box<[u8]>], bounds: &Bounds) -> Bounds {
 pub(crate) fn replace(domain: &mut crate::Domain, limits: &crate::Limits, needs: Needs) {
     assert!(
         match owned_bytes(&needs) {
-            Some(bytes) => bytes <= limits.needs_bytes,
+            Some(bytes) => bytes <= crate::limits::needs_bytes(limits).expect("needs bound"),
             None => false,
         },
         "replacement needs within their bound"
@@ -273,4 +282,30 @@ pub(crate) fn replace(domain: &mut crate::Domain, limits: &crate::Limits, needs:
         }
     }
     domain.placing = true;
+}
+
+/// The selected version's host kinds and non-model bounds. Probes check only
+/// their retained models separately, so an unused alternative cannot block them.
+pub(crate) fn fits(needs: &Needs, version: Version, bounds: &Bounds, kind: HostKind) -> bool {
+    let mut known = false;
+    for charter in &needs.charters {
+        known |= charter.version.charter == version.charter;
+        if charter.version != version {
+            continue;
+        }
+        return charter.kinds.allows(kind)
+            && bounds.turns >= charter.turns
+            && bounds.time >= charter.time
+            && bounds.waiting >= charter.waiting
+            && bounds.spend >= needs.spend
+            && bounds.message_bytes >= needs.message_bytes
+            && bounds.inbox >= needs.start_messages
+            && bounds.unacknowledged >= needs.unacknowledged
+            && match charter.change_reserve {
+                Some(reserve) => bounds.checks <= reserve,
+                None => true,
+            };
+    }
+    // The parent admits charter versions. An unconfigured charter has no needs.
+    !known
 }

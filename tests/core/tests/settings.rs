@@ -1170,3 +1170,79 @@ fn move_to_newest_of_the_newest_moves_nothing_and_an_unknown_revision_is_refused
     assert_eq!(settings_rows(&world), before);
     assert_eq!(world.domain.settings().newest(), 1);
 }
+
+#[test]
+fn a_goal_on_an_older_revision_runs_where_its_version_allows() {
+    let (mut config, mut limits) = configuration();
+    config.core.defaults.charters[0].hosts = fleet::Kinds::Engine;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    limits.core.fleet.engine_slots = 1;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(0),
+        hello: fleet::Hello {
+            bounds: fixtures::bounds(),
+            stop_bound: Duration::from_millis(1),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([]),
+        },
+    })));
+    let goal = held_goal(&mut world, signed, 101);
+    assert_eq!(world.assigned.as_ref().expect("first goal run").run.placement.kind, fleet::HostKind::Engine);
+    let mut charter = world.domain.settings().charter(1).expect("offered charter").clone();
+    charter.hosts = fleet::Kinds::Workers;
+    changed(
+        &change(
+            &mut world,
+            signed,
+            102,
+            1,
+            Box::new([settings::Item {
+                setting: settings::Setting::Charter(1),
+                edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+            }]),
+        ),
+        2,
+    );
+    world.end(jig_domain_tasks::End::Parked, 0);
+    let reply =
+        ask(&mut world, signed, 103, people::Ask::Say { project: 1, task: goal, words: b"Continue".as_slice().into() });
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let next = world.assigned.as_ref().expect("old goal's next run");
+    assert_eq!(next.task, goal);
+    assert_eq!(
+        next.run.placement,
+        fleet::PlacementConstraint { channel: Token::new(0), kind: fleet::HostKind::Engine }
+    );
+    assert_eq!(fixtures::live_row(&world, goal).settings.run, Some(1));
+    fixtures::finish_chat(&mut world, 0, b"Done");
+    let count = world.assignments.len();
+    let newest = held_goal(&mut world, signed, 104);
+    assert_eq!(world.assignments.len(), count, "new work waits for a worker");
+    assert_eq!(fixtures::live_row(&world, newest).settings.task, 2);
+    ready_host(&mut world);
+    let placed = world.assigned.as_ref().expect("new task runs on the arriving worker");
+    assert_eq!(placed.task, newest);
+    assert_eq!(placed.run.placement.kind, fleet::HostKind::Worker);
+}
+
+#[test]
+fn a_template_only_change_places_a_run_by_the_original_charter_version() {
+    let mut world = start(64);
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    let item = template_edit(&world, 7);
+    changed(&change(&mut world, signed, 101, 1, Box::new([item])), 2);
+    ready_host(&mut world);
+    let goal = held_goal(&mut world, signed, 102);
+    assert_eq!(fixtures::live_row(&world, goal).settings.run, Some(2));
+    let run = world.assigned.as_ref().expect("unchanged charter version (1, 1) is placed");
+    assert_eq!(run.task, goal);
+    assert_eq!(run.run.placement.kind, fleet::HostKind::Worker);
+}

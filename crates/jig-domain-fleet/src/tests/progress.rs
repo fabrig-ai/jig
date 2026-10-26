@@ -93,7 +93,7 @@ fn progress_names_are_whole_bounded_and_dropped_reports_do_not_replace_the_last_
     }
     h.step(Event::Start {
         placement: None,
-        charter: 1,
+        version: crate::Version { charter: 1, revision: 1 },
         grants: Box::new([]),
         reply_to: to(A2),
         run: R1,

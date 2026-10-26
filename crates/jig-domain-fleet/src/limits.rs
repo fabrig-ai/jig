@@ -24,6 +24,8 @@ pub struct Limits {
     pub workers: u32,
     /// Owned charter/model requirements retained for admission and placement.
     pub needs_bytes: u64,
+    /// Charter versions held besides the newest (engine.md, 17.8).
+    pub versions: u32,
     /// Slots hosted inside the engine; zero in applications using only workers.
     pub engine_slots: u32,
     /// The most runs a worker hosts at once: slots a hello says beyond them
@@ -103,9 +105,8 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     let keys = Map::<u64, u64>::worst_case(limits.workstreams)?;
     // Each configured charter owns a CharterNeeds, and each host keeps one bool
     // per charter. Model payloads can only lower this maximum charter count.
-    let eligibility = limits
-        .needs_bytes
-        .checked_add(limits.needs_bytes.checked_div(u64::try_from(size_of::<crate::CharterNeeds>()).ok()?)?)?;
+    let needs = needs_bytes(limits)?;
+    let eligibility = needs.checked_add(needs.checked_div(u64::try_from(size_of::<crate::CharterNeeds>()).ok()?)?)?;
     let workers = u64::from(limits.workers).checked_mul(hosts.checked_add(keys)?.checked_add(eligibility)?)?;
     let engine = if limits.engine_slots > 0 {
         Set::<Id<Attempt>>::worst_case(limits.engine_slots)?
@@ -144,6 +145,17 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(turns)?
         .checked_add(facts)?
         .checked_add(crate::history::worst_case(limits.history)?)?
-        .checked_add(limits.needs_bytes)?
+        .checked_add(needs)?
         .checked_add(views)
+}
+
+/// Newest's byte budget plus each retained version's header, model headers and
+/// names. A main model may also occur among the catalogue-sized alternatives.
+pub(crate) fn needs_bytes(limits: &Limits) -> Option<u64> {
+    let model =
+        u64::try_from(size_of::<crate::ModelNeed>()).ok()?.checked_add(u64::from(crate::CATALOGUE_NAME_BYTES))?;
+    let version = u64::try_from(size_of::<crate::CharterNeeds>())
+        .ok()?
+        .checked_add(u64::from(crate::CATALOGUE_MODELS).checked_add(1)?.checked_mul(model)?)?;
+    limits.needs_bytes.checked_add(u64::from(limits.versions).checked_mul(version)?)
 }
