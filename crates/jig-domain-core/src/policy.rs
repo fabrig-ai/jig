@@ -481,7 +481,7 @@ impl Core {
         }
         let mut templates: Box<[people::TemplateOverride]> = Box::new([]);
         if restore(&mut policy, &mut permissions, &mut templates, value, self.authority.limits().requirements).is_none()
-            || !crate::templates::valid(&self.current, &self.settings, &templates)
+            || !self.restored_templates_valid(&templates)
         {
             return false;
         }

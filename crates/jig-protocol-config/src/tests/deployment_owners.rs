@@ -157,6 +157,8 @@ fn first_owners_hold_the_deployments_roles_across_start_and_restart() {
                 RestartRequest::Step(next) => restart = core.restart_done(next),
                 RestartRequest::Idle => break,
                 RestartRequest::Settings { .. }
+                | RestartRequest::HeldPastLimit { .. }
+                | RestartRequest::UnheldRevision { .. }
                 | RestartRequest::ProjectPolicy { .. }
                 | RestartRequest::Refused { .. } => panic!("first-owner restart refused: {restart:?}"),
             }

@@ -157,29 +157,30 @@ fn a_stored_charter_with_an_unconfigured_model_refuses_the_start_naming_the_chan
 }
 
 #[test]
-fn a_live_agent_task_on_a_dropped_charter_refuses_the_start_before_a_release_commits() {
+fn a_start_keeps_a_dropped_charters_version_and_its_task_runs_on_it() {
     let mut world = start(64);
     let signed = sign_in(&mut world);
     world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
     let chat = fixtures::chat(&world, 1, Box::from(b"still live".as_slice()));
     let reply = ask(&mut world, signed, 3, chat);
     assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Created { .. })), "{reply:?}");
+    seed_restart_accounts(&mut world);
     let mut config = configuration().0;
-    config.core.defaults.charters = Box::new([]);
+    // T6 owns versioned fleet needs. Keep the model declared by a replacement
+    // charter while this story restores work whose charter was dropped.
+    config.core.defaults.charters[0].number = 2;
     config.core.defaults.templates = Box::new([]);
     config.core.defaults.policies = skein_lib::Map::with_capacity(0);
     config.core.defaults.rules.ceiling.delegation.kinds = Box::new([]);
-    world.restart_with(config);
-    assert_eq!(
-        world.domain.restore_failure(),
-        Some(core::RestartRequest::Settings {
-            failure: settings::Failure { setting: settings::Setting::Charter(1), fault: settings::Fault::Reference },
-            changed: false
-        })
-    );
-    assert!(world.stopped);
-    assert_eq!(revision(&world, 1, false).head.number, 1, "refused release was never committed");
-    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(2))));
+    restart(&mut world, config);
+    assert!(world.domain.restore_failure().is_none());
+    assert_eq!(revision(&world, 2, false).head.by, settings::Decider::Release);
+    assert_eq!(revision(&world, 1, false).head.number, 1);
+    assert!(world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 1 })));
+    resume_host_after_restart(&mut world);
+    let run = world.assigned.as_ref().expect("the restored task runs on the dropped charter");
+    assert_eq!(run.run.policy.instructions.as_ref(), b"Answer within the granted authority.");
+    assert_eq!(fixtures::live_row(&world, run.task).settings.run, Some(1));
 }
 
 #[test]
@@ -1279,4 +1280,188 @@ fn a_move_uses_the_room_freed_by_its_tasks_for_heads_and_versions() {
         inventory(&mut world, signed).held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(),
         [(2, 1), (3, 2)]
     );
+}
+
+fn held_restart_configuration() -> root::Config {
+    let mut config = configuration().0;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    config
+}
+
+fn runs_after_held_restart(world: &mut World, goal: u64, newest_instructions: &[u8]) {
+    let signed = sign_in(world);
+    let document = inventory(world, signed);
+    assert_eq!(document.held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(), [(1, 1), (2, 0)]);
+    world.assigned = None;
+    resume_host_after_restart(world);
+    let reply =
+        ask(world, signed, 103, people::Ask::Say { project: 1, task: goal, words: b"Continue".as_slice().into() });
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let next = world.assigned.as_ref().expect("restored goal's next run");
+    assert_eq!(next.task, goal);
+    assert_eq!(next.run.policy.instructions.as_ref(), b"Answer within the granted authority.");
+    assert_eq!(fixtures::live_row(world, goal).settings.run, Some(1));
+    fixtures::finish_chat(world, 0, b"Done");
+    let fresh = held_goal(world, signed, 104);
+    let next = world.assigned.as_ref().expect("new goal's run");
+    assert_eq!(next.task, fresh);
+    assert_eq!(next.run.policy.instructions.as_ref(), newest_instructions);
+    assert_eq!(fixtures::live_row(world, fresh).settings.run, Some(2));
+}
+
+#[test]
+fn a_restart_keeps_an_old_revision_held_and_its_goal_runs_on_its_version() {
+    let (mut world, signed, goal) = held_run();
+    seed_restart_accounts(&mut world);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    change_instructions(&mut world, signed);
+    restart(&mut world, held_restart_configuration());
+    runs_after_held_restart(&mut world, goal, b"Instructions from revision two.");
+}
+
+#[test]
+fn a_release_at_a_restart_keeps_the_old_default_for_the_revision_held() {
+    let (mut world, _, goal) = held_run();
+    seed_restart_accounts(&mut world);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    let mut config = held_restart_configuration();
+    config.core.defaults.charters[0].policy.instructions = b"Released default instructions".as_slice().into();
+    restart(&mut world, config);
+    assert_eq!(revision(&world, 2, false).head.by, settings::Decider::Release);
+    let root::Record::Core(core::Record::Core(core::CoreRecord::Settings(settings::Record::Charter { value, .. }))) =
+        &world.store.rows[&key(settings::Key::Charter { charter: 1, revision: 1 })]
+    else {
+        panic!("kept default version")
+    };
+    assert_eq!(
+        value.charter.as_ref().expect("the old default is present").policy.instructions.as_ref(),
+        b"Answer within the granted authority."
+    );
+    // The saved default stamp must keep the next start on the same release.
+    let mut config = held_restart_configuration();
+    config.core.defaults.charters[0].policy.instructions = b"Released default instructions".as_slice().into();
+    restart(&mut world, config);
+    assert_eq!(world.domain.settings().newest(), 2);
+    runs_after_held_restart(&mut world, goal, b"Released default instructions");
+}
+
+#[test]
+fn held_revisions_past_a_lowered_limit_refuse_the_start_naming_the_limit() {
+    let (config, mut limits) = configuration();
+    limits.core.settings.revisions = 2;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    for number in 1..=2 {
+        held_goal(&mut world, signed, 110 + number);
+        world.end(jig_domain_tasks::End::Parked, 0);
+        let item = instructions_edit(&world, &[number]);
+        changed(&change(&mut world, signed, 120 + number, u32::from(number), Box::new([item])), u32::from(number) + 1);
+    }
+    let before = world.store.rows.clone();
+    let commits = world.store.applied;
+    limits.core.settings.revisions = 1;
+    peers::journal(&mut limits);
+    world.restart_with_limits(configuration().0, limits);
+    assert_eq!(
+        world.domain.restore_failure(),
+        Some(core::RestartRequest::HeldPastLimit { which: core::HeldLimit::Revisions, held: 2, limit: 1 })
+    );
+    assert!(world.stopped);
+    assert!(!world.domain.ready());
+    assert_eq!(world.store.rows, before);
+    assert_eq!(world.store.applied, commits);
+}
+
+#[test]
+fn an_unheld_task_or_run_revision_refuses_the_start_naming_the_task() {
+    for run in [false, true] {
+        let (mut world, _, goal) = held_run();
+        world.end(jig_domain_tasks::End::Parked, 0);
+        let mut row = fixtures::live_row(&world, goal).clone();
+        if run {
+            row.settings.run = Some(91);
+        } else {
+            row.settings.task = 91;
+        }
+        world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
+        let before = world.store.applied;
+        world.restart_with(held_restart_configuration());
+        assert_eq!(
+            world.domain.restore_failure(),
+            Some(core::RestartRequest::UnheldRevision { task: goal, revision: 91 })
+        );
+        assert!(world.stopped);
+        assert_eq!(world.store.applied, before);
+    }
+}
+
+fn resume_host_after_restart(world: &mut World) {
+    ready_host(world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 2, budget: 100, next: None }));
+}
+
+fn seed_restart_accounts(world: &mut World) {
+    // first_start_with_accounts preloads this fake's rows into the first core;
+    // a cold start needs the same account fixture in the store.
+    world.seed(fixtures::account_rows(&configuration().0.core.settings.llm_providers));
+}
+
+#[test]
+fn a_release_past_either_held_limit_refuses_without_committing() {
+    for which in [core::HeldLimit::Revisions, core::HeldLimit::Versions] {
+        let (mut world, _, _) = held_run();
+        seed_restart_accounts(&mut world);
+        world.end(jig_domain_tasks::End::Parked, 0);
+        let mut config = held_restart_configuration();
+        config.core.defaults.charters[0].policy.instructions = b"A release that cannot fit".as_slice().into();
+        let mut limits = configuration().1;
+        match which {
+            core::HeldLimit::Revisions => limits.core.settings.revisions = 0,
+            core::HeldLimit::Versions => limits.core.settings.versions = 0,
+        }
+        peers::journal(&mut limits);
+        let before = world.store.rows.clone();
+        let commits = world.store.applied;
+        world.restart_with_limits(config, limits);
+        assert_eq!(
+            world.domain.restore_failure(),
+            Some(core::RestartRequest::HeldPastLimit { which, held: 1, limit: 0 })
+        );
+        assert!(world.stopped);
+        assert!(!world.domain.ready());
+        assert_eq!(world.store.applied, commits);
+        assert_eq!(world.store.rows, before);
+    }
+}
+
+#[test]
+fn a_restored_run_must_have_a_charter_on_its_held_revision() {
+    let (mut world, signed, goal) = held_run();
+    change_instructions(&mut world, signed);
+    let mut row = fixtures::live_row(&world, goal).clone();
+    row.settings.task = 2;
+    assert_eq!(row.settings.run, Some(1));
+    world.seed(Box::new([
+        root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row)))),
+        record(settings::Record::Charter {
+            charter: 1,
+            revision: 1,
+            value: settings::CharterVersion { charter: None },
+        }),
+    ]));
+    let commits = world.store.applied;
+    world.restart_with(held_restart_configuration());
+    assert_eq!(
+        world.domain.restore_failure(),
+        Some(core::RestartRequest::Settings {
+            failure: settings::Failure { setting: settings::Setting::Charter(1), fault: settings::Fault::Reference },
+            changed: true,
+        })
+    );
+    assert!(world.stopped);
+    assert_eq!(world.store.applied, commits);
 }

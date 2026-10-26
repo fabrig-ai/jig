@@ -606,3 +606,131 @@ fn removal_markers_fit_beside_offered_charters_and_held_versions() {
     assert!(core.tasks.charter_models(8, 2).is_some());
     assert!(core.tasks.charter_models(9, 2).is_some());
 }
+
+fn restore_settings_fixture() -> (Core, Limits) {
+    let limits = limits();
+    let mut core = Core::new(config(41), &limits).unwrap();
+    let mut defaults = List::with_capacity(core.current.defaults.len());
+    for (&setting, default) in &core.current.defaults {
+        let mut default = default.clone();
+        if let Setting::Charter(_) = setting {
+            default.revision = 2;
+        }
+        defaults.push(Record::Default { setting, default }).unwrap();
+    }
+    for row in defaults.into_boxed() {
+        assert!(core.restore_setting(row, &limits));
+    }
+    assert!(core.restore_setting(Record::Extent { oldest: 0 }, &limits));
+    (core, limits)
+}
+
+fn restore_head(core: &mut Core, limits: &Limits, number: u32) -> bool {
+    let head = version_head(core, number);
+    core.restore_setting(Record::Revision { history: false, revision: Revision { head, items: Box::new([]) } }, limits)
+}
+
+#[test]
+fn two_held_rows_and_a_charter_row_restore_before_tasks() {
+    for order in [[1, 2], [2, 1]] {
+        let (mut core, limits) = restore_settings_fixture();
+        let charter = core.charter(1).unwrap().clone();
+        for number in order {
+            assert!(restore_head(&mut core, &limits, number));
+        }
+        assert!(core.restore_setting(
+            Record::Charter {
+                charter: 1,
+                revision: 1,
+                value: CharterVersion { charter: Some(Box::new(charter.clone())) },
+            },
+            &limits
+        ));
+        let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+        assert!(core.settings_restored(&env));
+        assert_eq!(core.current.newest(), 2);
+        assert_eq!(core.held.heads.len(), 1);
+        assert_eq!(core.held.heads.get(&1).unwrap().number, 1);
+        assert_eq!(
+            core.held.versions.get(&VersionKey { charter: 1, revision: 1 }).unwrap().charter.as_deref(),
+            Some(&charter)
+        );
+        assert!(core.tasks.charter_models(1, 1).is_some());
+        assert!(!restore_head(&mut core, &limits, 3), "the settings range has ended");
+    }
+}
+
+#[test]
+fn a_charter_row_past_the_limit_refuses_without_retaining_it() {
+    let (mut core, mut limits) = restore_settings_fixture();
+    limits.settings.versions = 0;
+    assert!(restore_head(&mut core, &limits, 2));
+    assert!(!core.restore_setting(
+        Record::Charter {
+            charter: 1,
+            revision: 1,
+            value: CharterVersion { charter: Some(Box::new(core.charter(1).unwrap().clone())) },
+        },
+        &limits
+    ));
+    assert!(core.held.versions.is_empty());
+    let refusal = RestartRequest::HeldPastLimit { which: crate::HeldLimit::Versions, held: 1, limit: 0 };
+    assert_eq!(core.restore_failure(), Some(refusal));
+    assert_eq!(core.restart_done(RestartStep::LoadCore), refusal);
+}
+
+#[test]
+fn a_held_revision_left_without_holders_is_released_by_the_start() {
+    let (mut core, limits) = restore_settings_fixture();
+    assert!(restore_head(&mut core, &limits, 1));
+    assert!(restore_head(&mut core, &limits, 2));
+    let mut old = core.charter(1).unwrap().clone();
+    old.policy.instructions = b"An orphan version".as_slice().into();
+    assert!(core.restore_setting(
+        Record::Charter { charter: 1, revision: 1, value: CharterVersion { charter: Some(Box::new(old)) } },
+        &limits
+    ));
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    let crate::Requests::Out(mut out) = core.commit_restored_settings(&env, crate::room_max(&limits).unwrap().writes);
+    let mut copied = false;
+    let mut erased_head = false;
+    let mut erased_version = false;
+    let mut saved_extent = false;
+    while let Some(request) = out.pop() {
+        if let crate::Request::Write(write) = request {
+            if let crate::Write::CopySettingsRevision(number) = &write {
+                copied |= *number == 1;
+            }
+            if let crate::Write::Erase(key) = &write {
+                erased_head |= *key == crate::Key::Core(crate::CoreKey::Settings(Key::Held(1)));
+                erased_version |=
+                    *key == crate::Key::Core(crate::CoreKey::Settings(Key::Charter { charter: 1, revision: 1 }));
+            }
+            if let crate::Write::Save(crate::Record::Core(CoreRecord::Settings(Record::Extent { oldest }))) = write {
+                saved_extent |= oldest == 1;
+            }
+        }
+    }
+    assert!(core.held.heads.is_empty());
+    assert!(core.held.versions.is_empty());
+    assert!(copied);
+    assert!(erased_head);
+    assert!(erased_version);
+    assert!(saved_extent);
+}
+
+#[test]
+fn a_settings_commit_before_the_first_start_seed_keeps_the_supplied_defaults() {
+    let limits = limits();
+    let configured = config(41);
+    let rules = configured.defaults.rules.clone();
+    let mut core = Core::new(configured, &limits).unwrap();
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    let crate::Requests::Out(out) = core.commit_restored_settings(&env, crate::room_max(&limits).unwrap().writes);
+    assert!(out.is_empty());
+    assert_eq!(core.current.rules(), &rules);
+    let mut writes = skein_lib::Queue::with_capacity(crate::room_max(&limits).unwrap().writes);
+    assert!(restart::first_start(&mut core, &env, &mut writes));
+    assert!(!writes.is_empty());
+    assert_eq!(core.current.newest(), 1);
+}

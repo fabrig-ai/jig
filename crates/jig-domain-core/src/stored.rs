@@ -377,13 +377,24 @@ impl Core {
                     jig_domain_tasks::Executor::Procedure { .. } | jig_domain_tasks::Executor::Person(_) => None,
                 };
                 if let Some(number) = number {
-                    let valid = match self.charter_at(number, task.settings.task) {
-                        Some(charter) => match &task.llm {
-                            Some(choice) => crate::llm::takes(&self.settings.models, &charter.policy, choice),
-                            None => true,
-                        },
-                        None => false,
-                    };
+                    let mut versions = true;
+                    for revision in [Some(task.settings.task), task.settings.run].into_iter().flatten() {
+                        if !self.held(revision) {
+                            self.restore_failure =
+                                Some(crate::RestartRequest::UnheldRevision { task: task.number, revision });
+                            let _refused = self.restart_refuse();
+                            return false;
+                        }
+                        versions &= self.charter_at(number, revision).is_some();
+                    }
+                    let valid = versions
+                        && match self.charter_at(number, task.settings.task) {
+                            Some(charter) => match &task.llm {
+                                Some(choice) => crate::llm::takes(&self.settings.models, &charter.policy, choice),
+                                None => true,
+                            },
+                            None => false,
+                        };
                     if !valid {
                         let _request = self.refuse_settings(crate::settings::Failure {
                             setting: crate::settings::Setting::Charter(number),

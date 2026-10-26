@@ -544,6 +544,8 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
                 core::RestartRequest::Step(step) => domain.restart_load = Some(step),
                 core::RestartRequest::Idle
                 | core::RestartRequest::Settings { .. }
+                | core::RestartRequest::HeldPastLimit { .. }
+                | core::RestartRequest::UnheldRevision { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
                 | core::RestartRequest::Refused { .. } => {}
             }
@@ -745,6 +747,8 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
             Work::Restart(request) => match request {
                 core::RestartRequest::Idle => {}
                 core::RestartRequest::Settings { .. }
+                | core::RestartRequest::HeldPastLimit { .. }
+                | core::RestartRequest::UnheldRevision { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
                 | core::RestartRequest::Refused { .. } => {
                     domain.stopped_reported = false;

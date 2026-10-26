@@ -78,8 +78,27 @@ pub enum RestartStep {
     Open,
 }
 
+/// The held settings bound that prevents a cold start (engine.md, 17.7–17.8).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HeldLimit {
+    Revisions,
+    Versions,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartRequest {
+    /// Held settings revisions or charter versions past a limit lowered since the stop
+    /// (engine.md, 17.7, "past limits").
+    HeldPastLimit {
+        which: HeldLimit,
+        held: u32,
+        limit: u32,
+    },
+    /// A live task records a settings revision the store holds no record of.
+    UnheldRevision {
+        task: u64,
+        revision: u32,
+    },
     Settings {
         failure: crate::settings::Failure,
         changed: bool,

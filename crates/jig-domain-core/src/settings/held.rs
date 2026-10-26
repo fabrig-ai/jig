@@ -144,6 +144,33 @@ impl Held {
         plan
     }
 
+    /// A release removes a default itself, so no Changed row will name its
+    /// removal. Keep the same absence barrier as an erased owner removal.
+    pub(crate) fn plan_release(
+        &self,
+        current: &Current,
+        items: &[Item],
+        newest: u32,
+        held: &Map<u32, ()>,
+        limits: &Limits,
+    ) -> Plan {
+        let mut plan = self.plan_held(current, items, newest, held, limits);
+        for item in items {
+            if let (Setting::Charter(charter), Edit::Removed) = (item.setting, &item.edit) {
+                let mut older = false;
+                for (&key, ()) in &plan.keep {
+                    older |= key.charter == charter && key.revision < newest;
+                }
+                if older {
+                    let key = VersionKey { charter, revision: newest };
+                    plan.candidates.insert(key, ()).expect("release removal name");
+                    plan.keep.insert(key, ()).expect("release removal barrier");
+                }
+            }
+        }
+        plan
+    }
+
     /// Commit a preflighted selection, moving existing values only once.
     #[expect(clippy::manual_map, reason = "step code keeps charter ownership explicit without a closure")]
     pub(crate) fn retain(&mut self, current: &Current, plan: &Plan, out: &mut Queue<Request>) -> bool {
@@ -242,8 +269,20 @@ impl Core {
     }
 
     pub(crate) fn release_revision(&mut self, env: &Env<Limits>, revision: u32, out: &mut Queue<Request>) {
-        if self.held.heads.remove(&revision).is_none() {
+        if !self.archive_revision(env, revision, out) {
             return;
+        }
+        let plan = self.held.plan(&self.current, &[], self.current.newest(), None, &env.limits);
+        if self.held.retain(&self.current, &plan, out) {
+            self.tell_replaced_settings(env, false, true);
+        }
+        self.touch_settings();
+    }
+
+    /// Archive the head separately so a start can prune all versions in one plan.
+    pub(crate) fn archive_revision(&mut self, env: &Env<Limits>, revision: u32, out: &mut Queue<Request>) -> bool {
+        if self.held.heads.remove(&revision).is_none() {
+            return false;
         }
         assert!(self.tasks.holders(revision) == 0, "released revision has no live holder");
         let cutoff = self.current.newest().saturating_sub(env.limits.settings.history).max(1);
@@ -252,11 +291,7 @@ impl Core {
             self.current.oldest = if self.current.oldest == 0 { revision } else { self.current.oldest.min(revision) };
         }
         out.push(Request::Write(Write::Erase(crate::Key::Core(CoreKey::Settings(Key::Held(revision))))));
-        let plan = self.held.plan(&self.current, &[], self.current.newest(), None, &env.limits);
-        if self.held.retain(&self.current, &plan, out) {
-            self.tell_replaced_settings(env, false, true);
-        }
-        self.touch_settings();
+        true
     }
 
     /// Coalesce extent changes after all sibling routes, before the decision's mark.

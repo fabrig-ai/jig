@@ -22,6 +22,8 @@ pub(crate) fn route(
     match request {
         core::RestartRequest::Idle
         | core::RestartRequest::Settings { .. }
+        | core::RestartRequest::HeldPastLimit { .. }
+        | core::RestartRequest::UnheldRevision { .. }
         | core::RestartRequest::ProjectPolicy { .. }
         | core::RestartRequest::Refused { .. } => {}
         core::RestartRequest::Step(step) => match step {

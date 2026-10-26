@@ -182,6 +182,12 @@ impl World {
         self.observer.fresh_mark(self.wall, &self.store);
     }
 
+    /// Cold start after the owner lowers limits between processes.
+    pub fn restart_with_limits(&mut self, config: root::Config, limits: root::Limits) {
+        self.limits = limits;
+        self.restart_with(config);
+    }
+
     /// Cold start with the same scenario configuration, including its host slots.
     pub fn restart_with(&mut self, config: root::Config) {
         self.observer.observe(self.wall, crate::referee::Observed::Restart);

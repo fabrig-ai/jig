@@ -362,8 +362,9 @@ pub fn revision_worst_case(limits: &crate::Limits) -> Option<u64> {
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
     let count = capacity(limits)?;
     let maps = Map::<Setting, Default>::worst_case(count)?.checked_add(Map::<Setting, Changed>::worst_case(count)?)?;
-    let restore =
-        Map::<Setting, bool>::worst_case(count.checked_mul(2)?)?.checked_add(Map::<Setting, ()>::worst_case(count)?)?;
+    let restore = Map::<Setting, bool>::worst_case(count.checked_mul(2)?)?
+        .checked_add(Map::<Setting, Default>::worst_case(count)?)?
+        .checked_add(set_worst_case(limits)?)?;
     let walks = Map::<Setting, ()>::worst_case(count.checked_mul(4)?)?
         .checked_add(List::<Setting>::worst_case(count.checked_mul(4)?)?)?
         .checked_add(List::<jig_domain_tasks::CharterModels>::worst_case(
