@@ -1,7 +1,9 @@
 //! Private values kept before their owners use them (store.md, section 9).
 use crate::{
-    Below, CARRIED, Event, HELD, Limits, Phase, SecretOwner, SecretRow, Secrets, Store, directory, keys, open,
+    Below, CARRIED, CarriedKind, Event, HELD, Limits, Phase, SecretOwner, SecretRow, SecretValue, Secrets, Store,
+    directory, keys, open,
 };
+pub(super) mod codec;
 use alloc::boxed::Box;
 use skein_lib::{Env, List, Map, Queue, Secret, Token, sha256};
 
@@ -68,7 +70,9 @@ pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<SecretRow>::worst_case(limits.secrets.page.rows)?)?
         .checked_add(List::<skein_kv::Row>::worst_case(limits.secrets.page.rows)?)?
         .checked_add(List::<skein_kv::Op>::worst_case(limits.secrets.ops)?)?
-        .checked_add(u64::from(limits.secrets.value).checked_mul(2)?)?
+        // A conditional write holds its encoded replacement while decoding
+        // a durable row into its payload: three value buffers at that peak.
+        .checked_add(u64::from(limits.secrets.value).checked_mul(3)?)?
         .checked_add(32)?
         .checked_add(u64::from(limits.secrets.page.bytes).checked_mul(2)?)
 }
@@ -80,7 +84,7 @@ fn prefix(owner: SecretOwner) -> [u8; 2] {
         SecretOwner::Source => [3, 0],
     }
 }
-fn key(owner: SecretOwner, number: u64, limit: u32) -> Option<Box<[u8]>> {
+pub(super) fn key(owner: SecretOwner, number: u64, limit: u32) -> Option<Box<[u8]>> {
     let [tag, owner] = prefix(owner);
     let mut key = skein_kv::KeyWriter::new(limit);
     key.tag(tag).tag(owner).u64(number);
@@ -233,7 +237,11 @@ fn held(store: &mut Store, env: &Env<Limits>, key: &[u8], below: &mut Below) -> 
         }
     }
     match durable(store, env, Box::from(key), below)? {
-        Some(value) => Ok(Some(sha256::digest(&value))),
+        Some(value) => {
+            let (kind, number) = read_key(key).ok_or(())?;
+            let value = codec::decode(kind, number, value).ok_or(())?;
+            Ok(Some(codec::digest(&value)))
+        }
         None => Ok(None),
     }
 }
@@ -252,20 +260,20 @@ pub(crate) fn secrets(
     match request {
         Secrets::Keep { owner: kind, number, value } => keep(store, env, owner, (kind, number), value, above, below),
         Secrets::Replace { owner: kind, number, value, replaces } => {
-            if too_large(store, &value) {
+            let Some(value) = prepare(store, kind, number, value) else {
                 store.phase = Phase::Stopped;
                 return;
-            }
+            };
             let Some(key) = key(kind, number, store.limits.secrets.key) else {
                 store.phase = Phase::Stopped;
                 return;
             };
             let Ok(holds) = held(store, env, &key, below) else {
-                store.phase = Phase::Stopped;
+                corrupt(store, owner, above);
                 return;
             };
             if holds == replaces {
-                keep(store, env, owner, (kind, number), value, above, below);
+                write(store, env, owner, key, value, above, below);
             } else {
                 above.push(Event::Stale { owner });
             }
@@ -277,7 +285,7 @@ pub(crate) fn secrets(
             adopt_value(store, env, owner, (kind, number), (carried, holds, replaces, value), above, below);
         }
         Secrets::Hold { value } => hold(store, owner, value, above),
-        Secrets::Carry { value } => carry(store, env, owner, value, above, below),
+        Secrets::Carry { kind, value } => carry(store, env, owner, (kind, value), above, below),
         Secrets::Erase { owner: kind, number } => {
             if kind == SecretOwner::Application && number >= HELD {
                 let _removed = store.secret_state.held.remove(&number);
@@ -291,22 +299,7 @@ pub(crate) fn secrets(
             let ops = Box::new([skein_kv::Op::Erase { key: key.clone() }]);
             submit(store, env, ops, Pending::Write { owner, key, holds: None }, above, below);
         }
-        Secrets::Get { owner: kind, number } => {
-            if kind == SecretOwner::Application && number >= HELD {
-                let value = store.secret_state.held.get(&number).cloned();
-                above.push(Event::Secret { owner, value });
-                return;
-            }
-            let Some(key) = key(kind, number, store.limits.secrets.key) else {
-                store.phase = Phase::Stopped;
-                return;
-            };
-            match durable(store, env, key, below) {
-                Ok(Some(value)) => above.push(Event::Secret { owner, value: Some(Secret::new(value)) }),
-                Ok(None) => above.push(Event::Secret { owner, value: None }),
-                Err(()) => store.phase = Phase::Stopped,
-            }
-        }
+        Secrets::Get { owner: kind, number } => get(store, env, owner, (kind, number), above, below),
         Secrets::Load { owner: kind, after } => {
             let mut range = skein_kv::Range::prefix(&prefix(kind));
             if let Some(number) = after {
@@ -332,9 +325,11 @@ pub(crate) fn secrets(
                     return;
                 };
                 last = Some(number);
-                found
-                    .push(SecretRow { owner: kind, number, value: Secret::new(row.value) })
-                    .expect("bounded secret page");
+                let Some(value) = codec::decode(kind, number, row.value) else {
+                    corrupt(store, owner, above);
+                    return;
+                };
+                found.push(SecretRow { owner: kind, number, value }).expect("bounded secret page");
             }
             above.push(Event::SecretsLoaded {
                 owner,
@@ -354,6 +349,14 @@ fn adopt(
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
+    if kind != SecretOwner::Source {
+        store.phase = Phase::Stopped;
+        return;
+    }
+    if !(CARRIED..HELD).contains(&carried) {
+        above.push(Event::Stale { owner });
+        return;
+    }
     let Some(target) = key(kind, number, store.limits.secrets.key) else {
         store.phase = Phase::Stopped;
         return;
@@ -363,11 +366,11 @@ fn adopt(
         return;
     };
     let Ok(target_digest) = held(store, env, &target, below) else {
-        store.phase = Phase::Stopped;
+        corrupt(store, owner, above);
         return;
     };
     let Ok(carried_digest) = held(store, env, &carried, below) else {
-        store.phase = Phase::Stopped;
+        corrupt(store, owner, above);
         return;
     };
     if target == carried || target_digest != replaces || carried_digest.is_none() {
@@ -385,11 +388,33 @@ fn adopt(
             return;
         }
     };
-    let holds = sha256::digest(&value);
+    let value = match codec::decode(SecretOwner::Application, read_key(&carried).expect("carried key").1, value) {
+        Some(SecretValue::Carried { kind: CarriedKind::Key, value }) => value,
+        Some(SecretValue::Carried { kind: CarriedKind::Value | CarriedKind::Moved, .. }) => {
+            above.push(Event::Stale { owner });
+            return;
+        }
+        Some(
+            SecretValue::Digest { .. }
+            | SecretValue::Record(_)
+            | SecretValue::Key(_)
+            | SecretValue::Application(_)
+            | SecretValue::Held(_),
+        )
+        | None => {
+            corrupt(store, owner, above);
+            return;
+        }
+    };
+    let holds = sha256::digest(value.expose());
     if Some(holds) != carried_digest {
         above.push(Event::Stale { owner });
         return;
     }
+    let Some(value) = encode(store, SecretValue::Key(value)) else {
+        store.phase = Phase::Stopped;
+        return;
+    };
     let ops =
         Box::new([skein_kv::Op::Put { key: target.clone(), value }, skein_kv::Op::Erase { key: carried.clone() }]);
     submit(store, env, ops, Pending::Adopt { owner, key: target, holds, carried }, above, below);
@@ -401,12 +426,16 @@ fn adopt_value(
     env: &Env<Limits>,
     owner: Token,
     (kind, number): (SecretOwner, u64),
-    (carried, holds, replaces, value): (u64, [u8; 32], Option<[u8; 32]>, Secret),
+    (carried, holds, replaces, value): (u64, [u8; 32], Option<[u8; 32]>, SecretValue),
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
-    if too_large(store, &value) {
+    let Some(Encoded { value, holds: digest }) = prepare(store, kind, number, value) else {
         store.phase = Phase::Stopped;
+        return;
+    };
+    if !(CARRIED..HELD).contains(&carried) {
+        above.push(Event::Stale { owner });
         return;
     }
     let Some(target) = key(kind, number, store.limits.secrets.key) else {
@@ -418,47 +447,77 @@ fn adopt_value(
         return;
     };
     let Ok(target_digest) = held(store, env, &target, below) else {
-        store.phase = Phase::Stopped;
+        corrupt(store, owner, above);
         return;
     };
     let Ok(carried_digest) = held(store, env, &carried, below) else {
-        store.phase = Phase::Stopped;
+        corrupt(store, owner, above);
         return;
     };
     if target == carried || target_digest != replaces || carried_digest != Some(holds) {
         above.push(Event::Stale { owner });
         return;
     }
-    let holds = sha256::digest(value.expose());
-    let ops = Box::new([
-        skein_kv::Op::Put { key: target.clone(), value: Box::from(value.expose()) },
-        skein_kv::Op::Erase { key: carried.clone() },
-    ]);
+    let holds = digest;
+    let ops =
+        Box::new([skein_kv::Op::Put { key: target.clone(), value }, skein_kv::Op::Erase { key: carried.clone() }]);
     submit(store, env, ops, Pending::Adopt { owner, key: target, holds, carried }, above, below);
 }
 fn too_large(store: &Store, value: &Secret) -> bool {
     value.len() > usize::try_from(store.limits.secrets.value).expect("secret limit fits usize")
+}
+struct Encoded {
+    value: Box<[u8]>,
+    holds: [u8; 32],
+}
+fn encode(store: &Store, value: SecretValue) -> Option<Box<[u8]>> {
+    let bytes = codec::encode(value, store.limits.secrets.value)?;
+    if bytes.len() > usize::try_from(store.limits.secrets.value).expect("secret limit fits usize") {
+        return None;
+    }
+    Some(bytes)
+}
+fn prepare(store: &Store, kind: SecretOwner, number: u64, value: SecretValue) -> Option<Encoded> {
+    if !codec::accepts(kind, number, &value) {
+        return None;
+    }
+    let holds = codec::digest(&value);
+    Some(Encoded { value: encode(store, value)?, holds })
 }
 fn keep(
     store: &mut Store,
     env: &Env<Limits>,
     owner: Token,
     (kind, number): (SecretOwner, u64),
-    value: Secret,
+    value: SecretValue,
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
-    if too_large(store, &value) {
+    let Some(value) = prepare(store, kind, number, value) else {
         store.phase = Phase::Stopped;
         return;
-    }
+    };
     let Some(key) = key(kind, number, store.limits.secrets.key) else {
         store.phase = Phase::Stopped;
         return;
     };
-    let holds = Some(sha256::digest(value.expose()));
-    let ops = Box::new([skein_kv::Op::Put { key: key.clone(), value: Box::from(value.expose()) }]);
-    submit(store, env, ops, Pending::Write { owner, key, holds }, above, below);
+    write(store, env, owner, key, value, above, below);
+}
+fn write(
+    store: &mut Store,
+    env: &Env<Limits>,
+    owner: Token,
+    key: Box<[u8]>,
+    value: Encoded,
+    above: &mut Queue<Event>,
+    below: &mut Below,
+) {
+    let ops = Box::new([skein_kv::Op::Put { key: key.clone(), value: value.value }]);
+    submit(store, env, ops, Pending::Write { owner, key, holds: Some(value.holds) }, above, below);
+}
+fn corrupt(store: &mut Store, owner: Token, above: &mut Queue<Event>) {
+    store.phase = Phase::Stopped;
+    above.push(Event::Corrupt { owner });
 }
 /// The row holding the next carried number, beside the application's
 /// values (store.md 9).
@@ -478,11 +537,7 @@ fn next_carried(store: &mut Store, env: &Env<Limits>, below: &mut Below) -> Resu
     let next = match durable(store, env, key, below)? {
         None => CARRIED,
         Some(row) => {
-            let bytes: Result<[u8; 8], _> = (*row).try_into();
-            let Ok(bytes) = bytes else {
-                return Err(());
-            };
-            let next = u64::from_be_bytes(bytes);
+            let next = codec::next(&row).ok_or(())?;
             if next < CARRIED {
                 return Err(());
             }
@@ -498,16 +553,21 @@ fn carry(
     store: &mut Store,
     env: &Env<Limits>,
     owner: Token,
-    value: Secret,
+    (kind, value): (CarriedKind, Secret),
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
-    if too_large(store, &value) {
+    let holds = sha256::digest(value.expose());
+    let Some(value) = encode(store, SecretValue::Carried { kind, value }) else {
+        store.phase = Phase::Stopped;
+        return;
+    };
+    if store.limits.secrets.value < codec::NEXT_BYTES {
         store.phase = Phase::Stopped;
         return;
     }
     let Ok(number) = next_carried(store, env, below) else {
-        store.phase = Phase::Stopped;
+        corrupt(store, owner, above);
         return;
     };
     if number >= HELD {
@@ -533,10 +593,9 @@ fn carry(
         }
     }
     store.secret_state.carried = Some(after);
-    let holds = sha256::digest(value.expose());
     let ops = Box::new([
-        skein_kv::Op::Put { key: counter, value: Box::from(after.to_be_bytes()) },
-        skein_kv::Op::Put { key: key.clone(), value: Box::from(value.expose()) },
+        skein_kv::Op::Put { key: counter, value: codec::counter(after) },
+        skein_kv::Op::Put { key: key.clone(), value },
     ]);
     submit(store, env, ops, Pending::Carry { owner, key, holds, number }, above, below);
 }
@@ -618,4 +677,35 @@ fn hold(store: &mut Store, owner: Token, value: Secret, above: &mut Queue<Event>
     }
     store.secret_state.next_held = next;
     above.push(Event::Carried { owner, number });
+}
+
+#[expect(clippy::manual_map, reason = "step code translates optional payloads without closures")]
+fn get(
+    store: &mut Store,
+    env: &Env<Limits>,
+    owner: Token,
+    (kind, number): (SecretOwner, u64),
+    above: &mut Queue<Event>,
+    below: &mut Below,
+) {
+    if kind == SecretOwner::Application && number >= HELD {
+        let value = match store.secret_state.held.get(&number) {
+            Some(value) => Some(SecretValue::Held(value.clone())),
+            None => None,
+        };
+        above.push(Event::Secret { owner, value });
+        return;
+    }
+    let Some(key) = key(kind, number, store.limits.secrets.key) else {
+        store.phase = Phase::Stopped;
+        return;
+    };
+    match durable(store, env, key, below) {
+        Ok(Some(value)) => match codec::decode(kind, number, value) {
+            Some(value) => above.push(Event::Secret { owner, value: Some(value) }),
+            None => corrupt(store, owner, above),
+        },
+        Ok(None) => above.push(Event::Secret { owner, value: None }),
+        Err(()) => store.phase = Phase::Stopped,
+    }
 }

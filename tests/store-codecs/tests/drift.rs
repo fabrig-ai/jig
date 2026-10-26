@@ -131,3 +131,8 @@ fn the_stores_layouts_have_no_drift() {
         );
     }
 }
+
+#[test]
+fn the_secrets_familys_code_and_goldens_have_no_drift() {
+    check("secrets", 1);
+}

@@ -592,20 +592,26 @@ fn an_identity_walk_of_another_owners_holder_is_allowed() {
             keys: &[],
         }],
     };
-    let sets = PatchSets { sets: &[HOLDER_SET, JIG] };
-    let found = plan::binary(&PatchSets { sets: &[HOLDER_SET] });
-    let found = Levels { jig: Some(0), ..found };
-    let plan = plan::plan(&sets, &found, &plan::binary(&sets)).expect("plan");
-    let mut machines = machines::make(&sets, &plan, &found, ROOMS).expect("machines");
-    let mut input = Writer::new(13);
-    input.put(&1_u16.to_be_bytes()).expect("holder version");
-    input.put(&7_u32.to_be_bytes()).expect("held bytes");
-    input.put(&1_u16.to_be_bytes()).expect("note version");
-    input.put(&1_u32.to_be_bytes()).expect("note length");
-    input.put(b"a").expect("note text");
-    let (walk, stop) = walk::start(&mut machines, JIG_STEP, FamilyIx(0), "Holder", input.finish()).expect("identity");
-    assert_eq!(stop, Stop::Done);
-    assert_eq!(skein_codec::version_of(walk::finished(&mut machines, &walk).expect("holder")), Ok(1));
+    const SECRET: &str = "family holder 1\nversioned record Holder { note: secret 64 holds fixture-note Note }\n";
+    const SECRET_SET: PatchSet =
+        PatchSet { families: &[KeptFamily { texts: &[SECRET], ..HOLDER_SET.families[0] }], ..HOLDER_SET };
+    for holder in [PatchSets { sets: &[HOLDER_SET, JIG] }, PatchSets { sets: &[SECRET_SET, JIG] }] {
+        let sets = holder;
+        let found = Levels { skein: None, smith: None, jig: Some(0), application: Some(0) };
+        let plan = plan::plan(&sets, &found, &plan::binary(&sets)).expect("plan");
+        let mut machines = machines::make(&sets, &plan, &found, ROOMS).expect("machines");
+        let mut input = Writer::new(13);
+        input.put(&1_u16.to_be_bytes()).expect("holder version");
+        input.put(&7_u32.to_be_bytes()).expect("held bytes");
+        input.put(&1_u16.to_be_bytes()).expect("note version");
+        input.put(&1_u32.to_be_bytes()).expect("note length");
+        input.put(b"a").expect("note text");
+        let (walk, stop) =
+            walk::start(&mut machines, JIG_STEP, FamilyIx(0), "Holder", input.finish()).expect("identity");
+        assert_eq!(stop, Stop::Done);
+        assert_eq!(machines.walked(JIG_STEP).get(0), Some(&true));
+        assert_eq!(skein_codec::version_of(walk::finished(&mut machines, &walk).expect("holder")), Ok(1));
+    }
 }
 #[test]
 fn two_families_holding_each_other_refuse_the_plan() {

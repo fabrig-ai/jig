@@ -182,14 +182,22 @@ fn carried_counter_and_unwalked_values_survive_switch() {
     let records = empty();
     let mut world = records.committed(SEED, patches::BASE);
     assert_eq!(world.open(), Some(1));
-    let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"carried".as_slice())) });
+    let carried = world.secret(Secrets::Carry {
+        kind: jig_protocol_store::CarriedKind::Value,
+        value: Secret::new(Box::from(b"carried".as_slice())),
+    });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
     world.open().expect("patch with carried row");
     let found = world.secret(Secrets::Get { owner: SecretOwner::Application, number: CARRIED_FIRST });
-    assert!(matches!(found.as_slice(), [Event::Secret { value: Some(value), .. }] if value.expose() == b"carried"));
-    let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
+    assert!(
+        matches!(found.as_slice(), [Event::Secret { value: Some(jig_protocol_store::SecretValue::Carried { kind: jig_protocol_store::CarriedKind::Value, value }), .. }] if value.expose() == b"carried")
+    );
+    let carried = world.secret(Secrets::Carry {
+        kind: jig_protocol_store::CarriedKind::Value,
+        value: Secret::new(Box::from(b"next".as_slice())),
+    });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST + 1));
     assert_eq!(patches::counts(&mut world)[2], (b"fixture-token".to_vec(), 0, 0));
 }
@@ -198,14 +206,20 @@ fn carried_counter_and_unwalked_values_survive_switch() {
 fn erased_carried_number_is_never_drawn_after_switch() {
     let mut world = empty().committed(SEED, patches::BASE);
     assert_eq!(world.open(), Some(1));
-    let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"erased".as_slice())) });
+    let carried = world.secret(Secrets::Carry {
+        kind: jig_protocol_store::CarriedKind::Value,
+        value: Secret::new(Box::from(b"erased".as_slice())),
+    });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     let erased = world.secret(Secrets::Erase { owner: SecretOwner::Application, number: CARRIED_FIRST });
     assert!(matches!(erased.as_slice(), [Event::Erased { .. }]));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
     world.open().expect("patch with an erased carried value");
-    let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
+    let carried = world.secret(Secrets::Carry {
+        kind: jig_protocol_store::CarriedKind::Value,
+        value: Secret::new(Box::from(b"next".as_slice())),
+    });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST + 1));
 }
 

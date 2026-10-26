@@ -56,7 +56,7 @@ fn a_stale_adopt_keeps_the_old_llm_key_and_returns_the_carried_value() {
     world.secret(jig_protocol_store::Secrets::Keep {
         owner: SecretOwner::Source,
         number: 7,
-        value: Secret::new(Box::new([8; 32])),
+        value: jig_protocol_store::SecretValue::Key(Secret::new(Box::new([8; 32]))),
     });
     let next = world.carry(&[9; 32]);
     world.keep(7, next, true);

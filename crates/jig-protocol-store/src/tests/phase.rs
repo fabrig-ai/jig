@@ -803,7 +803,10 @@ fn secret_fixture() -> SecretFixture {
                 request: crate::Secrets::Keep {
                     owner: crate::SecretOwner::Application,
                     number,
-                    value: skein_lib::Secret::new(token(b"token", number.checked_add(71).expect("issued"))),
+                    value: crate::SecretValue::Application(skein_lib::Secret::new(token(
+                        b"token",
+                        number.checked_add(71).expect("issued"),
+                    ))),
                 },
             },
         );
@@ -813,7 +816,10 @@ fn secret_fixture() -> SecretFixture {
         &mut store,
         Request::Secrets {
             owner: Token::new(2),
-            request: crate::Secrets::Carry { value: skein_lib::Secret::new(Box::from(b"carried bytes".as_slice())) },
+            request: crate::Secrets::Carry {
+                kind: crate::CarriedKind::Value,
+                value: skein_lib::Secret::new(Box::from(b"carried bytes".as_slice())),
+            },
         },
     );
     let [Event::Carried { number, .. }] = events.as_ref() else { panic!("value carried: {events:?}") };
@@ -821,7 +827,12 @@ fn secret_fixture() -> SecretFixture {
     let key = secret_key(&store, crate::CARRIED);
     let carried = secret_row(&mut store, &key);
     let counter = secret_row(&mut store, &[2, 1]);
-    assert_eq!(counter.as_ref(), &crate::CARRIED.checked_add(1).expect("next carried number").to_be_bytes());
+    assert_eq!(
+        crate::secrets_v1::NextCarried::decode(&crate::secrets_v1::CEILINGS, &mut skein_lib::Reader::new(&counter))
+            .expect("versioned counter")
+            .next(),
+        crate::CARRIED.checked_add(1).expect("next carried number")
+    );
     let key = accounts_key(&store);
     let accounts = fixtures::get_kv(&mut store, &key).expect("accounts counter");
     SecretFixture {

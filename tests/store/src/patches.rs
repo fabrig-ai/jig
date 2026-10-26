@@ -220,7 +220,9 @@ impl Records {
             let events = world.secret(Secrets::Keep {
                 owner: SecretOwner::Application,
                 number: *number,
-                value: Secret::new(token(bytes, *number, version).into_boxed_slice()),
+                value: jig_protocol_store::SecretValue::Application(Secret::new(
+                    token(bytes, *number, version).into_boxed_slice(),
+                )),
             });
             assert!(matches!(events.as_slice(), [Event::Kept { .. }]), "token kept: {events:?}");
         }
@@ -232,7 +234,9 @@ impl Records {
     pub fn check(&self, world: &mut World, version: u16, context: &dyn std::fmt::Debug) {
         for (number, bytes) in &self.tokens {
             let events = world.secret(Secrets::Get { owner: SecretOwner::Application, number: *number });
-            let [Event::Secret { value: Some(value), .. }] = events.as_slice() else {
+            let [Event::Secret { value: Some(jig_protocol_store::SecretValue::Application(value)), .. }] =
+                events.as_slice()
+            else {
                 panic!("token {number}: {events:?}, {context:?}");
             };
             assert_eq!(value.expose(), token(bytes, *number, version), "token {number}, {context:?}");
