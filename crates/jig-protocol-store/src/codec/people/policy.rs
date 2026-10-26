@@ -349,6 +349,10 @@ pub(super) fn encode_policy_change(
     limits: &wire::Limits,
 ) -> Result<wire::PolicyChange, wire::Problem> {
     Ok(match value {
+        domain::PolicyChange::Ceiling { ceiling } => wire::PolicyChange::Ceiling(wire::PolicyChangeCeiling::new(
+            limits,
+            wire::PolicyChangeCeilingParts { ceiling: encode_authority(ceiling, limits)? },
+        )?),
         domain::PolicyChange::Templates { overrides } => {
             wire::PolicyChange::Templates(wire::PolicyChangeTemplates::new(
                 limits,
@@ -419,6 +423,9 @@ pub(super) fn decode_policy_change(
     limits: &wire::Limits,
 ) -> Result<domain::PolicyChange, wire::Problem> {
     Ok(match value {
+        wire::PolicyChange::Ceiling(value) => {
+            domain::PolicyChange::Ceiling { ceiling: decode_authority(value.into_parts().ceiling, limits)? }
+        }
         wire::PolicyChange::Templates(value) => {
             domain::PolicyChange::Templates { overrides: decode_templates(value.into_parts().overrides) }
         }

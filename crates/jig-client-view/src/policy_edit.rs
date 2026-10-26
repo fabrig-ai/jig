@@ -46,6 +46,7 @@ pub fn required(value: &PolicyEdit, words: &Words, rows: u32) -> Option<PolicyFr
     let phrase = match value {
         PolicyEdit::Templates { .. } => return None,
         PolicyEdit::ProjectSpend { .. } | PolicyEdit::RoleSpend { .. } => JigPhrase::PolicyPeriodSpend,
+        PolicyEdit::Ceiling { .. } => JigPhrase::PolicyCeiling,
         PolicyEdit::Role(_) => JigPhrase::PolicyEditRole,
         PolicyEdit::Requirements { .. } => JigPhrase::PolicyRequirements,
         PolicyEdit::Projections { .. } => JigPhrase::PolicyProjections,
@@ -60,6 +61,12 @@ pub fn required(value: &PolicyEdit, words: &Words, rows: u32) -> Option<PolicyFr
             result.phrase(words, JigPhrase::PolicyPeriodSpend)?;
         }
         PolicyEdit::ProjectSpend { .. } => result.phrase(words, JigPhrase::PolicyPeriodSpend)?,
+        PolicyEdit::Ceiling { ceiling } => {
+            let authority = crate::owner_authority::required_words(ceiling, words, rows)?;
+            result.nodes = result.nodes.checked_add(authority.nodes)?;
+            result.text_bytes = result.text_bytes.checked_add(authority.text_bytes)?;
+            result.text_per_node = result.text_per_node.max(authority.text_per_node);
+        }
         PolicyEdit::Role(role) => {
             for phrase in [
                 JigPhrase::PolicyEditRole,
@@ -142,6 +149,7 @@ pub fn render(b: &mut Builder, value: &PolicyEdit, words: &Words, text_limit: u3
         PolicyEdit::ProjectSpend { period_spend } | PolicyEdit::RoleSpend { period_spend, .. } => {
             words.say(JigPhrase::PolicyPeriodSpend, &[Hole::Amount(*period_spend)])
         }
+        PolicyEdit::Ceiling { .. } => words.say(JigPhrase::PolicyCeiling, &[]),
         PolicyEdit::Role(role) => words.say(JigPhrase::PolicyEditRole, &[Hole::Number(u64::from(role.number))]),
         PolicyEdit::Requirements { .. } => words.say(JigPhrase::PolicyRequirements, &[]),
         PolicyEdit::Projections { .. } => words.say(JigPhrase::PolicyProjections, &[]),
@@ -157,6 +165,9 @@ pub fn render(b: &mut Builder, value: &PolicyEdit, words: &Words, text_limit: u3
         PolicyEdit::RoleSpend { role, period_spend } => {
             words.text(b, JigPhrase::RoleNumber, &[Hole::Number(u64::from(*role))]);
             words.text(b, JigPhrase::PolicyPeriodSpend, &[Hole::Amount(*period_spend)]);
+        }
+        PolicyEdit::Ceiling { ceiling } => {
+            crate::owner_authority::render_words(b, ceiling, words, text_limit, rows);
         }
         PolicyEdit::Role(role) => {
             words.text(b, JigPhrase::PolicyEditRole, &[Hole::Number(u64::from(role.number))]);

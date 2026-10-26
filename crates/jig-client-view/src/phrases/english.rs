@@ -272,6 +272,7 @@ pub fn language() -> Language {
                 Segment::Text(copy_of(b"Period spend: ")),
                 Segment::Hole { index: 0, kind: HoleKind::Amount },
             ]),
+            JigPhrase::PolicyCeiling => Box::new([Segment::Text(copy_of(b"Project ceiling"))]),
             JigPhrase::PolicyEditRole => {
                 Box::new([Segment::Text(copy_of(b"Replace role ")), Segment::Hole { index: 0, kind: HoleKind::Number }])
             }

@@ -494,6 +494,9 @@ fn policy(
     names: &mut List<Box<[u8]>>,
 ) -> Result<p::PolicyChange, Untranslatable> {
     Ok(match value {
+        w::PolicyEdit::Ceiling(v) => {
+            p::PolicyChange::Ceiling { ceiling: authority(v.into_parts().ceiling, limits, names)? }
+        }
         w::PolicyEdit::Templates(v) => super::operations::templates(v),
         w::PolicyEdit::RoleSpend(v) => p::PolicyChange::RoleSpend { role: v.role(), period_spend: v.period_spend() },
         w::PolicyEdit::ProjectSpend(v) => p::PolicyChange::ProjectSpend { period_spend: v.period_spend() },
