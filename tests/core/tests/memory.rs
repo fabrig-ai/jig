@@ -22,7 +22,7 @@ fn core_children_routes_and_an_in_flight_decision_fit_the_checked_bound() {
     let measured = meter.end();
     meter.check(measured, bound, &limits.core);
 
-    domain.restart_begin();
+    domain.restart_begin(false);
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.core };
     for event in [
         core::Event::People(people::Event::Restored),

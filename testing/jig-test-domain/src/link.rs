@@ -479,6 +479,7 @@ pub(super) enum Work {
     ConnectorResume {
         number: u16,
     },
+    Switched,
     Restart(core::RestartRequest),
     CallAnswered {
         to: ReplyTo,

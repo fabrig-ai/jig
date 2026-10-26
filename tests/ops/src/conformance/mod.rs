@@ -257,7 +257,7 @@ impl Application for Ops {
                 store.rows.insert(row.key(), row);
             }
         }
-        vec![root::Event::Restart]
+        vec![root::Event::Restart { pending: false }]
     }
     fn cold(peers: &mut Peers, store: &Store, _: Clock) {
         peers.observed.push(r::Observed::ColdStore { receipts: observations::snapshot(store).receipts });
@@ -303,6 +303,7 @@ impl Application for Ops {
                     let mut results = Vec::new();
                     while let Some(write) = writes.pop() {
                         rows.push(match write {
+                            root::Write::Wires => continue,
                             root::Write::Save(row) => {
                                 if let root::Record::Core(core::Record::Tasks(tasks::Stored::Live(parent))) = &row {
                                     for word in &parent.inbox {
@@ -331,6 +332,7 @@ impl Application for Ops {
                 | root::Output::ApplicationRead { .. }
                 | root::Output::IncidentAssociationRefused { .. }
                 | root::Output::Application { .. }
+                | root::Output::Switch
                 | root::Output::Load { .. }
                 | root::Output::ReadResult { .. }
                 | root::Output::CoreLoad(_)
@@ -417,11 +419,13 @@ impl Application for Ops {
                 }
                 vec![Input::Event(root::Event::Released(child))]
             }
+            root::Output::Switch => vec![Input::Event(root::Event::Store(root::Store::Switched))],
             root::Output::Load { step, range } => {
                 let position = match step {
                     core::RestartStep::LoadCore | core::RestartStep::LoadInbox => 0,
                     core::RestartStep::RestoreConnector { connector } => u32::from(connector),
-                    core::RestartStep::AdoptRuns
+                    core::RestartStep::Switch
+                    | core::RestartStep::AdoptRuns
                     | core::RestartStep::ReadAfresh { .. }
                     | core::RestartStep::SettleOutbox { .. }
                     | core::RestartStep::Open => panic!("only row loads go to the store"),

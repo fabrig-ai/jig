@@ -48,6 +48,24 @@ impl Disk {
         self.machine.close(file);
         self.machine.close(root);
     }
+    /// Stable file bytes beneath one directory, for generation-isolation stories.
+    pub fn contents(&mut self, name: &[u8]) -> std::collections::BTreeMap<Vec<u8>, Vec<u8>> {
+        let root = self.machine.reopen_root(0);
+        let mut result = std::collections::BTreeMap::new();
+        collect(&mut self.machine, root, name, &mut result);
+        self.machine.close(root);
+        result
+    }
+    pub fn read(&mut self, name: &[u8]) -> Option<Vec<u8>> {
+        let root = self.machine.reopen_root(0);
+        let bytes = self.machine.open(root, name, How::ReadNoFollow).ok().map(|file| {
+            let bytes = self.machine.read(file, 0, u32::MAX).expect("scenario file");
+            self.machine.close(file);
+            bytes
+        });
+        self.machine.close(root);
+        bytes
+    }
     pub fn answer(&mut self, driver: usize, request: file::Request) -> Arrived {
         let io = &mut self.io[driver];
         let mut events = Queue::with_capacity(QUEUE);
@@ -90,4 +108,26 @@ fn drivers(limits: &Limits, handle: skein_fake_machine::Opened, seed: u64) -> (S
     let [store, secrets, transcripts] = &mut io;
     let seeded = jig_protocol_store::seed([store, secrets, transcripts], seed);
     (sim, pid, Root { token: Token::new(1), fd }, io, seeded)
+}
+
+fn collect(
+    machine: &mut Machine,
+    root: skein_fake_machine::Opened,
+    name: &[u8],
+    into: &mut std::collections::BTreeMap<Vec<u8>, Vec<u8>>,
+) {
+    let file = machine.open(root, name, How::ReadNoFollow).expect("generation path");
+    if machine.stat(file).is == skein_fake_machine::Is::Directory {
+        let entries = machine.list(file, 32, 8192).expect("bounded fixture directory");
+        assert!(entries.len() < 32, "fixture fits one directory page");
+        for (_, entry_name) in entries {
+            let mut child = name.to_vec();
+            child.push(b'/');
+            child.extend_from_slice(&entry_name);
+            collect(machine, root, &child, into);
+        }
+    } else {
+        into.insert(name.to_vec(), machine.read(file, 0, u32::MAX).expect("generation bytes"));
+    }
+    machine.close(file);
 }

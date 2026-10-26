@@ -54,6 +54,8 @@ impl Record {
 pub enum Write {
     /// Atomically copy the old settings revision to history.
     CopySettingsRevision(u32),
+    /// Save the shell-supplied start’s wires.
+    Wires,
     /// Save the owner's row at its key.
     Save(Record),
     /// Erase the owner's address.

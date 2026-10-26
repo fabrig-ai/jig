@@ -84,7 +84,7 @@ impl World {
     #[must_use]
     pub fn first_start(configuration: root::Config, limits: root::Limits) -> World {
         let mut world = Self::empty(configuration, &limits);
-        world.send(root::Event::RestartBegin);
+        world.send(root::Event::RestartBegin { pending: world.store.generation_pending });
         world
     }
 
@@ -97,7 +97,7 @@ impl World {
         for row in rows {
             assert!(root::restore_record(&mut world.domain, &env, row));
         }
-        world.send(root::Event::RestartBegin);
+        world.send(root::Event::RestartBegin { pending: world.store.generation_pending });
         world
     }
 
@@ -228,7 +228,7 @@ impl World {
         world.move_provider =
             configuration.core.settings.llm_providers.providers.first().map(|provider| provider.number);
         world.domain = root::Domain::new(configuration, limits);
-        world.send(root::Event::RestartBegin);
+        world.send(root::Event::RestartBegin { pending: world.store.generation_pending });
         world.hello_engine();
         for (project, budget) in projects {
             world.send(root::Event::Core(core::Event::Period { project, period: 1, budget, next: None }));
@@ -356,6 +356,7 @@ impl World {
             census_ended: 0,
             hold_restart_reads: false,
             hold_restore_pages: false,
+            hold_switch: false,
             store_delay: 0,
             fill: 0,
             stopped: false,
@@ -438,7 +439,7 @@ impl World {
         peers.creating = Some(world.creating.clone());
         world.peers = Some(peers);
         world.cut = cut;
-        world.events.push_back(root::Event::RestartBegin);
+        world.events.push_back(root::Event::RestartBegin { pending: world.store.generation_pending });
         world.hello_engine();
         world.events.push_back(root::Event::Core(core::Event::Account(accounts::Event::Component(
             accounts::FromComponent::Granted {

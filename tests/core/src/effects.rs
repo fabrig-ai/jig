@@ -106,6 +106,7 @@ pub struct World {
     pub hold_restart_reads: bool,
     /// Withhold requested whole store pages during a real cold restore.
     pub hold_restore_pages: bool,
+    pub hold_switch: bool,
     /// Delay before a submitted store transaction becomes durable.
     pub store_delay: u32,
     /// Store map bytes supplied with subsequent commit answers.
@@ -426,6 +427,7 @@ impl World {
                 && (!self.store.loading() || held_restore)
                 && (self.domain.quiescent()
                     || held_restore
+                    || self.hold_switch
                     || !self.store.held.is_empty()
                     || self.reads.as_ref().is_some_and(crate::reads::Parties::paused))
                 && self.watches.as_ref().is_none_or(crate::peers::WatchParties::quiescent)

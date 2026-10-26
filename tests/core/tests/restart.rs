@@ -72,6 +72,7 @@ fn the_restart_script_waits_for_each_step_and_each_connector() {
         core::RestartStep::LoadInbox,
         core::RestartStep::RestoreConnector { connector: 1 },
         core::RestartStep::RestoreConnector { connector: 2 },
+        core::RestartStep::Switch,
         core::RestartStep::AdoptRuns,
         core::RestartStep::ReadAfresh { connector: 1 },
         core::RestartStep::ReadAfresh { connector: 2 },
@@ -79,12 +80,12 @@ fn the_restart_script_waits_for_each_step_and_each_connector() {
         core::RestartStep::SettleOutbox { connector: 2 },
         core::RestartStep::Open,
     ];
-    let mut request = core.restart_begin();
+    let mut request = core.restart_begin(false);
     for step in steps {
         assert_eq!(request, core::RestartRequest::Step(step));
         assert_eq!(core.restart_step(), Some(step));
         assert!(!core.restart_ready());
-        assert_eq!(core.restart_begin(), core::RestartRequest::Idle);
+        assert_eq!(core.restart_begin(false), core::RestartRequest::Idle);
         request = core.restart_done(step);
     }
     assert_eq!(request, core::RestartRequest::Idle);
@@ -97,7 +98,7 @@ fn an_out_of_order_restart_completion_refuses_the_start_naming_its_step() {
     let limits = jig_core_world::world::limits().core;
     let mut core =
         core::Core::new(jig_core_world::world::config(112).core, &limits).expect("fixture core configuration");
-    assert_eq!(core.restart_begin(), core::RestartRequest::Step(core::RestartStep::LoadCore));
+    assert_eq!(core.restart_begin(false), core::RestartRequest::Step(core::RestartStep::LoadCore));
     assert_eq!(
         core.restart_done(core::RestartStep::Open),
         core::RestartRequest::Refused { step: core::RestartStep::LoadCore }
@@ -692,4 +693,27 @@ fn a_restart_keeps_an_unread_goal_older_than_an_unread_conversation() {
     assert!(results.contains(&goal));
     assert_eq!(results[0], chat);
     assert_eq!(census_updates(&mut world, AFTER), updates);
+}
+
+#[test]
+fn a_restart_without_connectors_still_switches_before_adoption() {
+    for pending in [false, true] {
+        let limits = jig_core_world::world::limits().core;
+        let mut config = jig_core_world::world::config(111).core;
+        config.connectors = Box::new([]);
+        config.grants = Box::new([]);
+        let mut core = core::Core::new(config, &limits).expect("no-connector fixture");
+        let mut request = core.restart_begin(pending);
+        for step in [
+            core::RestartStep::LoadCore,
+            core::RestartStep::LoadInbox,
+            core::RestartStep::Switch,
+            core::RestartStep::AdoptRuns,
+            core::RestartStep::Open,
+        ] {
+            assert_eq!(request, core::RestartRequest::Step(step));
+            request = core.restart_done(step);
+        }
+        assert!(core.restart_ready());
+    }
 }

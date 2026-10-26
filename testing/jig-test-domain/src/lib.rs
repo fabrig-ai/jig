@@ -56,6 +56,8 @@ impl Record {
 pub enum Write {
     /// Copy the old settings revision into history atomically.
     CopySettingsRevision(u32),
+    /// The shell-supplied wires, in the start’s own decision.
+    Wires,
     /// Replace the row under its key.
     Save(Record),
     /// Remove the row under its key.
@@ -209,7 +211,11 @@ pub enum Event {
     ConnectorTimer {
         number: u16,
     },
-    RestartBegin,
+    RestartBegin {
+        pending: bool,
+    },
+    /// The generation is active; commit the start’s mark.
+    Switched,
     RestartDone(core::RestartStep),
     /// Drive one due child timer through the same decision barrier.
     Timer(core::Timer),
@@ -385,6 +391,10 @@ impl Domain {
         &self.core.current
     }
     #[must_use]
+    pub fn restart_step(&self) -> Option<core::RestartStep> {
+        self.core.restart_step()
+    }
+    #[must_use]
     pub fn restore_failure(&self) -> Option<core::RestartRequest> {
         self.core.restore_failure()
     }
@@ -538,9 +548,10 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
         Event::WriterRead { connector, resource, event } => {
             decide(domain, env, Work::WriterRead { connector, resource, event });
         }
-        Event::RestartBegin => {
+        Event::Switched => decide(domain, env, Work::Switched),
+        Event::RestartBegin { pending } => {
             domain.restart_active = true;
-            match domain.core.restart_begin() {
+            match domain.core.restart_begin(pending) {
                 core::RestartRequest::Step(step) => domain.restart_load = Some(step),
                 core::RestartRequest::Idle
                 | core::RestartRequest::Settings { .. }
@@ -649,6 +660,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
         | Work::Link { .. }
         | Work::ReadApplication { .. }
         | Work::Application { .. }
+        | Work::Switched
         | Work::Restart(_)
         | Work::AdoptRestored
         | Work::AdoptDone
@@ -742,6 +754,10 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 );
                 route_connector(domain, env, &mut decision, number, &mut out, &mut work);
             }
+            Work::Switched => {
+                write(domain, &mut decision, Write::Wires);
+                hold(&mut decision, Delivery::Restart(core::RestartStep::AdoptRuns));
+            }
             Work::Restart(request) => match request {
                 core::RestartRequest::Idle => {}
                 core::RestartRequest::Settings { .. }
@@ -770,6 +786,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                         hold(&mut decision, Delivery::Restart(step));
                     }
                     core::RestartStep::LoadCore
+                    | core::RestartStep::Switch
                     | core::RestartStep::RestoreConnector { .. }
                     | core::RestartStep::ReadAfresh { .. } => hold(&mut decision, Delivery::Restart(step)),
                 },
@@ -951,6 +968,11 @@ pub fn release(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>)
                     })),
                 );
             }
+            // This continuation belongs to the mark decision. Only its durable
+            // release completes Switch; the core then selects AdoptRuns.
+            Delivery::Restart(core::RestartStep::AdoptRuns) => {
+                step(domain, env, Event::RestartDone(core::RestartStep::Switch));
+            }
             Delivery::Fleet(event) => step(domain, env, Event::Core(core::Event::Fleet(event))),
             Delivery::Core(core::Held::StopRun { task, attempt }) => {
                 step(
@@ -1061,6 +1083,7 @@ fn resume_restart_outbox(domain: &mut Domain, env: &Env<Limits>) -> bool {
             core::RestartStep::LoadCore
             | core::RestartStep::LoadInbox
             | core::RestartStep::RestoreConnector { .. }
+            | core::RestartStep::Switch
             | core::RestartStep::AdoptRuns
             | core::RestartStep::ReadAfresh { .. }
             | core::RestartStep::Open,

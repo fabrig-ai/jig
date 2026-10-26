@@ -262,9 +262,11 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
         | Event::Host(_)
         | Event::Agent(_)
         | Event::AgentContent { .. }
-        | Event::Store(Store::Restore(_) | Store::Restored(_) | Store::Transcript { .. } | Store::Loaded(_))
+        | Event::Store(
+            Store::Switched | Store::Restore(_) | Store::Restored(_) | Store::Transcript { .. } | Store::Loaded(_),
+        )
         | Event::Released(_)
-        | Event::Restart
+        | Event::Restart { .. }
         | Event::Timer(_)
         | Event::ObservabilityTimer
         | Event::InfrastructureTimer

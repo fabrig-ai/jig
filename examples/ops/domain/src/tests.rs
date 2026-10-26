@@ -184,6 +184,7 @@ fn a_connector_read_answer_uses_the_door_and_makes_no_commit() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "one cold-start story checks every output through the commit barrier")]
 fn cold_restart_loads_every_child_before_opening_decisions() {
     let (mut original, env) = fixture();
     step(&mut original, &env, name(1));
@@ -196,11 +197,15 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
                         crate::Write::Save(
                             record @ crate::Record::Core(core::Record::Core(core::CoreRecord::Deployment(_))),
                         ) => header = Some(record),
-                        crate::Write::Save(_) | crate::Write::Erase(_) | crate::Write::CopySettingsRevision(_) => {}
+                        crate::Write::Wires
+                        | crate::Write::Save(_)
+                        | crate::Write::Erase(_)
+                        | crate::Write::CopySettingsRevision(_) => {}
                     }
                 }
             }
-            Output::Load { .. }
+            Output::Switch
+            | Output::Load { .. }
             | Output::ReadResult { .. }
             | Output::CoreLoad(_)
             | Output::Core(_)
@@ -221,7 +226,7 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
     }
     assert!(header.is_some());
     let (mut domain, _) = fixture();
-    step(&mut domain, &env, Event::Restart);
+    step(&mut domain, &env, Event::Restart { pending: false });
     let mut loads = List::with_capacity(16);
     for _ in 0..16_u32 {
         for output in take(&mut domain, &env) {
@@ -232,6 +237,7 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
                 }))) => {
                     assert_eq!(account, 1);
                 }
+                Output::Switch => step(&mut domain, &env, Event::Store(Store::Switched)),
                 Output::Load { step: stage, .. } => {
                     loads.push(stage).unwrap();
                     if let Some(record) = header.take() {
@@ -312,7 +318,8 @@ fn settle(domain: &mut Domain, env: &Env<Limits>) -> Box<[Output]> {
                         more: false,
                     })),
                 ),
-                other @ (Output::Load { .. }
+                other @ (Output::Switch
+                | Output::Load { .. }
                 | Output::ReadResult { .. }
                 | Output::CoreLoad(_)
                 | Output::Core(_)
@@ -392,6 +399,7 @@ fn started_chat() -> (Domain, Env<Limits>, Token) {
                 reply: people::Reply::SignedIn { sign_in: session, .. }, ..
             }) => sign_in = Some(session),
             Output::Commit { .. }
+            | Output::Switch
             | Output::Load { .. }
             | Output::ReadResult { .. }
             | Output::CoreLoad(_)
@@ -430,6 +438,7 @@ fn started_chat() -> (Domain, Env<Limits>, Token) {
             Output::Agent(host::ToAgent::Start { owner, .. }) => started = Some(*owner),
             Output::Agent(_)
             | Output::Commit { .. }
+            | Output::Switch
             | Output::Load { .. }
             | Output::ReadResult { .. }
             | Output::CoreLoad(_)
@@ -569,6 +578,7 @@ fn connector_documents_and_reads_share_the_last_connector_commit_barrier() {
                 answers = answers.checked_add(1).unwrap();
             }
             Output::Commit { .. }
+            | Output::Switch
             | Output::Load { .. }
             | Output::ReadResult { .. }
             | Output::CoreLoad(_)

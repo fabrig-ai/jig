@@ -47,7 +47,8 @@ impl Makes {
             }
             root::Event::Core(_)
             | root::Event::Stop
-            | root::Event::RestartBegin
+            | root::Event::Switched
+            | root::Event::RestartBegin { .. }
             | root::Event::RestartDone(_)
             | root::Event::Timer(_)
             | root::Event::Link { .. }

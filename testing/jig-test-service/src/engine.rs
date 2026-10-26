@@ -361,7 +361,7 @@ pub fn iterate(engine: &mut Engine, now: Time, wall: Wall) {
     }
     if engine.begin {
         engine.begin = false;
-        engine.step(root::Event::RestartBegin);
+        engine.step(root::Event::RestartBegin { pending: engine.store.pending });
     } else if !engine.blocked && engine.pending.is_some() {
         let event = engine.pending.take().expect("held component input");
         engine.step(*event);

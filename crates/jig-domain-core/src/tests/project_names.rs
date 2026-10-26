@@ -17,7 +17,7 @@ fn restoring() -> (Core, Limits, people::PolicyValue) {
     config.seed_projects = Box::new([]);
     let mut core = Core::new(config, &limits).expect("restoring core");
     core.counters.deployment.projects = u64::from(SECOND_PROJECT);
-    core.restart_begin();
+    core.restart_begin(false);
     core.restore_core(CoreRecord::Deployment(core.counters.deployment()), &limits);
     (core, limits, value)
 }

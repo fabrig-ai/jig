@@ -282,7 +282,7 @@ pub(crate) fn restoring_sized_policy(bytes: u64) -> (Core, Limits, ConfiguredPol
     }
     config.seed_projects = Box::new([]);
     let mut core = Core::new(config, &limits).expect("restoring core");
-    core.restart_begin();
+    core.restart_begin(false);
     let mut deployment = core.counters.deployment();
     deployment.projects = u64::from(RESTORE_PROJECT);
     deployment.commits = 1;

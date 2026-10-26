@@ -142,9 +142,9 @@ fn event_in(
         Event::Infrastructure(event) => work.push(Work::Infrastructure(event)),
         Event::Observability(event) => work.push(Work::Observability(event)),
         Event::Host(event) => work.push(Work::Host(event)),
-        Event::Restart => {
+        Event::Restart { pending } => {
             domain.restarting = true;
-            let request = domain.core.restart_begin();
+            let request = domain.core.restart_begin(pending);
             work.push(Work::Restart(request));
         }
         Event::Store(store) => crate::restart::store(domain, env, decision, store, work),
@@ -154,6 +154,10 @@ fn event_in(
             Released::Host(event) => work.push(Work::Host(event)),
             Released::Infrastructure(event) => work.push(Work::Infrastructure(event)),
             Released::Observability(event) => work.push(Work::Observability(event)),
+            Released::RestartDone(step) => {
+                let request = domain.core.restart_done(step);
+                work.push(Work::Restart(request));
+            }
             Released::Restart(step) => work.push(Work::Restart(core::RestartRequest::Step(step))),
             Released::Procedure { task, step: _, connector, code: _ } => {
                 match jig_ops_domain_connectors::connector(connector) {
