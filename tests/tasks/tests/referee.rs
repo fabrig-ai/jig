@@ -1,4 +1,4 @@
-use jig_domain_tasks::{Party, Status};
+use jig_domain_tasks::{Party, SettingsRevision, Status};
 use jig_tasks_world::referee::{Seen, Tasks};
 use skein_lib::Time;
 use skein_world::domain::{Referee, Verdict};
@@ -13,11 +13,18 @@ fn rejects(seen: Vec<Seen>) {
 }
 
 fn made(task: u64) -> Seen {
-    Seen::Made { task, parent: Party::Person(1), dependencies: vec![], depth: 0 }
+    Seen::Made {
+        task,
+        parent: Party::Person(1),
+        dependencies: vec![],
+        depth: 0,
+        settings: SettingsRevision { task: 1, run: Some(1) },
+        newest: 1,
+    }
 }
 
 fn assigned(task: u64, attempt: u64) -> Seen {
-    Seen::Assigned { task, attempt, after: 0, adopted: false }
+    Seen::Assigned { task, attempt, after: 0, adopted: false, settings: 1 }
 }
 
 fn partial_batch() {
@@ -33,17 +40,38 @@ fn reused_number() {
 }
 
 fn dependency_on_self() {
-    rejects(vec![Seen::Made { task: 1, parent: Party::Person(1), dependencies: vec![1], depth: 0 }]);
+    rejects(vec![Seen::Made {
+        task: 1,
+        parent: Party::Person(1),
+        dependencies: vec![1],
+        depth: 0,
+        settings: SettingsRevision { task: 1, run: None },
+        newest: 1,
+    }]);
 }
 
 fn delegate_without_parent() {
-    rejects(vec![Seen::Made { task: 2, parent: Party::Task(1), dependencies: vec![], depth: 1 }]);
+    rejects(vec![Seen::Made {
+        task: 2,
+        parent: Party::Task(1),
+        dependencies: vec![],
+        depth: 1,
+        settings: SettingsRevision { task: 1, run: None },
+        newest: 1,
+    }]);
 }
 
 fn assignment_before_dependency_done() {
     rejects(vec![
         made(1),
-        Seen::Made { task: 2, parent: Party::Person(1), dependencies: vec![1], depth: 0 },
+        Seen::Made {
+            task: 2,
+            parent: Party::Person(1),
+            dependencies: vec![1],
+            depth: 0,
+            settings: SettingsRevision { task: 1, run: None },
+            newest: 1,
+        },
         assigned(2, 1),
     ]);
 }
@@ -67,7 +95,14 @@ fn closing_before_run_ended() {
 fn closing_before_delegate_ended() {
     rejects(vec![
         made(1),
-        Seen::Made { task: 2, parent: Party::Task(1), dependencies: vec![], depth: 1 },
+        Seen::Made {
+            task: 2,
+            parent: Party::Task(1),
+            dependencies: vec![],
+            depth: 1,
+            settings: SettingsRevision { task: 1, run: None },
+            newest: 1,
+        },
         Seen::Closing { task: 1 },
     ]);
 }
@@ -95,7 +130,14 @@ fn parent_result_before_child() {
         made(1),
         Seen::Closing { task: 1 },
         Seen::Settled { task: 1 },
-        Seen::Made { task: 2, parent: Party::Task(1), dependencies: vec![], depth: 1 },
+        Seen::Made {
+            task: 2,
+            parent: Party::Task(1),
+            dependencies: vec![],
+            depth: 1,
+            settings: SettingsRevision { task: 1, run: None },
+            newest: 1,
+        },
         Seen::Ended { task: 1, status: Status::Done, after: 0 },
     ]);
 }
@@ -127,7 +169,7 @@ fn duplicate_reply() {
 }
 
 fn assignment_before_durable() {
-    rejects(vec![made(1), Seen::Assigned { task: 1, attempt: 1, after: 1, adopted: false }]);
+    rejects(vec![made(1), Seen::Assigned { task: 1, attempt: 1, after: 1, adopted: false, settings: 1 }]);
 }
 
 fn result_before_durable() {
@@ -614,4 +656,66 @@ fn retaining_a_dependency_that_failed_later_is_not_a_new_add() {
         Seen::Ended { task: 2, status: Status::Failed, after: 0 },
         Seen::Amended { task: 1, dependencies: vec![2] },
     ]);
+}
+
+#[test]
+fn the_referee_catches_a_task_made_on_an_older_revision() {
+    rejects(vec![Seen::Made {
+        task: 1,
+        parent: Party::Person(1),
+        dependencies: vec![],
+        depth: 0,
+        settings: SettingsRevision { task: 1, run: None },
+        newest: 2,
+    }]);
+}
+
+#[test]
+fn the_referee_catches_a_task_moved_to_an_older_revision() {
+    rejects(vec![made(1), Seen::Newest { revision: 3 }, Seen::MovedToNewest { task: 1, revision: 2 }]);
+}
+
+#[test]
+fn the_referee_catches_a_run_prepared_on_another_revision() {
+    rejects(vec![made(1), Seen::PreparationAsked { task: 1 }, Seen::Prepared { task: 1, revision: 2 }]);
+}
+
+#[test]
+fn the_referee_catches_an_assignment_on_another_revision() {
+    rejects(vec![made(1), Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false, settings: 2 }]);
+}
+
+#[test]
+fn a_move_keeps_the_prepared_run_on_its_revision_until_the_next_preparation() {
+    passes(vec![
+        made(1),
+        Seen::Newest { revision: 2 },
+        Seen::MovedToNewest { task: 1, revision: 2 },
+        assigned(1, 1),
+        Seen::Terminal { task: 1, attempt: 1 },
+        Seen::PreparationAsked { task: 1 },
+        Seen::Prepared { task: 1, revision: 2 },
+        Seen::Assigned { task: 1, attempt: 2, after: 0, adopted: false, settings: 2 },
+    ]);
+}
+
+#[test]
+fn the_world_observes_settings_moves_separately_from_requester_moves() {
+    use jig_domain_tasks::Event;
+    use jig_tasks_world::{EFFORTS, LIMITS, World, charters, task};
+    let mut world = World::new(713, LIMITS);
+    world.make(Party::Person(1), vec![task(1, &[])]);
+    world.claim(1, 1);
+    let mut versions = charters().into_vec();
+    let mut newest = versions.clone();
+    for charter in &mut newest {
+        charter.revision = 2;
+    }
+    versions.extend(newest);
+    world.send(Event::Charters { newest: 2, charters: versions.into_boxed_slice(), efforts: Box::new(EFFORTS) });
+    world.send(Event::MoveToNewest { from: Some(1) });
+    assert_eq!(world.record(1).settings, SettingsRevision { task: 2, run: Some(1) });
+    world.make(Party::Person(1), vec![task(2, &[])]);
+    world.claim(2, 2);
+    assert_eq!(world.record(2).settings, SettingsRevision { task: 2, run: Some(2) });
 }

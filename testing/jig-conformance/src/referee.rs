@@ -9,8 +9,10 @@ mod conversations;
 mod positions;
 mod proposals;
 mod revisions;
+mod settings;
 pub use application::{ApplicationAnswer, ApplicationKey};
 pub use revisions::Revision;
+pub use settings::SettingsRevision;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -107,6 +109,8 @@ pub enum Phase {
 /// The externally visible parts of one durable task row.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Task {
+    /// Settings revisions in the durable task and its preparation.
+    pub settings: SettingsRevision,
     /// This task has goal projection state.
     pub tracked: bool,
     pub number: u64,
@@ -225,6 +229,8 @@ pub struct Acceptance {
 /// One atomic committed view, supplied by the store adapter.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Snapshot {
+    /// The newest settings revision in the committed view.
+    pub newest: u32,
     pub tasks: BTreeMap<u64, Task>,
     /// Committed conversation positions, live or ended, keyed by party then task.
     pub read_positions: BTreeMap<(u64, u64), u64>,
@@ -294,7 +300,7 @@ pub enum Observed {
     /// A delivery reached a host, party, or system.
     Released { requires: Vec<Receipt> },
     /// A host saw a reserved assignment.
-    Assigned { task: u64, attempt: u64, conversation: u64, resumed: bool, budget: u64 },
+    Assigned { task: u64, attempt: u64, conversation: u64, resumed: bool, budget: u64, settings: u32 },
     /// An independent host made a priced completion against its reservation.
     Completion { task: u64, attempt: u64, cumulative: u64 },
     /// A vanished worker lost these unacknowledged completions.
@@ -479,6 +485,7 @@ impl Referee {
     )]
     fn durable(&mut self, number: u64, snapshot: Snapshot, now: u64) -> Result<(), Violation> {
         require(number == self.commit + 1, Promise::Commit, "commits apply whole in number order")?;
+        settings::durable(&self.last, &snapshot)?;
         for task in snapshot.tasks.values() {
             require(
                 !self.last.accepted_tasks.contains_key(&task.number)
@@ -935,7 +942,7 @@ impl Referee {
                     self.seen.insert(receipt);
                 }
             }
-            Observed::Assigned { task, attempt, conversation, resumed, budget } => {
+            Observed::Assigned { task, attempt, conversation, resumed, budget, settings } => {
                 let row = self.last.tasks.get(&task);
                 require(
                     row.is_some_and(|row| row.attempt == attempt)
@@ -944,6 +951,7 @@ impl Referee {
                     "host assigned before its task and claim were durable",
                 )?;
                 let row = row.expect("durable assignment");
+                settings::assigned(row, settings)?;
                 require(
                     row.dependencies.iter().all(|dependency| {
                         self.last.tasks.get(dependency).is_some_and(|task| task.phase == Phase::Done)

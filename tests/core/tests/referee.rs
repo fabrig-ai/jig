@@ -3,6 +3,8 @@
 mod proposals;
 #[path = "referee/revisions.rs"]
 mod revisions;
+#[path = "referee/settings.rs"]
+mod settings;
 
 use std::collections::{BTreeMap, BTreeSet};
 

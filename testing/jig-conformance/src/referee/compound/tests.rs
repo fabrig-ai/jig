@@ -5,6 +5,7 @@ const AT: u64 = 0;
 
 fn task(number: u64) -> Task {
     Task {
+        settings: crate::referee::SettingsRevision::default(),
         spec_revision: 0,
         hold_revision: 0,
         tracked: false,

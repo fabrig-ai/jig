@@ -2,7 +2,7 @@
 //! (domain/tasks.md, 5.7, 6.7, sections 7 and 12).
 use jig_domain_tasks::{
     Contract, Ending, HoldKind, Holding, Kind, Last, Limits, Name as ResourceName, Parameter, Party, Phase, PoolSlots,
-    Status, TaskRecord, TaskResult, Was, WriterSlot,
+    SettingsRevision, Status, TaskRecord, TaskResult, Was, WriterSlot,
 };
 use skein_lib::Duration;
 use skein_world::domain::{Expectations, Judge};
@@ -20,6 +20,22 @@ pub enum Seen {
         parent: Party,
         dependencies: Vec<u64>,
         depth: u32,
+        settings: SettingsRevision,
+        newest: u32,
+    },
+    Newest {
+        revision: u32,
+    },
+    MovedToNewest {
+        task: u64,
+        revision: u32,
+    },
+    PreparationAsked {
+        task: u64,
+    },
+    Prepared {
+        task: u64,
+        revision: u32,
     },
     Moved {
         task: u64,
@@ -41,6 +57,7 @@ pub enum Seen {
         attempt: u64,
         after: u64,
         adopted: bool,
+        settings: u32,
     },
     Terminal {
         task: u64,
@@ -91,6 +108,10 @@ pub enum Stimulus {
 #[derive(Default, Debug)]
 pub struct Tasks {
     durable: u64,
+    newest: u32,
+    settings: BTreeMap<u64, u32>,
+    prepared: BTreeMap<u64, u32>,
+    preparing: BTreeSet<u64>,
     replies: BTreeSet<u64>,
     parents: BTreeMap<u64, Party>,
     dependencies: BTreeMap<u64, Vec<u64>>,
@@ -233,7 +254,36 @@ impl Expectations for Tasks {
                     judge.fail("batch partially admitted");
                 }
             }
-            Seen::Made { task, parent, dependencies, depth } => {
+            Seen::Newest { revision } => self.newest = revision,
+            Seen::MovedToNewest { task, revision } => {
+                if revision != self.newest || !self.settings.contains_key(&task) {
+                    judge.fail("task moved to settings other than newest");
+                }
+                self.settings.insert(task, revision);
+            }
+            Seen::PreparationAsked { task } => {
+                self.preparing.insert(task);
+            }
+            Seen::Prepared { task, revision } => {
+                if !self.preparing.remove(&task) {
+                    judge.fail("run settings changed without preparation");
+                }
+                if self.settings.get(&task) != Some(&revision) {
+                    judge.fail("run prepared on another settings revision");
+                }
+                self.prepared.insert(task, revision);
+            }
+            Seen::Made { task, parent, dependencies, depth, settings, newest } => {
+                if settings.task != newest {
+                    judge.fail("task made on an older settings revision");
+                }
+                self.settings.insert(task, settings.task);
+                if let Some(run) = settings.run {
+                    if run != settings.task {
+                        judge.fail("new task run prepared on another settings revision");
+                    }
+                    self.prepared.insert(task, run);
+                }
                 if self.parents.insert(task, parent).is_some() {
                     judge.fail("task number reused");
                 }
@@ -276,7 +326,10 @@ impl Expectations for Tasks {
                     judge.fail("call replied twice");
                 }
             }
-            Seen::Assigned { task, attempt, after, adopted } => {
+            Seen::Assigned { task, attempt, after, adopted, settings } => {
+                if self.prepared.get(&task) != Some(&settings) {
+                    judge.fail("assignment on another settings revision");
+                }
                 if after > self.durable {
                     judge.fail("run before claim durable");
                 }
@@ -345,7 +398,16 @@ impl Expectations for Tasks {
             }
             Seen::Stored { live, limits } => {
                 stored(&live, &limits, judge);
+                self.preparing.clear();
                 for row in &live {
+                    if self.settings.get(&row.number) != Some(&row.settings.task) {
+                        judge.fail("stored task settings changed without moving to newest");
+                    }
+                    if let Some(run) = row.settings.run
+                        && self.prepared.get(&row.number) != Some(&run)
+                    {
+                        judge.fail("stored run settings changed since preparation");
+                    }
                     let proposal_holder = match &row.proposal {
                         Some(proposal) => match proposal.state {
                             jig_domain_tasks::ProposalState::Pending {

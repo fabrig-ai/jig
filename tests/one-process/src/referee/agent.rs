@@ -65,6 +65,8 @@ impl Wire {
                 conversation: 1,
                 resumed: !start.transcript().is_empty(),
                 budget: charter.budget().spend(),
+                // These byte-level scenarios use fixed first-start settings.
+                settings: 1,
             });
         } else if !down && kind == 0x0109 {
             let turn = smith_channel::Turn::decode(&limits, &mut Reader::new(bytes)).expect("agent Turn bytes");

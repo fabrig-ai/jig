@@ -413,6 +413,8 @@ impl Application for Ops {
                         budget,
                         conversation: proof.conversation,
                         resumed: !assignment.turns.is_empty(),
+                        // These scenarios use the first-start settings and draw no changes.
+                        settings: 1,
                     });
                 }
                 vec![Input::Event(root::Event::Released(child))]

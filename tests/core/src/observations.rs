@@ -140,6 +140,7 @@ fn phase(value: &tasks::Phase) -> r::Phase {
 #[must_use]
 pub fn task(value: &tasks::TaskRecord) -> r::Task {
     r::Task {
+        settings: r::SettingsRevision { task: value.settings.task, run: value.settings.run },
         tracked: value.tracked.is_some(),
         number: value.number,
         project: value.project,
@@ -758,6 +759,11 @@ impl Observer {
         let mut reached = Vec::new();
         for row in store.rows.values() {
             match row {
+                root::Record::Core(core::Record::Core(core::CoreRecord::Settings(
+                    core::settings::Record::Revision { revision, history: false },
+                ))) => {
+                    snapshot.newest = snapshot.newest.max(revision.head.number);
+                }
                 root::Record::Core(core::Record::Tasks(tasks::Stored::PersonProposal(value)))
                     if matches!(value.state, tasks::PersonProposalState::Pending { .. }) =>
                 {
@@ -1065,6 +1071,7 @@ impl Observer {
                         conversation: assignment.conversation,
                         resumed: !assignment.transcript.is_empty(),
                         budget: assignment.run.budget,
+                        settings: assignment.run.revision,
                     },
                 );
                 for word in &assignment.messages {

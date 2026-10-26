@@ -225,6 +225,7 @@ fn position_snapshot(
     snapshot.tasks.insert(
         5,
         r::Task {
+            settings: r::SettingsRevision::default(),
             spec_revision: 0,
             hold_revision: 0,
             tracked: false,

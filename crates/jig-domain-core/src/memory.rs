@@ -360,7 +360,9 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
             sizeof(size_of::<authority::AccountBinding>())?.checked_add(sizeof(size_of::<Option<u32>>())?)?,
         )?,
     )?)?;
-    total = total.checked_add(bytes(limits.tasks.tasks, u64::from(limits.run_bytes))?)?;
+    // Each prepared assignment owns the complete run header as well as its policy bytes.
+    let run = sizeof(size_of::<crate::RunCharter>())?.checked_add(u64::from(limits.run_bytes))?;
+    total = total.checked_add(bytes(limits.tasks.tasks, run)?)?;
     total = total
         .checked_add(List::<u32>::worst_case(limits.accounts.accounts)?)?
         .checked_add(List::<skein_lib::Token>::worst_case(limits.fleet.workers.checked_add(1)?)?)?
@@ -508,7 +510,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(u64::from(task.message_bytes.max(task.result_bytes)).checked_mul(field_size.checked_add(1)?)?)?
         .checked_add(limits.policy_bytes)?
         .checked_add(u64::try_from(people::NAME_BYTES).ok()?)?
-        .checked_add(u64::from(limits.run_bytes))?
+        .checked_add(run)?
         .checked_add(u64::from(task.message_bytes))?
         .checked_add(u64::from(limits.brief.brief_bytes))?
         .checked_add(u64::from(limits.resume_bytes))?

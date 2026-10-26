@@ -1387,6 +1387,9 @@ fn an_unheld_task_or_run_revision_refuses_the_start_naming_the_task() {
         } else {
             row.settings.task = 91;
         }
+        // This deliberately corrupt fixture violates the normal-world referee.
+        // Record its observations while checking the engine's startup refusal.
+        world.observer = jig_core_world::observations::Observer::recording(&held_restart_configuration());
         world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
         let before = world.store.applied;
         world.restart_with(held_restart_configuration());

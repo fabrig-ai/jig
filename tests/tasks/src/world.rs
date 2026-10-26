@@ -256,6 +256,7 @@ impl World {
             kinds: Vec::new(),
             reports: BTreeMap::new(),
         };
+        world.observe(Seen::Newest { revision: 1 });
         world.send(Event::Restored);
         world.open_period(0, 100_000);
         world
@@ -625,6 +626,12 @@ impl World {
         if let Event::Resource { name, hold } = &event {
             self.reports.insert(name.clone(), *hold);
         }
+        if let Event::Charters { newest, .. } = &event {
+            self.observe(Seen::Newest { revision: *newest });
+        }
+        if let Event::Prepare { task, .. } = &event {
+            self.observe(Seen::PreparationAsked { task: *task });
+        }
         self.remember_input(&event);
         self.trace.input(self.env.now, &event);
         tasks::step(&mut self.domain, &self.env, event, &mut self.out);
@@ -705,20 +712,7 @@ impl World {
         for request in &self.pending {
             match request {
                 Request::Save { record } => {
-                    if let Stored::Live(row) = record
-                        && let Some(Stored::Live(before)) = self.records.get(&record.key())
-                        && row.requester != before.requester
-                    {
-                        ordered.push(Seen::Moved { task: row.number, parent: row.requester });
-                    }
-                    if let Stored::History(history) = record
-                        && let Some(amendment) = &history.amendment
-                    {
-                        ordered.push(Seen::Amended {
-                            task: history.task,
-                            dependencies: amendment.after.dependencies.to_vec(),
-                        });
-                    }
+                    self.saved_observations(record, &mut ordered);
                     self.records.insert(record.key(), record.clone());
                 }
                 Request::Erase { key } => {
@@ -796,6 +790,32 @@ impl World {
         }
     }
 
+    fn saved_observations(&self, record: &Stored, ordered: &mut Vec<Seen>) {
+        if let Stored::Live(row) = record
+            && let Some(Stored::Live(before)) = self.records.get(&record.key())
+            && row.requester != before.requester
+        {
+            ordered.push(Seen::Moved { task: row.number, parent: row.requester });
+        }
+        if let Stored::Live(row) = record
+            && let Some(Stored::Live(before)) = self.records.get(&record.key())
+        {
+            if row.settings.task != before.settings.task {
+                ordered.push(Seen::MovedToNewest { task: row.number, revision: row.settings.task });
+            }
+            if row.settings.run != before.settings.run
+                && let Some(revision) = row.settings.run
+            {
+                ordered.push(Seen::Prepared { task: row.number, revision });
+            }
+        }
+        if let Stored::History(history) = record
+            && let Some(amendment) = &history.amendment
+        {
+            ordered.push(Seen::Amended { task: history.task, dependencies: amendment.after.dependencies.to_vec() });
+        }
+    }
+
     /// Each live row the referee has not met yet is made, as it was committed.
     fn observe_made(&mut self) {
         let made = self
@@ -808,6 +828,8 @@ impl World {
                 parent: record.requester,
                 dependencies: record.dependencies.to_vec(),
                 depth: record.depth,
+                settings: record.settings,
+                newest: self.domain.newest(),
             })
             .collect::<Vec<_>>();
         for seen in made {
@@ -874,7 +896,13 @@ impl World {
                 Request::Adopt { task, attempt, kept } => {
                     assert_eq!(kept, self.record(task).turn, "adoption carries durable turn fence");
                     self.runs.insert(task, attempt);
-                    self.observe(Seen::Assigned { task, attempt, after: self.commit, adopted: true });
+                    self.observe(Seen::Assigned {
+                        task,
+                        attempt,
+                        after: self.commit,
+                        adopted: true,
+                        settings: self.record(task).settings.run.expect("adopted run revision"),
+                    });
                 }
                 Request::Close { task, .. } => {
                     self.closing.insert(task);
@@ -1028,7 +1056,13 @@ impl World {
         let reply = self.replies[&call].clone();
         if reply == Reply::Done {
             assert!(self.runs.insert(task, attempt).is_none());
-            self.observe(Seen::Assigned { task, attempt, after: self.commit, adopted: false });
+            self.observe(Seen::Assigned {
+                task,
+                attempt,
+                after: self.commit,
+                adopted: false,
+                settings: self.record(task).settings.run.expect("claimed run revision"),
+            });
             self.send(Event::Started { task, attempt });
         }
         reply

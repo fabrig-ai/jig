@@ -180,6 +180,12 @@ pub fn snapshot(store: &Store) -> r::Snapshot {
     let mut authority_acceptances = Vec::new();
     for record in store.rows.values() {
         match record {
+            root::Record::Core(core::Record::Core(core::CoreRecord::Settings(core::settings::Record::Revision {
+                history: false,
+                revision,
+            }))) => {
+                snapshot.newest = snapshot.newest.max(revision.head.number);
+            }
             root::Record::Core(core::Record::Tasks(tasks::Stored::History(row))) => {
                 if let Some(accepted) = jig_core_world::observations::acceptance::task(row) {
                     authority_acceptances.push(accepted);

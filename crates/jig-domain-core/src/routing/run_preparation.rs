@@ -171,6 +171,7 @@ pub(super) fn workspace_prepared(
     }
     policy.resume = resume;
     let run = RunCharter {
+        revision: core.tasks.task(task).expect("prepared task").settings.run.expect("prepared revision"),
         ended_by: context.ended_by,
         sources: sources.into_boxed(),
         accounts: allowance.choice.accounts,

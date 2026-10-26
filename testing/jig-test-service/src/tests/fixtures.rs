@@ -386,6 +386,7 @@ pub fn assignment(config: &jig_protocol_config::Engine) -> jig_test_domain::Assi
         attempt: 3,
         charter: 1,
         run: Box::new(core::RunCharter {
+            revision: 1,
             ended_by: jig_domain_tasks::EndedBy::Result,
             sources: Box::new([Some(1)]),
             accounts: Box::new([]),

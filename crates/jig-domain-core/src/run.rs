@@ -398,9 +398,12 @@ pub struct RunPolicy {
 }
 
 /// The root's complete task-specific charter, kept behind one bounded
-/// assignment cell so delivery queues carry a small fixed-size value.
+/// assignment cell so delivery queues carry a small fixed-size value. Its settings
+/// revision is fixed when preparation begins (domain/engine.md, 17.3).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RunCharter {
+    /// The settings revision recorded as this run began preparation.
+    pub revision: u32,
     pub ended_by: tasks::EndedBy,
     /// Selected grant for main then each retained alternative; none sources have no grant.
     pub sources: Box<[Option<u32>]>,

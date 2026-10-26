@@ -153,6 +153,7 @@ pub fn domain() -> Domain {
 }
 pub fn run() -> Box<core::RunCharter> {
     Box::new(core::RunCharter {
+        revision: 1,
         ended_by: jig_domain_tasks::EndedBy::Result,
         sources: Box::new([Some(1)]),
         accounts: Box::new([]),

@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn assigned(budget: u64) -> Observed {
-    Observed::Assigned { task: 1, attempt: 1, conversation: 1, resumed: false, budget }
+    Observed::Assigned { task: 1, attempt: 1, conversation: 1, resumed: false, budget, settings: 0 }
 }
 
 pub(super) fn pattern() -> Pattern {
@@ -46,6 +46,7 @@ pub(super) fn policy(recovery: Recovery) -> Policy {
 
 pub(super) fn task(number: u64) -> Task {
     Task {
+        settings: SettingsRevision { task: 0, run: Some(0) },
         tracked: false,
         number,
         project: 1,

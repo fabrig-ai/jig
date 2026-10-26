@@ -533,13 +533,27 @@ fn the_referee_rejects_fresh_runs_and_done_ends_after_a_committed_dependency_ame
     use jig_tasks_world::referee::{Seen, Tasks};
     use skein_world::domain::{Referee, Verdict};
     for violation in [
-        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false },
+        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false, settings: 1 },
         Seen::Ended { task: 1, status: Status::Done, after: 0 },
     ] {
         let mut referee = Referee::new(Tasks::default());
         for seen in [
-            Seen::Made { task: 1, parent: Party::Person(9), dependencies: vec![], depth: 0 },
-            Seen::Made { task: 2, parent: Party::Person(9), dependencies: vec![], depth: 0 },
+            Seen::Made {
+                task: 1,
+                parent: Party::Person(9),
+                dependencies: vec![],
+                depth: 0,
+                settings: tasks::SettingsRevision { task: 1, run: Some(1) },
+                newest: 1,
+            },
+            Seen::Made {
+                task: 2,
+                parent: Party::Person(9),
+                dependencies: vec![],
+                depth: 0,
+                settings: tasks::SettingsRevision { task: 1, run: Some(1) },
+                newest: 1,
+            },
             Seen::Amended { task: 1, dependencies: vec![2] },
             Seen::Closing { task: 1 },
             Seen::Settled { task: 1 },
@@ -557,11 +571,25 @@ fn the_referee_allows_adoption_of_a_run_live_before_its_task_was_kept() {
     use skein_world::domain::{Referee, Verdict};
     let mut referee = Referee::new(Tasks::default());
     for seen in [
-        Seen::Made { task: 1, parent: Party::Person(9), dependencies: vec![], depth: 0 },
-        Seen::Made { task: 2, parent: Party::Person(9), dependencies: vec![], depth: 0 },
-        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false },
+        Seen::Made {
+            task: 1,
+            parent: Party::Person(9),
+            dependencies: vec![],
+            depth: 0,
+            settings: tasks::SettingsRevision { task: 1, run: Some(1) },
+            newest: 1,
+        },
+        Seen::Made {
+            task: 2,
+            parent: Party::Person(9),
+            dependencies: vec![],
+            depth: 0,
+            settings: tasks::SettingsRevision { task: 1, run: Some(1) },
+            newest: 1,
+        },
+        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false, settings: 1 },
         Seen::Amended { task: 1, dependencies: vec![2] },
-        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: true },
+        Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: true, settings: 1 },
     ] {
         referee.observe(skein_lib::Time::ZERO, seen, &mut Vec::new());
     }
@@ -639,7 +667,13 @@ fn a_claim_committed_before_the_amendment_stays_live_and_its_done_finish_parks()
     );
     // The world records assignment independently from the task's Claimed phase.
     world.runs.insert(1, 1);
-    world.observe(jig_tasks_world::referee::Seen::Assigned { task: 1, attempt: 1, after: 0, adopted: false });
+    world.observe(jig_tasks_world::referee::Seen::Assigned {
+        task: 1,
+        attempt: 1,
+        after: 0,
+        adopted: false,
+        settings: 1,
+    });
     keep(&mut world);
     assert_eq!(world.record(1).phase, Phase::Active(Active::Claimed { attempt: 1 }));
     world.send(Event::Started { task: 1, attempt: 1 });
