@@ -182,6 +182,19 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
         .ok_or(Missing::TooLarge)?;
     let counts = core.people.counts(&limits.people, party).ok_or(Missing::Unknown)?;
     if core.people.role(party, people::DEPLOYMENT) == Some(people::Role::Owner) {
+        for (&(proposer, number), _) in &core.settings_proposals {
+            let Proposer::Task(task) = proposer else { continue };
+            let Some(row) = core.tasks.proposal(task, u64::from(number)) else { continue };
+            let jig_domain_tasks::ProposalState::Pending { since, .. } = row.state else { continue };
+            let object = InboxObject::Proposal { proposer, number: u64::from(number) };
+            let cursor = Cursor::Inbox { task: jig_domain_tasks::PROPOSAL_WITHOUT_TASK, object, at: Some(since) };
+            ordered
+                .insert(
+                    key(cursor)?,
+                    (jig_domain_tasks::PROPOSAL_WITHOUT_TASK, 0, object, None, since, false, cursor, false),
+                )
+                .expect("bounded settings needs");
+        }
         for (_, row) in core.tasks.person_proposals() {
             match row.action {
                 jig_domain_tasks::PersonAction::Settings { .. } => {

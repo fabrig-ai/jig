@@ -38,6 +38,7 @@ fn merge_key(kind: &MessageKind) -> Option<(u8, u64)> {
         | MessageKind::Answer { .. }
         | MessageKind::Proposal { .. }
         | MessageKind::Escalation { .. }
+        | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::PersonStalled { .. }
         | MessageKind::Result(_) => None,
@@ -120,6 +121,7 @@ pub(crate) fn prepare_staged(
                 | MessageKind::Answer { .. }
                 | MessageKind::Proposal { .. }
                 | MessageKind::Escalation { .. }
+                | MessageKind::SettingsDecision { .. }
                 | MessageKind::ProposalDecision { .. }
                 | MessageKind::PersonStalled { .. }
                 | MessageKind::Result(_)
@@ -191,6 +193,7 @@ fn room_staged(
             | MessageKind::Answer { .. }
             | MessageKind::Proposal { .. }
             | MessageKind::Escalation { .. }
+            | MessageKind::SettingsDecision { .. }
             | MessageKind::ProposalDecision { .. }
             | MessageKind::PersonStalled { .. }
             | MessageKind::Result(_)
@@ -306,6 +309,7 @@ pub(crate) fn check_message(
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::PersonStalled { .. }
         | MessageKind::Result(_)
@@ -405,6 +409,7 @@ pub(crate) fn check_message(
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::PersonStalled { .. }
         | MessageKind::Result(_)
@@ -517,6 +522,7 @@ pub(crate) fn delegate_result(
         | MessageKind::Words
         | MessageKind::Proposal { .. }
         | MessageKind::Escalation { .. }
+        | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }

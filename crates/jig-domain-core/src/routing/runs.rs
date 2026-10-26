@@ -102,7 +102,8 @@ pub(super) fn named_proposal_accept(
                 },
             );
         }
-        tasks::ProposalAction::Batch(_)
+        tasks::ProposalAction::Settings { .. }
+        | tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
         | tasks::ProposalAction::Release { .. } => {}
@@ -112,6 +113,7 @@ pub(super) fn named_proposal_accept(
     };
     let token = to.into_token();
     let event = match proposal.action {
+        tasks::ProposalAction::Settings { .. } => unreachable!("tasks cannot accept settings"),
         tasks::ProposalAction::Effect { .. } | tasks::ProposalAction::ProcedureEffect { .. } => {
             unreachable!("effect accepted through its connector")
         }
@@ -429,6 +431,16 @@ pub(super) fn named_action(
     let token = to.into_token();
     let mut out = Queue::with_capacity(3);
     match action {
+        NamedAction::ProposeSettings { against, items, reason } => {
+            return super::settings::propose_run(
+                core,
+                env,
+                work,
+                ReplyTo::new(token),
+                key,
+                crate::settings::Proposed { against, items, reason },
+            );
+        }
         NamedAction::Message { target, kind, words } => {
             let Some(context) = core.tasks.delegation(key.task) else {
                 call_decision(
@@ -685,6 +697,7 @@ pub(super) fn named_action(
 
 pub(super) fn named_tool_kind(action: &NamedAction) -> ToolKind {
     match action {
+        NamedAction::ProposeSettings { .. } => ToolKind::Settings,
         NamedAction::Message { target, .. } => ToolKind::Message { target: *target },
         NamedAction::Introduce { left, .. } => ToolKind::Message { target: *left },
         NamedAction::Subscribe { .. } | NamedAction::Unsubscribe { .. } => ToolKind::Subscribe,

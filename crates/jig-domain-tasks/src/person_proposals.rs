@@ -8,30 +8,7 @@ use skein_lib::{Env, List, Queue, ReplyTo};
 pub(crate) fn valid_action(proposal: &PersonProposal, limits: &Limits) -> bool {
     let batch = match &proposal.action {
         PersonAction::Settings { against, items } => {
-            if proposal.project != 0
-                || *against == 0
-                || items.is_empty()
-                || items.len() > usize::try_from(crate::SETTINGS_ITEMS).expect("settings item bound")
-            {
-                return false;
-            }
-            for (at, item) in items.iter().enumerate() {
-                match item.setting {
-                    crate::Setting::Charter(0) | crate::Setting::Template(0) | crate::Setting::Policy(0) => {
-                        return false;
-                    }
-                    crate::Setting::Charter(_)
-                    | crate::Setting::Template(_)
-                    | crate::Setting::Policy(_)
-                    | crate::Setting::Rules => {}
-                }
-                for earlier in items.iter().take(at) {
-                    if earlier.setting == item.setting {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return proposal.project == 0 && *against > 0 && valid_settings(items);
         }
         PersonAction::Batch(batch) => batch,
         PersonAction::Amend { task, amendment, .. } => {
@@ -191,4 +168,27 @@ pub(crate) fn check(domain: &Domain, env: &Env<Limits>, proposal: &PersonProposa
         },
     )?;
     Ok(())
+}
+
+pub(crate) fn valid_settings(items: &[crate::SettingHead]) -> bool {
+    if items.is_empty() || items.len() > usize::try_from(crate::SETTINGS_ITEMS).expect("settings bound") {
+        return false;
+    }
+    for (at, item) in items.iter().enumerate() {
+        match item.setting {
+            crate::Setting::Charter(0) | crate::Setting::Template(0) | crate::Setting::Policy(0) => {
+                return false;
+            }
+            crate::Setting::Charter(_)
+            | crate::Setting::Template(_)
+            | crate::Setting::Policy(_)
+            | crate::Setting::Rules => {}
+        }
+        for earlier in items.iter().take(at) {
+            if earlier.setting == item.setting {
+                return false;
+            }
+        }
+    }
+    true
 }

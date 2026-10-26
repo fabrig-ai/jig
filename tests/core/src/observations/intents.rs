@@ -103,7 +103,8 @@ impl Intents {
         if let core::Event::NamedAction { key, action, .. } = event
             && matches!(
                 action,
-                core::NamedAction::Propose { .. }
+                core::NamedAction::ProposeSettings { .. }
+                    | core::NamedAction::Propose { .. }
                     | core::NamedAction::ProposeBatch { .. }
                     | core::NamedAction::ProposeGoal { .. }
             )
