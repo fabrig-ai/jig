@@ -10,6 +10,10 @@ pub(crate) fn open(store: &mut Store, owner: Token, above: &mut Queue<Event>, be
         refuse(store, owner, OpenRefusal::Failed, above);
         return;
     }
+    if let Err(why) = plan::bounds(&store.patch_sets) {
+        refuse(store, owner, OpenRefusal::Set { owner: why.owner, patch: why.patch }, above);
+        return;
+    }
     let format_key = keys::encode_own(&keys::Own::Format, store.limits.store.key).expect("format key fits");
     let header_key = keys::encode(&Key::Core(CoreKey::Deployment), store.limits.store.key).expect("header key fits");
     let Ok(found) = get(store, owner, format_key) else {
@@ -186,10 +190,6 @@ fn ready(
         refuse(store, owner, OpenRefusal::Failed, above);
         return;
     };
-    if let Err(why) = plan::bounds(&store.patch_sets) {
-        refuse(store, owner, OpenRefusal::Set { owner: why.owner, patch: why.patch }, above);
-        return;
-    }
     // A behind open crosses Ready on its way to the copy. Its map machines
     // already exist; the copy's serving machines are made after its check.
     if store.directory.patch.is_none() {

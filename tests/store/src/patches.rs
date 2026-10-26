@@ -39,7 +39,7 @@ const NOTE: KeptFamily = KeptFamily {
     name: "fixture-note",
     map: KeptMap::Store,
     texts: jig::kept::fixture_note::TEXTS,
-    keys: &[Keys { from: upstream::keys::NOTES_FROM, to: upstream::keys::NOTES_TO, root: upstream::keys::NOTES_ROOT }],
+    keys: &[Keys { from: &[1, b'n'], to: &[1, b'o'], root: upstream::keys::NOTES_ROOT }],
 };
 const APPLICATION: PatchSet = PatchSet {
     fresh: None,
@@ -226,6 +226,7 @@ impl Records {
             });
             assert!(matches!(events.as_slice(), [Event::Kept { .. }]), "token kept: {events:?}");
         }
+        world.seed_fixture_notes(&self.rows(version));
         world.crash(seed);
         world
     }
@@ -253,7 +254,8 @@ impl Records {
 
     /// The copy's public restore is checked before the start can serve secrets.
     pub fn check_public(&self, world: &mut World, version: u16, context: &dyn std::fmt::Debug) {
-        let rows = world.application(false);
+        let mut rows = world.application(false);
+        rows.extend(world.fixture_notes());
         assert_eq!(rows, self.rows(version), "all records belong to one whole level: {context:?}");
         for (key, bytes) in rows {
             let (texts, root) = match key[0] {

@@ -83,6 +83,7 @@ fn pinned_order_reports_exact_walk_counts() {
         let writes = [Write::Save(root::header(number)), Write::Put { key, value }];
         assert_eq!(world.commit(Box::new(writes)), Some(number), "source commit");
     }
+    world.seed_fixture_notes(&Records::story().rows(UNPATCHED));
     world.crash(SEED);
     world.patch_sets(SETS);
     world.open_switched().expect("upgrade opens");
@@ -167,7 +168,7 @@ fn written_refusal_repeats_and_old_binary_reopens() {
     assert_eq!(world.refusal(), Some(&refusal));
     world.crash(SEED);
     world.patch_sets(BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(2));
     records.check(&mut world, UNPATCHED, &"old binary rollback");
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
     patches::kept(&original, &after_refusal, &"written refusal");
