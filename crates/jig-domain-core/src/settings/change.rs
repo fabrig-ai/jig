@@ -56,7 +56,8 @@ pub(crate) fn changes_current(current: &Current, items: &[Item]) -> bool {
 }
 /// Apply only a checked, nonempty set. Both persisted and held changes get the same stamp.
 pub(crate) fn apply(current: &mut Current, items: &[Item], revision: u32) -> List<Write> {
-    let mut writes = List::with_capacity(u32::try_from(items.len()).expect("bounded items"));
+    let mut writes =
+        List::with_capacity(u32::try_from(items.len()).expect("bounded items").checked_mul(2).expect("reset writes"));
     // Erases precede puts in memory so replacing a whole bounded kind needs no spare slot.
     for item in items {
         let erase = match item.edit {
@@ -86,6 +87,17 @@ pub(crate) fn apply(current: &mut Current, items: &[Item], revision: u32) -> Lis
             None => Write::Erase(crate::Key::Core(CoreKey::Settings(Key::Changed(item.setting)))),
         };
         writes.push(write).expect("one change write per item");
+        if item.edit == Edit::Reset
+            && let Some(default) = current.defaults.get_mut(&item.setting)
+        {
+            default.revision = revision;
+            writes
+                .push(Write::Save(crate::Record::Core(CoreRecord::Settings(Record::Default {
+                    setting: item.setting,
+                    default: default.clone(),
+                }))))
+                .expect("reset default write");
+        }
     }
     writes
 }

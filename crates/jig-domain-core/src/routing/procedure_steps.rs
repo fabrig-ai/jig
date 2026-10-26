@@ -110,7 +110,7 @@ pub(super) fn apply(core: &mut Core, env: &Env<Limits>, task: u64, step: u64, ev
             revised.push(part.task).expect("amendments bounded");
         }
     }
-    let room = tasks::max_out(&env.limits.tasks);
+    let room = crate::settings::task_room(&env.limits);
     let mut child = Queue::with_capacity(room);
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut child);
     let mut kept = Queue::with_capacity(room);

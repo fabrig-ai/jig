@@ -223,7 +223,19 @@ fn decision_edits_apply_each_kind_over_defaults_and_additions() {
         assert_eq!(current.value(setting), Some(&original));
         assert_eq!(current.changes.get(&setting).unwrap().revision, 2);
         let reset = [Item { setting, edit: Edit::Reset }];
-        apply(&mut current, &reset, 3);
+        let writes = apply(&mut current, &reset, 3);
+        let mut saved_reset = false;
+        for write in writes.as_slice() {
+            if let crate::Write::Save(crate::Record::Core(CoreRecord::Settings(Record::Default {
+                setting: saved,
+                default,
+            }))) = write
+            {
+                saved_reset |= *saved == setting && default.revision == 3;
+            }
+        }
+        assert!(saved_reset);
+        assert_eq!(current.lookup(setting).1, Some((false, 3)));
         assert!(!current.changed(setting));
         if setting == Setting::Rules {
             assert_eq!(
@@ -293,8 +305,8 @@ fn current_lookup_keeps_each_kinds_default_change_and_removal_origin() {
         assert_eq!(current.lookup(setting), (Some(&default), Some((true, 2))));
         current.changes.insert(setting, Changed { value: None, revision: 3 }).unwrap();
         assert_eq!(current.lookup(setting), (None, Some((true, 3))));
-        current.changes.remove(&setting);
-        assert_eq!(current.lookup(setting), (Some(&default), Some((false, 1))));
+        let _writes = apply(&mut current, &[Item { setting, edit: Edit::Reset }], 4);
+        assert_eq!(current.lookup(setting), (Some(&default), Some((false, 4))));
     }
     assert_eq!(current.lookup(Setting::Template(999)), (None, None));
 }
@@ -375,4 +387,190 @@ fn settings_policy_restore_admits_the_policy_byte_budget() {
     assert_eq!(core.restore_failure(), None);
     assert_eq!(core.restart_done(RestartStep::LoadCore), RestartRequest::Step(RestartStep::LoadInbox));
     assert!(core.current.policy(RESTORE_PROJECT).is_some());
+}
+
+fn version_head(core: &Core, revision: u32) -> Head {
+    Head { number: revision, against: revision.saturating_sub(1), ..core.current.head.clone() }
+}
+fn held_fixture() -> (Core, Limits) {
+    let (mut core, limits) = crate::tests::core();
+    let mut charter = core.charter(1).unwrap().clone();
+    charter.number = 7;
+    charter.spend = 1;
+    core.current.defaults.remove(&Setting::Charter(1)).unwrap();
+    core.current
+        .defaults
+        .insert(Setting::Charter(7), Default { value: Value::Charter(Box::new(charter)), revision: 1 })
+        .unwrap();
+    (core, limits)
+}
+fn version_edit(core: &mut Core, limits: &Limits, number: u32, charter: u32, edit: Edit, keep_previous: bool) {
+    let previous = core.current.newest();
+    let items = [Item { setting: Setting::Charter(charter), edit }];
+    let plan = core.held.plan(&core.current, &items, number, if keep_previous { Some(previous) } else { None }, limits);
+    assert!(plan.versions() <= limits.settings.versions);
+    let mut out = skein_lib::Queue::with_capacity(64);
+    core.held.retain(&core.current, &plan, &mut out);
+    if keep_previous {
+        core.held.heads.insert(previous, core.current.head.clone()).unwrap();
+    }
+    let _writes = apply(&mut core.current, &items, number);
+    core.current.head = version_head(core, number);
+}
+fn version_value(core: &Core, charter: u32, spend: u64) -> Edit {
+    let source = match core.charter(charter) {
+        Some(charter) => charter,
+        None => core.charter(7).unwrap(),
+    };
+    let mut value = source.clone();
+    value.number = charter;
+    value.spend = spend;
+    Edit::Set(Value::Charter(Box::new(value)))
+}
+fn held_versions() -> (Core, Limits) {
+    let (mut core, limits) = held_fixture();
+    let edit = version_value(&core, 7, 3);
+    version_edit(&mut core, &limits, 3, 7, edit, true);
+    core.current.head = version_head(&core, 4);
+    let edit = version_value(&core, 7, 5);
+    version_edit(&mut core, &limits, 5, 7, edit, true);
+    core.current.head = version_head(&core, 6);
+    (core, limits)
+}
+#[test]
+fn a_revision_reads_the_latest_version_at_or_before_it() {
+    let (core, _) = held_versions();
+    for (revision, expected) in [(1, 1), (4, 3), (6, 5)] {
+        assert_eq!(core.charter_at(7, revision).unwrap().spend, expected);
+    }
+    assert_eq!(
+        core.charter_at(7, 1),
+        core.held.versions.get(&VersionKey { charter: 7, revision: 1 }).unwrap().charter.as_deref()
+    );
+    assert!(core.charter_at(7, 2).is_none());
+}
+#[test]
+fn a_removal_is_a_version_from_which_the_charter_is_not_offered() {
+    let (mut core, limits) = held_fixture();
+    let edit = version_value(&core, 8, 2);
+    version_edit(&mut core, &limits, 2, 8, edit, false);
+    core.current.head = version_head(&core, 3);
+    version_edit(&mut core, &limits, 4, 8, Edit::Removed, true);
+    core.current.head = version_head(&core, 5);
+    assert!(!core.current.changed(Setting::Charter(8)));
+    assert_eq!(core.charter_at(8, 3).unwrap().spend, 2);
+    assert!(core.charter_at(8, 5).is_none());
+    assert!(core.charter(8).is_none());
+    assert!(core.held.versions.get(&VersionKey { charter: 8, revision: 4 }).unwrap().charter.is_none());
+}
+#[test]
+fn versions_no_held_revision_reads_are_dropped() {
+    let (mut core, limits) = held_versions();
+    core.held.heads.remove(&1).unwrap();
+    let plan = core.held.plan(&core.current, &[], core.current.newest(), None, &limits);
+    let mut out = skein_lib::Queue::with_capacity(64);
+    core.held.retain(&core.current, &plan, &mut out);
+    assert!(!core.held.versions.contains_key(&VersionKey { charter: 7, revision: 1 }));
+    assert!(core.held.versions.contains_key(&VersionKey { charter: 7, revision: 3 }));
+    assert_eq!(core.charter_at(7, 4).unwrap().spend, 3);
+}
+#[test]
+fn a_reset_is_a_version_made_at_the_reset() {
+    let (mut core, limits) = held_fixture();
+    let original = core.charter(7).unwrap().clone();
+    let edit = version_value(&core, 7, 3);
+    version_edit(&mut core, &limits, 3, 7, edit, false);
+    core.current.head = version_head(&core, 4);
+    version_edit(&mut core, &limits, 5, 7, Edit::Reset, true);
+    assert!(!core.current.changed(Setting::Charter(7)));
+    assert_eq!(core.current.lookup(Setting::Charter(7)).1, Some((false, 5)));
+    core.current.head = version_head(&core, 6);
+    let edit = version_value(&core, 7, 7);
+    version_edit(&mut core, &limits, 7, 7, edit, true);
+    assert_eq!(core.charter_at(7, 4).unwrap().spend, 3);
+    assert_eq!(core.charter_at(7, 6), Some(&original));
+    assert_eq!(core.charter_at(7, 7).unwrap().spend, 7);
+}
+#[test]
+fn an_erased_removal_bars_older_versions_from_later_revisions() {
+    let (mut core, limits) = held_fixture();
+    let edit = version_value(&core, 8, 2);
+    version_edit(&mut core, &limits, 2, 8, edit, false);
+    core.current.head = version_head(&core, 3);
+    version_edit(&mut core, &limits, 4, 8, Edit::Removed, true);
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    core.tell_replaced_settings(&env, false, true);
+    assert!(core.tasks.charter_models(8, 3).is_some());
+    assert!(core.tasks.charter_models(8, 4).is_none());
+    core.current.head = version_head(&core, 5);
+    let edit = version_value(&core, 8, 6);
+    version_edit(&mut core, &limits, 6, 8, edit, true);
+    assert_eq!(core.charter_at(8, 3).unwrap().spend, 2);
+    assert!(core.charter_at(8, 5).is_none());
+    assert_eq!(core.charter_at(8, 6).unwrap().spend, 6);
+    core.held.heads.remove(&3).unwrap();
+    let plan = core.held.plan(&core.current, &[], core.current.newest(), None, &limits);
+    let mut out = skein_lib::Queue::with_capacity(64);
+    core.held.retain(&core.current, &plan, &mut out);
+    assert!(!core.held.versions.contains_key(&VersionKey { charter: 8, revision: 2 }));
+    assert!(core.charter_at(8, 5).is_none());
+}
+
+#[test]
+fn a_barrier_leaves_with_the_last_older_value_even_while_absence_is_held() {
+    let (mut core, limits) = held_fixture();
+    let edit = version_value(&core, 8, 2);
+    version_edit(&mut core, &limits, 2, 8, edit, false);
+    core.current.head = version_head(&core, 3);
+    version_edit(&mut core, &limits, 4, 8, Edit::Removed, true);
+    core.held.heads.insert(4, version_head(&core, 4)).unwrap();
+    core.current.head = version_head(&core, 5);
+    core.held.heads.remove(&3).unwrap();
+    let plan = core.held.plan(&core.current, &[], 5, None, &limits);
+    let mut out = skein_lib::Queue::with_capacity(64);
+    core.held.retain(&core.current, &plan, &mut out);
+    assert!(core.held.versions.is_empty());
+    assert!(core.charter_at(8, 4).is_none());
+    assert!(core.charter_at(8, 5).is_none());
+}
+
+#[test]
+fn removal_markers_fit_beside_offered_charters_and_held_versions() {
+    let (mut core, mut limits) = held_fixture();
+    limits.tasks.charters = 2;
+    limits.settings.versions = 1;
+    let mut unchanged = core.charter(7).unwrap().clone();
+    unchanged.number = 9;
+    core.current
+        .defaults
+        .insert(Setting::Charter(9), Default { value: Value::Charter(Box::new(unchanged)), revision: 1 })
+        .unwrap();
+    let items = [
+        Item { setting: Setting::Charter(7), edit: Edit::Removed },
+        Item { setting: Setting::Charter(8), edit: version_value(&core, 8, 2) },
+    ];
+    let plan = core.held.plan(&core.current, &items, 2, Some(1), &limits);
+    assert_eq!(plan.versions(), 1, "the newest removal consumes no extra version");
+    let mut out = skein_lib::Queue::with_capacity(64);
+    core.held.retain(&core.current, &plan, &mut out);
+    core.held.heads.insert(1, core.current.head.clone()).unwrap();
+    let _writes = apply(&mut core.current, &items, 2);
+    core.current.head = version_head(&core, 2);
+    let models = crate::charters::held_models(&core, &limits);
+    assert_eq!(models.len(), 4);
+    assert_eq!(core.held.versions.len(), 1);
+    assert!(core.charter_at(7, 1).is_some());
+    assert!(core.charter_at(7, 2).is_none());
+    let mut tasks_out = skein_lib::Queue::with_capacity(task_room(&limits));
+    tasks::step(
+        &mut core.tasks,
+        &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: task_limits(&limits) },
+        tasks::Event::Charters { newest: 2, charters: models, efforts: crate::charters::efforts(&core.settings) },
+        &mut tasks_out,
+    );
+    assert!(tasks_out.is_empty());
+    assert!(core.tasks.charter_models(7, 1).is_some());
+    assert!(core.tasks.charter_models(7, 2).is_none());
+    assert!(core.tasks.charter_models(8, 2).is_some());
+    assert!(core.tasks.charter_models(9, 2).is_some());
 }

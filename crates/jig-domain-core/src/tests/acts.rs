@@ -368,7 +368,7 @@ fn a_maintainer_word_uses_the_trusted_entrance_and_keeps_its_actor() {
             },
         )
         .unwrap();
-    let mut out = Queue::with_capacity(tasks::max_out(&limits.tasks));
+    let mut out = Queue::with_capacity(settings::task_room(&limits));
     tasks::step(&mut core.tasks, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.tasks }, event, &mut out);
     let mut sent = false;
     for row in &out {

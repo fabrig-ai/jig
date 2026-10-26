@@ -36,7 +36,7 @@ pub(crate) fn make_batch_at(
     wall: Wall,
 ) {
     use super::{Env, Queue, ReplyTo, Time, Token, projections, room_max, tasks};
-    let mut out = Queue::with_capacity(tasks::max_out(&limits.tasks));
+    let mut out = Queue::with_capacity(settings::task_room(limits));
     tasks::step(
         &mut core.tasks,
         &Env { now: Time::ZERO, wall, limits: limits.tasks },

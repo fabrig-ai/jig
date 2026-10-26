@@ -47,9 +47,7 @@ pub fn admits(party: u64, scope: &Scope, key: &crate::Key) -> bool {
     use jig_domain_tasks::{Funder, Key as TaskKey};
     match scope {
         Scope::SettingsHistory { first, last, newest, .. } => match key {
-            Key::Core(crate::CoreKey::Settings(crate::settings::Key::Held(n))) => {
-                n == newest && n >= first && n <= last
-            }
+            Key::Core(crate::CoreKey::Settings(crate::settings::Key::Held(n))) => n >= first && n <= last,
             Key::Core(crate::CoreKey::Settings(crate::settings::Key::History(n))) => {
                 n != newest && n >= first && n <= last
             }

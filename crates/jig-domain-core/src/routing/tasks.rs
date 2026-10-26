@@ -28,7 +28,11 @@ pub(super) fn tag_tasks(
 ) -> Requests {
     let task_room = room.checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
-    let route_room = task_room.checked_add(party_room).expect("bounded task and party routes");
+    let route_room = task_room
+        .checked_add(party_room)
+        .expect("bounded task and party routes")
+        .checked_add(crate::settings::release_writes(&env.limits).expect("release bound"))
+        .expect("release route room");
     let mut pending = Queue::with_capacity(route_room);
     for _ in 0..child.len() {
         pending.push(child.pop().expect("task output count"));
@@ -39,6 +43,10 @@ pub(super) fn tag_tasks(
         let request = match next {
             tasks::Request::ProcedureRefused { task, step, problem } => {
                 super::procedure_steps::append_problem(core, task, step, problem, &mut out);
+                continue;
+            }
+            tasks::Request::Released { revision } => {
+                core.release_revision(env, revision, &mut out);
                 continue;
             }
             tasks::Request::Erase { key } => Request::Write(Write::Erase(Key::Tasks(key))),
@@ -1447,19 +1455,19 @@ pub(super) fn tag_tasks(
 }
 
 pub(super) fn route_person_escalation(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, true)
+    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, true)
 }
 
 pub(super) fn route_task_escalation(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, true, false)
+    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, true, false)
 }
 
 pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
     if let tasks::Event::Make { batch, .. } | tasks::Event::MakeResultFollowups { batch, .. } = &event
         && let Err(problem) = core.batch_accounts(batch)
     {
@@ -1467,7 +1475,7 @@ pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: t
             unreachable!("checked batch event")
         };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), true, false, false);
+        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false);
     }
     if let tasks::Event::Amend { task, amendment, funder, .. } = &event
         && let Err(why) = core.amendment_account(*task, amendment, *funder)
@@ -1475,10 +1483,10 @@ pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: t
         let problem = tasks::Problem::new(Some(*task), why);
         let tasks::Event::Amend { reply_to, .. } = event else { unreachable!("checked amendment event") };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), true, false, false);
+        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false);
     }
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), true, false, false)
+    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false)
 }
 
 #[expect(clippy::boxed_local, reason = "the moved route retains its owned event payload")]
@@ -1535,14 +1543,14 @@ pub(super) fn route_tasks(
     if let tasks::Event::Procedure { task, step, .. } = &event {
         return super::procedure_steps::apply(core, env, *task, *step, event);
     }
-    let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
     if let tasks::Event::Amend { task, amendment, funder, .. } = &event
         && let Err(why) = core.amendment_account(*task, amendment, *funder)
     {
         let problem = tasks::Problem::new(Some(*task), why);
         let tasks::Event::Amend { reply_to, .. } = event else { unreachable!("checked amendment event") };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false);
+        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
     }
     if let tasks::Event::Amend { task, amendment, .. } = &event
         && let Some(tasks::Tracking::Tracked { .. }) = amendment.tracked
@@ -1552,7 +1560,7 @@ pub(super) fn route_tasks(
     {
         let tasks::Event::Amend { task, reply_to, .. } = event else { unreachable!("checked amendment") };
         out.push(tasks::Request::Refused { reply_to, problem: tasks::Problem::new(Some(task), tasks::Refusal::Goals) });
-        return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false);
+        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
     }
     if let tasks::Event::Make { batch, .. } = &event {
         let mut tracked = 0_u32;
@@ -1574,13 +1582,13 @@ pub(super) fn route_tasks(
                 reply_to,
                 problem: tasks::Problem::capacity(None, tasks::Refusal::Live, capacity),
             });
-            return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false);
+            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
         }
     }
     let event = if let tasks::Event::Make { reply_to, creator, mut batch } = event {
         if let Err(problem) = core.resolve_llm(&mut batch) {
             out.push(tasks::Request::Refused { reply_to, problem });
-            return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false);
+            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
         }
         match crate::resources::defer(
             core,
@@ -1591,12 +1599,14 @@ pub(super) fn route_tasks(
             &mut out,
         ) {
             Some(event) => event,
-            None => return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false),
+            None => {
+                return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+            }
         }
     } else if let tasks::Event::MakeResultFollowups { reply_to, proposer, proposal, mut batch } = event {
         if let Err(problem) = core.resolve_llm(&mut batch) {
             out.push(tasks::Request::Refused { reply_to, problem });
-            return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false);
+            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
         }
         match crate::resources::defer(
             core,
@@ -1607,14 +1617,16 @@ pub(super) fn route_tasks(
             &mut out,
         ) {
             Some(event) => event,
-            None => return tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false),
+            None => {
+                return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+            }
         }
     } else {
         event
     };
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
     crate::resources::resume(core, work);
-    tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false)
+    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false)
 }
 pub(super) fn result_words(result: tasks::TaskResult) -> Box<[u8]> {
     match result {

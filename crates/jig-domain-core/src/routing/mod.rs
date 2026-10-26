@@ -301,7 +301,8 @@ impl Core {
 
 fn route_room_checked(limits: &Limits) -> Option<u32> {
     accounts::worst_case(&limits.accounts)?;
-    let tasks = tasks::max_out(&limits.tasks).checked_mul(16)?;
+    tasks::worst_case(&crate::settings::task_limits(limits))?;
+    let tasks = crate::settings::task_room(limits).checked_mul(16)?;
     let people = people::max_out(&limits.people).checked_mul(8)?;
     let fleet = fleet::max_out(&limits.fleet).checked_mul(8)?;
     let brief = brief::gather_max_out(&limits.brief).checked_mul(4)?;
@@ -318,6 +319,7 @@ fn route_room_checked(limits: &Limits) -> Option<u32> {
             limits.tasks.tasks.checked_mul(limits.tasks.tree_tasks.checked_add(limits.connectors)?.checked_add(4)?)?,
         )?
         .checked_add(limits.views.watchers.checked_mul(4)?)?
+        .checked_add(crate::settings::release_writes(limits)?)?
         .checked_add(8)?;
     Some(bound.max(settings::room(limits)?.writes))
 }
@@ -666,9 +668,9 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
             requests
         }
         Timer::Tasks => {
-            let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+            let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
             tasks::fire(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, &mut out);
-            tag_tasks(core, env, out, tasks::max_out(&env.limits.tasks), false, false, false)
+            tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false)
         }
         Timer::Fleet => {
             let mut out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));

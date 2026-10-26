@@ -115,11 +115,12 @@ pub fn scope(party: u64, scope: &core::reads::Scope) -> Option<Box<[Range]>> {
                     })
                     .expect("history interval");
             }
-            if first <= newest && newest <= last {
-                ranges
-                    .push(point(&core::Key::Core(core::CoreKey::Settings(core::settings::Key::Held(*newest)))))
-                    .expect("held point");
-            }
+            ranges
+                .push(Range {
+                    start: encoded(&core::Key::Core(core::CoreKey::Settings(core::settings::Key::Held(*first)))),
+                    end: point(&core::Key::Core(core::CoreKey::Settings(core::settings::Key::Held(*last)))).end,
+                })
+                .expect("held interval");
             ranges.into_boxed()
         }
         Scope::Task { task } | Scope::PersonTask { task } | Scope::Result { task } => Box::new([

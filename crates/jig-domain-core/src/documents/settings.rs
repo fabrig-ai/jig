@@ -2,7 +2,7 @@
 use super::{Missing, Text};
 use crate::{
     Core, Limits,
-    settings::{Current, Head, Setting, Value},
+    settings::{Head, Setting, Value},
 };
 use jig_domain_people as people;
 use skein_lib::{List, Map};
@@ -41,7 +41,7 @@ pub(super) fn make(core: &Core, party: u64) -> Result<Settings, Missing> {
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return Err(Missing::NotAllowed);
     }
-    let mut result = build(&core.current, core.tasks.live_agent_tasks());
+    let mut result = build(core);
     result.pending = List::with_capacity(core.settings_proposals.capacity());
     for (&(proposer, number), _) in &core.settings_proposals {
         result.pending.push(SettingsProposal { proposer, number }).expect("pending bound");
@@ -49,7 +49,8 @@ pub(super) fn make(core: &Core, party: u64) -> Result<Settings, Missing> {
     Ok(result)
 }
 
-pub(crate) fn build(current: &Current, holders: u32) -> Settings {
+pub(crate) fn build(core: &Core) -> Settings {
+    let current = &core.current;
     let mut names =
         Map::with_capacity(current.defaults.len().checked_add(current.changes.len()).expect("settings bounds"));
     for (&setting, _) in &current.defaults {
@@ -70,8 +71,12 @@ pub(crate) fn build(current: &Current, holders: u32) -> Settings {
         };
         settings.push(SettingLine { setting, name, follows, last }).expect("one line per setting");
     }
-    let mut held = List::with_capacity(1);
-    held.push(HeldRevision { head: current.newest_head().clone(), holders }).expect("newest held");
+    let mut held = List::with_capacity(core.held.heads.capacity().checked_add(1).expect("held inventory bound"));
+    for (&revision, head) in &core.held.heads {
+        held.push(HeldRevision { head: head.clone(), holders: core.tasks.holders(revision) }).expect("held inventory");
+    }
+    held.push(HeldRevision { head: current.newest_head().clone(), holders: core.tasks.holders(current.newest()) })
+        .expect("newest held");
     Settings { newest: current.newest(), settings, held, pending: List::with_capacity(0) }
 }
 
@@ -79,7 +84,7 @@ pub(super) fn worst_case(limits: &Limits) -> Option<u64> {
     let count = crate::settings::capacity(limits)?.checked_mul(2)?;
     List::<SettingLine>::worst_case(count)?
         .checked_add(u64::from(limits.templates).checked_mul(2)?.checked_mul(u64::from(limits.documents.text_bytes))?)?
-        .checked_add(List::<HeldRevision>::worst_case(1)?)?
+        .checked_add(List::<HeldRevision>::worst_case(limits.settings.revisions.checked_add(1)?)?)?
         .checked_add(List::<SettingsProposal>::worst_case(limits.settings.proposals)?)?
         .checked_add(u64::try_from(size_of::<Settings>()).ok()?)
 }
@@ -90,7 +95,7 @@ pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{Changed, Default};
+    use crate::settings::{Changed, Current};
     use alloc::boxed::Box;
 
     fn current() -> Current {
@@ -111,8 +116,25 @@ mod tests {
         }]);
         Current::new(config.defaults, &crate::tests::limits())
     }
+    fn document(current: Current) -> Settings {
+        let (mut core, _) = crate::tests::core();
+        core.current = current;
+        build(&core)
+    }
     fn line(current: &Current) -> SettingLine {
-        for line in build(current, 0).settings.into_boxed() {
+        let mut copied = Current {
+            defaults: Map::with_capacity(current.defaults.capacity()),
+            changes: Map::with_capacity(current.changes.capacity()),
+            head: current.head.clone(),
+            oldest: current.oldest,
+        };
+        for (&setting, value) in &current.defaults {
+            copied.defaults.insert(setting, value.clone()).unwrap();
+        }
+        for (&setting, value) in &current.changes {
+            copied.changes.insert(setting, value.clone()).unwrap();
+        }
+        for line in document(copied).settings.into_boxed() {
             if line.setting == Setting::Template(1) {
                 return line;
             }
@@ -139,22 +161,26 @@ mod tests {
             line(&current),
             SettingLine { setting: Setting::Template(1), name: None, follows: Follows::Change, last: 3 }
         );
-        current.defaults.insert(Setting::Template(1), Default { value: original, revision: 4 }).unwrap();
-        current.changes.remove(&Setting::Template(1));
+        let writes = crate::settings::apply(
+            &mut current,
+            &[crate::settings::Item { setting: Setting::Template(1), edit: crate::settings::Edit::Reset }],
+            4,
+        );
+        assert_eq!(writes.len(), 2);
         assert_eq!((line(&current).follows, line(&current).last), (Follows::Default, 4));
     }
     #[test]
     fn inventory_keeps_disjoint_removed_names_in_setting_order() {
         let mut current = current();
         current.changes.insert(Setting::Template(2), Changed { value: None, revision: 2 }).unwrap();
-        let settings = build(&current, 7).settings.into_boxed();
+        let document = document(current);
+        let settings = document.settings.into_boxed();
         let wanted = [Setting::Charter(1), Setting::Template(1), Setting::Template(2), Setting::Rules];
         assert_eq!(settings.len(), wanted.len());
         for (line, setting) in settings.iter().zip(wanted) {
             assert_eq!(line.setting, setting);
         }
-        let document = build(&current, 7);
-        assert_eq!(document.held.get(0).unwrap().holders, 7);
+        assert_eq!(document.held.get(0).unwrap().holders, 0);
         assert!(document.pending.is_empty());
     }
 }

@@ -206,13 +206,14 @@ impl Core {
             assert!(facts.is_empty(), "rules replacement has no policy lifecycle fact");
         }
         if charters || self.tasks.newest() != self.current.newest() {
-            let mut tasks_out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+            let charters = crate::charters::held_models(self, &env.limits);
+            let mut tasks_out = Queue::with_capacity(crate::settings::task_room(&env.limits));
             tasks::step(
                 &mut self.tasks,
                 &Env { now: env.now, wall: env.wall, limits: super::task_limits(&env.limits) },
                 tasks::Event::Charters {
                     newest: self.current.newest(),
-                    charters: crate::charters::models(&self.current, &self.settings, &env.limits),
+                    charters,
                     efforts: crate::charters::efforts(&self.settings),
                 },
                 &mut tasks_out,
@@ -332,10 +333,22 @@ fn save(record: Record) -> Write {
 pub fn revision_writes(
     revision: Option<Revision>,
     defaults: List<Write>,
+    oldest: u32,
+    newest: u32,
+    history: u32,
+    room: u32,
+) -> (List<Write>, u32) {
+    revision_writes_with_hold(revision, defaults, oldest, newest, history, room, false)
+}
+
+pub(crate) fn revision_writes_with_hold(
+    revision: Option<Revision>,
+    defaults: List<Write>,
     mut oldest: u32,
     newest: u32,
     history: u32,
     room: u32,
+    keep_previous: bool,
 ) -> (List<Write>, u32) {
     let mut writes = List::with_capacity(room);
     for write in defaults.into_boxed() {
@@ -343,14 +356,16 @@ pub fn revision_writes(
     }
     if let Some(revision) = revision {
         let previous = revision.head.against;
-        if previous != 0 {
-            writes.push(Write::CopySettingsRevision(previous)).expect("revision archive room");
+        if previous != 0 && !keep_previous {
+            if previous >= newest.saturating_sub(history).max(1) {
+                writes.push(Write::CopySettingsRevision(previous)).expect("revision archive room");
+                if oldest == 0 {
+                    oldest = previous;
+                }
+            }
             writes
                 .push(Write::Erase(crate::Key::Core(CoreKey::Settings(Key::Held(previous)))))
                 .expect("old held row erase room");
-            if oldest == 0 {
-                oldest = previous;
-            }
         }
         writes.push(save(Record::Revision { history: false, revision })).expect("new held row room");
     }

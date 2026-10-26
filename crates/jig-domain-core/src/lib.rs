@@ -347,6 +347,7 @@ pub struct Core {
     /// Configured project identifiers for bootstrap.
     pub projects: List<u32>,
     pub current: settings::Current,
+    pub(crate) held: settings::Held,
     pub(crate) hub_turns: u32,
     pub(crate) settings_restore: settings::restart::Restore,
     pub(crate) restore_failure: Option<RestartRequest>,
@@ -732,6 +733,7 @@ impl Core {
                 charters::efforts(&config.settings),
             ),
             current,
+            held: settings::Held::new(limits),
             hub_turns: config.hub_turns,
             settings_restore: settings::restart::Restore::new(limits),
             restore_failure: None,

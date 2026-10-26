@@ -342,11 +342,12 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         )?
         // Live agent count, including alignment room.
         .checked_add(u64::try_from(size_of::<u64>()).ok()?)?
-        // Each charter and its models, and each configured model's count of efforts.
-        .checked_add(u64::from(limits.charters.checked_add(limits.versions)?).checked_mul(
+        // Offered charters and newest removal markers, plus held versions and their models.
+        .checked_add(u64::from(limits.charters.checked_mul(2)?.checked_add(limits.versions)?).checked_mul(
             u64::try_from(size_of::<crate::CharterModels>()).ok()?.checked_add(u64::from(crate::MODELS))?,
         )?)?
         .checked_add(Map::<u32, u32>::worst_case(limits.revisions.checked_add(1)?)?)?
+        .checked_add(List::<u32>::worst_case(limits.revisions.checked_add(1)?)?)?
         .checked_add(u64::from(crate::MODELS))?
         // Atomic procedure admission saves every live row and finite balance.
         .checked_add(List::<crate::TaskRecord>::worst_case(limits.tasks)?)?

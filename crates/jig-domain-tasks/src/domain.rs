@@ -529,6 +529,7 @@ pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
         // Each party proposal terminal uses four outputs: pending erase, update
         // index, terminal row and notification, within this eight-per-row room.
         .checked_add(limits.tasks.checked_mul(8)?)?
+        .checked_add(limits.revisions.checked_add(1)?)?
         .checked_add(8)
 }
 
@@ -547,6 +548,7 @@ pub fn max_out(limits: &Limits) -> u32 {
 /// effects before external replies.
 #[expect(clippy::too_many_lines, reason = "the closed task event vocabulary dispatches to focused handlers")]
 pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queue<Request>) {
+    let held = crate::settings::before(domain);
     match event {
         Event::Charters { newest, charters, efforts } => {
             validate_charters(&env.limits, &charters, &efforts);
@@ -763,6 +765,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         crate::holds::expire(domain, env, out);
         crate::closing::progress(domain, env, out);
     }
+    crate::settings::released(domain, held, out);
 }
 
 /// Expire at most one due retry deadline using `env.now` after successful restoration, then advance
@@ -772,6 +775,7 @@ pub fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
     if !domain.ready() {
         return;
     }
+    let held = crate::settings::before(domain);
     crate::grace::fire(domain, env, out);
     crate::subscriptions::timer_due(domain, env, out);
     crate::wake::fire(domain, env, out);
@@ -814,6 +818,7 @@ pub fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
         }
     }
     crate::closing::progress(domain, env, out);
+    crate::settings::released(domain, held, out);
 }
 
 /// A changed writer or connector fact makes an idle procedure due.
@@ -1457,8 +1462,15 @@ fn append(capacity: u32, old: &[u64], batch: &[New]) -> Box<[u64]> {
 fn validate_charters(limits: &Limits, charters: &[crate::CharterModels], efforts: &[u8]) {
     assert!(
         charters.len()
-            <= usize::try_from(limits.charters.checked_add(limits.versions).expect("version bound"))
-                .expect("u32 fits usize"),
+            <= usize::try_from(
+                limits
+                    .charters
+                    .checked_mul(2)
+                    .expect("newest charter states")
+                    .checked_add(limits.versions)
+                    .expect("version bound")
+            )
+            .expect("u32 fits usize"),
         "charter versions fit"
     );
     let models = usize::try_from(crate::MODELS).expect("u32 fits usize");

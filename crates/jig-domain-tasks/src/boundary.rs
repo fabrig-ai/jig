@@ -1721,6 +1721,8 @@ pub enum Event {
 /// saves/erases with effects and delays outward replies until durability. (domain/tasks.md, section 5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Request {
+    /// The last live holder of this settings revision ended in this step.
+    Released { revision: u32 },
     /// Nothing was made: the first failed operation and its owner diagnostic.
     CompoundRefused { reply_to: ReplyTo, at: u32, problem: Problem },
     /// No part of this procedure step changed task state.

@@ -333,6 +333,27 @@ impl World {
         }
     }
 
+    fn route_timer(&mut self, task: u64, subscription: u64) {
+        self.message = self.message.checked_add(1).expect("message number room");
+        tasks::step(
+            &mut self.domain,
+            &self.env,
+            Event::Notice {
+                task,
+                word: Word {
+                    number: self.message,
+                    from: Party::Task(task),
+                    kind: MessageKind::Timer { subscription },
+                    words: Box::new([]),
+                    at: self.env.wall,
+                    hits: 1,
+                    eligible: false,
+                },
+            },
+            &mut self.out,
+        );
+    }
+
     fn route_hint(&mut self, request: &Request) {
         match request {
             Request::PersonStallDue { task } => {
@@ -379,26 +400,7 @@ impl World {
                     &mut self.out,
                 );
             }
-            Request::Timer { task, subscription } => {
-                self.message = self.message.checked_add(1).expect("message number room");
-                tasks::step(
-                    &mut self.domain,
-                    &self.env,
-                    Event::Notice {
-                        task: *task,
-                        word: Word {
-                            number: self.message,
-                            from: Party::Task(*task),
-                            kind: MessageKind::Timer { subscription: *subscription },
-                            words: Box::new([]),
-                            at: self.env.wall,
-                            hits: 1,
-                            eligible: false,
-                        },
-                    },
-                    &mut self.out,
-                );
-            }
+            Request::Timer { task, subscription } => self.route_timer(*task, *subscription),
             Request::Taken { .. }
             | Request::Waiting { .. }
             | Request::WriterWaiting { .. }
@@ -432,6 +434,7 @@ impl World {
             | Request::Ended { .. }
             | Request::Save { .. }
             | Request::Erase { .. }
+            | Request::Released { .. }
             | Request::RestoreRefused { .. } => {}
         }
     }
@@ -740,6 +743,7 @@ impl World {
                 | Request::Adopt { .. }
                 | Request::Close { .. }
                 | Request::Release { .. }
+                | Request::Released { .. }
                 | Request::RestoreRefused { .. }
                 | Request::EscalationNeeded { .. }
                 | Request::EscalationsInspected { .. }
@@ -827,6 +831,7 @@ impl World {
                 | Request::ProposalStalled { .. }
                 | Request::EscalationStalled { .. }
                 | Request::ResolveUncertain { .. }
+                | Request::Released { .. }
                 | Request::Release { .. } => {}
                 Request::EndTopic { task, subscription, connector } => {
                     self.ended_topics.push((task, subscription, connector));

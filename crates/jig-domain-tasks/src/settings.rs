@@ -1,6 +1,8 @@
 //! Settings revisions held by live agent tasks and their runs (domain/engine.md, 17.3).
 use crate::domain::{Domain, task_mut};
-use crate::{Active, Executor, Phase, SettingsRevision, TaskRecord};
+use crate::{Active, Executor, Phase, Request, SettingsRevision, TaskRecord};
+use alloc::boxed::Box;
+use skein_lib::{List, Queue};
 
 impl Domain {
     /// The newest revision named by the last charter replacement.
@@ -27,6 +29,28 @@ impl Domain {
     #[must_use]
     pub fn holders(&self, revision: u32) -> u32 {
         self.holders.get(&revision).copied().unwrap_or(0)
+    }
+
+    /// Live holders in task-number order, bounded in the refusal with an exact remainder.
+    #[must_use]
+    pub fn holding(&self, revision: u32, limit: u32) -> (Box<[u64]>, u32) {
+        let mut tasks = List::with_capacity(limit);
+        let mut more = 0_u32;
+        for (&number, _) in &self.names {
+            let task = self.task(number).expect("indexed live task");
+            let agent = match task.executor {
+                Executor::Agent { .. } => true,
+                Executor::Procedure { .. } | Executor::Person(_) => false,
+            };
+            if agent && (task.settings.task == revision || task.settings.run == Some(revision)) {
+                if tasks.len() < limit {
+                    tasks.push(number).expect("bounded named holders");
+                } else {
+                    more = more.checked_add(1).expect("bounded holders");
+                }
+            }
+        }
+        (tasks.into_boxed(), more)
     }
 }
 
@@ -96,4 +120,20 @@ pub(crate) fn publish(domain: &mut Domain, number: u64) {
         release_settings(domain, before);
     }
     hold_settings(domain, after);
+}
+
+/// Snapshot names, not transient decrements: a republished holder is no release.
+pub(crate) fn before(domain: &Domain) -> List<u32> {
+    let mut revisions = List::with_capacity(domain.holders.capacity());
+    for (&revision, _) in &domain.holders {
+        revisions.push(revision).expect("bounded held revisions");
+    }
+    revisions
+}
+pub(crate) fn released(domain: &Domain, before: List<u32>, out: &mut Queue<Request>) {
+    for &revision in &before {
+        if domain.holders(revision) == 0 {
+            out.push(Request::Released { revision });
+        }
+    }
 }

@@ -42,6 +42,9 @@ fn a_stored_override_of_a_dropped_template_is_restored_at_start() {
             change: people::PolicyChange::Templates { overrides: Box::new([override_goal()]) },
         },
     );
+    // This story restores a template override. Restoring older held revisions
+    // is a later task, so finish the fixture's unrelated conversation first.
+    jig_core_world::fixtures::finish_chat(&mut world, 0, b"Done");
     let mut config = fixture(SEED, false).0;
     config.core.defaults.templates = Box::new([jig_core_world::fixtures::templates()[0].clone()]);
     world.restart_with(config);
@@ -62,6 +65,9 @@ fn a_policy_change_naming_a_dropped_template_is_refused() {
             change: people::PolicyChange::Templates { overrides: Box::new([override_goal()]) },
         },
     );
+    // This story restores a template override. Restoring older held revisions
+    // is a later task, so finish the fixture's unrelated conversation first.
+    jig_core_world::fixtures::finish_chat(&mut world, 0, b"Done");
     let mut config = fixture(SEED, false).0;
     config.core.defaults.templates = Box::new([jig_core_world::fixtures::templates()[0].clone()]);
     world.restart_with(config);

@@ -12,14 +12,30 @@ use skein_lib::{Env, List, Map, ReplyTo};
 pub fn oldest(core: &Core, limits: &Limits) -> u32 {
     core.current.oldest().max(core.current.newest().saturating_sub(limits.settings.history)).max(1)
 }
-/// The M4 held-charter selection belongs at this seam.
+/// Whole charter values are available while their revision is held.
 #[must_use]
-pub fn may_read(current: &settings::Current, revision: u32) -> bool {
-    revision == current.newest()
+pub fn may_read(core: &Core, revision: u32) -> bool {
+    core.held(revision)
 }
 
 pub(super) fn setting(core: &Core, reply: ReplyTo, party: u64, setting: settings::Setting, revision: u32) -> Requests {
-    if core.people.role(party, people::DEPLOYMENT).is_none() || !may_read(&core.current, revision) {
+    if core.people.role(party, people::DEPLOYMENT).is_none() || !may_read(core, revision) {
+        return terminal(reply, Answer::None(Why::Unknown));
+    }
+    if let settings::Setting::Charter(number) = setting {
+        return terminal(
+            reply,
+            match core.charter_at(number, revision) {
+                Some(charter) => Answer::Setting(Box::new(SettingDocument {
+                    setting,
+                    revision,
+                    value: settings::Value::Charter(Box::new(charter.clone())),
+                })),
+                None => Answer::None(Why::Unknown),
+            },
+        );
+    }
+    if revision != core.current.newest() {
         return terminal(reply, Answer::None(Why::Unknown));
     }
     let answer = match core.current.value(setting) {
@@ -68,6 +84,9 @@ pub(super) fn revision(
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return terminal(reply, Answer::None(Why::Unknown));
     }
+    if core.held(number) {
+        return load(core, env, reply, sign_in, party, number, number, true);
+    }
     match select_revision(core.current.newest(), oldest(core, &env.limits), number) {
         Selection::Unknown => terminal(reply, Answer::Revision(Box::new(RevisionAnswer::Unknown))),
         Selection::Forgotten { oldest } => {
@@ -87,7 +106,25 @@ pub(super) fn revisions(
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return terminal(reply, Answer::None(Why::Unknown));
     }
-    let oldest = oldest(core, &env.limits);
+    let cutoff = oldest(core, &env.limits);
+    let last = match before {
+        Some(before) => core.current.newest().min(before.saturating_sub(1)),
+        None => core.current.newest(),
+    };
+    let (oldest, before) = if last < cutoff {
+        let mut held = None;
+        for (&revision, _) in &core.held.heads {
+            if revision <= last {
+                held = Some(revision);
+            }
+        }
+        match held {
+            Some(revision) => (page_oldest(core, cutoff), revision.checked_add(1)),
+            None => (cutoff, before),
+        }
+    } else {
+        (cutoff, before)
+    };
     match page_range(core.current.newest(), oldest, before, env.limits.documents.rows) {
         Some((first, last)) => load(core, env, reply, sign_in, party, first, last, false),
         None => terminal(
@@ -215,6 +252,13 @@ pub fn record_revision(value: &Record) -> Option<&settings::Revision> {
     }
 }
 
+fn page_oldest(core: &Core, cutoff: u32) -> u32 {
+    match core.held.heads.first() {
+        Some((&revision, _)) => cutoff.min(revision),
+        None => cutoff,
+    }
+}
+
 fn selected(scope: &Scope) -> (u32, u32, u32, bool) {
     match scope {
         Scope::SettingsHistory { first, last, newest, whole } => (*first, *last, *newest, *whole),
@@ -249,7 +293,7 @@ pub(super) fn from_store(
         return Answer::None(Why::Busy);
     }
     let oldest = oldest(core, limits);
-    if whole && first < oldest {
+    if whole && first < oldest && !core.held(first) {
         return Answer::Revision(Box::new(RevisionAnswer::Forgotten { oldest }));
     }
     let mut found = Map::with_capacity(range.rows);
@@ -312,7 +356,7 @@ pub(super) fn from_store(
     }
     let mut rows = List::with_capacity(range.rows);
     for number in (first..=last).rev() {
-        if number < oldest {
+        if number < oldest && !core.held(number) {
             continue;
         }
         let Some(revision) = found.remove(&number) else { continue };
@@ -329,7 +373,7 @@ pub(super) fn from_store(
         rows.push(RevisionRow { head: revision.head, more: total.saturating_sub(items.len()), items })
             .expect("bounded revision page");
     }
-    let next = if first > oldest { Some(first) } else { None };
+    let next = if first > page_oldest(core, oldest) { Some(first) } else { None };
     Answer::Revisions(Box::new(RevisionsPage { rows, next, forgotten: next.is_none() && oldest > 1 }))
 }
 
@@ -390,7 +434,7 @@ mod tests {
             (settings::Key::History(4), true),
             (settings::Key::History(5), true),
             (settings::Key::History(6), false),
-            (settings::Key::Held(5), false),
+            (settings::Key::Held(5), true),
             (settings::Key::Held(6), true),
             (settings::Key::Held(7), false),
             (settings::Key::Extent, false),

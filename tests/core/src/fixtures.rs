@@ -218,7 +218,7 @@ pub fn delegate(world: &mut crate::effects::World, run: (u64, u64), completion: 
         stubs: Box::new([]),
     }));
     let core::CallPart::Delegated(numbers) = &world.answers.last().expect("delegate answer").2 else {
-        panic!("delegation was not admitted");
+        panic!("delegation was not admitted: {:?}", world.answers.last());
     };
     numbers[0].task
 }
