@@ -48,6 +48,8 @@ pub(crate) fn prepare(domain: &mut Domain, env: &Env<Limits>, to: ReplyTo, numbe
         Err((to, why)) => return refused(to, Some(number), why, out),
     };
     let kept = ends::kept(domain, number);
+    let moves = domain.task(number).expect("entrance names task").flags.conversation && domain.may_move(number);
+    let newest = domain.newest();
     let task = task_mut(domain, number).expect("entrance names task");
     match task.record.executor {
         crate::Executor::Agent { .. } => {}
@@ -57,6 +59,9 @@ pub(crate) fn prepare(domain: &mut Domain, env: &Env<Limits>, to: ReplyTo, numbe
     }
     if task.record.phase != Phase::Active(Active::Due) || kept.blocks_claims() {
         return refused(to, Some(number), Refusal::State, out);
+    }
+    if moves {
+        task.record.settings.task = newest;
     }
     task.record.settings.run = Some(task.record.settings.task);
     task.record.phase = Phase::Active(Active::Preparing);

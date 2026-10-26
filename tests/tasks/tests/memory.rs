@@ -655,6 +655,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     // grows each of 16 tasks' three retained/scratch records by eight bytes.
     // T3 also keeps five u32 revision names for the net-release snapshot.
     const SETTINGS_REVISIONS_BYTES: u64 = 10 * (24 + 64) + 416 + 16 * 3 * 8 + 5 * 4;
+    // One bounded snapshot of the sixteen task numbers moved in a settings decision.
+    const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -669,6 +671,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_HOLDERS_BYTES
                 + SETTINGS_PROPOSAL_BYTES
                 + SETTINGS_REVISIONS_BYTES
+                + SETTINGS_MOVES_BYTES
         )
     );
 }

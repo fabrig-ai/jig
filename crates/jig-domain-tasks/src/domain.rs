@@ -550,6 +550,7 @@ pub fn max_out(limits: &Limits) -> u32 {
 pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queue<Request>) {
     let held = crate::settings::before(domain);
     match event {
+        Event::MoveToNewest { from } => crate::settings_moves::move_tasks(domain, env, from, out),
         Event::Charters { newest, charters, efforts } => {
             validate_charters(&env.limits, &charters, &efforts);
             domain.newest = newest;

@@ -434,6 +434,7 @@ impl World {
             | Request::Ended { .. }
             | Request::Save { .. }
             | Request::Erase { .. }
+            | Request::MovedToNewest { .. }
             | Request::Released { .. }
             | Request::RestoreRefused { .. } => {}
         }
@@ -468,7 +469,8 @@ impl World {
             }
             Event::Turn { task, cumulative, .. }
             | Event::Activation { task, cause: Cause::Priced { cumulative }, .. } => Some((*task, *cumulative)),
-            Event::Charters { .. }
+            Event::MoveToNewest { .. }
+            | Event::Charters { .. }
             | Event::ResourceAccess { .. }
             | Event::Resource { .. }
             | Event::Kinds { .. }
@@ -562,6 +564,7 @@ impl World {
             | Event::HandBackPerson { .. }
             | Event::AnswerPerson { .. }
             | Event::Control { .. }
+            | Event::MoveToNewest { .. }
             | Event::Move { .. }
             | Event::Compound { .. }
             | Event::Propose { .. }
@@ -743,6 +746,7 @@ impl World {
                 | Request::Adopt { .. }
                 | Request::Close { .. }
                 | Request::Release { .. }
+                | Request::MovedToNewest { .. }
                 | Request::Released { .. }
                 | Request::RestoreRefused { .. }
                 | Request::EscalationNeeded { .. }
@@ -831,6 +835,7 @@ impl World {
                 | Request::ProposalStalled { .. }
                 | Request::EscalationStalled { .. }
                 | Request::ResolveUncertain { .. }
+                | Request::MovedToNewest { .. }
                 | Request::Released { .. }
                 | Request::Release { .. } => {}
                 Request::EndTopic { task, subscription, connector } => {

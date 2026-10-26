@@ -420,7 +420,7 @@ fn refused_changes_preserve_all_settings_rows_and_the_newest() {
 }
 
 #[test]
-fn a_live_tasks_charter_removal_is_full_and_commits_no_settings() {
+fn a_live_task_keeps_its_revision_when_the_newest_removes_its_charter() {
     let mut world = start(64);
     let signed = sign_in(&mut world);
     world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
@@ -430,7 +430,6 @@ fn a_live_tasks_charter_removal_is_full_and_commits_no_settings() {
     };
     let mut rules = world.domain.settings().rules().clone();
     rules.ceiling.delegation.kinds = Box::new([]);
-    let before_settings = settings_rows(&world);
     let items = Box::new([
         settings::Item { setting: settings::Setting::Charter(1), edit: settings::Edit::Removed },
         settings::Item { setting: settings::Setting::Template(1), edit: settings::Edit::Removed },
@@ -440,18 +439,15 @@ fn a_live_tasks_charter_removal_is_full_and_commits_no_settings() {
             edit: settings::Edit::Set(settings::Value::Rules(Box::new(rules))),
         },
     ]);
+    changed(&change(&mut world, signed, 41, 1, items), 2);
+    assert_eq!(world.domain.settings().newest(), 2);
+    assert!(world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(world.domain.settings().charter(1).is_none());
+    assert_eq!(fixtures::live_row(&world, first).settings.task, 1);
     assert_eq!(
-        change(&mut world, signed, 41, 1, items),
-        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
-            revision: 1,
-            tasks: Box::new([first]),
-            more: 0
-        }))
+        ask(&mut world, signed, 42, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 2, moved: 0, stayed: 1 })
     );
-    assert_eq!(world.domain.settings().newest(), 1);
-    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(2))));
-    assert!(world.domain.settings().charter(1).is_some());
-    assert_eq!(settings_rows(&world), before_settings);
 }
 
 #[test]
@@ -543,7 +539,7 @@ fn a_settings_answer_and_the_new_me_watch_wait_together_for_durability() {
 }
 
 #[test]
-fn a_live_llm_choice_outside_new_charter_models_is_full_and_names_only_the_bounded_first_tasks() {
+fn live_tasks_with_llm_choices_the_newest_disallows_stay_and_are_all_counted() {
     let (mut config, mut limits) = configuration();
     let mut other = config.core.settings.models[0].clone();
     other.name = Box::from(b"other".as_slice());
@@ -569,29 +565,19 @@ fn a_live_llm_choice_outside_new_charter_models_is_full_and_names_only_the_bound
     let mut charter = world.domain.settings().charter(1).expect("charter").clone();
     charter.policy.model = other;
     charter.policy.alternatives = Box::new([]);
-    let before_settings = settings_rows(&world);
-    let before = revision(&world, 1, false).clone();
+    let item = settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    };
+    changed(&change(&mut world, signed, 41, 1, Box::new([item])), 2);
     assert_eq!(
-        change(
-            &mut world,
-            signed,
-            41,
-            1,
-            Box::new([settings::Item {
-                setting: settings::Setting::Charter(1),
-                edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter)))
-            }])
-        ),
-        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
-            revision: 1,
-            tasks: Box::new([made[0]]),
-            more: 1
-        }))
+        ask(&mut world, signed, 42, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 2, moved: 0, stayed: 2 })
     );
-    assert_eq!(world.domain.settings().newest(), 1);
-    assert_eq!(revision(&world, 1, false), &before);
-    assert_eq!(settings_rows(&world), before_settings);
-    assert!(!world.store.rows.contains_key(&key(settings::Key::Changed(settings::Setting::Charter(1)))));
+    for task in made {
+        assert_eq!(fixtures::live_row(&world, task).settings.task, 1);
+    }
+    assert!(world.store.rows.contains_key(&key(settings::Key::Held(1))));
 }
 
 #[test]
@@ -1169,4 +1155,128 @@ fn move_to_newest_of_the_newest_moves_nothing_and_an_unknown_revision_is_refused
     );
     assert_eq!(settings_rows(&world), before);
     assert_eq!(world.domain.settings().newest(), 1);
+}
+
+fn moving_change(world: &mut World, signed: u64, request: u8, against: u32, item: settings::Item) {
+    world.send(root::Event::Core(core::Event::ChangeSettings {
+        reply_to: ReplyTo::new(Token::new(SEED)),
+        sign_in: signed,
+        key: [request; 16],
+        digest: [request; 32],
+        change: Box::new(settings::Change { against, items: Box::new([item]), running: settings::Running::Moves }),
+    }));
+    let (_, root::Delivery::Core(core::Held::PeopleReply { reply, .. })) =
+        world.client_peer.as_mut().expect("client").delivered.pop().expect("settings reply")
+    else {
+        panic!("settings reply")
+    };
+    changed(&reply, against + 1);
+}
+
+#[test]
+fn a_change_moving_running_work_moves_the_waiting_goal_and_keeps_the_live_run() {
+    let (mut world, signed, parked) = held_run();
+    world.end(jig_domain_tasks::End::Parked, 0);
+    let live = held_goal(&mut world, signed, 103);
+    let assignments = world.assignments.clone();
+    let old_policy = world.assigned.as_ref().expect("live run").run.policy.clone();
+    let item = instructions_edit(&world, b"The next run's instructions.");
+    moving_change(&mut world, signed, 104, 1, item);
+    assert_eq!(world.assignments, assignments);
+    assert_eq!(world.assigned.as_ref().expect("live run").run.policy, old_policy);
+    assert_eq!(fixtures::live_row(&world, parked).settings, jig_domain_tasks::SettingsRevision { task: 2, run: None });
+    assert_eq!(fixtures::live_row(&world, live).settings, jig_domain_tasks::SettingsRevision { task: 2, run: Some(1) });
+    assert_eq!(
+        inventory(&mut world, signed).held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(),
+        [(1, 1), (2, 2)]
+    );
+    let decision = world
+        .commits
+        .iter()
+        .find(|writes| {
+            writes
+                .iter()
+                .any(|write| matches!(write, root::Write::Save(record) if record.key() == key(settings::Key::Held(2))))
+        })
+        .expect("settings decision");
+    for number in [parked, live] {
+        assert!(decision.iter().any(|write| matches!(write, root::Write::Save(root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(row)))) if row.number == number && row.settings.task == 2)));
+    }
+    world.end(jig_domain_tasks::End::Parked, 0);
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert_eq!(revision(&world, 1, true).head.number, 1);
+    let reply = ask(
+        &mut world,
+        signed,
+        105,
+        people::Ask::Say { project: 1, task: parked, words: b"Continue".as_slice().into() },
+    );
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let next = world.assigned.as_ref().expect("parked goal's next run");
+    assert_eq!(next.task, parked);
+    assert_eq!(next.run.policy.instructions.as_ref(), b"The next run's instructions.");
+    assert_eq!(fixtures::live_row(&world, parked).settings.run, Some(2));
+}
+
+#[test]
+fn move_to_newest_moves_a_held_revisions_tasks_and_releases_it() {
+    let (mut world, signed, goal) = held_run();
+    world.end(jig_domain_tasks::End::Parked, 0);
+    change_instructions(&mut world, signed);
+    let before = world.commits.len();
+    assert_eq!(
+        ask(&mut world, signed, 103, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 2, moved: 1, stayed: 0 })
+    );
+    assert_eq!(fixtures::live_row(&world, goal).settings, jig_domain_tasks::SettingsRevision { task: 2, run: None });
+    let decision = world.commits[before..]
+        .iter()
+        .find(|writes| writes.iter().any(|write| matches!(write, root::Write::CopySettingsRevision(1))))
+        .expect("move releases revision in its decision");
+    assert!(
+        decision
+            .iter()
+            .any(|write| matches!(write, root::Write::Erase(address) if *address == key(settings::Key::Held(1))))
+    );
+    assert!(decision.iter().any(|write| matches!(write, root::Write::Save(root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(row)))) if row.number == goal && row.settings.task == 2)));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert_eq!(revision(&world, 1, true).head.number, 1);
+    let reply =
+        ask(&mut world, signed, 104, people::Ask::Say { project: 1, task: goal, words: b"Continue".as_slice().into() });
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let next = world.assigned.as_ref().expect("goal's next run");
+    assert_eq!(next.task, goal);
+    assert_eq!(next.run.policy.instructions.as_ref(), b"Instructions from revision two.");
+}
+
+#[test]
+fn a_move_uses_the_room_freed_by_its_tasks_for_heads_and_versions() {
+    let (mut config, mut limits) = configuration();
+    limits.core.settings.revisions = 1;
+    limits.core.settings.versions = 1;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let first = held_goal(&mut world, signed, 101);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    change_instructions(&mut world, signed);
+    let second = held_goal(&mut world, signed, 103);
+    let item = instructions_edit(&world, b"Revision three.");
+    moving_change(&mut world, signed, 104, 2, item);
+    for task in [first, second] {
+        assert_eq!(fixtures::live_row(&world, task).settings.task, 3);
+    }
+    assert_eq!(fixtures::live_row(&world, second).settings.run, Some(2));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 1 })));
+    assert!(world.store.rows.contains_key(&key(settings::Key::Held(2))));
+    assert!(world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 2 })));
+    assert_eq!(
+        inventory(&mut world, signed).held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(),
+        [(2, 1), (3, 2)]
+    );
 }

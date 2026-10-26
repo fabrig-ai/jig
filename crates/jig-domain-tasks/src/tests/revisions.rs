@@ -1324,3 +1324,96 @@ fn released_names_only_revisions_with_no_holders_after_the_whole_step() {
     );
     assert_eq!(h.domain.holding(1, 1), (Box::<[u64]>::from([]), 0));
 }
+
+#[test]
+fn a_move_sets_the_newest_for_those_that_may_and_counts_those_that_stay() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 1, &[(7, 1, Some(&[0, 1])), (1, 1, Some(&[0]))]);
+    h.make(vec![settings_agent(1, 0), settings_agent(2, 1), task(3, &[])]);
+    h.send(Event::Prepare { reply_to: to(), task: 1 });
+    settings_claim(&mut h, 1);
+    settings_charters(&mut h, 2, &[(7, 1, Some(&[0, 1])), (1, 1, Some(&[0]))]);
+    let mut procedure = task(5, &[]);
+    procedure.executor = Executor::Procedure { connector: 1, code: 1 };
+    let mut person = task(6, &[]);
+    person.executor = Executor::Person(PersonAddress::Person(9));
+    h.make(vec![settings_agent(4, 0), procedure, person]);
+    settings_charters(&mut h, 3, &[(7, 1, Some(&[0, 1])), (7, 3, Some(&[0])), (1, 1, Some(&[0])), (1, 3, None)]);
+    assert!(h.domain.may_move(1));
+    assert!(!h.domain.may_move(2));
+    assert!(!h.domain.may_move(3));
+    assert!(!h.domain.may_move(5));
+    let mut held = skein_lib::Map::with_capacity(LIMITS.revisions + 1);
+    h.domain.held_after_moves(None, 3, h.domain.charters(), &mut held);
+    assert_eq!(held.len(), 1);
+    assert!(held.contains_key(&1));
+    let out = h.send(Event::MoveToNewest { from: None });
+    assert!(out.contains(&Request::MovedToNewest { moved: 2, stayed: 2 }), "{out:?}");
+    for number in [1, 4] {
+        let Stored::Live(row) = &h.stored[&Key::Live(number)] else { panic!("live moved task") };
+        assert_eq!(row.settings.task, 3);
+    }
+    assert_eq!(h.domain.task(1).unwrap().settings.run, Some(1));
+    for number in [2, 3] {
+        assert_eq!(h.domain.task(number).unwrap().settings.task, 1);
+    }
+    for number in [5, 6] {
+        assert_eq!(h.domain.task(number).unwrap().settings.task, 2);
+    }
+    assert_eq!(h.domain.holders(1), 3);
+    assert_eq!(h.domain.holders(2), 0);
+    assert_eq!(h.domain.holders(3), 2);
+}
+
+#[test]
+fn move_from_one_revision_leaves_the_others() {
+    let mut h = Harness::new();
+    h.make(vec![task(1, &[])]);
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    h.make(vec![task(2, &[])]);
+    settings_charters(&mut h, 3, &[(1, 1, Some(&[0]))]);
+    let out = h.send(Event::MoveToNewest { from: Some(1) });
+    assert!(out.contains(&Request::MovedToNewest { moved: 1, stayed: 0 }), "{out:?}");
+    assert_eq!(h.domain.task(1).unwrap().settings.task, 3);
+    assert_eq!(h.domain.task(2).unwrap().settings.task, 2);
+    let out = h.send(Event::MoveToNewest { from: Some(3) });
+    assert!(out.contains(&Request::MovedToNewest { moved: 0, stayed: 0 }));
+}
+
+#[test]
+fn a_conversation_moves_as_its_run_is_prepared_and_one_that_may_not_stays() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 1, &[(7, 1, Some(&[0, 1]))]);
+    let mut first = settings_agent(1, 0);
+    first.flags.conversation = true;
+    let mut second = settings_agent(2, 1);
+    second.flags.conversation = true;
+    h.make(vec![first, second]);
+    settings_charters(&mut h, 2, &[(7, 1, Some(&[0, 1])), (7, 2, Some(&[0]))]);
+    for number in [1, 2] {
+        h.send(Event::Prepare { reply_to: to(), task: number });
+    }
+    assert_eq!(h.domain.task(1).unwrap().settings, crate::SettingsRevision { task: 2, run: Some(2) });
+    assert_eq!(h.domain.task(2).unwrap().settings, crate::SettingsRevision { task: 1, run: Some(1) });
+    assert_eq!(h.domain.holders(1), 1);
+    assert_eq!(h.domain.holders(2), 1);
+}
+
+#[test]
+fn the_last_holder_moving_releases_its_revision() {
+    let mut h = Harness::new();
+    h.make(vec![task(1, &[]), task(2, &[])]);
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    let out = h.send(Event::MoveToNewest { from: None });
+    assert_eq!(
+        out.iter()
+            .filter(|request| match request {
+                Request::Released { revision: 1 } => true,
+                _ => false,
+            })
+            .count(),
+        1
+    );
+    assert_eq!(h.domain.holders(1), 0);
+    assert_eq!(h.domain.holders(2), 2);
+}

@@ -33,7 +33,8 @@ impl Plan {
 impl Held {
     pub(crate) fn new(limits: &Limits) -> Self {
         Self {
-            heads: Map::with_capacity(limits.settings.revisions),
+            // A Moves decision stages the previous newest before releasing old heads.
+            heads: Map::with_capacity(limits.settings.revisions.checked_add(1).expect("staged head")),
             versions: Map::with_capacity(limits.settings.versions),
         }
     }
@@ -79,6 +80,24 @@ impl Held {
         previous: Option<u32>,
         limits: &Limits,
     ) -> Plan {
+        let mut held = Map::with_capacity(limits.settings.revisions.checked_add(1).expect("held names"));
+        for (&revision, _) in &self.heads {
+            held.insert(revision, ()).expect("existing held names");
+        }
+        if let Some(revision) = previous {
+            held.insert(revision, ()).expect("previous newest name");
+        }
+        self.plan_held(current, items, newest, &held, limits)
+    }
+
+    pub(crate) fn plan_held(
+        &self,
+        current: &Current,
+        items: &[Item],
+        newest: u32,
+        held: &Map<u32, ()>,
+        limits: &Limits,
+    ) -> Plan {
         let capacity = scratch_capacity(limits).expect("held scratch bound");
         let mut candidates = Map::with_capacity(capacity);
         for (&key, _) in &self.versions {
@@ -100,10 +119,7 @@ impl Held {
                 continue;
             }
             let mut read = false;
-            for (&revision, _) in &self.heads {
-                read |= select(&plan.candidates, latest, key.charter, revision) == Some(key);
-            }
-            if let Some(revision) = previous {
+            for (&revision, ()) in held {
                 read |= select(&plan.candidates, latest, key.charter, revision) == Some(key);
             }
             if read {
@@ -274,11 +290,12 @@ fn scratch_capacity(limits: &Limits) -> Option<u32> {
 }
 /// Retained tables and one decision's two content-free version-name tables.
 pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<u32, Head>::worst_case(limits.settings.revisions)?
+    Map::<u32, Head>::worst_case(limits.settings.revisions.checked_add(1)?)?
         .checked_add(Map::<VersionKey, CharterVersion>::worst_case(limits.settings.versions)?)?
         .checked_add(
             u64::from(limits.settings.versions)
                 .checked_mul(u64::from(limits.run_bytes).checked_add(u64::try_from(size_of::<Charter>()).ok()?)?)?,
         )?
-        .checked_add(Map::<VersionKey, ()>::worst_case(scratch_capacity(limits)?)?.checked_mul(2)?)
+        .checked_add(Map::<VersionKey, ()>::worst_case(scratch_capacity(limits)?)?.checked_mul(2)?)?
+        .checked_add(Map::<u32, ()>::worst_case(limits.settings.revisions.checked_add(1)?)?)
 }

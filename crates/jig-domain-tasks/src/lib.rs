@@ -107,6 +107,7 @@ mod retire;
 mod run;
 mod runtime;
 mod settings;
+mod settings_moves;
 mod standing;
 mod stored;
 mod subscriptions;
