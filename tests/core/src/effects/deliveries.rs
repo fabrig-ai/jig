@@ -101,6 +101,8 @@ impl World {
             root::Delivery::CallAnswer { name, call, .. } => self.host_answers.push((name, call)),
             root::Delivery::Message { word, .. } => self.inbound.push(word),
             root::Delivery::Assigned { assignment, .. } => {
+                self.assigned_answers =
+                    assignment.answered.iter().cloned().map(|call| self.protocol.replay(call)).collect();
                 self.last_read = None;
                 self.assignments.push((assignment.task, assignment.attempt));
                 self.assigned = Some(assignment);

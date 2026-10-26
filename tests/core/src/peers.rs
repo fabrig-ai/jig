@@ -208,15 +208,20 @@ impl Peers {
             }
             root::Delivery::CallAnswer { task, attempt, name, call, .. } => {
                 if let Some((channel, number)) = self.opaque.remove(&(*task, *attempt, name.clone())) {
-                    self.worker(channel).call_answer(
-                        *task,
-                        *attempt,
-                        number,
-                        match &call.answer {
-                            core::SettledAnswer::Host { body, .. } => body.clone(),
-                            core::SettledAnswer::Delivery { evidence, .. } => evidence.clone(),
-                        },
-                    );
+                    let bytes = match &call.answer {
+                        core::SettledAnswer::Host { body, .. } => body.clone(),
+                        core::SettledAnswer::Delivery { .. } => {
+                            let name = jig_protocol_charter::call_key(name, *attempt).expect("settled call name");
+                            self.protocol.delivery_evidence[&core::CallKey {
+                                task: *task,
+                                attempt: *attempt,
+                                completion: name.completion,
+                                position: name.position,
+                            }]
+                                .clone()
+                        }
+                    };
+                    self.worker(channel).call_answer(*task, *attempt, number, bytes);
                 }
             }
             root::Delivery::Application { .. }

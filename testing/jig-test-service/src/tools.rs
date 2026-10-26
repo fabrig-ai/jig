@@ -1,4 +1,6 @@
 //! Decode attested calls and render their terminals outside the root (channel.md, 6.3).
+#[cfg(test)]
+mod tests;
 use alloc::boxed::Box;
 use jig_domain_core as core;
 use jig_domain_fleet as fleet;
@@ -139,6 +141,7 @@ pub(super) fn charter(
     value: root::Assignment,
     names: &[jig_protocol_charter::EndpointName],
     deployment: &[u8; 16],
+    evidence: &[(core::CallKey, Box<[u8]>)],
 ) -> Option<jig_domain_host::Assignment> {
     use jig_domain_host as host;
     use jig_protocol_charter as charter;
@@ -201,7 +204,7 @@ pub(super) fn charter(
     }
     let mut answered = List::with_capacity(u32::try_from(value.answered.len()).ok()?);
     for call in value.answered {
-        answered.push(replay(call)).ok()?;
+        answered.push(replay(call, evidence)?).ok()?;
     }
     let mut grants = List::with_capacity(u32::try_from(value.grants.len()).ok()?);
     for grant in value.grants {
@@ -230,10 +233,11 @@ pub(super) fn charter(
         messages: messages.into_boxed(),
     })
 }
-fn replay(value: core::Settled) -> jig_domain_host::AnsweredCall {
+// Evidence is supplied by the application by key, never recovered from core rows.
+fn replay(value: core::Settled, evidence: &[(core::CallKey, Box<[u8]>)]) -> Option<jig_domain_host::AnsweredCall> {
     use jig_domain_host as host;
     let core::Settled { key, call } = value;
-    host::AnsweredCall {
+    Some(host::AnsweredCall {
         name: jig_protocol_charter::call_name(&jig_protocol_charter::CallKey {
             activation: key.attempt,
             completion: key.completion,
@@ -242,11 +246,19 @@ fn replay(value: core::Settled) -> jig_domain_host::AnsweredCall {
         tool: call.tool,
         answer: match call.answer {
             core::SettledAnswer::Host { error, body } => host::SettledAnswer::Host { error, body },
-            core::SettledAnswer::Delivery { outcome, evidence } => {
-                host::SettledAnswer::Delivery { outcome: delivery(outcome), evidence }
+            core::SettledAnswer::Delivery { outcome } => {
+                host::SettledAnswer::Delivery { outcome: delivery(outcome), evidence: evidence_for(key, evidence)? }
             }
         },
+    })
+}
+fn evidence_for(key: core::CallKey, evidence: &[(core::CallKey, Box<[u8]>)]) -> Option<Box<[u8]>> {
+    for (candidate, bytes) in evidence {
+        if *candidate == key {
+            return Some(bytes.clone());
+        }
     }
+    None
 }
 fn declarations(timeout: skein_lib::Duration, families: u64) -> Option<Box<[jig_protocol_charter::Tool]>> {
     let mut tools = skein_lib::List::with_capacity(u32::try_from(kit::declarations().len()).ok()?);

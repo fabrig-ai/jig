@@ -21,11 +21,11 @@ pub struct Settled {
     pub call: SettledCall,
 }
 
-/// An answer is opaque conversation data, including replay evidence for delivery.
+/// A settled delivery keeps its outcome alone (store.md, 5.1).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum SettledAnswer {
     Host { error: bool, body: Box<[u8]> },
-    Delivery { outcome: DeliveryOutcome, evidence: Box<[u8]> },
+    Delivery { outcome: DeliveryOutcome },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -43,7 +43,7 @@ impl SettledCall {
     pub fn owned_bytes(&self) -> Option<u64> {
         let answer = match &self.answer {
             SettledAnswer::Host { body, .. } => body.len(),
-            SettledAnswer::Delivery { evidence, .. } => evidence.len(),
+            SettledAnswer::Delivery { .. } => 0,
         };
         u64::try_from(self.tool.len()).ok()?.checked_add(u64::try_from(answer).ok()?)
     }

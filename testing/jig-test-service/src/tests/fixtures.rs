@@ -559,7 +559,7 @@ pub fn worker_service() -> Service {
 pub fn worker_assignment() -> jig_domain_host::LinkDown {
     let names = [jig_protocol_charter::EndpointName { number: 1, name: b"fake".as_slice().into(), dialect: 1 }];
     let mut assignment =
-        crate::tools::charter(assignment(&config()), &names, &seeds().deployment).expect("charter assignment");
+        crate::tools::charter(assignment(&config()), &names, &seeds().deployment, &[]).expect("charter assignment");
     assignment.assignment.identity = [3; 16];
     assignment.assignment.run = Token::new(7);
     assignment.assignment.attempt = Token::new(3);

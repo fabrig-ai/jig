@@ -37,7 +37,6 @@ pub fn limits(domain: &domain::Limits) -> Option<Limits> {
 
         escalation_decision_reject_reason: domain.escalation_reason_bytes.max(domain.people.words),
         settled_answer_host_body: domain.call_answer_bytes,
-        settled_answer_delivery_evidence: domain.call_answer_bytes,
         settled_call_tool: domain.call_answer_bytes,
         call_part_effect_denied_findings: jig_domain_authority::max_out(&domain.authority)?,
         call_part_tool_denied_findings: jig_domain_authority::max_out(&domain.authority)?,

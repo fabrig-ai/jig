@@ -96,9 +96,7 @@ pub(crate) fn assignment(
     for core::Settled { key, call: value } in domain.core.settled_calls(task, attempt) {
         let answer = match value.answer {
             core::SettledAnswer::Host { error, body } => host::SettledAnswer::Host { error, body },
-            core::SettledAnswer::Delivery { outcome, evidence } => {
-                host::SettledAnswer::Delivery { outcome: delivery(outcome), evidence }
-            }
+            core::SettledAnswer::Delivery { .. } => unreachable!("engine charter has no delivery tool"),
         };
         let name = charter::call_name(&charter::CallKey {
             activation: key.attempt,
@@ -206,15 +204,6 @@ fn contract(value: tasks::Contract) -> Option<charter::Contract> {
             }),
         },
     })
-}
-const fn delivery(value: core::DeliveryOutcome) -> host::DeliveryOutcome {
-    match value {
-        core::DeliveryOutcome::Delivered => host::DeliveryOutcome::Delivered,
-        core::DeliveryOutcome::Nothing => host::DeliveryOutcome::Nothing,
-        core::DeliveryOutcome::Stale => host::DeliveryOutcome::Stale,
-        core::DeliveryOutcome::Refused | core::DeliveryOutcome::Invalid => host::DeliveryOutcome::Refused,
-        core::DeliveryOutcome::Failed => host::DeliveryOutcome::Failed,
-    }
 }
 pub(crate) fn sender(value: tasks::Party) -> Box<[u8]> {
     match value {

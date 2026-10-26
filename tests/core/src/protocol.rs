@@ -12,6 +12,8 @@ type Envelope = (Box<[u8]>, Box<[u8]>);
 pub struct Stand {
     limits: tools::Limits,
     calls: BTreeMap<core::CallKey, Envelope>,
+    /// The application's kept delivery bytes, preserved across engine restarts.
+    pub delivery_evidence: BTreeMap<core::CallKey, Box<[u8]>>,
 }
 
 impl Stand {
@@ -25,6 +27,37 @@ impl Stand {
                 depth: 16,
             },
             calls: BTreeMap::new(),
+            delivery_evidence: BTreeMap::new(),
+        }
+    }
+
+    /// Assemble the down-channel answer from the core's outcome and the application's evidence.
+    #[must_use]
+    pub fn replay(&self, settled: core::Settled) -> jig_domain_host::AnsweredCall {
+        use jig_domain_host as host;
+        let core::Settled { key, call } = settled;
+        host::AnsweredCall {
+            name: jig_protocol_charter::call_name(&jig_protocol_charter::CallKey {
+                activation: key.attempt,
+                completion: key.completion,
+                position: key.position,
+            }),
+            tool: call.tool,
+            answer: match call.answer {
+                core::SettledAnswer::Host { error, body } => host::SettledAnswer::Host { error, body },
+                core::SettledAnswer::Delivery { outcome } => host::SettledAnswer::Delivery {
+                    outcome: match outcome {
+                        core::DeliveryOutcome::Delivered => host::DeliveryOutcome::Delivered,
+                        core::DeliveryOutcome::Nothing => host::DeliveryOutcome::Nothing,
+                        core::DeliveryOutcome::Stale => host::DeliveryOutcome::Stale,
+                        core::DeliveryOutcome::Refused | core::DeliveryOutcome::Invalid => {
+                            host::DeliveryOutcome::Refused
+                        }
+                        core::DeliveryOutcome::Failed => host::DeliveryOutcome::Failed,
+                    },
+                    evidence: self.delivery_evidence[&key].clone(),
+                },
+            },
         }
     }
 
