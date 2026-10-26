@@ -152,7 +152,7 @@ impl Engine {
                         self.carried.insert(number, value);
                         SecretsAnswer::Carried { exchange, number: Some(number) }
                     }
-                    SecretsRequest::Carry { exchange, value } => {
+                    SecretsRequest::Carry { exchange, value, .. } => {
                         // The referee's domain rule: no carried value in a root input.
                         self.rules.secret(value.expose());
                         let number = self.next_carried;

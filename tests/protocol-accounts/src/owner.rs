@@ -472,7 +472,10 @@ impl Owner {
         let Some(store::Event::Secret { owner: GET, value }) = self.store_above.pop() else {
             panic!("the memory store answers Get immediately");
         };
-        value.map(|value| bytes::copy_of(value.expose()))
+        value.map(|value| {
+            let store::SecretValue::Record(value) = value else { panic!("source record kind") };
+            bytes::copy_of(value.expose())
+        })
     }
     pub(crate) fn unstarted(&self) -> bool {
         self.component.is_none()
@@ -572,7 +575,8 @@ impl Owner {
             };
             for row in rows {
                 let account = u32::try_from(row.number).expect("a source's number");
-                let Some(record) = self.records.load(account, row.value.expose(), &self.limits.client.document) else {
+                let store::SecretValue::Record(value) = row.value else { panic!("restored source record kind") };
+                let Some(record) = self.records.load(account, value.expose(), &self.limits.client.document) else {
                     continue;
                 };
                 self.trace.push(Trace::Loaded { account, generation: record.generation });
@@ -651,7 +655,17 @@ impl Owner {
             panic!("immediate secret read")
         };
         assert_eq!(owner, exchange);
-        value
+        value.map(|value| match value {
+            store::SecretValue::Record(value)
+            | store::SecretValue::Held(value)
+            | store::SecretValue::Carried { kind: store::CarriedKind::Moved, value } => value,
+            other @ (store::SecretValue::Digest { .. }
+            | store::SecretValue::Key(_)
+            | store::SecretValue::Carried {
+                kind: store::CarriedKind::Key | store::CarriedKind::Value, ..
+            }
+            | store::SecretValue::Application(_)) => panic!("accounts payload kind: {other:?}"),
+        })
     }
     fn move_steps(&mut self, env: &Env<driver::Limits>) {
         while let Some(next) = self.move_out.pop() {
@@ -709,7 +723,7 @@ impl Owner {
                                 holds,
                                 owner: store::SecretOwner::Source,
                                 number: u64::from(source),
-                                value,
+                                value: jig_protocol_store::SecretValue::Record(value),
                                 replaces: None,
                             },
                         );
@@ -789,6 +803,7 @@ impl Owner {
                     let Some(store::Event::Secret { owner: GET, value: Some(value) }) = self.store_above.pop() else {
                         panic!("a kept record reads back");
                     };
+                    let store::SecretValue::Record(value) = value else { panic!("kept source record kind") };
                     self.last_kept = Some(value);
                     request
                 }
@@ -1143,7 +1158,12 @@ fn source(owner: Token) -> u32 {
     u32::try_from(owner.raw() - SOURCE).expect("a source's number")
 }
 fn replace(account: u32, value: Secret, replaces: Option<[u8; 32]>) -> store::Secrets {
-    store::Secrets::Replace { owner: store::SecretOwner::Source, number: u64::from(account), value, replaces }
+    store::Secrets::Replace {
+        owner: store::SecretOwner::Source,
+        number: u64::from(account),
+        value: jig_protocol_store::SecretValue::Record(value),
+        replaces,
+    }
 }
 /// The generation the store's answer makes durable.
 fn generation(request: &driver::Request) -> u64 {
@@ -1192,7 +1212,7 @@ impl Host for Owner {
         self.answers(&env);
         if let Some(len) = self.move_input_len.take() {
             let value = Secret::new(bytes::copy_of(&self.move_input[..len]));
-            self.secrets(now, wall, GET, store::Secrets::Carry { value });
+            self.secrets(now, wall, GET, store::Secrets::Carry { kind: jig_protocol_store::CarriedKind::Moved, value });
             let Some(store::Event::Carried { number, .. }) = self.store_above.pop() else { panic!("carried move") };
             self.carried_move = Some(number);
             self.change(93, child::Change::MoveIn { carried: number });

@@ -119,13 +119,41 @@ pub const CARRIED: u64 = 1 << 63;
 /// The first number of values held in memory for this run alone (store.md, section 9).
 pub const HELD: u64 = CARRIED + (1 << 62);
 
+/// What a secrets row holds, as its owner gives it and gets it back (store.md 9).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SecretValue {
+    /// A credential digest; a service's expiry is `u64::MAX`.
+    Digest {
+        expiry: u64,
+        digest: [u8; 32],
+    },
+    /// A signed-in source's `SavedToken`, in skein-oauth's own form.
+    Record(Secret),
+    Key(Secret),
+    Carried {
+        kind: CarriedKind,
+        value: Secret,
+    },
+    /// The application's own family's bytes, below CARRIED.
+    Application(Secret),
+    /// A value held for this run alone, never written.
+    Held(Secret),
+}
+/// What a request's carried value is (store.md 9).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CarriedKind {
+    Key,
+    Value,
+    Moved,
+}
+
 /// A request to the secrets' store (store.md, section 9).
 #[derive(Debug)]
 pub enum Secrets {
     Keep {
         owner: SecretOwner,
         number: u64,
-        value: Secret,
+        value: SecretValue,
     },
     /// Keep `value` in place of the value whose digest is `replaces`, none
     /// when nothing is held: `Kept` once durable, or `Stale`, nothing
@@ -133,7 +161,7 @@ pub enum Secrets {
     Replace {
         owner: SecretOwner,
         number: u64,
-        value: Secret,
+        value: SecretValue,
         replaces: Option<[u8; 32]>,
     },
     /// Atomically move a carried value into its owner's row, conditional on
@@ -151,7 +179,7 @@ pub enum Secrets {
         holds: [u8; 32],
         owner: SecretOwner,
         number: u64,
-        value: Secret,
+        value: SecretValue,
         replaces: Option<[u8; 32]>,
     },
     /// Hold in memory, never written, under the next number from HELD (store.md, 9).
@@ -164,6 +192,7 @@ pub enum Secrets {
     /// `Carried` once durable, the next number moved in the same commit;
     /// `Stale`, nothing written, when that number already holds a value.
     Carry {
+        kind: CarriedKind,
         value: Secret,
     },
     Erase {
@@ -184,7 +213,7 @@ pub enum Secrets {
 pub struct SecretRow {
     pub owner: SecretOwner,
     pub number: u64,
-    pub value: Secret,
+    pub value: SecretValue,
 }
 
 /// Where a page stopped: the interval of the request's list, and the last
@@ -523,7 +552,7 @@ pub enum Event {
     },
     Secret {
         owner: Token,
-        value: Option<Secret>,
+        value: Option<SecretValue>,
     },
     SecretsLoaded {
         owner: Token,

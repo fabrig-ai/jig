@@ -8,7 +8,7 @@ use crate::{Event, Limits, Request, Store, Stores, Write, codec, format, keys};
 use alloc::boxed::Box;
 use jig_domain_core::{CoreKey, CoreRecord, Key, Record};
 use skein_io::{file, kernel::Fd};
-use skein_lib::{Duration, Env, JournalLimits, List, Queue, Secret, Token};
+use skein_lib::{Duration, Env, JournalLimits, List, Queue, Token};
 
 pub const OTHER_DEPLOYMENT: [u8; 16] = [9; 16];
 pub const ROOT: Root = Root { token: Token::new(900), fd: Fd::new(3) };
@@ -294,7 +294,11 @@ pub fn events(above: &mut Queue<Event>) -> Box<[Event]> {
     events.into_boxed()
 }
 pub fn sign_in_secret(number: u64, byte: u8) -> Secrets {
-    Secrets::Keep { owner: SecretOwner::SignIn, number, value: Secret::new(Box::new([byte; 32])) }
+    Secrets::Keep {
+        owner: SecretOwner::SignIn,
+        number,
+        value: crate::SecretValue::Digest { expiry: 0, digest: [byte; 32] },
+    }
 }
 pub fn codec_limits() -> codec::Limits {
     codec::limits(&CORE_LIMITS).expect("fixture codec limits")
