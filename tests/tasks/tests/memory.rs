@@ -648,6 +648,15 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_HOLDERS_BYTES: u64 = 8;
     // Settings action carriers enlarge this fixture's bounded party-proposal map.
     const SETTINGS_PROPOSAL_BYTES: u64 = 352;
+    // T1: eight held charter slots, each 24 inline bytes plus 64 model bytes
+    // (limits.rs: (charters + versions) * (size_of::<CharterModels>() + MODELS)).
+    const SETTINGS_CHARTER_VERSIONS_BYTES: u64 = 8 * (24 + 64);
+    // T1: Map::<u32, u32>::worst_case(revisions + 1), five holder entries.
+    const SETTINGS_HOLDER_MAP_BYTES: u64 = 416;
+    // T1: SettingsRevision's 12 bytes consume four existing padding bytes.
+    // Each of 16 tasks has three records priced by limits.rs: the live slab,
+    // last-published row and atomic procedure admission snapshot, each +8 bytes.
+    const SETTINGS_RECORD_BYTES: u64 = 16 * 3 * 8;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -661,6 +670,9 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + ENDING_AUTHORITY_BYTES
                 + SETTINGS_HOLDERS_BYTES
                 + SETTINGS_PROPOSAL_BYTES
+                + SETTINGS_CHARTER_VERSIONS_BYTES
+                + SETTINGS_HOLDER_MAP_BYTES
+                + SETTINGS_RECORD_BYTES
         )
     );
 }
