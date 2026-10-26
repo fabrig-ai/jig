@@ -63,6 +63,9 @@ pub struct World {
     /// The installation's identifier the last open answered (store.md 4.4).
     pub installation: [u8; 16],
     pub pending: bool,
+    scratch: Option<Root>,
+    pub rehearsing: Option<(Option<Box<[jig_protocol_store::KeptWire]>>, bool)>,
+    fail_remove: Option<skein_io::kernel::Error>,
 }
 
 /// Optional ordinary-Rust observation seam, around store calls only.
@@ -181,6 +184,8 @@ impl World {
     pub fn unopened_observed(seed: u64, limits: jig_protocol_store::Limits, observer: Option<fn(Step)>) -> World {
         let mut machine = Machine::for_user(0);
         let handle = machine.lay(&[]);
+        let scratch = machine.lay(&[]); // A separate stopped-engine tools scratch root.
+        machine.close(scratch);
         let mut sim = Sim::new(seed, Config::calm());
         let pid = sim.spawn_process();
         let fd = sim.root(pid, Handle::new(handle.raw()));
@@ -223,6 +228,9 @@ impl World {
             drawn: [1; 16],
             installation: [0; 16],
             pending: false,
+            scratch: None,
+            rehearsing: None,
+            fail_remove: None,
         }
     }
 
@@ -230,6 +238,11 @@ impl World {
     #[must_use]
     pub fn into_stores(self) -> jig_protocol_store::Stores {
         self.store.into_stores()
+    }
+
+    #[must_use]
+    pub fn open_position(&self) -> u64 {
+        self.next - 1
     }
 
     pub fn patch_sets(&mut self, sets: PatchSets) {
@@ -325,6 +338,9 @@ impl World {
         );
         self.store = Store::on_directory(&self.env.limits, root::APPLICATION, &[], seeded);
         self.store.patch_sets(self.sets);
+        self.scratch = None;
+        self.rehearsing = None;
+        self.fail_remove = None;
         self.patched.clear();
         self.refusal = None;
         self.changes.clear();
@@ -467,12 +483,27 @@ impl World {
     pub fn open(&mut self) -> Option<u64> {
         self.patched.clear();
         self.refusal = None;
+        self.open_request(Request::Open { owner: OWNER, root: self.root, installation: self.drawn })
+    }
+
+    pub fn begin_rehearsal(&mut self) {
+        let scratch = self.scratch_root();
+        self.enqueue(Request::Rehearse { owner: OWNER, directory: self.root, scratch, installation: self.drawn });
+    }
+
+    pub fn rehearse(&mut self) -> Option<u64> {
+        let scratch = self.scratch_root();
+        self.open_request(Request::Rehearse { owner: OWNER, directory: self.root, scratch, installation: self.drawn })
+    }
+
+    fn open_request(&mut self, request: Request) -> Option<u64> {
         let mut contexts = Contexts::default();
-        let mut events = self.request(Request::Open { owner: OWNER, root: self.root, installation: self.drawn });
+        let mut events = self.request(request);
         for _ in 0..10_000 {
             let mut answer = None;
             for event in events {
                 match event {
+                    Event::Rehearsing { wires, fresh, .. } => self.rehearsing = Some((wires, fresh)),
                     Event::Site { owner, of, key, site, at, patcher } => {
                         answer = Some(answer_site(owner, of, key, site, at, patcher, &mut contexts));
                     }
@@ -490,7 +521,10 @@ impl World {
                         self.refusal = Some(why);
                         return None;
                     }
-                    other @ (Event::Switched { .. }
+                    other @ (Event::Back { .. }
+                    | Event::BackRefused { .. }
+                    | Event::Closed { .. }
+                    | Event::Switched { .. }
                     | Event::Committed { .. }
                     | Event::Failed { .. }
                     | Event::FrameTooLarge { .. }
@@ -528,12 +562,68 @@ impl World {
         panic!("open did not settle");
     }
 
+    fn scratch_root(&mut self) -> Root {
+        if let Some(root) = self.scratch {
+            return root;
+        }
+        let handle = self.machine.reopen_root(1);
+        let fd = self.sim.root(self.pid, Handle::new(handle.raw()));
+        let tokens: Vec<_> = self.io.iter_mut().map(|io| io.adopt_root(fd).expect("scratch root slot")).collect();
+        assert!(tokens.iter().all(|token| *token == tokens[0]), "shell adopts roots in every driver");
+        let root = Root { token: tokens[0], fd };
+        self.scratch = Some(root);
+        root
+    }
+
+    pub fn hold_deployment_lock(&mut self) {
+        let handle = self.machine.reopen_root(0);
+        let pid = self.sim.spawn_process();
+        let fd = self.sim.root(pid, Handle::new(handle.raw()));
+        let mut driver = FileIo::new(1, self.env.limits.store.chunk, 32, self.env.limits.store.deadline);
+        let token = driver.adopt_root(fd).expect("other process root");
+        let mut events = Queue::with_capacity(QUEUE);
+        file_layer::down(
+            &mut driver,
+            self.env.now,
+            file::Request::Lock { owner: OWNER, root: token },
+            &mut events,
+            &mut self.subs,
+        );
+        self.sim.submit(pid, &mut self.subs);
+        serve(&mut self.machine, &mut self.sim);
+        self.sim.reap(pid, &mut self.completions);
+        while let Some(completion) = self.completions.pop() {
+            file_layer::up(&mut driver, completion, &mut events, &mut self.subs);
+        }
+        assert!(matches!(events.pop(), Some(file::Event::Locked { .. })), "other process holds lock");
+    }
+
+    pub fn back(&mut self) -> Vec<Event> {
+        self.request(Request::Back { owner: OWNER, root: self.root })
+    }
+    pub fn close(&mut self) -> Vec<Event> {
+        self.request(Request::Close { owner: OWNER })
+    }
+    pub fn fail_next_removal(&mut self) {
+        self.fail_remove = Some(skein_io::kernel::Error::Permission);
+    }
+
+    pub fn scratch_paths(&mut self) -> Vec<Vec<u8>> {
+        self.paths_in(1)
+    }
+    pub fn scratch_contents(&mut self) -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
+        self.contents_in(1)
+    }
+
     /// All paths, with file bytes, for byte-for-byte refusal checks.
     #[must_use]
     pub fn contents(&mut self) -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
+        self.contents_in(0)
+    }
+    fn contents_in(&mut self, index: u32) -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
         use skein_fake_machine::{How, Is};
-        let paths = self.paths();
-        let root = self.machine.reopen_root(0);
+        let paths = self.paths_in(index);
+        let root = self.machine.reopen_root(index);
         let mut result = BTreeMap::new();
         for path in paths {
             let file = self.machine.open(root, &path, How::ReadNoFollow).expect("listed path");
@@ -552,8 +642,14 @@ impl World {
 
     /// Lay durable scenario entries beneath the existing deployment.
     pub fn lay(&mut self, items: &[skein_fake_machine::Item]) {
+        self.lay_in(0, items);
+    }
+    pub fn lay_scratch(&mut self, items: &[skein_fake_machine::Item]) {
+        self.lay_in(1, items);
+    }
+    fn lay_in(&mut self, index: u32, items: &[skein_fake_machine::Item]) {
         use skein_fake_machine::{How, Made};
-        let root = self.machine.reopen_root(0);
+        let root = self.machine.reopen_root(index);
         for item in items {
             let split = item.path.iter().rposition(|b| *b == b'/');
             let (parent, name) =
@@ -599,7 +695,10 @@ impl World {
 
     #[must_use]
     pub fn paths(&mut self) -> Vec<Vec<u8>> {
-        let root = self.machine.reopen_root(0);
+        self.paths_in(0)
+    }
+    fn paths_in(&mut self, index: u32) -> Vec<Vec<u8>> {
+        let root = self.machine.reopen_root(index);
         let mut paths = Vec::new();
         tree(&mut self.machine, root, b"", &mut paths);
         self.machine.close(root);
@@ -652,6 +751,20 @@ impl World {
     }
 
     fn file(&mut self, driver: usize, request: file::Request) {
+        if matches!(request, file::Request::Remove { .. })
+            && let Some(error) = self.fail_remove.take()
+        {
+            let file::Request::Remove { owner, .. } = request else { unreachable!() };
+            let arrived =
+                Arrived { event: file::Event::Failed { owner, error, committed: false, residue: None }, fd: None };
+            let io = match driver {
+                0 => Io::Store(arrived),
+                1 => Io::Secrets(arrived),
+                _ => Io::Transcripts(arrived),
+            };
+            jig_protocol_store::up(&mut self.store, &self.env, io, &mut self.above, &mut self.below);
+            return;
+        }
         let io = self.io.get_mut(driver).expect("three drivers");
         assert!(io.takes());
         let mut events = Queue::with_capacity(QUEUE);

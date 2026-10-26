@@ -10,6 +10,7 @@ pub(crate) fn open(store: &mut Store, owner: Token, above: &mut Queue<Event>, be
         refuse(store, owner, OpenRefusal::Failed, above);
         return;
     }
+    read_wires(store, owner);
     let format_key = keys::encode_own(&keys::Own::Format, store.limits.store.key).expect("format key fits");
     let header_key = keys::encode(&Key::Core(CoreKey::Deployment), store.limits.store.key).expect("header key fits");
     let Ok(found) = get(store, owner, format_key) else {
@@ -201,18 +202,23 @@ fn ready(
             }
         };
     }
+    crate::maintenance::report(store, above);
     store.phase = Phase::Ready { next, format_due };
     store.directory.owner = owner;
     crate::directory::checked(store, above, below);
 }
 
 pub(crate) fn refuse(store: &mut Store, owner: Token, why: OpenRefusal, above: &mut Queue<Event>) {
+    crate::maintenance::report(store, above);
     store.phase = Phase::Stopped;
+    crate::maintenance::opening_ended(store);
     above.push(Event::OpenRefused { owner, why });
 }
 
 fn corrupt(store: &mut Store, owner: Token, above: &mut Queue<Event>) {
+    crate::maintenance::report(store, above);
     store.phase = Phase::Stopped;
+    crate::maintenance::opening_ended(store);
     above.push(Event::Corrupt { owner });
 }
 
@@ -248,4 +254,35 @@ fn decode(
         return None;
     };
     Some(found)
+}
+
+/// Wires are information for a rehearsal, never an opening's compatibility gate.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the store protocol validates kept wire names before handing them up as text (store.md 10.5)"
+)]
+fn read_wires(store: &mut Store, owner: Token) {
+    let key = keys::encode_own(&keys::Own::Wires, store.limits.store.key).expect("wires key fits");
+    let wires = match get(store, owner, key) {
+        Ok(Some(bytes)) => match crate::component_v3::Wires::decode(
+            &crate::component_v3::CEILINGS,
+            &mut skein_lib::Reader::new(&bytes),
+        ) {
+            Ok(row) => {
+                let mut wires = skein_lib::List::with_capacity(16);
+                for wire in row.wires() {
+                    let Ok(name) = core::str::from_utf8(wire.name()) else {
+                        return crate::maintenance::wires(store, None);
+                    };
+                    wires
+                        .push(crate::KeptWire { name: Box::from(name), version: wire.version() })
+                        .expect("bounded wires");
+                }
+                Some(wires.into_boxed())
+            }
+            Err(_) => None,
+        },
+        Ok(None) | Err(_) => None,
+    };
+    crate::maintenance::wires(store, wires);
 }

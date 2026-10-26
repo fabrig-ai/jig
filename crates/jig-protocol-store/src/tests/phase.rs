@@ -1917,10 +1917,12 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // Store gains the 16-byte static wires slice and the 16-byte Mark
     // (8-byte discriminant, 8-byte commit number; store.md 5.3). Pending retains before/after
     // levels, the check's counts and the explicit switch's stage and owner.
-    assert_eq!(size_of::<Store>(), 4_008);
+    // store.md 10.5 adds the 8-byte optional stopped-engine operation.
+    assert_eq!(size_of::<Store>(), 4_016);
     assert_eq!(size_of::<crate::directory::Directory>(), 280);
     assert_eq!(size_of::<Opening>(), 88);
-    assert_eq!(size_of::<Patching>(), 168);
+    // The rehearsal copy retains a separate 16-byte source root (store.md 10.5).
+    assert_eq!(size_of::<Patching>(), 184);
     assert_eq!(size_of::<Pending>(), 136);
     // Pending: before 32 + after 32 + counts List 32 + switch stage 80.
     assert_eq!(size_of::<crate::patching::switch::Pending>(), 176);
@@ -1928,6 +1930,7 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // Retained and encoded counts: two * (64 Count carriers * 32 +
     // 64 family names * 64), plus the 5,464-byte encoded manifest.
     assert_eq!(crate::patching::switch::worst_case(), Some(17_928));
-    // Baseline 581,544,799,687,077 + wires 16 + pending 17,928 + Mark 16.
-    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_544_799_705_037));
+    // Prior price 581,544,799,705,037 + operation pointer 8 +
+    // stopped-engine tool state/buffers 16,788,508 (store.md 10.5).
+    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_544_816_493_553));
 }

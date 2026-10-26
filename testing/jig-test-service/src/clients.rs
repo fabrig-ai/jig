@@ -707,6 +707,10 @@ impl Clients {
                 kit::SecretsAnswer::Got { owner, value }
             }
             Event::SecretsLoaded { .. }
+            | Event::Rehearsing { .. }
+            | Event::Back { .. }
+            | Event::BackRefused { .. }
+            | Event::Closed { .. }
             | Event::Switched { .. }
             | Event::Opened { .. }
             | Event::OpenRefused { .. }

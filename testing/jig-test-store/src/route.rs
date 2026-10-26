@@ -275,7 +275,11 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
             }
         }
         // The shell driving open owns progress; this root route prints no lines.
-        Event::Patched { .. }
+        Event::Rehearsing { .. }
+        | Event::Back { .. }
+        | Event::BackRefused { .. }
+        | Event::Closed { .. }
+        | Event::Patched { .. }
         | Event::Opened { .. }
         | Event::Kept { .. }
         | Event::Carried { .. }

@@ -127,7 +127,11 @@ impl World {
                         store::Event::Secret { value, .. } => self.keys.read(exchange, value),
                         store::Event::Kept { .. } => self.keys.kept(exchange, true, Time::ZERO),
                         store::Event::Stale { .. } => self.keys.kept(exchange, false, Time::ZERO),
-                        other @ (store::Event::Switched { .. }
+                        other @ (store::Event::Rehearsing { .. }
+                        | store::Event::Back { .. }
+                        | store::Event::BackRefused { .. }
+                        | store::Event::Closed { .. }
+                        | store::Event::Switched { .. }
                         | store::Event::Opened { .. }
                         | store::Event::OpenRefused { .. }
                         | store::Event::Site { .. }

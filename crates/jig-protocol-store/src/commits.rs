@@ -48,14 +48,14 @@ pub(crate) fn operations(
     for write in writes {
         match write {
             Write::Wires => {
-                if crate::patching::switch::pending(store) {
+                if crate::patching::switch::pending(store) || crate::maintenance::rehearsal(store) {
                     return Err(Refusal::Failed);
                 }
                 wires = true;
                 ops.push(operation(store, Write::Wires).ok_or(Refusal::Failed)?).ok().ok_or(Refusal::Failed)?;
             }
             Write::DropTranscript { task } => {
-                if crate::patching::switch::pending(store) {
+                if crate::patching::switch::pending(store) || crate::maintenance::rehearsal(store) {
                     return Err(Refusal::Failed);
                 }
                 crate::transcripts::drop::queue(store, task, number).ok_or(Refusal::Failed)?;
@@ -65,7 +65,7 @@ pub(crate) fn operations(
                 drops.push(task);
             }
             Write::Save(Record::Core(CoreRecord::Turn(turn))) => {
-                if crate::patching::switch::pending(store) {
+                if crate::patching::switch::pending(store) || crate::maintenance::rehearsal(store) {
                     return Err(Refusal::Failed);
                 }
                 let body = crate::transcripts::frame::encode(&turn, &store.codec).ok_or(Refusal::Failed)?;

@@ -127,6 +127,9 @@ fn close_directories(store: &mut Store, below: &mut Below) {
     store.stores.secrets = skein_kv::Store::new(&store.limits.secrets);
 }
 fn dropping(store: &mut Store, above: &mut Queue<Event>, below: &mut Below) {
+    if crate::maintenance::rehearsal(store) {
+        return copying(store, above, below);
+    }
     let dropping = generations::drop_previous(root(store), active(store), below);
     match dropping.progress() {
         Progress::Pending => state(store, Patching::Dropping(dropping)),
@@ -285,6 +288,13 @@ pub(crate) fn event(
 pub(crate) fn resume(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, below: &mut Below) {
     if store.phase == Phase::Stopped {
         return;
+    }
+    if crate::maintenance::rehearsal(store)
+        && store.directory.patch.is_some()
+        && store.phase != Phase::Closed
+        && let Some(pending) = store.directory.patch.take()
+    {
+        begin(store, env, pending, above, below);
     }
     if let Some(phase) = directory::patching(store) {
         match *phase {

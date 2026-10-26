@@ -145,8 +145,13 @@ pub(crate) fn open(
         return refuse(store, above);
     }
     store.directory.root = Some(root);
-    store.directory.opening = Opening::Locking;
-    below.store.push(file::Request::Lock { owner: OWNER, root: root.token });
+    if crate::maintenance::rehearsal(store) {
+        // The tool took the source and scratch locks before making its copy.
+        read_active(store, below);
+    } else {
+        store.directory.opening = Opening::Locking;
+        below.store.push(file::Request::Lock { owner: OWNER, root: root.token });
+    }
 }
 fn refuse(store: &mut Store, above: &mut Queue<Event>) {
     refusal(store, OpenRefusal::Failed, above);
@@ -348,7 +353,20 @@ pub(crate) fn checked(store: &mut Store, above: &mut Queue<Event>, below: &mut B
         crate::transcripts::cut::begin(store, above, below);
         return;
     }
-    if pending(store).is_some() {
+    if crate::maintenance::rehearsal(store) {
+        // The next phase::resume has the file step's environment and starts
+        // patching here, without the ordinary generation/transcript sweep.
+        if store.directory.patch.is_none() {
+            if pending(store).is_none() {
+                store.directory.opening = Opening::TranscriptsOpen;
+            }
+            open_directory(
+                crate::maintenance::transcripts(store),
+                Box::from(generations::TRANSCRIPTS),
+                &mut below.transcripts,
+            );
+        }
+    } else if pending(store).is_some() {
         open_directory(deployment(store), Box::from(generations::TRANSCRIPTS), &mut below.transcripts);
     } else {
         sweep_open(store, SweepKind::Generations, false, below);

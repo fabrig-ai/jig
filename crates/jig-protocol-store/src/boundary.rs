@@ -20,6 +20,13 @@ pub enum Request {
     /// Activate the copy opened pending, once every earlier commit is durable
     /// (store.md 10.2, step 7). Once, after `Opened`; terminal `Switched` or `OpenRefused`.
     Switch { owner: Token },
+    /// Rehearse a start over a scratch deployment under `scratch` (store.md 10.5).
+    /// The source directory is only read; Switch is refused.
+    Rehearse { owner: Token, directory: Root, scratch: Root, installation: [u8; 16] },
+    /// Name the previous generation active before the patched one's first commit.
+    Back { owner: Token, root: Root },
+    /// End a rehearsal in any state, closing its maps and removing its scratch.
+    Close { owner: Token },
     /// Commit `number` (store.md 6): its writes, in order, one skein-kv
     /// commit with the same number. Terminal: `Committed`, `Failed` or
     /// `FrameTooLarge`; a refusal stops the engine.
@@ -452,9 +459,44 @@ pub enum Generations {
     Missing { generation: u64 },
 }
 
+/// The wires kept by the source generation's last start (store.md 5.3 and 10.5).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct KeptWire {
+    pub name: Box<str>,
+    pub version: u32,
+}
+
+/// Why going back changed nothing (store.md 10.5).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BackRefusal {
+    Busy,
+    NoPrevious,
+    Committed { manifest: u64, last: u64 },
+    Unreadable,
+}
+
 /// What the component answers.
 #[derive(Debug)]
 pub enum Event {
+    /// Source wires and the plan's fresh mark, before the rehearsal's open terminal.
+    Rehearsing {
+        owner: Token,
+        wires: Option<Box<[KeptWire]>>,
+        fresh: bool,
+    },
+    Back {
+        owner: Token,
+        to: u64,
+    },
+    BackRefused {
+        owner: Token,
+        why: BackRefusal,
+    },
+    /// True only after the rehearsal's scratch deployment has been removed.
+    Closed {
+        owner: Token,
+        removed: bool,
+    },
     /// Both stores are open and checked; `last` is the last durable commit.
     /// `installation` is the installation's identifier (store.md 4.4): the
     /// kept one, or, in an empty store, the drawn one its first commit keeps.

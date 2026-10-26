@@ -165,7 +165,10 @@ impl Store {
                     self.above.push(event);
                 }
             }
-            request @ (protocol::Request::Switch { .. }
+            request @ (protocol::Request::Rehearse { .. }
+            | protocol::Request::Back { .. }
+            | protocol::Request::Close { .. }
+            | protocol::Request::Switch { .. }
             | protocol::Request::Open { .. }
             | protocol::Request::Site { .. }
             | protocol::Request::Commit { .. }
@@ -533,6 +536,10 @@ pub(super) fn answer(engine: &mut crate::Engine) {
             | protocol::Event::Got { .. }
             | protocol::Event::Turns { .. }
             | protocol::Event::Unread { .. }
+            | protocol::Event::Rehearsing { .. }
+            | protocol::Event::Back { .. }
+            | protocol::Event::BackRefused { .. }
+            | protocol::Event::Closed { .. }
             | protocol::Event::Corrupt { .. }) => route::up(&mut engine.store.routes, other, &mut engine.store.routed),
         }
     }

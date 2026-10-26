@@ -166,7 +166,11 @@ pub(crate) fn decode(
                     store::down(component, env, Request::Site { owner, patcher, result }, &mut above, &mut below);
                     continue;
                 }
-                other @ (Event::Switched { .. }
+                other @ (Event::Rehearsing { .. }
+                | Event::Back { .. }
+                | Event::BackRefused { .. }
+                | Event::Closed { .. }
+                | Event::Switched { .. }
                 | Event::Opened { .. }
                 | Event::OpenRefused { .. }
                 | Event::Committed { .. }

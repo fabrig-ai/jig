@@ -828,7 +828,11 @@ impl Owner {
                     }
                     continue;
                 }
-                store::Event::Switched { .. }
+                store::Event::Rehearsing { .. }
+                | store::Event::Back { .. }
+                | store::Event::BackRefused { .. }
+                | store::Event::Closed { .. }
+                | store::Event::Switched { .. }
                 | store::Event::Opened { .. }
                 | store::Event::OpenRefused { .. }
                 | store::Event::Site { .. }

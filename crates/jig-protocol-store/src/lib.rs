@@ -12,6 +12,13 @@ mod gets;
 pub mod historical;
 pub mod intervals;
 mod loads;
+mod maintenance;
+pub use patching::plan::Levels;
+/// The binary's patch levels (protocol/store.md, 10.5).
+#[must_use]
+pub fn levels(sets: &PatchSets) -> Levels {
+    patching::plan::binary(sets)
+}
 mod open;
 mod pages;
 mod patching;
@@ -77,6 +84,7 @@ pub struct Store {
     wires: &'static [Wire],
     /// This start's first Wires commit, and its durability (store.md 5.3).
     mark: Mark,
+    operation: Option<Box<maintenance::Operation>>,
 }
 
 #[derive(Debug)]
@@ -164,6 +172,7 @@ impl Store {
             patch_sets: PatchSets::NONE,
             wires: &[],
             mark: Mark::Waiting,
+            operation: None,
         }
     }
 
@@ -265,6 +274,7 @@ fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
         .checked_add(secrets::worst_case(limits)?)?
         .checked_add(transcripts::worst_case(limits)?)?
         .checked_add(generations::worst_case()?)?
+        .checked_add(maintenance::worst_case(limits)?)?
         .checked_add(names_worst_case()?)?;
     let serving = rows
         .checked_add(page)?
@@ -316,11 +326,46 @@ fn names_worst_case() -> Option<u64> {
 
 /// The memory component's requests (store.md, section 10).
 pub fn down(store: &mut Store, env: &Env<Limits>, request: Request, above: &mut Queue<Event>, below: &mut Below) {
+    let queued = maintenance::queued(below);
+    down_inner(store, env, request, above, below);
+    maintenance::emitted(store, queued, below);
+    let queued = maintenance::queued(below);
+    maintenance::resume(store, env, above, below);
+    maintenance::emitted(store, queued, below);
+}
+fn down_inner(store: &mut Store, env: &Env<Limits>, request: Request, above: &mut Queue<Event>, below: &mut Below) {
+    // Close is accepted after a rehearsal's refused open or switch too.
+    let request = match request {
+        Request::Close { owner } => return maintenance::close(store, owner, above),
+        request @ (Request::Open { .. }
+        | Request::Rehearse { .. }
+        | Request::Back { .. }
+        | Request::Switch { .. }
+        | Request::Site { .. }
+        | Request::Commit { .. }
+        | Request::Restore { .. }
+        | Request::Load { .. }
+        | Request::Get { .. }
+        | Request::Read { .. }
+        | Request::Secrets { .. }
+        | Request::Transcript { .. }) => request,
+    };
     if store.phase == Phase::Stopped {
         return;
     }
     match request {
-        Request::Switch { owner } => patching::switch::ask(store, env, owner, above, below),
+        Request::Rehearse { owner, directory, scratch, installation } => {
+            maintenance::rehearse(store, owner, directory, scratch, installation, above, below);
+        }
+        Request::Back { owner, root } => maintenance::back(store, owner, root, above, below),
+        Request::Close { .. } => unreachable!("close handled even after a refusal"),
+        Request::Switch { owner } => {
+            if maintenance::rehearsal(store) {
+                open::refuse(store, owner, OpenRefusal::Failed, above);
+            } else {
+                patching::switch::ask(store, env, owner, above, below);
+            }
+        }
         Request::Open { owner, root, installation } => {
             directory::open(store, env, owner, root, installation, above, below);
         }
@@ -346,23 +391,38 @@ pub fn down(store: &mut Store, env: &Env<Limits>, request: Request, above: &mut 
 
 /// File terminals routed through their independent drivers.
 pub fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue<Event>, below: &mut Below) {
-    directory::up(store, env, io, above, below);
-    if store.phase != Phase::Stopped {
+    maintenance::arrived(store);
+    let queued = maintenance::queued(below);
+    if maintenance::routes(store) {
+        maintenance::up(store, env, io, above, below);
+    } else {
+        directory::up(store, env, io, above, below);
+    }
+    if store.phase != Phase::Stopped && !maintenance::routes(store) {
         transcripts::read::fire(store, above, below);
         transcripts::write::fire(store, env, above, below);
         patching::switch::resume(store, env, below);
     }
+    maintenance::emitted(store, queued, below);
+    let queued = maintenance::queued(below);
+    maintenance::resume(store, env, above, below);
+    maintenance::emitted(store, queued, below);
 }
 
 /// Bounded background store work and the orphan sweep.
 pub fn fire(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, below: &mut Below) {
-    if store.phase != Phase::Stopped {
+    let queued = maintenance::queued(below);
+    if store.phase != Phase::Stopped && !maintenance::routes(store) {
         directory::fire(store, env, above, below);
         secrets::sweep(store, env, above, below);
         transcripts::read::fire(store, above, below);
         transcripts::write::fire(store, env, above, below);
         patching::switch::resume(store, env, below);
     }
+    maintenance::emitted(store, queued, below);
+    let queued = maintenance::queued(below);
+    maintenance::resume(store, env, above, below);
+    maintenance::emitted(store, queued, below);
 }
 
 fn memory_env(limits: skein_kv::Limits) -> Env<skein_kv::Limits> {
@@ -391,8 +451,8 @@ pub mod tasks_v9;
 pub mod core_v6;
 pub mod keys;
 pub use boundary::{
-    Arrived, Below, CARRIED, Check, Cursor, Event, Family, Generations, Get, HELD, Io, Load, Older, OpenRefusal,
-    Request, Restore, Root, Row, SecretOwner, SecretRow, Secrets, TranscriptRead, Write,
+    Arrived, BackRefusal, Below, CARRIED, Check, Cursor, Event, Family, Generations, Get, HELD, Io, KeptWire, Load,
+    Older, OpenRefusal, Request, Restore, Root, Row, SecretOwner, SecretRow, Secrets, TranscriptRead, Write,
 };
 
 #[cfg(test)]

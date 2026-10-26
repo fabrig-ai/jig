@@ -351,3 +351,27 @@ fn a_crash_during_the_restore_patches_a_fresh_copy_next() {
     assert!(world.domain.ready());
     assert_eq!(world.store.file_bytes(b"active"), Some(b"2\n".to_vec()));
 }
+
+#[test]
+fn a_rehearsal_restores_whole_and_stops_at_the_switch() {
+    let mut world = before();
+    let source = world.store.generation_contents(b".");
+    let assignments = world.assignments.clone();
+    let since = world.commits.len();
+    let secrets = world.store.secrets_served;
+    world.store.patch_sets(f::AFTER);
+    world.store.rehearse_next_start();
+    world.hold_switch = true;
+    world.restart_with(release_config());
+    assert_eq!(world.restart_steps, RESTORES);
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
+    assert_eq!(world.domain.restore_failure(), None);
+    assert_eq!(world.domain.settings().newest(), 2, "restores commit the release into scratch");
+    assert!(world.store.generation_pending);
+    assert_eq!(world.store.switch_requests, 0);
+    assert!(!world.store.mark_durable());
+    assert!(world.commits[since..].iter().all(|writes| !writes.contains(&root::Write::Wires)));
+    assert_eq!(world.assignments, assignments);
+    assert_eq!(world.store.secrets_served, secrets);
+    assert_eq!(world.store.generation_contents(b"."), source);
+}

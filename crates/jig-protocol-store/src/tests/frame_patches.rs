@@ -184,7 +184,11 @@ fn answer_frame(disk: &mut Disk, store: &mut Store, events: Box<[Event]>, refuse
                 let events = disk.request(store, Request::Site { owner, patcher, result: status });
                 result.extend(answer_frame(disk, store, events, refuse, offset));
             }
-            other @ (Event::Switched { .. }
+            other @ (Event::Rehearsing { .. }
+            | Event::Back { .. }
+            | Event::BackRefused { .. }
+            | Event::Closed { .. }
+            | Event::Switched { .. }
             | Event::Opened { .. }
             | Event::OpenRefused { .. }
             | Event::Committed { .. }

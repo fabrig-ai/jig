@@ -41,6 +41,8 @@ pub struct Store {
     /// Whether this open serves a copy awaiting the core’s switch step.
     pub generation_pending: bool,
     pub switch_requests: u32,
+    rehearsal: bool,
+    pub secrets_served: u32,
     wires: &'static [protocol::Wire],
     pub rows: BTreeMap<root::Key, root::Record>,
     pub pending: VecDeque<Pending>,
@@ -112,6 +114,8 @@ impl Store {
             applied: 0,
             generation_pending: false,
             switch_requests: 0,
+            rehearsal: false,
+            secrets_served: 0,
             wires: &[],
             rows: BTreeMap::new(),
             pending: VecDeque::new(),
@@ -142,6 +146,15 @@ impl Store {
         store.open();
         store
     }
+    /// Open the next cold start as a stopped-engine rehearsal.
+    pub fn rehearse_next_start(&mut self) {
+        self.rehearsal = true;
+    }
+    #[must_use]
+    pub fn mark_durable(&self) -> bool {
+        self.component.as_ref().expect("component").mark_durable()
+    }
+
     /// Set the shell's wire data for this and subsequent opens.
     pub fn wires(&mut self, wires: &'static [protocol::Wire]) {
         assert!(self.component.as_mut().expect("component").wires(wires));
@@ -356,10 +369,13 @@ impl Store {
             Some(disk) => disk.root(),
             None => self.files.root(),
         };
-        self.drive(
-            VecDeque::from([Request::Open { owner: Token::new(0), root, installation: INSTALLATION }]),
-            Queue::with_capacity(protocol::MAX_OUT_DOWN),
-        );
+        let request = if self.rehearsal {
+            let scratch = self.disk.as_mut().expect("rehearsal uses directory-backed store").scratch();
+            Request::Rehearse { owner: Token::new(0), directory: root, scratch, installation: INSTALLATION }
+        } else {
+            Request::Open { owner: Token::new(0), root, installation: INSTALLATION }
+        };
+        self.drive(VecDeque::from([request]), Queue::with_capacity(protocol::MAX_OUT_DOWN));
         assert!(!self.failed, "durable stores reopen after their files are cut");
         if !self.rows.is_empty() {
             self.refresh_patched_rows();
@@ -439,7 +455,11 @@ impl Store {
         }
     }
     fn event(&mut self, event: Event, requests: &mut VecDeque<Request>) {
+        if matches!(&event, Event::Secret { value: Some(_), .. } | Event::SecretsLoaded { .. }) {
+            self.secrets_served += 1;
+        }
         match event {
+            Event::Rehearsing { .. } | Event::Back { .. } | Event::BackRefused { .. } | Event::Closed { .. } => {}
             Event::Opened { last, pending, .. } => {
                 self.applied = last;
                 self.generation_pending = pending;

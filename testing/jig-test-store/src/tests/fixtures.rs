@@ -301,7 +301,10 @@ pub fn core_commit() -> crate::StoreOut {
 pub fn commit_writes(request: jig_protocol_store::Request) -> Box<[jig_protocol_store::Write]> {
     match request {
         jig_protocol_store::Request::Commit { writes, .. } => writes,
-        jig_protocol_store::Request::Switch { .. }
+        jig_protocol_store::Request::Rehearse { .. }
+        | jig_protocol_store::Request::Back { .. }
+        | jig_protocol_store::Request::Close { .. }
+        | jig_protocol_store::Request::Switch { .. }
         | jig_protocol_store::Request::Site { .. }
         | jig_protocol_store::Request::Open { .. }
         | jig_protocol_store::Request::Restore { .. }

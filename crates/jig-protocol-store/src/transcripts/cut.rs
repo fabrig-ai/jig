@@ -24,7 +24,7 @@ impl State {
     }
 }
 pub(crate) fn begin(store: &mut Store, above: &mut Queue<Event>, below: &mut Below) {
-    let result = next(store, below);
+    let result = if crate::maintenance::rehearsal(store) { Ok(true) } else { next(store, below) };
     finish(store, result, above);
 }
 fn next(store: &mut Store, below: &mut Below) -> Result<bool, ()> {
@@ -127,6 +127,7 @@ fn finish(store: &mut Store, result: Result<bool, ()>, above: &mut Queue<Event>)
                 open::refuse(store, store.directory.owner, OpenRefusal::Failed, above);
             } else {
                 crate::patching::switch::opened(store);
+                crate::maintenance::opening_ended(store);
                 above.push(Event::Opened {
                     owner: store.directory.owner,
                     last: store.stores.store.last(),

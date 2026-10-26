@@ -78,7 +78,7 @@ pub(crate) fn manifest(
 pub(crate) fn encode(number: u64) -> Box<[u8]> {
     join(Decimal::of(number).as_bytes(), b"\n")
 }
-fn join(prefix: &[u8], suffix: &[u8]) -> Box<[u8]> {
+pub(crate) fn join(prefix: &[u8], suffix: &[u8]) -> Box<[u8]> {
     let mut writer = Writer::new(prefix.len().checked_add(suffix.len()).expect("bounded generation path"));
     writer.put(prefix).expect("measured prefix");
     writer.put(suffix).expect("measured suffix");
@@ -309,13 +309,14 @@ enum CopyStep {
     Failing,
     Finished,
 }
-/// Generation `from`'s maps copied into `from + 1` (store.md 10.2, step 2).
+/// A generation's maps copied between bounded roots (store.md 10.2, step 2, and 10.5).
 /// Directories are made 0o700, secrets opened private, files created exclusively
 /// 0o600 and copied through one bounded chunk. Files, map directories and finally
 /// generations are synced. The source is only read; a standing destination fails.
 #[derive(Debug)]
 pub(crate) struct Copying {
     root: Root,
+    source_root: Root,
     from: u64,
     to: u64,
     chunk: u32,
@@ -334,7 +335,18 @@ pub(crate) struct Copying {
     progress: Progress,
 }
 pub(crate) fn copy(root: Root, from: u64, chunk: u32, below: &mut crate::Below) -> Copying {
-    let to = from.checked_add(1);
+    copy_between(root, root, from, from.checked_add(1), chunk, below)
+}
+/// The rehearsal uses the same bounded driver with a separate source and the
+/// same generation number in its scratch deployment (store.md 10.5).
+pub(crate) fn copy_between(
+    source_root: Root,
+    root: Root,
+    from: u64,
+    to: Option<u64>,
+    chunk: u32,
+    below: &mut crate::Below,
+) -> Copying {
     let valid = from != 0 && to.is_some() && chunk != 0;
     let to = to.unwrap_or(from);
     if valid {
@@ -347,6 +359,7 @@ pub(crate) fn copy(root: Root, from: u64, chunk: u32, below: &mut crate::Below) 
     }
     Copying {
         root,
+        source_root,
         from,
         to,
         chunk,
@@ -476,7 +489,7 @@ fn copy_arrived(copying: &mut Copying, arrived: Arrived, queue: &mut Queue<file:
             copying.destination = Some(Root { token: file, fd });
             queue.push(file::Request::OpenDirectory {
                 owner: OWNER,
-                root: copying.root.fd,
+                root: copying.source_root.fd,
                 name: map(copying.from, copying.map),
                 no_follow: true,
             });

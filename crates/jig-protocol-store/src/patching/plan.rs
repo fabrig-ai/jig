@@ -7,7 +7,7 @@ use skein_lib::List;
 pub(crate) const DOWNSTREAM: [Owner; 4] = [Owner::Application, Owner::Jig, Owner::Smith, Owner::Skein];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct Levels {
+pub struct Levels {
     pub skein: Option<u32>,
     pub smith: Option<u32>,
     pub jig: Option<u32>,

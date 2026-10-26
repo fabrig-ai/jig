@@ -20,21 +20,37 @@ pub(super) struct Disk {
     root: Root,
     io: [FileIo; 3],
     seeded: Seeded,
+    scratch: Option<Root>,
 }
 impl Disk {
     pub fn new(limits: &Limits) -> Self {
         let mut machine = Machine::for_user(0);
         let handle = machine.lay(&[]);
+        let scratch = machine.lay(&[]);
+        machine.close(scratch);
         let (sim, pid, root, io, seeded) = drivers(limits, handle, 0);
-        Self { machine, sim, pid, root, io, seeded }
+        Self { machine, sim, pid, root, io, seeded, scratch: None }
     }
     pub fn root(&self) -> Root {
         self.root
+    }
+    pub fn scratch(&mut self) -> Root {
+        if let Some(root) = self.scratch {
+            return root;
+        }
+        let handle = self.machine.reopen_root(1);
+        let fd = self.sim.root(self.pid, Handle::new(handle.raw()));
+        let tokens: Vec<_> = self.io.iter_mut().map(|io| io.adopt_root(fd).expect("scratch root slot")).collect();
+        assert!(tokens.iter().all(|token| *token == tokens[0]), "roots adopted in the same order");
+        let root = Root { token: tokens[0], fd };
+        self.scratch = Some(root);
+        root
     }
     pub fn seeded(&self) -> Seeded {
         self.seeded
     }
     pub fn crash(&mut self, limits: &Limits, seed: u64) {
+        self.scratch = None;
         self.machine.crash(seed);
         let handle = self.machine.reopen_root(0);
         (self.sim, self.pid, self.root, self.io, self.seeded) = drivers(limits, handle, seed);
