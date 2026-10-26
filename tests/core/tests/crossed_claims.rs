@@ -129,8 +129,8 @@ fn an_in_process_crossed_claim_yet_to_commit_a_turn_is_not_started() {
 fn a_crash_after_the_switch_ends_the_crossed_claim_at_the_next_restart() {
     let (mut world, task, attempt) = live_resumed();
     world.switch_patch_sets(SEED, AFTER);
-    assert!(fresh_windows::proof(&world).crossed, "crossing survives before any new root runs");
-    // Drop the old root in a cold restart at the already switched levels.
+    assert!(fresh_windows::proof(&world).crossed, "crossing survives before adoption");
+    // Crash the new root before the durable mark is acknowledged.
     // No worker has listed this attempt, and no grace has elapsed.
     fresh_windows::restart(&mut world, AFTER);
     assert!(fresh_windows::proof(&world).crossed);

@@ -190,12 +190,13 @@ impl World {
         self.restart(seed, requirement);
     }
 
-    /// Switch the durable store to the next binary's sets without starting its root.
+    /// Run the next binary through Switch and its durable mark, holding the
+    /// acknowledgement so no restored claim is adopted before the crash.
     pub fn switch_patch_sets(&mut self, seed: u64, sets: jig_protocol_store::PatchSets) {
-        self.store.patch_sets(sets);
-        let config = fixture(seed, false).0;
-        self.store.reconfigure(18, &config.core.settings.models);
-        self.observer.fresh_mark(self.wall, &self.store);
+        self.hold_switch = true;
+        self.restart_with_patch_sets(seed, false, sets);
+        self.store.fault(jig_test_store_files::Fault::Hold { commits: 1 });
+        self.finish_switch();
     }
 
     /// Restart the root under changed admission limits, over the same store.
