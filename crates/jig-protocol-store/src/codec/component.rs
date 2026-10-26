@@ -197,7 +197,7 @@ impl Attempt {
     }
 }
 
-/// Each jig family's layout fingerprint, kept by the first commit (store.md, 5.3).
+/// Each kept family's layout fingerprint, kept by the first commit (store.md, 5.3).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Layouts {
     pub component: [u8; 32],
@@ -207,10 +207,13 @@ pub struct Layouts {
     pub notes: [u8; 32],
     pub accounts: [u8; 32],
     pub settings: [u8; 32],
+    pub secrets: [u8; 32],
+    pub skein_oauth: [u8; 32],
+    pub smith_transcript: [u8; 32],
 }
 
 impl Layouts {
-    /// Encode the seven fixed digests with the component family's version.
+    /// Encode the ten fixed digests with the component family's version.
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
         let row = wire::Layouts::new(
@@ -223,6 +226,9 @@ impl Layouts {
                 notes: self.notes,
                 accounts: self.accounts,
                 settings: self.settings,
+                secrets: self.secrets,
+                skein_oauth: self.skein_oauth,
+                smith_transcript: self.smith_transcript,
             },
         )
         .expect("layouts have no bounded fields");
@@ -233,8 +239,18 @@ impl Layouts {
 
     /// Decode one complete row, refusing another version or trailing bytes.
     pub fn decode(bytes: &[u8]) -> Result<Self, wire::Problem> {
-        let wire::LayoutsParts { component, core, tasks, people, notes, accounts, settings } =
-            wire::Layouts::decode(&wire::CEILINGS, &mut Reader::new(bytes))?.into_parts();
-        Ok(Self { component, core, tasks, people, notes, accounts, settings })
+        let wire::LayoutsParts {
+            component,
+            core,
+            tasks,
+            people,
+            notes,
+            accounts,
+            settings,
+            secrets,
+            skein_oauth,
+            smith_transcript,
+        } = wire::Layouts::decode(&wire::CEILINGS, &mut Reader::new(bytes))?.into_parts();
+        Ok(Self { component, core, tasks, people, notes, accounts, settings, secrets, skein_oauth, smith_transcript })
     }
 }
