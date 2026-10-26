@@ -14,7 +14,7 @@ pub enum TaskRunWait {
 }
 /// A derived explanation, never a durable task state (domain/engine.md, section 8).
 /// Hello keeps the fleet's observed receipt time and cause until admission or restart.
-/// Program names an incompatible Open path, derived by `waiting` from the run choice.
+/// Program is retained with no producer: Open admits program paths (hosts.md, 8.1).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TaskWaitRefused {
     Hello { kind: jig_domain_fleet::HostKind, at: Wall, why: jig_domain_fleet::HelloRefusal },
@@ -22,7 +22,7 @@ pub enum TaskWaitRefused {
 }
 
 /// The incompatible model path or configured account/source of an Open run.
-/// `waiting` produces this explanation from an incompatible Open run choice.
+/// Retained with no producer since Open admits program paths (hosts.md, 8.1).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum OpenProgram {
     Model,
@@ -71,7 +71,6 @@ pub(super) fn waiting(core: &Core, row: &tasks::TaskRecord) -> Option<TaskRunWai
         Err(RunWait::InvalidAccount { account, why }) => {
             Some(TaskRunWait::Account { account: Some(account), source: None, why: TaskWaitWhy::Invalid(why) })
         }
-        Err(RunWait::OpenProgram(why)) => Some(TaskRunWait::Refused(TaskWaitRefused::Program(why))),
         Err(RunWait::Credential) => Some(TaskRunWait::Credential),
         Err(RunWait::Host) => Some(match core.fleet.standing_refusal(core.charter_of(row.number).hosts) {
             Some((kind, record)) => {
