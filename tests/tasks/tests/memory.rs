@@ -648,9 +648,13 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_HOLDERS_BYTES: u64 = 8;
     // Settings action carriers enlarge this fixture's bounded party-proposal map.
     const SETTINGS_PROPOSAL_BYTES: u64 = 352;
-    // Twelve charter-model slots at 88 bytes, the five-revision holder map
-    // at 624 bytes, and the net-release snapshot's five u32 revision names.
-    const SETTINGS_REVISIONS_BYTES: u64 = 1_056 + 624 + 20;
+    // T1's eight held slots and T3's two extra offered/removal slots,
+    // each 24 inline CharterModels bytes plus 64 model bytes. The original
+    // two offered slots are already in the baseline above.
+    // T1's five-entry holder map costs 416 bytes. Its SettingsRevision
+    // grows each of 16 tasks' three retained/scratch records by eight bytes.
+    // T3 also keeps five u32 revision names for the net-release snapshot.
+    const SETTINGS_REVISIONS_BYTES: u64 = 10 * (24 + 64) + 416 + 16 * 3 * 8 + 5 * 4;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
