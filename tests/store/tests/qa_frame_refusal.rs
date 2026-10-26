@@ -18,6 +18,7 @@ const CODEC_TRANSCRIPT_CEILING: u32 = 8_388_608;
 const FIRST: u64 = 1;
 const DURABLE: u64 = 2;
 const REFUSED: u64 = 3;
+const KV_CHUNK_OVERHEAD: u32 = 20;
 
 fn checked(limits: &Limits) -> Result<sizes::Sizes, sizes::SizeRefusal> {
     sizes::check(&limits.core, &root::APPLICATION, &limits.journal, &limits.store, limits.orphan_erases)
@@ -37,6 +38,8 @@ fn payload() -> Box<[u8]> {
 fn opened(page: u32) -> World {
     let mut limits = root::limits();
     limits.store.page.bytes = page;
+    // The world's drivers must read a full frame in one chunk.
+    limits.store.chunk = limits.store.chunk.max(page + KV_CHUNK_OVERHEAD);
     checked(&limits).expect("every opened world passes the shell's size check");
     let mut world = World::unopened_observed(SEED, limits, None);
     assert_eq!(world.open(), Some(0), "open: {:?}", world.refusal());
