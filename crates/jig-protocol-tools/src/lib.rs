@@ -42,6 +42,13 @@ pub struct Problem {
 #[expect(clippy::large_enum_variant, reason = "the decoded amendment stays inline as in the core's vocabulary")]
 pub enum Decoded {
     Action(core::NamedAction),
+    /// The core world's settings stand uses the existing settings-v1 whole-set codec.
+    /// Applications supply their own settings tool and value translation.
+    Settings {
+        against: u32,
+        set: Box<[u8]>,
+        reason: Box<[u8]>,
+    },
     Delegate(Box<[core::Delegate]>),
     Problem(Problem),
     NotMine,

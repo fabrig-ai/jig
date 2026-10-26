@@ -24,6 +24,7 @@ pub fn decode(tool: &[u8], input: &[u8], limits: &Limits) -> Decoded {
 fn read(tool: &[u8], input: &[u8], limits: &Limits) -> Result<Decoded, Problem> {
     let value = json::parse(input, limits)?;
     let action = match tool {
+        b"propose_settings" => return settings(&value, limits),
         b"delegate" => return Ok(Decoded::Delegate(delegates(value.required(b"batch")?, limits)?)),
         b"message" => message(&value)?,
         b"cancel" => core::NamedAction::Control {
@@ -203,4 +204,44 @@ fn amend(value: &json::Value) -> Result<core::NamedAction, Problem> {
         None => return Err(Problem { field: b"revision", why: Why::Missing }),
     };
     Ok(core::NamedAction::Amend { target: value.required(b"target")?.number()?, revision, amendment })
+}
+
+fn settings(value: &json::Value, limits: &Limits) -> Result<Decoded, Problem> {
+    let set = value.required(b"set")?;
+    let set = match &set.kind {
+        json::Kind::String(value) => value,
+        json::Kind::Object(_)
+        | json::Kind::Array(_)
+        | json::Kind::Number(_)
+        | json::Kind::Boolean(_)
+        | json::Kind::Null => {
+            return Err(Problem { field: b"set", why: Why::Type });
+        }
+    };
+    let Ok(count) = u32::try_from(set.len() / 2) else {
+        return Err(Problem { field: b"set", why: Why::TooLarge });
+    };
+    if set.len() % 2 != 0 || count > limits.input_bytes {
+        return Err(Problem { field: b"set", why: Why::Malformed });
+    }
+    let mut bytes = skein_lib::List::with_capacity(count);
+    for pair in set.chunks_exact(2) {
+        let high = hex(*pair.first().expect("two hex digits"))?;
+        let low = hex(*pair.get(1).expect("two hex digits"))?;
+        let byte = high.checked_mul(16).expect("high hex nibble").checked_add(low).expect("low hex nibble");
+        bytes.push(byte).expect("bounded settings bytes");
+    }
+    Ok(Decoded::Settings {
+        against: value.required(b"against")?.small()?,
+        set: bytes.into_boxed(),
+        reason: value.required(b"reason")?.text()?,
+    })
+}
+fn hex(byte: u8) -> Result<u8, Problem> {
+    match byte {
+        b'0'..=b'9' => Ok(byte.checked_sub(b'0').expect("decimal digit")),
+        b'a'..=b'f' => Ok(byte.checked_sub(b'a').expect("hex letter").checked_add(10).expect("hex digit")),
+        b'A'..=b'F' => Ok(byte.checked_sub(b'A').expect("hex letter").checked_add(10).expect("hex digit")),
+        _ => Err(Problem { field: b"set", why: Why::Range }),
+    }
 }

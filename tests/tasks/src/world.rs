@@ -498,6 +498,7 @@ impl World {
             | Event::WithdrawPersonProposal { .. }
             | Event::DecidePersonProposal { .. }
             | Event::DecideProposal { .. }
+            | Event::DecideSettingsProposal { .. }
             | Event::WithdrawProposal { .. }
             | Event::StalledProposal { .. }
             | Event::CarvePool { .. }
@@ -537,6 +538,9 @@ impl World {
             | Event::Notice { .. } => None,
         };
         match event {
+            Event::DecideSettingsProposal { decision, .. } => {
+                self.message = self.message.max(decision.message);
+            }
             Event::Amend { message, .. } => {
                 self.message = self.message.max(*message);
             }

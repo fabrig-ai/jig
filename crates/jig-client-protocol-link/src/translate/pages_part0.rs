@@ -63,6 +63,14 @@ pub(crate) fn owner_message_kind_fields(
     limits: &Limits,
 ) -> Result<c::OwnerMessageKind, w::Problem> {
     Ok(match value {
+        w::OwnerMessageKind::SettingsDecision(row) => c::OwnerMessageKind::SettingsDecision {
+            proposal: row.proposal(),
+            outcome: match row.outcome() {
+                w::SettingsOutcome::Accepted(value) => c::SettingsOutcome::Accepted { revision: value.revision() },
+                w::SettingsOutcome::Rejected => c::SettingsOutcome::Rejected,
+                w::SettingsOutcome::Stale(value) => c::SettingsOutcome::Stale { newest: value.newest() },
+            },
+        },
         w::OwnerMessageKind::Escalation(row) => {
             c::OwnerMessageKind::Escalation { task: row.task(), revision: row.revision() }
         }
