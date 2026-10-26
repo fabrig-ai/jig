@@ -108,7 +108,7 @@ impl Machines {
                                         | Type::Bool
                                         | Type::Duration
                                         | Type::Fixed(_)
-                                        | Type::Secret(_)
+                                        | Type::Secret { .. }
                                         | Type::Text(_)
                                         | Type::Named(_)
                                         | Type::Bytes { held: Held::Opaque | Held::Pieces(_), .. } => break,
