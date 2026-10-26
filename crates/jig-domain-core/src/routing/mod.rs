@@ -574,31 +574,21 @@ fn step_one(core: &mut Core, env: &Env<Limits>, event: Event, work: &mut Queue<E
         Event::TurnPayload { run, attempt, turn, body, read, cumulative, refused } => {
             route_turn_payload(core, work, run, attempt, turn, body, read, refused, cumulative)
         }
-        Event::AnswerPayload {
-            run,
-            attempt,
-            payload,
-            cumulative,
-            end,
-            saved,
-            invalid_saved,
-            grants_refused,
-            read,
-            refused,
-        } => route_answer_payload(
-            core,
-            work,
-            run,
-            attempt,
-            payload,
-            cumulative,
-            end,
-            saved,
-            invalid_saved,
-            grants_refused,
-            read,
-            &refused,
-        ),
+        Event::AnswerPayload { run, attempt, payload, cumulative, end, saved, invalid_saved, read, refused } => {
+            route_answer_payload(
+                core,
+                work,
+                run,
+                attempt,
+                payload,
+                cumulative,
+                end,
+                saved,
+                invalid_saved,
+                read,
+                &refused,
+            )
+        }
         Event::AcceptedTurn { task, attempt, turn, accepted, cumulative, read, transcript, opens_window } => {
             route_accepted_turn(core, env, task, attempt, turn, accepted, cumulative, read, transcript, opens_window)
         }

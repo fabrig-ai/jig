@@ -231,7 +231,8 @@ pub(crate) fn host_answer(value: core::SettledAnswer) -> host::Relayed {
 
 pub(crate) fn ending(value: host::Ending) -> tasks::End {
     match value {
-        host::Ending::Refused(_) => tasks::End::Refused,
+        host::Ending::Refused(host::Refusal::Busy) => tasks::End::Refused,
+        host::Ending::Refused(host::Refusal::Invalid(_)) => tasks::End::Failed(tasks::Class::Invalid),
         host::Ending::Parked { .. } => tasks::End::Parked,
         host::Ending::Failed { failure, .. } => match failure {
             host::Failure::Run(host::RunFailure::Exceeded(value)) => tasks::End::Exceeded(tasks::Exceeded {
@@ -288,13 +289,12 @@ pub(crate) fn answer_payload(domain: &mut Domain, run: Token, attempt: Token, pa
 }
 
 pub(crate) fn result_read(domain: &Domain, payload: Token, end: tasks::End, work: &mut Queue<Work>) {
-    let Some(crate::boundary::Payload::Answer { task, attempt, spent, read, refused, ending, .. }) =
+    let Some(crate::boundary::Payload::Answer { task, attempt, spent, read, refused, .. }) =
         domain.payloads.get(&payload)
     else {
         return;
     };
     work.push(Work::Core(core::Event::AnswerPayload {
-        grants_refused: grants_refused(ending),
         run: Token::new(*task),
         attempt: Token::new(*attempt),
         payload,
@@ -433,21 +433,5 @@ fn host_form(form: fleet::Form) -> host::Form {
         fleet::Form::Program(name) => {
             host::Form::Program(host::SourceName::new(name.as_bytes()).expect("source name follows the same rules"))
         }
-    }
-}
-
-fn grants_refused(ending: &host::Ending) -> bool {
-    match ending {
-        host::Ending::Refused(refusal) => match refusal {
-            host::Refusal::Invalid(invalid) => match invalid {
-                host::Invalid::Start { cause, .. } => *cause == host::StartCause::Grants,
-                host::Invalid::Charter
-                | host::Invalid::Transcript
-                | host::Invalid::Grants
-                | host::Invalid::Messages => false,
-            },
-            host::Refusal::Busy => false,
-        },
-        host::Ending::Ended { .. } | host::Ending::Parked { .. } | host::Ending::Failed { .. } => false,
     }
 }

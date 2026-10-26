@@ -139,16 +139,28 @@ fn received_answer(domain: &mut crate::Domain, up: jig_domain_host::LinkUp) -> (
 }
 #[test]
 fn a_start_refusal_reaches_the_core_as_invalid_without_reading_a_result() {
-    let mut domain = fixtures::domain();
-    let (run, attempt, payload, answer) = received_answer(&mut domain, fixtures::start_refusal());
-    assert_eq!(answer, fleet::Answer::Invalid);
-    let mut work = fixtures::work();
-    link::answer(&mut domain, run, attempt, payload, &mut work);
-    assert!(domain.now.is_empty());
-    let Some(crate::Work::Core(core::Event::AnswerPayload { end, .. })) = work.pop() else {
-        panic!("invalid start reaches the core without a result codec");
-    };
-    assert_eq!(end, tasks::End::Failed(tasks::Class::Invalid));
+    for cause in [host::StartCause::Other, host::StartCause::Grants] {
+        let mut domain = fixtures::domain();
+        let host::LinkUp::Answer { run, attempt, mut answer } = fixtures::start_refusal() else {
+            panic!("start refusal fixture");
+        };
+        let host::Ending::Refused(host::Refusal::Invalid(host::Invalid::Start { cause: start_cause, .. })) =
+            &mut answer.ending
+        else {
+            panic!("start cause fixture");
+        };
+        *start_cause = cause;
+        let (run, attempt, payload, answer) =
+            received_answer(&mut domain, host::LinkUp::Answer { run, attempt, answer });
+        assert_eq!(answer, fleet::Answer::Invalid);
+        let mut work = fixtures::work();
+        link::answer(&mut domain, run, attempt, payload, &mut work);
+        assert!(domain.now.is_empty());
+        let Some(crate::Work::Core(core::Event::AnswerPayload { end, .. })) = work.pop() else {
+            panic!("invalid start reaches the core without a result codec");
+        };
+        assert_eq!(end, tasks::End::Failed(tasks::Class::Invalid));
+    }
 }
 
 fn core_request(request: core::Request) -> core::Requests {
