@@ -474,6 +474,38 @@ fn versions_no_held_revision_reads_are_dropped() {
     assert!(core.held.versions.contains_key(&VersionKey { charter: 7, revision: 3 }));
     assert_eq!(core.charter_at(7, 4).unwrap().spend, 3);
 }
+
+#[test]
+fn releasing_multiple_revisions_writes_one_extent_after_all_copies_and_erases() {
+    let (mut core, mut limits) = held_versions();
+    limits.settings.revisions = 2;
+    limits.settings.versions = 2;
+    core.current.oldest = 0;
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    let mut out = skein_lib::Queue::with_capacity(release_writes(&limits).unwrap() + 1);
+    core.release_revision(&env, 4, &mut out);
+    core.release_revision(&env, 1, &mut out);
+    out.push(crate::Request::Decided);
+    core.finish_extent(0, &mut out);
+    assert_eq!(out.len(), 8, "two copies, two Held erases, two Charter erases, one extent and the mark");
+    let mut extents = 0_u32;
+    for request in &out {
+        if let crate::Request::Write(crate::Write::Save(crate::Record::Core(CoreRecord::Settings(Record::Extent {
+            oldest,
+        })))) = request
+        {
+            extents += 1;
+            assert_eq!(*oldest, 1);
+        }
+    }
+    assert_eq!(extents, 1);
+    for _ in 0_u32..7 {
+        if let Some(crate::Request::Decided) = out.pop() {
+            panic!("the mark follows every write");
+        }
+    }
+    let Some(crate::Request::Decided) = out.pop() else { panic!("decision mark") };
+}
 #[test]
 fn a_reset_is_a_version_made_at_the_reset() {
     let (mut core, limits) = held_fixture();

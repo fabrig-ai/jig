@@ -1037,6 +1037,13 @@ fn a_revision_leaves_memory_as_its_last_holder_ends() {
         .find(|writes| writes.iter().any(|write| matches!(write, root::Write::Save(record) if record.key() == ended)))
         .expect("ending decision");
     assert!(decision.iter().any(|write| matches!(write, root::Write::CopySettingsRevision(1))));
+    assert_eq!(
+        decision
+            .iter()
+            .filter(|write| matches!(write, root::Write::Save(record) if record.key() == key(settings::Key::Extent)))
+            .count(),
+        1
+    );
     assert!(
         decision
             .iter()

@@ -302,7 +302,7 @@ impl Core {
 fn route_room_checked(limits: &Limits) -> Option<u32> {
     accounts::worst_case(&limits.accounts)?;
     tasks::worst_case(&crate::settings::task_limits(limits))?;
-    let tasks = crate::settings::task_room(limits).checked_mul(16)?;
+    let tasks = crate::settings::task_route_room(limits).checked_mul(16)?;
     let people = people::max_out(&limits.people).checked_mul(8)?;
     let fleet = fleet::max_out(&limits.fleet).checked_mul(8)?;
     let brief = brief::gather_max_out(&limits.brief).checked_mul(4)?;
@@ -421,6 +421,7 @@ pub fn room(limits: &Limits, event: &Event) -> Option<JournalRoom> {
 
 /// Route one child event and each sibling continuation within one core decision.
 pub fn step(core: &mut Core, env: &Env<Limits>, event: Event) -> Requests {
+    let oldest = core.current.oldest;
     core.run_now = env.now;
     core.run_wall = env.wall;
     let room = route_room(&env.limits);
@@ -444,22 +445,26 @@ pub fn step(core: &mut Core, env: &Env<Limits>, event: Event) -> Requests {
         }
     }
     assert!(work.is_empty(), "finite sibling routes fit their bound");
+    core.finish_extent(oldest, &mut out);
     out.push(Request::Decided);
     Requests::Out(out)
 }
 
 /// Want every configured account once, after the restart has restored the core's own ranges.
 pub fn want_accounts(core: &mut Core, env: &Env<Limits>) -> Requests {
+    let oldest = core.current.oldest;
     core.run_now = env.now;
     core.run_wall = env.wall;
     let mut work = Queue::with_capacity(0);
-    let requests = route_account(core, env, &mut work, accounts::Event::Want);
+    let Requests::Out(mut out) = route_account(core, env, &mut work, accounts::Event::Want);
     assert!(work.is_empty(), "wanting the accounts answers no party");
-    requests
+    core.finish_extent(oldest, &mut out);
+    Requests::Out(out)
 }
 
 /// Resume the fleet's next held placement or relay through the core's sibling routes.
 pub fn resume_fleet(core: &mut Core, env: &Env<Limits>) -> Requests {
+    let oldest = core.current.oldest;
     core.run_now = env.now;
     core.run_wall = env.wall;
     if core.stopping {
@@ -471,7 +476,10 @@ pub fn resume_fleet(core: &mut Core, env: &Env<Limits>) -> Requests {
         core.touch_deployment();
         core.touch_run_waits();
     }
-    tag_fleet(core, env, &mut Queue::with_capacity(0), child, fleet::max_out(&env.limits.fleet))
+    let Requests::Out(mut out) =
+        tag_fleet(core, env, &mut Queue::with_capacity(0), child, fleet::max_out(&env.limits.fleet));
+    core.finish_extent(oldest, &mut out);
+    Requests::Out(out)
 }
 
 #[expect(clippy::too_many_lines, reason = "exhaustive event dispatch delegates each concern")]
@@ -658,7 +666,8 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
     if core.stopping && crate::stopping::waits(timer) {
         return crate::stopping::empty();
     }
-    match timer {
+    let oldest = core.current.oldest;
+    let Requests::Out(mut out) = match timer {
         Timer::People => {
             let mut out = Queue::with_capacity(people::max_out(&env.limits.people));
             people::fire(&mut core.people, &Env { now: env.now, wall: env.wall, limits: env.limits.people }, &mut out);
@@ -711,7 +720,9 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
             views::fire(&mut core.views, &Env { now: env.now, wall: env.wall, limits: env.limits.views }, &mut out);
             made_outputs(core, env, out)
         }
-    }
+    };
+    core.finish_extent(oldest, &mut out);
+    Requests::Out(out)
 }
 
 pub(crate) fn tag_ended_mark(
