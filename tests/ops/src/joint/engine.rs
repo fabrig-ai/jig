@@ -345,6 +345,7 @@ impl Application for OpsApplication {
             | root::Output::Now(
                 core::Now::Relayed { .. }
                 | core::Now::EffectAnswer { .. }
+                | core::Now::SettingsAnswer { .. }
                 | core::Now::SettledCallRefused { .. }
                 | core::Now::Call { .. }
                 | core::Now::RelayBusy { .. }

@@ -41,12 +41,16 @@ pub(super) fn make(core: &Core, party: u64) -> Result<Settings, Missing> {
     if core.people.role(party, people::DEPLOYMENT).is_none() {
         return Err(Missing::NotAllowed);
     }
+    Ok(inventory(core))
+}
+
+pub(crate) fn inventory(core: &Core) -> Settings {
     let mut result = build(core);
     result.pending = List::with_capacity(core.settings_proposals.capacity());
     for (&(proposer, number), _) in &core.settings_proposals {
         result.pending.push(SettingsProposal { proposer, number }).expect("pending bound");
     }
-    Ok(result)
+    result
 }
 
 pub(crate) fn build(core: &Core) -> Settings {

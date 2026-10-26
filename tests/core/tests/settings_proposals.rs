@@ -468,64 +468,6 @@ fn full_version_configuration() -> (root::Config, root::Limits) {
     (config, limits)
 }
 
-fn run_configuration() -> (root::Config, root::Limits) {
-    let (mut config, mut limits) = configuration();
-    config.core.defaults.rules.ceiling.tools.0 |= 1024;
-    config.core.defaults.rules.maximum_run_spend = 20;
-    for seed in &mut config.core.seed_projects {
-        seed.policy.policy.ceiling.tools.0 |= 1024;
-        for role in &mut seed.policy.policy.roles {
-            role.authority.tools.0 |= 1024;
-        }
-    }
-    let policy = config.core.defaults.policies.get_mut(&1).expect("project policy");
-    policy.policy.ceiling.tools.0 |= 1024;
-    for role in &mut policy.policy.roles {
-        role.authority.tools.0 |= 1024;
-    }
-    limits.core.settings.proposals = 2;
-    peers::journal(&mut limits);
-    (config, limits)
-}
-fn proposing_run(settings_family: bool) -> (World, u64, u64) {
-    use skein_lib::{Duration, Token};
-    let (config, limits) = run_configuration();
-    let mut world = World::first_start_with_accounts(config, &limits);
-    world.client_peer = Some(ClientPeer::default());
-    let signed = sign_in(&mut world);
-    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
-    world.send(root::Event::Core(core::Event::Fleet(jig_domain_fleet::Event::Hello {
-        worker: 0,
-        channel: Token::new(7),
-        hello: jig_domain_fleet::Hello {
-            bounds: fixtures::bounds(),
-            stop_bound: Duration::from_millis(1),
-            slots: 1,
-            workstreams: Box::new([]),
-            hosting: Box::new([]),
-        },
-    })));
-    let mut goal = fixtures::chat(&world, 1, b"Review the settings".as_slice().into());
-    let people::Ask::Create { batch, .. } = &mut goal else { panic!("goal creation") };
-    batch[0].flags.conversation = false;
-    batch[0].flags.listed = true;
-    batch[0].budget = people::Budget::Named;
-    batch[0].authority.spend = 40;
-    batch[0].authority.tools = if settings_family { 2047 } else { 1023 };
-    let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(&mut world, signed, 101, goal) else {
-        panic!("goal admitted")
-    };
-    assert_eq!(world.assigned.as_ref().expect("assigned proposing goal").task, first);
-    (world, signed, first)
-}
-fn run_charter(world: &World, instructions: &[u8]) -> settings::Item {
-    let mut charter = world.domain.settings().charter(1).expect("fixture charter").clone();
-    charter.policy.instructions = instructions.into();
-    settings::Item {
-        setting: settings::Setting::Charter(1),
-        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
-    }
-}
 fn run_propose(world: &mut World, against: u32, items: Box<[settings::Item]>) -> core::CallPart {
     let (config, limits) = run_configuration();
     let models = settings::model_names(&config.core.settings.models);
