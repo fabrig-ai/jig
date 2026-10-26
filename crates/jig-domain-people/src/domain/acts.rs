@@ -209,6 +209,7 @@ fn permanent(outcome: &Outcome) -> bool {
         | Outcome::Renamed { .. }
         | Outcome::ProjectMade { .. }
         | Outcome::SettingsChanged { .. }
+        | Outcome::MovedToNewest { .. }
         | Outcome::PoolSet { .. }
         | Outcome::Said { .. }
         | Outcome::QuestionAnswered { .. }
@@ -260,6 +261,7 @@ pub(super) fn valid_outcome(limits: &Limits, act: &Act, outcome: &Outcome) -> bo
             | Outcome::Renamed { .. }
             | Outcome::ProjectMade { .. }
             | Outcome::SettingsChanged { .. }
+            | Outcome::MovedToNewest { .. }
             | Outcome::PoolSet { .. }
             | Outcome::Said { .. }
             | Outcome::QuestionAnswered { .. }

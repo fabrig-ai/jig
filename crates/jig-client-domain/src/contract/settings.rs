@@ -316,3 +316,15 @@ pub struct OwnerRetainedActionSettings {
     pub items: List<RevisionItemHead>,
     pub made: Option<u32>,
 }
+
+/// An owner's move of live agent tasks (engine.md, 17.4; contract.md, 3.2).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MoveToNewest {
+    pub revision: u32,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OutcomeMovedToNewest {
+    pub newest: u32,
+    pub moved: u32,
+    pub stayed: u32,
+}

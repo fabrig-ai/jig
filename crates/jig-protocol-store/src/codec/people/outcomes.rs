@@ -9,6 +9,12 @@ use facts::{
 #[expect(clippy::too_many_lines, reason = "one exhaustive permanent outcome translation table")]
 pub(super) fn encode_outcome(value: &domain::Outcome, limits: &wire::Limits) -> Result<wire::Outcome, wire::Problem> {
     Ok(match value {
+        domain::Outcome::MovedToNewest { newest, moved, stayed } => {
+            wire::Outcome::MovedToNewest(wire::OutcomeMovedToNewest::new(
+                limits,
+                wire::OutcomeMovedToNewestParts { newest: *newest, moved: *moved, stayed: *stayed },
+            )?)
+        }
         domain::Outcome::SettingsChanged { revision } => wire::Outcome::SettingsChanged(
             wire::OutcomeSettingsChanged::new(limits, wire::OutcomeSettingsChangedParts { revision: *revision })?,
         ),
@@ -168,6 +174,9 @@ fn account_sign_in_started(source: u32, address: &[u8], limits: &wire::Limits) -
 #[expect(clippy::too_many_lines, reason = "one exhaustive permanent outcome translation table")]
 pub(super) fn decode_outcome(value: wire::Outcome) -> domain::Outcome {
     match value {
+        wire::Outcome::MovedToNewest(value) => {
+            domain::Outcome::MovedToNewest { newest: value.newest(), moved: value.moved(), stayed: value.stayed() }
+        }
         wire::Outcome::SettingsChanged(value) => domain::Outcome::SettingsChanged { revision: value.revision() },
         wire::Outcome::Compound(value) => {
             let wire::OutcomeCompoundParts { project, operations, first_message } = value.into_parts();

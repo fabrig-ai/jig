@@ -297,6 +297,10 @@ pub(super) fn decode_escalation_decision(value: wire::EscalationDecision) -> dom
 #[expect(clippy::manual_map, reason = "step code translates optional fields through exhaustive matches")]
 pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::Ask, wire::Problem> {
     Ok(match value {
+        domain::Ask::MoveToNewest { revision } => wire::Ask::MoveToNewest(wire::AskMoveToNewest::new(
+            limits,
+            wire::AskMoveToNewestParts { revision: *revision },
+        )?),
         domain::Ask::ChangeSettings { against, digest } => wire::Ask::ChangeSettings(wire::AskChangeSettings::new(
             limits,
             wire::AskChangeSettingsParts { against: *against, digest: *digest },
@@ -505,6 +509,7 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
 #[expect(clippy::manual_map, reason = "step code translates optional fields through exhaustive matches")]
 pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask, wire::Problem> {
     Ok(match value {
+        wire::Ask::MoveToNewest(value) => domain::Ask::MoveToNewest { revision: value.revision() },
         wire::Ask::ChangeSettings(value) => {
             domain::Ask::ChangeSettings { against: value.against(), digest: *value.digest() }
         }

@@ -7,6 +7,7 @@ use skein_ui::phrases::{HoleKind, HoleShape, PhraseId, PhraseShape};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JigPhrase {
     SettingsChanged,
+    MovedToNewest,
     SettingsStale,
     SettingsFull,
     SettingsFullTask,
@@ -1064,6 +1065,7 @@ impl JigPhrase {
     pub const fn id(self) -> PhraseId {
         let number = match self {
             Self::SettingsChanged => 7900,
+            Self::MovedToNewest => 7919,
             Self::SettingsStale => 7901,
             Self::SettingsFull => 7902,
             Self::SettingsFullTask => 7903,
@@ -1731,11 +1733,13 @@ impl JigPhrase {
                 HoleShape { kind: HoleKind::Number, bytes: 0 },
                 HoleShape { kind: HoleKind::Number, bytes: 0 },
             ]),
-            Self::PolicyJudge | Self::PolicyPermission | Self::SpecificationResource => Box::new([
-                HoleShape { kind: HoleKind::Number, bytes: 0 },
-                HoleShape { kind: HoleKind::Number, bytes: 0 },
-                HoleShape { kind: HoleKind::Number, bytes: 0 },
-            ]),
+            Self::PolicyJudge | Self::PolicyPermission | Self::SpecificationResource | Self::MovedToNewest => {
+                Box::new([
+                    HoleShape { kind: HoleKind::Number, bytes: 0 },
+                    HoleShape { kind: HoleKind::Number, bytes: 0 },
+                    HoleShape { kind: HoleKind::Number, bytes: 0 },
+                ])
+            }
             Self::MalformedRunning
             | Self::SettingsUnchanged
             | Self::SettingRules
@@ -2397,8 +2401,9 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 638] = [
+pub const ALL: [JigPhrase; 639] = [
     JigPhrase::SettingsChanged,
+    JigPhrase::MovedToNewest,
     JigPhrase::SettingsStale,
     JigPhrase::SettingsFull,
     JigPhrase::SettingsFullTask,

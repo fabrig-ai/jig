@@ -250,6 +250,7 @@ impl Core {
                 | people::Outcome::Renamed { .. }
                 | people::Outcome::ProjectMade { .. }
                 | people::Outcome::SettingsChanged { .. }
+                | people::Outcome::MovedToNewest { .. }
                 | people::Outcome::PoolSet { .. }
                 | people::Outcome::EscalationDecided { .. }
                 | people::Outcome::AccountSignInStarted { .. }
