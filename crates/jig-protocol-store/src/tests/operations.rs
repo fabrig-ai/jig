@@ -41,6 +41,7 @@ fn real_generation() -> Disk {
                 number,
                 Box::new([
                     fixtures::header(number),
+                    Write::Wires,
                     Write::Put { key: Box::from(ROW_KEY), value: Box::from(ROW_VALUE) },
                 ]),
             ),
@@ -103,6 +104,8 @@ fn read_rows(disk: &mut Disk, store: &mut Store) {
         },
         "{events:?}"
     );
+    let next = store.stores.store.last().checked_add(1).expect("fixture mark number");
+    disk.request(store, fixtures::commit(next, Box::new([fixtures::header(next), Write::Wires])));
     let events = disk.request(
         store,
         Request::Secrets {

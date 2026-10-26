@@ -263,6 +263,7 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
                 into.push(Up::Root(root::Event::Core(core::Event::TranscriptUnread { task })));
             }
         }
+        Event::SecretsNotReady { .. } => unreachable!("the root store route handles public records only"),
         Event::Corrupt { owner } => {
             routes.pending.remove(&owner);
             stop(routes, into);

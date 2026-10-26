@@ -396,7 +396,7 @@ pub fn turn(task: u64, attempt: u64, number: u32, bytes: &[u8]) -> core::TurnRec
 
 #[must_use]
 pub fn first() -> Box<[Write]> {
-    Box::new([Write::Save(header(1)), Write::Save(live_task(LIVE)), Write::Save(run_proof(LIVE))])
+    Box::new([Write::Save(header(1)), Write::Wires, Write::Save(live_task(LIVE)), Write::Save(run_proof(LIVE))])
 }
 
 #[must_use]

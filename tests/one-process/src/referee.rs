@@ -20,6 +20,7 @@ pub(super) enum Scenario {
     Answer,
     MidRun,
     Restart,
+    MarkGate,
     Fault { cut: skein_world::Cut, before: u32 },
 }
 /// Read-only evidence captured before shutdown changes the task.
@@ -102,6 +103,36 @@ impl Referee {
             restarts,
         }
     }
+    fn mark_gate(&self, now: Time, service: &mut crate::world::ServiceHost) -> bool {
+        let source = self
+            .rows
+            .values()
+            .find_map(|row| match row {
+                root::Record::Core(core::Record::Accounts(jig_domain_accounts::Stored::Source { number, .. })) => {
+                    Some(*number)
+                }
+                root::Record::Core(_) | root::Record::Connector { .. } => None,
+            })
+            .expect("the previous start kept its source");
+        let state = service.service.account_startup(source, 1, now).expect("accounts component");
+        if !service.held_mark.is_empty() {
+            assert!(!state.durable);
+            assert!(!state.driver_made, "driver is made only after the mark");
+            assert_eq!(state.restores_waiting, 1, "source restore still queued, without reading its secret");
+            assert_eq!(state.wants_waiting, 1, "the restored source has one waiting want");
+            assert!(!state.granted);
+            assert_eq!(service.early_connections, 0, "no provider connection or token request");
+            service.mark_gate_checked = true;
+            service.hold_mark = false;
+        }
+        service.mark_gate_checked
+            && state.durable
+            && state.driver_made
+            && state.granted
+            && state.restores_waiting == 0
+            && state.wants_waiting == 0
+    }
+
     fn expectation_deadline(&self) -> Time {
         Time::from_nanos(if self.chat == crate::fixtures::Chat::Finite { 10_000_000_000 } else { 60_000_000_000 })
     }
@@ -380,6 +411,7 @@ impl skein_world::Referee<Proc> for Referee {
         if !service.attached {
             service.store = self.store.clone();
             service.attached = true;
+            service.hold_mark = self.scenario == Scenario::MarkGate;
             if self.attached {
                 self.handed = false;
                 self.agent_seen = 0;
@@ -411,6 +443,7 @@ impl skein_world::Referee<Proc> for Referee {
             }
             self.handed = true;
         }
+        let gate_ready = self.scenario == Scenario::MarkGate && self.mark_gate(now, service);
         let reached = match self.scenario {
             Scenario::Answer => {
                 clients_done
@@ -431,6 +464,7 @@ impl skein_world::Referee<Proc> for Referee {
                         .any(|row| matches!(row, root::Record::Core(core::Record::Core(core::CoreRecord::Turn(_)))))
             }
             Scenario::Restart => settled(&self.store.borrow()) > 0,
+            Scenario::MarkGate => gate_ready,
             Scenario::Fault { .. } => *self.restarts.borrow() > 0 && clients_done && self.cold.is_none(),
         };
         if !self.done && reached {

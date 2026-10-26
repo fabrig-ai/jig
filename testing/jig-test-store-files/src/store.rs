@@ -524,6 +524,7 @@ impl Store {
             | Event::Carried { .. }
             | Event::Stale { .. }
             | Event::Erased { .. }
+            | Event::SecretsNotReady { .. }
             | Event::Secret { .. }
             | Event::SecretsLoaded { .. }) => self.route(event, requests),
         }

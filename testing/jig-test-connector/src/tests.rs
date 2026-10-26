@@ -60,6 +60,10 @@ fn pool() -> Path {
 }
 
 fn domain() -> Domain {
+    domain_with_limits(&LIMITS)
+}
+
+fn domain_with_limits(limits: &Limits) -> Domain {
     Domain::new(
         Config {
             prefix: prefix(),
@@ -99,7 +103,7 @@ fn domain() -> Domain {
                 stall: skein_lib::Duration::from_nanos(10),
             }]),
         },
-        &LIMITS,
+        limits,
     )
 }
 
@@ -702,4 +706,41 @@ fn a_kept_step_refusal_clears_the_awaited_action_without_advancing_it() {
             decision: crate::StepDecision::Amend { task: DELEGATE_TASK, revision: 3, words: 12, priority: None },
         })
     );
+}
+
+#[test]
+fn restored_outboxes_wait_for_the_scripted_settlement() {
+    // One live outbox, no new decisions or system kind lookup needed to show its timer gate.
+    let limits = Limits { entries: 1, ..LIMITS };
+    let mut cold = domain_with_limits(&limits);
+    let env = Env { now: Time::ZERO, wall: Wall::from_nanos(9), limits };
+    let mut out = Queue::with_capacity(MAX_OUT);
+    step(
+        &mut cold,
+        &env,
+        Event::Restore {
+            record: Record::Outbox(crate::OutboxEntry {
+                number: 1,
+                task: 4,
+                key: crate::Key { attempt: 0, completion: 0, position: 0, deployment: [1; 16], task: 4, purpose: 1 },
+                effect: crate::Effect {
+                    kind: 1,
+                    resources: Box::new([]),
+                    purpose: 1,
+                    condition: None,
+                    target: 2,
+                    state: 1,
+                },
+                attempt: None,
+                phase: crate::EffectPhase::Uncertain,
+            }),
+        },
+        &mut out,
+    );
+    crate::fire(&mut cold, &env, &mut out);
+    assert!(out.is_empty(), "no restored system action before the mark");
+    assert_eq!(crate::next_deadline(&cold), None);
+    // Activation is the existing scripted stage, after adoption and the mark.
+    crate::outbox::activate(&mut cold);
+    assert_eq!(crate::next_deadline(&cold), Some(Wall::EPOCH));
 }

@@ -182,13 +182,16 @@ fn carried_counter_and_unwalked_values_survive_switch() {
     let records = empty();
     let mut world = records.committed(SEED, patches::BASE);
     assert_eq!(world.open_switched(), Some(1));
+    world.mark_if_needed();
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"carried".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
     world.open_switched().expect("patch with carried row");
+    world.mark_if_needed();
     let found = world.secret(Secrets::Get { owner: SecretOwner::Application, number: CARRIED_FIRST });
     assert!(matches!(found.as_slice(), [Event::Secret { value: Some(value), .. }] if value.expose() == b"carried"));
+    world.mark_if_needed();
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST + 1));
     assert_eq!(patches::counts(&mut world)[2], (b"fixture-token".to_vec(), 0, 0));
@@ -198,6 +201,7 @@ fn carried_counter_and_unwalked_values_survive_switch() {
 fn erased_carried_number_is_never_drawn_after_switch() {
     let mut world = empty().committed(SEED, patches::BASE);
     assert_eq!(world.open_switched(), Some(1));
+    world.mark_if_needed();
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"erased".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST));
     let erased = world.secret(Secrets::Erase { owner: SecretOwner::Application, number: CARRIED_FIRST });
@@ -205,6 +209,7 @@ fn erased_carried_number_is_never_drawn_after_switch() {
     world.crash(SEED);
     world.patch_sets(patches::SETS);
     world.open_switched().expect("patch with an erased carried value");
+    world.mark_if_needed();
     let carried = world.secret(Secrets::Carry { value: Secret::new(Box::from(b"next".as_slice())) });
     assert!(matches!(carried.as_slice(), [Event::Carried { number, .. }] if *number == CARRIED_FIRST + 1));
 }

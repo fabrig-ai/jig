@@ -210,7 +210,8 @@ impl Store {
             for _ in 0..self.above.len() {
                 let event = self.above.pop().expect("store terminals");
                 if let protocol::Event::Secret { owner: found, .. }
-                | protocol::Event::SecretsLoaded { owner: found, .. } = &event
+                | protocol::Event::SecretsLoaded { owner: found, .. }
+                | protocol::Event::SecretsNotReady { owner: found } = &event
                     && *found == owner
                 {
                     answer = Some(event);
@@ -508,7 +509,8 @@ pub(super) fn answer(engine: &mut crate::Engine) {
             // This shell prints no per-open progress lines.
             protocol::Event::Patched { .. } => {}
             protocol::Event::OpenRefused { .. } => crate::stop::unavailable(engine, b"deployment"),
-            event @ (protocol::Event::Kept { owner }
+            event @ (protocol::Event::SecretsNotReady { owner }
+            | protocol::Event::Kept { owner }
             | protocol::Event::Stale { owner }
             | protocol::Event::Erased { owner }
             | protocol::Event::Carried { owner, .. }

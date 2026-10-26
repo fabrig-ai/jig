@@ -2,7 +2,7 @@
 //!
 //! The root commits each `Save` before releasing the accompanying `Make` or
 //! `System` request. A restored entry is already durable, so its first action
-//! is to settle an earlier attempt or prepare a new one. Entries with a common
+//! at the scripted post-mark outbox step is to settle an earlier attempt or prepare a new one. Entries with a common
 //! resource execute in their numbered decision order.
 use alloc::boxed::Box;
 use skein_lib::{Env, Map, Queue, Token, Wall};
@@ -267,7 +267,7 @@ pub(crate) fn restore_entry(domain: &mut Domain, mut entry: OutboxEntry) {
     domain
         .outbox
         .runtime
-        .insert(number, Runtime { released: true, checking: false, needs_lookup })
+        .insert(number, Runtime { released: false, checking: false, needs_lookup })
         .expect("restored runtime entry fits");
 }
 
@@ -584,6 +584,13 @@ pub(crate) fn next_deadline(domain: &Domain) -> Option<Wall> {
         }
     }
     earliest
+}
+
+/// Restored entries become actionable at the scripted outbox step, after the start mark.
+pub(crate) fn activate(domain: &mut Domain) {
+    for (number, _) in &domain.outbox.entries {
+        domain.outbox.runtime.get_mut(number).expect("each entry has runtime state").released = true;
+    }
 }
 
 pub(crate) fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {

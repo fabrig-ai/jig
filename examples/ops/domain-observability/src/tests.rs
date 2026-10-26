@@ -574,3 +574,34 @@ fn a_refused_lead_creation_keeps_its_step_and_never_accepts_a_later_child() {
     };
     assert_eq!(incident.lead, None);
 }
+
+#[test]
+fn restored_effect_timers_wait_for_read_afresh() {
+    let mut domain = Domain::new(&limits());
+    let key = Key::procedure([1; 16], 7, 3);
+    event(
+        &mut domain,
+        2,
+        Event::Restore {
+            record: Record::Outbox(Entry {
+                project: Some(1),
+                number: 3,
+                key,
+                effect: Effect { rule: Box::from(*b"checkout-errors"), until: 100 },
+                attempt: 1,
+                deadline: 1,
+                phase: Phase::Uncertain,
+            }),
+        },
+    );
+    let env = Env { now: Time::from_nanos(2_000_000_000), wall: Wall::from_nanos(2_000_000_000), limits: limits() };
+    let mut out = Queue::with_capacity(MAX_OUT);
+    fire(&mut domain, &env, &mut out);
+    assert!(out.is_empty(), "no system lookup before the scripted post-mark step");
+    assert_eq!(next_deadline(&domain), None);
+    event(&mut domain, 2, Event::ReadAfresh);
+    fire(&mut domain, &env, &mut out);
+    let Some(Request::System(SystemRequest::FindSilence { .. })) = out.pop() else {
+        panic!("system lookup resumes after read afresh");
+    };
+}

@@ -207,6 +207,8 @@ fn submitted_commits_advance_before_the_durable_number() {
 #[test]
 fn a_disk_secret_waits_for_its_own_sync() {
     let mut store = disk();
+    // This IO transition starts in the post-mark serving state.
+    store.mark = crate::Mark::Durable;
     let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
     let mut below = fixtures::below();
     crate::down(

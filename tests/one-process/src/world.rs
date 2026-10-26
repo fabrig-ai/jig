@@ -30,6 +30,7 @@ pub struct Outcome {
     pub drained: bool,
     pub restarts: u32,
     pub claims_settled_at_restart: u32,
+    pub mark_gate_checked: bool,
 }
 pub(super) struct ServiceHost {
     pub(super) service: jig_test_service::Service,
@@ -38,11 +39,29 @@ pub(super) struct ServiceHost {
     pub(super) attached: bool,
     pub(super) wire: crate::referee::agent::Wire,
     pub(super) commits: Vec<jig_channel_world::world::store::Commit>,
+    pub(super) hold_mark: bool,
+    pub(super) held_mark: Vec<Complete>,
+    pub(super) mark_gate_checked: bool,
+    pub(super) early_connections: u32,
     codec: jig_protocol_store::codec::Limits,
     connector: jig_test_connector::Limits,
 }
 impl Host for ServiceHost {
     fn iterate(&mut self, now: Time, wall: Wall) {
+        if !self.hold_mark {
+            for complete in self.held_mark.drain(..) {
+                self.service.completions().push(complete);
+            }
+        } else if self.service.account_startup(0, 1, now).is_some_and(|state| state.pending_mark.is_some()) {
+            for _ in 0..self.service.completions().len() {
+                let complete = self.service.completions().pop().expect("completion count");
+                if matches!(complete.kind, skein_io::kernel::Op::Sync { .. }) {
+                    self.held_mark.push(complete);
+                } else {
+                    self.service.completions().push(complete);
+                }
+            }
+        }
         for complete in self.service.completions().iter() {
             self.capture.complete(complete);
             self.wire.complete(complete);
@@ -57,6 +76,9 @@ impl Host for ServiceHost {
         jig_test_service::iterate(&mut self.service, now, wall);
         for submit in self.service.submissions().iter() {
             self.capture.pending(&submit.kind);
+            if self.hold_mark && matches!(submit.kind, skein_io::kernel::Op::Connect { .. }) {
+                self.early_connections += 1;
+            }
         }
     }
     fn completions(&mut self) -> &mut Queue<Complete> {
@@ -173,6 +195,10 @@ fn service_chat(inherited: &Inherited, chat: fixtures::Chat) -> Proc {
         attached: false,
         wire: crate::referee::agent::Wire::default(),
         commits: Vec::new(),
+        hold_mark: false,
+        held_mark: Vec::new(),
+        mark_gate_checked: false,
+        early_connections: 0,
         codec,
         connector: limits.root.connector,
     }))
@@ -244,6 +270,20 @@ pub fn crash(settings: Settings, cut: skein_world::Cut, before: u32) -> Outcome 
     )
     .0
 }
+/// Restore a real saved source with the service's mark acknowledgement held.
+#[must_use]
+pub fn accounts_mark_gate(settings: Settings) -> Outcome {
+    let (_, machine, store, reference) = run_phase(
+        settings,
+        fixtures::one_person_chat(b"Hello"),
+        machine(),
+        Store::new(),
+        crate::referee::conformance(),
+        Scenario::Answer,
+    );
+    run_phase(settings, Box::new([]), machine, store, reference, Scenario::MarkGate).0
+}
+
 fn client(inherited: &Inherited) -> Proc {
     let root = inherited.roots.first().expect("client root").1;
     let mut client =
@@ -326,6 +366,10 @@ fn run_phase(
     let result = Outcome {
         verdict: skein_world::domain::Verdict::Passed,
         chat: chat_outcome.borrow().clone(),
+        mark_gate_checked: outcome.procs.iter().any(|proc| match proc {
+            Proc::Service(service) => service.mark_gate_checked,
+            Proc::Client(_) | Proc::Agent { .. } | Proc::Peer(_) => false,
+        }),
         chats_made,
         restarts: *restarts.borrow(),
         runs_answered: outcome

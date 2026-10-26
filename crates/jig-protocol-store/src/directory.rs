@@ -926,6 +926,7 @@ pub(crate) fn events_up(
                     secrets::committed(store, owner, above);
                 } else if owner == Token::new(number) {
                     crate::transcripts::committed(store, number);
+                    store.mark.committed(number);
                     above.push(Event::Committed { number, fill: store.stores.store.used() });
                 } else {
                     store.phase = Phase::Stopped;

@@ -210,7 +210,15 @@ fn service_restart_restores_an_llm_key_before_want_and_sweeps_only_unnamed_sourc
     }));
     restarted.request(domain::Request::Component(domain::ToComponent::Want { account: 7 }));
     restarted.request(domain::Request::Signing(domain::Signing::Restored));
-    assert!(has_llm_key_grant(&pump_accounts(&mut restarted, engine), 1));
+    let heard = pump_accounts(&mut restarted, engine);
+    // One restored source and one queued want yield exactly one grant.
+    let mut grants = 0_u32;
+    for event in &heard {
+        if let domain::FromComponent::Granted { account: 7, generation: 1, .. } = event {
+            grants = grants.checked_add(1).expect("bounded component events");
+        }
+    }
+    assert_eq!(grants, 1);
     assert_eq!(
         engine.values.accounts.value(7, 1, Time::from_nanos(1)).expect("restored value").token.expose(),
         b"kept-llm-key"
@@ -255,9 +263,9 @@ fn aborting_does_not_submit_an_llm_key_adoption_to_the_closing_store() {
     let engine = fixtures::engine(&mut service);
     let mut accounts = engine.accounts.take().expect("accounts component");
     let carried = carry_llm_key(engine, b"aborted-llm-key");
+    accounts.start(&mut engine.store, &mut engine.values);
     accounts.request(domain::Request::Signing(domain::Signing::Keep { source: 7, carried, replaces: false }));
-    let mut events = Queue::with_capacity(64);
-    accounts.iterate(Time::from_nanos(1), Wall::from_nanos(1), &mut engine.values, &mut events, &mut engine.store);
+    accounts.start(&mut engine.store, &mut engine.values);
     assert!(!accounts.key_out.is_empty(), "adoption has not been submitted yet");
     accounts.abort();
     let heard = pump_accounts(&mut accounts, engine);

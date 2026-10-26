@@ -200,10 +200,11 @@ fn keyed_timeout_found_after_restart_is_made_once() {
     assert!(system.observed()[0].applied);
     let mut cold = Domain::new(config(), &LIMITS);
     run(&mut cold, 1, Event::Restore { record: durable_attempt });
-    let seeking = fire(&mut cold, 1);
+    let seeking = run(&mut cold, 1, Event::Restart(connector::RestartStep::SettleOutbox));
     assert!(matches!(seeking.as_slice(), [Request::System(SystemRequest::Look { .. })]));
     let found = system.answer(system_call(&seeking), Fault::None);
-    let settled = run(&mut cold, 1, Event::System(found));
+    let mut settled = run(&mut cold, 1, Event::System(found));
+    assert_eq!(settled.pop(), Some(Request::RestartDone));
     assert!(matches!(
         settled.last(),
         Some(Request::Outcome { entry: 1, outcome: Outcome::Made { state: 7, found: true } })

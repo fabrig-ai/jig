@@ -925,6 +925,7 @@ dependencies = [
  "jig-client-shell-native",
  "jig-conformance",
  "jig-core-world",
+ "jig-domain-accounts",
  "jig-domain-core",
  "jig-domain-host",
  "jig-domain-notes",
