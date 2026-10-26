@@ -17,7 +17,7 @@ pub use words::words;
 mod tests;
 pub use declarations::{Declaration, declarations};
 pub use decode::{batch, decode};
-pub use render::{problem, render};
+pub use render::{problem, render, settings_answer};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub input_bytes: u32,

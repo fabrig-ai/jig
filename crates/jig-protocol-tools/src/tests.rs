@@ -3,6 +3,7 @@ use alloc::boxed::Box;
 use jig_domain_core as core;
 mod fixtures;
 mod llm;
+mod settings;
 
 const PROPOSED_NUMBER: u64 = 9;
 const TASK_HOLDER: u64 = 3;

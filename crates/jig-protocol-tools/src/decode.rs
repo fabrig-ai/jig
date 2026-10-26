@@ -24,6 +24,7 @@ pub fn decode(tool: &[u8], input: &[u8], limits: &Limits) -> Decoded {
 fn read(tool: &[u8], input: &[u8], limits: &Limits) -> Result<Decoded, Problem> {
     let value = json::parse(input, limits)?;
     let action = match tool {
+        b"settings" => core::NamedAction::Settings(settings_read(&value)?),
         b"propose_settings" => return settings(&value, limits),
         b"delegate" => return Ok(Decoded::Delegate(delegates(value.required(b"batch")?, limits)?)),
         b"message" => message(&value)?,
@@ -244,4 +245,28 @@ fn hex(byte: u8) -> Result<u8, Problem> {
         b'A'..=b'F' => Ok(byte.checked_sub(b'A').expect("hex letter").checked_add(10).expect("hex digit")),
         _ => Err(Problem { field: b"set", why: Why::Range }),
     }
+}
+
+fn settings_read(value: &json::Value) -> Result<core::SettingsRead, Problem> {
+    Ok(match value.required(b"kind")?.text()?.as_ref() {
+        b"inventory" => core::SettingsRead::Inventory,
+        b"setting" => {
+            let setting = match value.required(b"setting")?.text()?.as_ref() {
+                b"charter" => core::settings::Setting::Charter(value.required(b"number")?.small()?),
+                b"template" => core::settings::Setting::Template(value.required(b"number")?.small()?),
+                b"policy" => core::settings::Setting::Policy(value.required(b"number")?.small()?),
+                b"rules" => core::settings::Setting::Rules,
+                _ => return Err(Problem { field: b"setting", why: Why::Range }),
+            };
+            core::SettingsRead::Setting { setting, revision: value.required(b"revision")?.small()? }
+        }
+        b"revision" => core::SettingsRead::Revision { number: value.required(b"number")?.small()? },
+        b"revisions" => core::SettingsRead::Revisions {
+            before: match value.field(b"before")? {
+                Some(value) => Some(value.small()?),
+                None => None,
+            },
+        },
+        _ => return Err(Problem { field: b"kind", why: Why::Range }),
+    })
 }

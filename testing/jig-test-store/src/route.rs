@@ -152,6 +152,7 @@ fn window(now: core::Now) -> Option<(u64, u64, u32)> {
         | core::Now::CallBusy { .. }
         | core::Now::Relayed { .. }
         | core::Now::EffectAnswer { .. }
+        | core::Now::SettingsAnswer { .. }
         | core::Now::SettledCallRefused { .. }
         | core::Now::Call { .. }
         | core::Now::DropCall { .. }
