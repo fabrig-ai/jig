@@ -71,7 +71,7 @@ impl Core {
             Record::Proposal { proposer, proposal, value } => {
                 let person = match proposer {
                     jig_domain_people::Proposer::Party(person) => person,
-                    jig_domain_people::Proposer::Task(_) => return false,
+                    jig_domain_people::Proposer::Task(task) => task,
                 };
                 if proposal == 0
                     || person == 0
@@ -134,7 +134,7 @@ impl Core {
         if let Some((proposer, number)) = revision.head.proposal {
             let valid = match proposer {
                 jig_domain_people::Proposer::Party(person) => person > 0,
-                jig_domain_people::Proposer::Task(_) => false,
+                jig_domain_people::Proposer::Task(task) => task > 0,
             };
             if !valid || number == 0 {
                 return false;
@@ -347,6 +347,25 @@ impl Core {
                 tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {}
             }
         }
+        for view in self.tasks.view_tasks() {
+            let Some(row) = self.tasks.task(view.number) else { continue };
+            let Some(row) = &row.proposal else { continue };
+            if let tasks::ProposalAction::Settings { against: revision, items } = &row.action {
+                let Ok(number) = u32::try_from(row.number) else { return false };
+                let Some(set) = self.settings_proposals.get(&(jig_domain_people::Proposer::Task(row.proposer), number))
+                else {
+                    return false;
+                };
+                if row.project != 0
+                    || set.against != against
+                    || *revision != against
+                    || super::proposal_heads(&set.items).as_ref() != items.as_ref()
+                {
+                    return false;
+                }
+                count = count.checked_add(1).expect("bounded pending sets");
+            }
+        }
         count == self.settings_proposals.len()
     }
     /// Project template overrides describe new work. Check them against the
@@ -413,6 +432,10 @@ impl Core {
         let oldest_before = self.current.oldest;
         let previous = self.current.newest();
         let release = self.settings_restore.release.is_some();
+        if release && !crate::routing::settings::withdrawal_room(self, None) {
+            let _refused = self.refuse_settings(Failure { setting: Setting::Rules, fault: Fault::Count });
+            return Requests::Out(out);
+        }
         let newest = if release { previous.checked_add(1).expect("release number preflighted") } else { previous };
         let reserve = if release { super::withdrawal_writes(&env.limits).expect("withdrawal room") } else { 0 };
         let count = self.settings_restore.pending.len();

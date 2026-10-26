@@ -18,32 +18,67 @@ use skein_lib::Wall;
 /// answers for calls routed among its children (domain/engine.md, 7.3).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum CallPart {
+    SettingsRefused(jig_domain_people::Refusal),
     /// A release must name again exactly when its effect is uncertain.
-    Again { task: u64, required: bool },
+    Again {
+        task: u64,
+        required: bool,
+    },
     /// An escalation release exceeded this holder's authority and passed up.
-    PassedUp { task: u64 },
+    PassedUp {
+        task: u64,
+    },
     /// A control committed; the spec revision a following amendment names.
-    Revised { task: u64, revision: u64 },
+    Revised {
+        task: u64,
+        revision: u64,
+    },
     /// The named revision moved; the caller must decide against this value.
-    Moved { task: u64, now: jig_domain_people::Moved },
+    Moved {
+        task: u64,
+        now: jig_domain_people::Moved,
+    },
     /// An effect kept in the same decision; its settled connector answer may follow.
-    Effect { connector: u16, entry: u64, deadline: Wall, outcome: Option<crate::connector::OutboxOutcome> },
+    Effect {
+        connector: u16,
+        entry: u64,
+        deadline: Wall,
+        outcome: Option<crate::connector::OutboxOutcome>,
+    },
     /// The application connector owns the answer.
-    Connector { connector: u16 },
+    Connector {
+        connector: u16,
+    },
     /// The core denied a connector effect after checking its authority.
-    EffectDenied { answer: jig_domain_authority::Answer, findings: Box<[jig_domain_authority::Finding]> },
+    EffectDenied {
+        answer: jig_domain_authority::Answer,
+        findings: Box<[jig_domain_authority::Finding]>,
+    },
     /// A waiting effect was refused by its task's current dependencies.
     EffectRefused(jig_domain_tasks::Problem),
     /// A named engine tool was refused before serving it, with the missing authority.
-    ToolDenied { answer: jig_domain_authority::Answer, findings: Box<[jig_domain_authority::Finding]> },
+    ToolDenied {
+        answer: jig_domain_authority::Answer,
+        findings: Box<[jig_domain_authority::Finding]>,
+    },
     /// One held descendant decision reached its semantic terminal.
-    EscalationDecided { task: u64, revision: u64, outcome: jig_domain_tasks::EscalationOutcome },
+    EscalationDecided {
+        task: u64,
+        revision: u64,
+        outcome: jig_domain_tasks::EscalationOutcome,
+    },
     /// A task holder's decision call was refused before mutation.
     EscalationRefused(jig_domain_tasks::Problem),
     /// Proposal entered its proposer's pending state.
-    Proposed { proposal: u64, holder: jig_domain_tasks::ProposalHolder },
+    Proposed {
+        proposal: u64,
+        holder: jig_domain_tasks::ProposalHolder,
+    },
     /// Proposal was accepted, rejected, passed or withdrawn.
-    ProposalDecided { proposal: u64, outcome: jig_domain_tasks::ProposalOutcome },
+    ProposalDecided {
+        proposal: u64,
+        outcome: jig_domain_tasks::ProposalOutcome,
+    },
     /// Proposal action or standing failed before mutation.
     ProposalRefused(jig_domain_tasks::Problem),
     /// A named task control change entered the decision.
@@ -51,15 +86,21 @@ pub enum CallPart {
     /// A named task control change was refused.
     ControlRefused(jig_domain_tasks::Problem),
     /// A widening needs a holder or violates a ceiling.
-    ControlDenied { answer: jig_domain_authority::Answer },
+    ControlDenied {
+        answer: jig_domain_authority::Answer,
+    },
     /// Message entered its target's inbox.
-    Sent { message: u64 },
+    Sent {
+        message: u64,
+    },
     /// Reciprocal task references were installed.
     Introduced,
     /// A message or introduction failed admission.
     MessageRefused(jig_domain_tasks::Problem),
     /// One standing interest was installed.
-    Subscribed { subscription: u64 },
+    Subscribed {
+        subscription: u64,
+    },
     /// One standing interest was removed.
     Unsubscribed,
     /// A standing interest failed admission.
@@ -67,13 +108,22 @@ pub enum CallPart {
     /// All members of an authorized batch, in call order.
     Delegated(Box<[Made]>),
     /// A batch declined by authority, with findings.
-    DelegationDenied { answer: jig_domain_authority::Answer, findings: Box<[jig_domain_authority::Finding]> },
+    DelegationDenied {
+        answer: jig_domain_authority::Answer,
+        findings: Box<[jig_domain_authority::Finding]>,
+    },
     /// A batch refused by structural or funding admission.
     DelegationRefused(jig_domain_tasks::Problem),
     /// A scoped note was committed at the named revision.
-    NoteWritten { name: u64, revision: u32 },
+    NoteWritten {
+        name: u64,
+        revision: u32,
+    },
     /// One bounded recall page was answered from the notes child.
-    NoteRecalled { entries: Box<[jig_domain_notes::Entry]>, more: bool },
+    NoteRecalled {
+        entries: Box<[jig_domain_notes::Entry]>,
+        more: bool,
+    },
     /// A note request changed nothing.
     NoteRefused(jig_domain_notes::Refusal),
     /// The named tool is deferred to a later route.
@@ -99,6 +149,7 @@ impl CallPart {
         authority_limits: &jig_domain_authority::Limits,
     ) -> bool {
         match self {
+            CallPart::SettingsRefused(why) => settings_refusal_valid(why),
             CallPart::Again { task, .. }
             | CallPart::PassedUp { task }
             | CallPart::Revised { task, .. }
@@ -549,12 +600,13 @@ fn supported_proposal(task: &jig_domain_tasks::TaskRecord, deployment: &Deployme
     let holder_valid = match holder {
         tasks::ProposalHolder::Task(number) => number != 0 && number <= deployment.tasks,
         tasks::ProposalHolder::Person(number) => number != 0 && number <= deployment.people,
-        tasks::ProposalHolder::Policy { project, .. } => project == task.project,
+        tasks::ProposalHolder::Policy { project, .. } => project == proposal.project,
     };
     if !holder_valid {
         return false;
     }
     match &proposal.action {
+        tasks::ProposalAction::Settings { .. } => true,
         tasks::ProposalAction::Effect { attempt, completion, .. } => {
             *attempt != 0 && *attempt <= deployment.runs && *completion != 0
         }
@@ -766,4 +818,24 @@ impl RunProof {
             terminal: None,
         }
     }
+}
+
+fn settings_refusal_valid(why: &jig_domain_people::Refusal) -> bool {
+    use jig_domain_people::{Accepter, Lack, LimitKind, Malformed, Refusal};
+    if let Refusal::Stale { newest } = why {
+        return *newest > 0;
+    }
+    if let Refusal::NotWellFormed { at: 0, why: Malformed::Settings { .. } | Malformed::SettingsUnchanged } = why {
+        return true;
+    }
+    if let Refusal::Authority { lacking: Lack::Approver, proposable: Some(Accepter::Nobody) } = why {
+        return true;
+    }
+    if let Refusal::NotOffered = why {
+        return true;
+    }
+    if let Refusal::Limit { which } = why {
+        return *which == LimitKind::Arithmetic || *which == LimitKind::SettingsProposals;
+    }
+    false
 }

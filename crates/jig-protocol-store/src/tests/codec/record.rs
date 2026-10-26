@@ -132,6 +132,12 @@ fn each_message_kind_reads_back() {
         domain::MessageKind::Proposal { proposer: 17, proposal: 43, kind: domain::ProposalKind::Widen },
         domain::MessageKind::PersonStalled { task: 19 },
         domain::MessageKind::ProposalDecision { proposal: 43, accepted: false },
+        domain::MessageKind::SettingsDecision {
+            proposal: 43,
+            outcome: domain::SettingsOutcome::Accepted { revision: 2 },
+        },
+        domain::MessageKind::SettingsDecision { proposal: 43, outcome: domain::SettingsOutcome::Rejected },
+        domain::MessageKind::SettingsDecision { proposal: 43, outcome: domain::SettingsOutcome::Stale { newest: 3 } },
         domain::MessageKind::Words,
         domain::MessageKind::EffectNotMade { entry: 11 },
         domain::MessageKind::FinishRequested { revision: 1 },

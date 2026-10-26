@@ -130,7 +130,8 @@ impl Core {
                     return false;
                 }
             }
-            tasks::ProposalAction::Effect { .. }
+            tasks::ProposalAction::Settings { .. }
+            | tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::Widen { .. }
             | tasks::ProposalAction::Release { .. } => {}

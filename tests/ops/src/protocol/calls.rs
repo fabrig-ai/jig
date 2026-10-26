@@ -49,6 +49,9 @@ impl Stand {
             protocol::Decoded::Delegate(batch) if call.writes => {
                 root::Event::Core(core::Event::DelegateValidated { to, key, batch, stubs: Box::new([]) })
             }
+            protocol::Decoded::Settings { .. } => {
+                return problem(to, call, protocol::Problem { field: b"set", why: protocol::Why::Range });
+            }
             protocol::Decoded::Problem(why) => return problem(to, call, why),
             protocol::Decoded::NotMine => match tools::decode(&call.tool, &call.input) {
                 Ok(tools::Decoded::Read(read)) if !call.writes => {
