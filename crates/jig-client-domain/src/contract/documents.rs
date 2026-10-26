@@ -96,9 +96,23 @@ pub enum ChipPhase {
     },
 }
 
+/// The settings revisions an agent task's runs read their charter from
+/// (client/domain/contract.md, 5.1; domain/engine.md, 17.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TaskSettings {
+    /// The revision the task records.
+    pub task: u32,
+    /// Its live run's, only while that run was prepared under another.
+    pub run: Option<u32>,
+    /// The newest revision's number.
+    pub newest: u32,
+}
+
 /// A complete task document with independently moving revisions.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Task {
+    /// None for a procedure's or a person's task.
+    pub settings: Option<TaskSettings>,
     pub label: u32,
     pub flags: super::TaskFlags,
     pub last_activity: Wall,

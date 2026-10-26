@@ -8,6 +8,10 @@ pub fn task(limits: &Limits) -> Task {
             dependency_facts: List::with_capacity(0),
             kept_account: None,
             run_wait: None,
+            settings: Some(
+                TaskSettings::new(limits, TaskSettingsParts { task: 1, run: None, newest: 1 })
+                    .expect("fixture settings"),
+            ),
             llm: None,
             label: 0,
             flags: TaskFlags::new(

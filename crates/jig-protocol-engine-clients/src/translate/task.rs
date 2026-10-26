@@ -335,10 +335,10 @@ pub fn document(value: &d::Task, models: &[crate::Model], limits: &w::Limits) ->
     for item in &value.proposals {
         proposals.push(proposal(item, limits)?).expect("supplied proposals");
     }
-    let delegates = delegates(&value.delegates, limits)?;
     w::Task::new(
         limits,
         w::TaskParts {
+            settings: settings(value.settings, limits)?,
             dependency_facts: chips::dependencies(&value.dependency_facts, limits)?,
             llm: super::llm::choice(value.llm.as_ref(), models, limits)?,
             kept_account: value.kept_account,
@@ -393,7 +393,7 @@ pub fn document(value: &d::Task, models: &[crate::Model], limits: &w::Limits) ->
                 )?)),
                 None => None,
             },
-            delegates,
+            delegates: delegates(&value.delegates, limits)?,
             context: None,
         },
     )
@@ -482,4 +482,14 @@ pub fn effect(value: &acts::Effect, limits: &w::Limits) -> Result<w::Effect, w::
             },
         )?),
     })
+}
+
+fn settings(value: Option<d::TaskSettings>, limits: &w::Limits) -> Result<Option<w::TaskSettings>, w::Problem> {
+    match value {
+        Some(value) => Ok(Some(w::TaskSettings::new(
+            limits,
+            w::TaskSettingsParts { task: value.task, run: value.run, newest: value.newest },
+        )?)),
+        None => Ok(None),
+    }
 }

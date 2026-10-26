@@ -56,6 +56,7 @@ pub fn task() -> c::Task {
         dependency_facts: List::with_capacity(0),
         kept_account: None,
         run_wait: None,
+        settings: Some(c::TaskSettings { task: 1, run: None, newest: 1 }),
         llm: None,
         label: 0,
         flags: c::TaskFlags {

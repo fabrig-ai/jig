@@ -341,3 +341,27 @@ fn a_circle_hold_keeps_its_order_and_cut_through_the_client() {
     assert_eq!(circle.tasks.as_slice(), &[9, 7]);
     assert!(circle.cut);
 }
+
+#[test]
+fn task_settings_revisions_cross_into_the_wire_document() {
+    use jig_domain_core::documents::TaskSettings;
+    let limits = fixtures::wire_limits();
+    let mut source = fixtures::task_with_hold();
+    for settings in [
+        None,
+        Some(TaskSettings { task: 7, run: None, newest: 9 }),
+        Some(TaskSettings { task: 7, run: Some(6), newest: 9 }),
+    ] {
+        source.settings = settings;
+        let record = translate::task::document(&source, &[], &limits).expect("task document");
+        match (record.settings(), settings) {
+            (Some(actual), Some(expected)) => {
+                assert_eq!(actual.task(), expected.task);
+                assert_eq!(*actual.run(), expected.run);
+                assert_eq!(actual.newest(), expected.newest);
+            }
+            (None, None) => (),
+            (Some(_), None) | (None, Some(_)) => panic!("settings presence"),
+        }
+    }
+}

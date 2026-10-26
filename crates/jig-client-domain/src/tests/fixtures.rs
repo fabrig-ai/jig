@@ -148,6 +148,7 @@ fn document(number: u64) -> contract::Task {
         dependency_facts: List::with_capacity(0),
         kept_account: None,
         run_wait: None,
+        settings: Some(contract::TaskSettings { task: 1, run: None, newest: 1 }),
         label: 0,
         flags: contract::TaskFlags {
             ended_by: contract::EndedBy::Result,
