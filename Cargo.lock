@@ -1117,6 +1117,7 @@ name = "jig-protocol-accounts"
 version = "0.0.0"
 dependencies = [
  "jig-domain-accounts",
+ "skein-codec",
  "skein-http",
  "skein-io",
  "skein-lib",
@@ -1134,6 +1135,7 @@ dependencies = [
  "jig-protocol-accounts",
  "jig-protocol-config",
  "jig-protocol-store",
+ "skein-codegen",
  "skein-fake-oauth",
  "skein-fake-peers",
  "skein-heap",
@@ -1143,6 +1145,7 @@ dependencies = [
  "skein-lib",
  "skein-oauth",
  "skein-oauth-accounts",
+ "skein-scratch",
  "skein-sim",
  "skein-tls",
  "skein-world",
