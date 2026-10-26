@@ -414,6 +414,9 @@ pub(super) fn named_action(
     action: NamedAction,
 ) -> Requests {
     assert!(core.current_proof(key.task, key.attempt), "named action belongs to current claim");
+    if let NamedAction::Settings(read) = action {
+        return crate::reads::settings::run(core, env, to, key, read);
+    }
     if let Some(part) = core.call_parts.get(&key) {
         let mut out = Queue::with_capacity(2);
         out.push(Request::Held(Box::new(Held::CallAnswer { to, key, part: part.clone() })));
@@ -434,6 +437,7 @@ pub(super) fn named_action(
     let token = to.into_token();
     let mut out = Queue::with_capacity(3);
     match action {
+        NamedAction::Settings(_) => unreachable!("settings reads use the unrecorded path"),
         NamedAction::ProposeSettings { against, items, reason } => {
             return super::settings::propose_run(
                 core,
@@ -700,7 +704,7 @@ pub(super) fn named_action(
 
 pub(super) fn named_tool_kind(action: &NamedAction) -> ToolKind {
     match action {
-        NamedAction::ProposeSettings { .. } => ToolKind::Settings,
+        NamedAction::Settings(_) | NamedAction::ProposeSettings { .. } => ToolKind::Settings,
         NamedAction::Message { target, .. } => ToolKind::Message { target: *target },
         NamedAction::Introduce { left, .. } => ToolKind::Message { target: *left },
         NamedAction::Subscribe { .. } | NamedAction::Unsubscribe { .. } => ToolKind::Subscribe,

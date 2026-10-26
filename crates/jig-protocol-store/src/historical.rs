@@ -25,6 +25,7 @@ pub fn key(now: &Now) -> Option<Key> {
         | Now::CallBusy { .. }
         | Now::Relayed { .. }
         | Now::EffectAnswer { .. }
+        | Now::SettingsAnswer { .. }
         | Now::SettledCallRefused { .. }
         | Now::Call { .. }
         | Now::DropCall { .. }
@@ -102,6 +103,7 @@ pub fn answer(now: Now, row: Option<Record>) -> Option<core::Event> {
         | Now::CallBusy { .. }
         | Now::Relayed { .. }
         | Now::EffectAnswer { .. }
+        | Now::SettingsAnswer { .. }
         | Now::SettledCallRefused { .. }
         | Now::Call { .. }
         | Now::DropCall { .. }
