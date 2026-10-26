@@ -1,6 +1,6 @@
 #![expect(dead_code, reason = "each settings binary uses its own subset of the shared story helpers")]
 //! Settings travel through the real restart, store and commit barrier (engine.md, 17.7).
-use jig_core_world::{client_peer::ClientPeer, effects::World, peers, world};
+use jig_core_world::{client_peer::ClientPeer, effects::World, fixtures, peers, world};
 use jig_domain_core::{self as core, documents, reads, settings};
 use jig_domain_people as people;
 use jig_test_domain as root;
@@ -326,4 +326,69 @@ pub(super) fn updates(world: &mut World, signed: u64) -> Vec<documents::InboxEnt
             entry
         })
         .collect()
+}
+
+pub(super) fn run_configuration() -> (root::Config, root::Limits) {
+    let (mut config, mut limits) = configuration();
+    config.core.defaults.rules.ceiling.tools.0 |= 1024;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    for seed in &mut config.core.seed_projects {
+        seed.policy.policy.ceiling.tools.0 |= 1024;
+        for role in &mut seed.policy.policy.roles {
+            role.authority.tools.0 |= 1024;
+        }
+    }
+    let policy = config.core.defaults.policies.get_mut(&1).expect("project policy");
+    policy.policy.ceiling.tools.0 |= 1024;
+    for role in &mut policy.policy.roles {
+        role.authority.tools.0 |= 1024;
+    }
+    limits.core.settings.proposals = 2;
+    peers::journal(&mut limits);
+    (config, limits)
+}
+pub(super) fn proposing_run(settings_family: bool) -> (World, u64, u64) {
+    settings_run(settings_family, None)
+}
+pub(super) fn settings_run(settings_family: bool, history: Option<u32>) -> (World, u64, u64) {
+    use skein_lib::{Duration, Token};
+    let (config, mut limits) = run_configuration();
+    if let Some(history) = history {
+        limits.core.settings.history = history;
+    }
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    world.send(root::Event::Core(core::Event::Fleet(jig_domain_fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(7),
+        hello: jig_domain_fleet::Hello {
+            bounds: fixtures::bounds(),
+            stop_bound: Duration::from_millis(1),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([]),
+        },
+    })));
+    let mut goal = fixtures::chat(&world, 1, b"Review the settings".as_slice().into());
+    let people::Ask::Create { batch, .. } = &mut goal else { panic!("goal creation") };
+    batch[0].flags.conversation = false;
+    batch[0].flags.listed = true;
+    batch[0].budget = people::Budget::Named;
+    batch[0].authority.spend = 40;
+    batch[0].authority.tools = if settings_family { 2047 } else { 1023 };
+    let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(&mut world, signed, 101, goal) else {
+        panic!("goal admitted")
+    };
+    assert_eq!(world.assigned.as_ref().expect("assigned proposing goal").task, first);
+    (world, signed, first)
+}
+pub(super) fn run_charter(world: &World, instructions: &[u8]) -> settings::Item {
+    let mut charter = world.domain.settings().charter(1).expect("fixture charter").clone();
+    charter.policy.instructions = instructions.into();
+    settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    }
 }
