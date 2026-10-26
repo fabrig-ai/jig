@@ -597,6 +597,7 @@ fn core_ask(
                                 },
                                 tasks::MessageKind::Escalation { .. }
                                 | tasks::MessageKind::Proposal { .. }
+                                | tasks::MessageKind::SettingsDecision { .. }
                                 | tasks::MessageKind::ProposalDecision { .. }
                                 | tasks::MessageKind::EffectNotMade { .. }
                                 | tasks::MessageKind::Words

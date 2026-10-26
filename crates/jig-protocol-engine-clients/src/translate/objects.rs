@@ -8,7 +8,7 @@ pub(super) mod goal;
 pub(super) mod historical;
 mod projects;
 pub(super) mod proposals;
-pub(super) mod question_answer;
+pub(crate) mod question_answer;
 pub use current::{escalation, person_task, question, result};
 pub use projects::project;
 pub use proposals::proposal;

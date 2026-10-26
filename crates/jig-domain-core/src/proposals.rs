@@ -9,20 +9,24 @@ use skein_lib::{List, Queue, Wall};
 
 use crate::{Core, Limits, ProposalDecisionRecord, translate};
 
-fn kind(action: &tasks::ProposalAction) -> (tasks::ProposalKind, authority::ProposalKind) {
+fn kind(action: &tasks::ProposalAction) -> (tasks::ProposalKind, Option<authority::ProposalKind>) {
     match action {
-        tasks::ProposalAction::Batch(_) => (tasks::ProposalKind::Batch, authority::ProposalKind::Batch),
+        tasks::ProposalAction::Settings { .. } => (tasks::ProposalKind::Settings, None),
+        tasks::ProposalAction::Batch(_) => (tasks::ProposalKind::Batch, Some(authority::ProposalKind::Batch)),
         tasks::ProposalAction::Effect { .. } | tasks::ProposalAction::ProcedureEffect { .. } => {
-            (tasks::ProposalKind::Effect, authority::ProposalKind::Effect)
+            (tasks::ProposalKind::Effect, Some(authority::ProposalKind::Effect))
         }
-        tasks::ProposalAction::Amend { .. } => (tasks::ProposalKind::Amend, authority::ProposalKind::Amend),
-        tasks::ProposalAction::Widen { .. } => (tasks::ProposalKind::Widen, authority::ProposalKind::Widen),
-        tasks::ProposalAction::Release { .. } => (tasks::ProposalKind::Release, authority::ProposalKind::Escalation),
+        tasks::ProposalAction::Amend { .. } => (tasks::ProposalKind::Amend, Some(authority::ProposalKind::Amend)),
+        tasks::ProposalAction::Widen { .. } => (tasks::ProposalKind::Widen, Some(authority::ProposalKind::Widen)),
+        tasks::ProposalAction::Release { .. } => {
+            (tasks::ProposalKind::Release, Some(authority::ProposalKind::Escalation))
+        }
     }
 }
 
 fn action_for_check(core: &Core, action: &tasks::ProposalAction, decision: Wall) -> Option<authority::Action> {
     match action {
+        tasks::ProposalAction::Settings { .. } => None,
         tasks::ProposalAction::Batch(batch) => {
             let mut members = List::with_capacity(u32::try_from(batch.len()).expect("bounded proposed batch"));
             for member in batch {
@@ -129,9 +133,17 @@ fn holder(
     after: Option<tasks::ProposalHolder>,
     decision: Wall,
 ) -> Option<tasks::ProposalHolder> {
+    if let tasks::ProposalAction::Settings { .. } = action {
+        return if after.is_none() {
+            Some(tasks::ProposalHolder::Policy { project: people::DEPLOYMENT, kind: tasks::ProposalKind::Settings })
+        } else {
+            None
+        };
+    }
     let context = core.tasks.delegation(proposer)?;
     let needed = core.proposal_admit_action(context.project, action, decision).ok()?;
     let (kind, policy_kind) = kind(action);
+    let policy_kind = policy_kind?;
     let mut next = context.requester;
     let mut distance = 1_u32;
     let mut passed = after.is_none();
@@ -275,7 +287,7 @@ impl Core {
 
     /// The task and authority kinds of a proposal action.
     #[must_use]
-    pub fn proposal_kind(action: &tasks::ProposalAction) -> (tasks::ProposalKind, authority::ProposalKind) {
+    pub fn proposal_kind(action: &tasks::ProposalAction) -> (tasks::ProposalKind, Option<authority::ProposalKind>) {
         kind(action)
     }
 

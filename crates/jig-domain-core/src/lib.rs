@@ -200,6 +200,7 @@ pub struct ToolFamilies {
     pub note: authority::Tools,
     pub recall: authority::Tools,
     pub read: authority::Tools,
+    pub settings: u64,
 }
 
 /// Connector number reserved for the core's recurring procedure (tasks.md, 10).
@@ -221,6 +222,7 @@ impl ToolFamilies {
             self.note,
             self.recall,
             self.read,
+            authority::Tools(self.settings),
         ] {
             if family.0.count_ones() != 1 || seen & family.0 != 0 {
                 return false;
@@ -230,7 +232,7 @@ impl ToolFamilies {
         true
     }
 
-    /// The ten engine tool families, numbered alike in every deployment.
+    /// The eleven engine tool families, numbered alike in every deployment.
     pub const JIG: Self = Self {
         delegate: authority::Tools(1),
         message: authority::Tools(2),
@@ -242,6 +244,7 @@ impl ToolFamilies {
         note: authority::Tools(128),
         recall: authority::Tools(256),
         read: authority::Tools(512),
+        settings: 1024,
     };
 }
 
@@ -532,6 +535,7 @@ impl Core {
                     | CallPart::EscalationRefused(_)
                     | CallPart::Proposed { .. }
                     | CallPart::ProposalDecided { .. }
+                    | CallPart::SettingsRefused(_)
                     | CallPart::ProposalRefused(_)
                     | CallPart::Controlled
                     | CallPart::ControlRefused(_)

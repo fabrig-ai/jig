@@ -433,12 +433,12 @@ pub fn writes_worst_case(limits: &crate::Limits) -> Option<u32> {
         .checked_add(move_writes(limits)?)
 }
 
-/// Each withdrawal erases the set and pending row, saves the terminal row and
-/// the core decision archive, plus the proposer's update index. Settings never
-/// carry task stubs, so this path does not prune unrelated stubs.
+/// A party withdrawal takes five writes. A task withdrawal takes two activity
+/// rows, its terminal history, up to three live rows (decision, inbox, wake),
+/// and the retained set's erase: seven. Settings carry no task stubs.
 #[must_use]
 pub fn withdrawal_writes(limits: &crate::Limits) -> Option<u32> {
-    limits.settings.proposals.checked_mul(5)
+    limits.settings.proposals.checked_mul(7)
 }
 #[must_use]
 pub fn proposal_heads(items: &[Item]) -> Box<[jig_domain_tasks::SettingHead]> {
