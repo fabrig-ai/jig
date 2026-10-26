@@ -213,6 +213,7 @@ pub(super) fn tag_people(
                     | people::Outcome::Renamed { .. }
                     | people::Outcome::ProjectMade { .. }
                     | people::Outcome::SettingsChanged { .. }
+                    | people::Outcome::MovedToNewest { .. }
                     | people::Outcome::PoolSet { .. }
                     | people::Outcome::EscalationDecided { .. }
                     | people::Outcome::AccountSignInStarted { .. }
@@ -313,6 +314,17 @@ pub(super) fn tag_people(
                     }
                     people::Ask::Rename { name, .. } => {
                         super::projects::rename_request(core, env, work, &mut out, request, person, project, name);
+                    }
+                    people::Ask::MoveToNewest { revision } => {
+                        let outcome = match super::settings::move_to_newest(core, env, &mut out, revision) {
+                            Ok(moved) => people::Outcome::MovedToNewest {
+                                newest: core.current.newest(),
+                                moved: moved.moved,
+                                stayed: moved.stayed,
+                            },
+                            Err(why) => people::Outcome::Refused(why),
+                        };
+                        work.push(Event::People(people::Event::Decided { request, outcome }));
                     }
                     people::Ask::ChangeSettings { against, .. } => {
                         super::settings::admitted(core, env, work, &mut out, request, person, against);

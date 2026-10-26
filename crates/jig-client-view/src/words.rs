@@ -273,6 +273,15 @@ impl Words {
     /// Say all durable outcomes, preserving who decided first and when.
     pub fn outcome(&self, b: &mut Builder, outcome: &Outcome) {
         match outcome {
+            Outcome::MovedToNewest(value) => self.text(
+                b,
+                JigPhrase::MovedToNewest,
+                &[
+                    Hole::Number(u64::from(value.moved)),
+                    Hole::Number(u64::from(value.newest)),
+                    Hole::Number(u64::from(value.stayed)),
+                ],
+            ),
             Outcome::SettingsChanged(value) => {
                 self.text(b, JigPhrase::SettingsChanged, &[Hole::Number(u64::from(value.revision))]);
             }

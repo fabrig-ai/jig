@@ -28,6 +28,7 @@ pub(crate) fn number(ask: &people::Ask) -> u64 {
         | people::Ask::Rename { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::ChangeSettings { .. }
+        | people::Ask::MoveToNewest { .. }
         | people::Ask::ChangePolicy { .. }
         | people::Ask::SetPool { .. }
         | people::Ask::DecideEscalation { .. }
@@ -124,38 +125,7 @@ impl Core {
         if self.tasks.task(task).ok_or(people::Refusal::Unknown)?.project != project {
             return Err(people::Refusal::Unknown);
         }
-        let act = match &ask {
-            people::Ask::TakePerson { .. } => crate::acts::Act::Take,
-            people::Ask::HandBackPerson { .. } => crate::acts::Act::HandBack,
-            people::Ask::AnswerPerson { .. } => crate::acts::Act::Answer,
-            people::Ask::Compound { .. }
-            | people::Ask::MarkSeen { .. }
-            | people::Ask::Application { .. }
-            | people::Ask::Move { .. }
-            | people::Ask::DecideProposal { .. }
-            | people::Ask::Say { .. }
-            | people::Ask::AnswerQuestion { .. }
-            | people::Ask::Amend { .. }
-            | people::Ask::EditNote { .. }
-            | people::Ask::MakeService { .. }
-            | people::Ask::SetRoles { .. }
-            | people::Ask::Adopt { .. }
-            | people::Ask::Rename { .. }
-            | people::Ask::MakeProject { .. }
-            | people::Ask::ChangeSettings { .. }
-            | people::Ask::ChangePolicy { .. }
-            | people::Ask::SetPool { .. }
-            | people::Ask::DecideEscalation { .. }
-            | people::Ask::Stop { .. }
-            | people::Ask::Cancel { .. }
-            | people::Ask::Release { .. }
-            | people::Ask::Create { .. }
-            | people::Ask::Propose { .. }
-            | people::Ask::Withdraw { .. }
-            | people::Ask::AccountSignIn { .. }
-            | people::Ask::AccountSignOut { .. }
-            | people::Ask::AccountChange { .. } => unreachable!("person-task route owns its ask"),
-        };
+        let act = person_act(&ask);
         let revision = if let people::Ask::AnswerPerson { revision, .. } = &ask { Some(*revision) } else { None };
         match crate::acts::person(self, person, act, task, revision) {
             Ok(()) => {}
@@ -205,6 +175,7 @@ impl Core {
             | people::Ask::Rename { .. }
             | people::Ask::MakeProject { .. }
             | people::Ask::ChangeSettings { .. }
+            | people::Ask::MoveToNewest { .. }
             | people::Ask::ChangePolicy { .. }
             | people::Ask::SetPool { .. }
             | people::Ask::DecideEscalation { .. }
@@ -220,5 +191,41 @@ impl Core {
         };
         assert!(self.person_tasks.insert(request, route) == Ok(None), "one routed person task per keyed flight");
         Ok(event)
+    }
+}
+
+fn person_act(ask: &people::Ask) -> crate::acts::Act {
+    match ask {
+        people::Ask::TakePerson { .. } => crate::acts::Act::Take,
+        people::Ask::HandBackPerson { .. } => crate::acts::Act::HandBack,
+        people::Ask::AnswerPerson { .. } => crate::acts::Act::Answer,
+        people::Ask::Compound { .. }
+        | people::Ask::MarkSeen { .. }
+        | people::Ask::Application { .. }
+        | people::Ask::Move { .. }
+        | people::Ask::DecideProposal { .. }
+        | people::Ask::Say { .. }
+        | people::Ask::AnswerQuestion { .. }
+        | people::Ask::Amend { .. }
+        | people::Ask::EditNote { .. }
+        | people::Ask::MakeService { .. }
+        | people::Ask::SetRoles { .. }
+        | people::Ask::Adopt { .. }
+        | people::Ask::Rename { .. }
+        | people::Ask::MakeProject { .. }
+        | people::Ask::ChangeSettings { .. }
+        | people::Ask::MoveToNewest { .. }
+        | people::Ask::ChangePolicy { .. }
+        | people::Ask::SetPool { .. }
+        | people::Ask::DecideEscalation { .. }
+        | people::Ask::Stop { .. }
+        | people::Ask::Cancel { .. }
+        | people::Ask::Release { .. }
+        | people::Ask::Create { .. }
+        | people::Ask::Propose { .. }
+        | people::Ask::Withdraw { .. }
+        | people::Ask::AccountSignIn { .. }
+        | people::Ask::AccountSignOut { .. }
+        | people::Ask::AccountChange { .. } => unreachable!("person-task route owns its ask"),
     }
 }

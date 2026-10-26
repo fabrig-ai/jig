@@ -137,6 +137,7 @@ impl Core {
             | people::Ask::Rename { .. }
             | people::Ask::MakeProject { .. }
             | people::Ask::ChangeSettings { .. }
+            | people::Ask::MoveToNewest { .. }
             | people::Ask::ChangePolicy { .. }
             | people::Ask::SetPool { .. }
             | people::Ask::DecideEscalation { .. }

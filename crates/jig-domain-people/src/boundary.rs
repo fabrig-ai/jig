@@ -228,6 +228,8 @@ pub enum NoteChange {
 pub enum Ask {
     /// Deployment owner changes settings, whose value the core holds during admission.
     ChangeSettings { against: u32, digest: [u8; 32] },
+    /// Deployment owner moves live agent tasks to the newest (engine.md, 17.4; people.md, 5.1).
+    MoveToNewest { revision: u32 },
     /// Several task operations committed together under one key.
     Compound { project: u32, operations: List<crate::Operation> },
     /// Make these roots together (domain/people.md, 5.1).
@@ -394,6 +396,8 @@ pub enum Outcome {
     AccountFinishing { source: u32 },
     /// One whole settings change committed at this revision.
     SettingsChanged { revision: u32 },
+    /// Live agent tasks moved to the newest, and those that finish on their revision (engine.md, 17.4).
+    MovedToNewest { newest: u32, moved: u32, stayed: u32 },
     /// All operations were made; their issued messages start here, or at zero for none.
     Compound { project: u32, operations: u32, first_message: u64 },
     /// No operation was made; the first failure has this zero-based place.

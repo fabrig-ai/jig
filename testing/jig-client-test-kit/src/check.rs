@@ -229,6 +229,7 @@ pub fn named(ask: &Ask) -> Vec<(Object, Revision)> {
         | Ask::SignOut { .. }
         | Ask::Rename { .. }
         | Ask::ChangeSettings(_)
+        | Ask::MoveToNewest(_)
         | Ask::MakeProject { .. }
         | Ask::SetPool { .. } => Vec::new(),
     }

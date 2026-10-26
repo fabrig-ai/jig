@@ -163,6 +163,7 @@ impl Offers {
             | Ask::MakeService { .. }
             | Ask::Rename { .. }
             | Ask::ChangeSettings(_)
+            | Ask::MoveToNewest(_)
             | Ask::MakeProject { .. }
             | Ask::SetPool { .. } => return None,
         };

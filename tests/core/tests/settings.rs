@@ -913,3 +913,27 @@ fn a_revision_item_past_the_single_read_budget_answers_its_encoded_size() {
     let w::RevisionEdit::TooLarge(size) = item.edit() else { panic!("item size") };
     assert_eq!(size.bytes(), ENCODED_TEMPLATE_BYTES);
 }
+
+#[test]
+fn move_to_newest_of_the_newest_moves_nothing_and_an_unknown_revision_is_refused() {
+    let mut world = start(64);
+    let signed = sign_in(&mut world);
+    let before = settings_rows(&world);
+    let moved = people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 1, moved: 0, stayed: 0 });
+    assert_eq!(ask(&mut world, signed, 51, people::Ask::MoveToNewest { revision: 1 }), moved);
+    assert_eq!(ask(&mut world, signed, 51, people::Ask::MoveToNewest { revision: 1 }), moved);
+    assert_eq!(
+        ask(&mut world, signed, 52, people::Ask::MoveToNewest { revision: 7 }),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Unknown))
+    );
+    world.send(root::Event::Core(core::Event::People(people::Event::Roles {
+        project: people::DEPLOYMENT,
+        holdings: Box::new([people::Holding { person: OWNER, role: people::Role::Member }]),
+    })));
+    assert_eq!(
+        ask(&mut world, signed, 53, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Role { held: Some(people::Role::Member) }))
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert_eq!(world.domain.settings().newest(), 1);
+}

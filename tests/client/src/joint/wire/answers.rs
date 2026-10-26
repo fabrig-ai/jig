@@ -46,6 +46,13 @@ pub fn reply(
         }
         people::Reply::Outcome(value) => match outcomes::outcome(&value, limits)? {
             outcomes::Outcome::MovingOut { account, number, source } => Reply::MovingOut { account, number, source },
+            outcomes::Outcome::MovedToNewest { newest, moved, stayed } => {
+                Reply::Final(client::Answer::Done(client::Outcome::MovedToNewest(client::OutcomeMovedToNewest {
+                    newest,
+                    moved,
+                    stayed,
+                })))
+            }
             outcomes::Outcome::SettingsChanged { revision } => {
                 Reply::Final(client::Answer::Done(client::Outcome::SettingsChanged(client::OutcomeSettingsChanged {
                     revision,

@@ -284,3 +284,21 @@ fn proposal_envelope(request: Box<[u8]>, limits: &w::Limits) -> Box<[u8]> {
     keyed.encode(&mut writer).expect("measured envelope");
     writer.finish()
 }
+
+#[test]
+fn move_to_newest_translates_the_revision_and_both_counts() {
+    let limits = f::wire();
+    let ask = w::Ask::MoveToNewest(w::MoveToNewest::new(&limits, w::MoveToNewestParts { revision: 7 }).expect("move"));
+    assert_eq!(translate::asks::ask(ask, &[], &limits), Ok(p::Ask::MoveToNewest { revision: 7 }));
+    let answer = translate::answers::answer(
+        &p::Reply::Outcome(p::Outcome::MovedToNewest { newest: 9, moved: 3, stayed: 1 }),
+        &[],
+        &limits,
+    )
+    .expect("answer");
+    let w::KeyedAnswer::FinalAnswer(answer) = answer else { panic!("final answer") };
+    let answer = w::Final::decode(&limits, &mut skein_lib::Reader::new(answer.record())).expect("final");
+    let w::Final::Done(answer) = answer else { panic!("done") };
+    let w::Outcome::MovedToNewest(value) = answer.outcome() else { panic!("counts") };
+    assert_eq!((value.newest(), value.moved(), value.stayed()), (9, 3, 1));
+}

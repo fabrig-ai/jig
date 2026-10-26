@@ -21,6 +21,7 @@ pub(crate) fn request(
         // An account request's check is its holder's, which people made (domain/authority.md, 8.4).
         people::Ask::Propose { action: people::Action::Settings { .. }, .. }
         | people::Ask::ChangeSettings { .. }
+        | people::Ask::MoveToNewest { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::Application { .. }
         | people::Ask::Compound { .. }
@@ -152,6 +153,7 @@ pub(crate) fn request(
         | people::Ask::Rename { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::ChangeSettings { .. }
+        | people::Ask::MoveToNewest { .. }
         | people::Ask::ChangePolicy { .. }
         | people::Ask::SetRoles { .. }
         | people::Ask::MakeService { .. }

@@ -124,6 +124,7 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
                 | w::Ask::SignOut(_)
                 | w::Ask::Rename(_)
                 | w::Ask::ChangeSettings(_)
+                | w::Ask::MoveToNewest(_)
                 | w::Ask::MakeProject(_)
                 | w::Ask::SetPool(_) => None,
             };

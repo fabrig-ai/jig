@@ -370,3 +370,18 @@ pub(super) fn proposal_saved(core: &mut Core, record: &jig_domain_tasks::Stored,
     }
     core.touch_settings();
 }
+
+/// Counts decided by an owner's move (engine.md, 17.4).
+pub(crate) struct Moved {
+    pub moved: u32,
+    pub stayed: u32,
+}
+/// An owner's `MoveToNewest` (engine.md, 17.4). Only the newest is held until held revisions are built.
+pub(super) fn move_to_newest(
+    core: &mut Core,
+    _env: &Env<Limits>,
+    _out: &mut Queue<Request>,
+    revision: u32,
+) -> Result<Moved, people::Refusal> {
+    if revision == core.current.newest() { Ok(Moved { moved: 0, stayed: 0 }) } else { Err(people::Refusal::Unknown) }
+}

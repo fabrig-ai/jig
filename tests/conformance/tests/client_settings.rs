@@ -205,3 +205,106 @@ fn engine_settings_reads_and_deliveries_decode_at_the_client_end() {
     assert_eq!(page.next, Some(6));
     assert_eq!(page.rows.get(0).expect("revision row").more, 3);
 }
+
+#[test]
+fn an_owner_moves_running_work_through_the_client_and_hears_both_counts() {
+    use jig_client::{Asker, Client, Event, Key, Told};
+    use jig_client_world::{
+        harness::ClientId,
+        joint::{engine::Driver, session::Session},
+    };
+    use skein_lib::{Time, Wall};
+    let now = Time::from_nanos(17);
+    let wall = Wall::from_nanos(1_000_000_000_000);
+    let (configuration, owner_limits) = jig_core_world::peers::fixture(8455, 0);
+    let driver =
+        Driver::new(configuration, owner_limits, jig_core_world::peers::Peers::new(Vec::new(), Vec::new()), now, wall);
+    let mut limits = jig_client_world::test::limits();
+    // The real deployment's frame uses the joint world's document bounds.
+    limits.client.domain.rows = 32;
+    limits.client.domain.projects = 64;
+    limits.client.domain.text = 4096;
+    limits.client.domain.turn_text = 4096;
+    limits.client.domain.turn_bytes = 4096;
+    limits.client.domain.document_bytes = 1_048_576;
+    limits.jig.rows = 32;
+    limits.jig.projects = 64;
+    limits.jig.roles = 64;
+    limits.jig.text = 4096;
+    limits.jig.document_bytes = 1_048_576;
+    let mut client = Client::unlinked(&limits.client, 8455).expect("public client");
+    let codec =
+        jig_protocol_transcript::Limits::new(1_048_576, c::TurnLimits { messages: 64, blocks: 16, text: 65_536 });
+    let mut session = Session::new(driver, limits, codec);
+    session.bind(
+        ClientId(0),
+        1,
+        jig_domain_people::Identity {
+            key: jig_domain_people::IdentityKey { provider: 0, subject: 7_u64.to_be_bytes().into() },
+            login: Box::from(b"login".as_slice()),
+            name: Box::from(b"Person".as_slice()),
+        },
+        now,
+        wall,
+    );
+    session.poll(now, wall).expect("signed-in owner");
+    move_exchange(&mut session, &mut client, now, wall, Event::StartUnlinked { kept: List::with_capacity(0) });
+    move_exchange(&mut session, &mut client, now, wall, Event::Up { up: jig_client::Up::SignedIn });
+    let key = Key { asker: Asker::JIG, number: 1 };
+    let newest = session.driver.world.domain.settings().newest();
+    let told = move_exchange(
+        &mut session,
+        &mut client,
+        now,
+        wall,
+        Event::Send {
+            key,
+            name: Some([7; 16]),
+            request: jig_client::Ask::Jig(Box::new(c::Ask::MoveToNewest(c::MoveToNewest { revision: newest }))),
+        },
+    );
+    assert!(told.iter().any(|told| matches!(told, Told::Answered { key: answered, outcome: jig_client::Outcome::Answered(jig_client::Answered::Jig(c::Answer::Done(c::Outcome::MovedToNewest(value)))) } if *answered == key && *value == c::OutcomeMovedToNewest { newest, moved: 0, stayed: 0 })));
+}
+
+fn move_exchange(
+    session: &mut jig_client_world::joint::session::Session,
+    client: &mut jig_client::Client,
+    now: skein_lib::Time,
+    wall: skein_lib::Wall,
+    event: jig_client::Event,
+) -> Vec<jig_client::Told> {
+    let mut out = skein_lib::Queue::with_capacity(jig_client::max_out(&jig_client_world::test::limits().client));
+    client.step(now, wall, event, &mut out);
+    let mut told = Vec::new();
+    let mut kept = std::collections::BTreeMap::new();
+    for _ in 0..16 {
+        while let Some(request) = out.pop() {
+            if let jig_client::Request::Told { told: value } = request {
+                told.push(value);
+            } else if let jig_client::Request::Down { down: jig_client::Down::Save { record } } = request {
+                let _previous = kept.insert(record.key, record);
+            } else if let jig_client::Request::Down { down: jig_client::Down::Erase { key } } = request {
+                let _previous = kept.remove(&key);
+            } else {
+                session
+                    .send(
+                        jig_client_world::harness::ClientId(0),
+                        now,
+                        wall,
+                        jig_client_test_domain::Request::Client { request },
+                    )
+                    .expect("public request");
+            }
+        }
+        let callbacks = session.poll(now, wall).expect("real engine replies");
+        if callbacks.is_empty() {
+            return told;
+        }
+        for (owner, callback) in callbacks {
+            session.received(owner, now, wall, &callback);
+            let jig_client_test_domain::Event::Client { event } = callback else { panic!("client callback") };
+            client.step(now, wall, event, &mut out);
+        }
+    }
+    panic!("public exchange did not settle");
+}

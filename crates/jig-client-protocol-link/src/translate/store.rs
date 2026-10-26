@@ -64,6 +64,7 @@ fn policy_edit(value: &w::PolicyEdit, limits: &Limits) -> Result<c::PolicyEdit, 
 #[expect(clippy::too_many_lines, reason = "one total match restores every client ask")]
 pub(crate) fn restore_ask(value: w::Ask, limits: &Limits) -> Result<c::Ask, w::Problem> {
     Ok(match value {
+        w::Ask::MoveToNewest(value) => c::Ask::MoveToNewest(c::MoveToNewest { revision: value.revision() }),
         w::Ask::ChangeSettings(value) => {
             c::Ask::ChangeSettings(super::settings::restore_change_settings(&value, limits)?)
         }
