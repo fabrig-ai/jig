@@ -43,6 +43,7 @@ pub struct World {
     pub host_calls: Vec<(Token, u64, u64, fleet::Call)>,
     pub host_answers: Vec<(Box<[u8]>, core::SettledCall)>,
     pub inbound: Vec<tasks::Word>,
+    pub settings_answers: Vec<(Token, core::CallKey, core::SettingsAnswer)>,
     pub answers: Vec<(Token, core::CallKey, core::CallPart)>,
     pub assigned: Option<root::Assignment>,
     last_read: Option<u64>,
@@ -335,6 +336,18 @@ impl World {
                         } else {
                             self.host_calls.push((token, run.raw(), attempt.raw(), call));
                         }
+                    }
+                    root::Request::Now(core::Now::SettingsAnswer { to, key, answer }) => {
+                        let token = to.into_token();
+                        if let Some(event) = self
+                            .peers
+                            .as_mut()
+                            .map_or(&mut self.protocol, |peers| &mut peers.protocol)
+                            .settings_answer(token, key, &answer)
+                        {
+                            self.events.push_back(event);
+                        }
+                        self.settings_answers.push((token, key, *answer));
                     }
                     root::Request::Now(core::Now::EffectAnswer { to, key, part }) => {
                         let token = to.into_token();

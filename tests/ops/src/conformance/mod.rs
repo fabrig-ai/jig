@@ -604,6 +604,9 @@ impl Application for Ops {
             root::Output::Core(core::Held::CallAnswer { to, key, part }) => {
                 vec![Input::Event(peers.protocol.answer(to, key, &part, true))]
             }
+            root::Output::Now(core::Now::SettingsAnswer { to, key, answer }) => {
+                peers.protocol.settings_answer(to, key, &answer).into_iter().map(Input::Event).collect()
+            }
             root::Output::Now(core::Now::EffectAnswer { to, key, part }) => {
                 vec![Input::Event(peers.protocol.answer(to, key, &part, false))]
             }

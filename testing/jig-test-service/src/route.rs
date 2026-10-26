@@ -179,6 +179,11 @@ fn immediate(engine: &mut Engine, now: core::Now) {
             }
         }
         core::Now::Call { to, run, attempt, call } => engine.events.push(engine.tools.decode(to, run, attempt, &call)),
+        core::Now::SettingsAnswer { to, key, answer } => {
+            if let Some(event) = engine.tools.settings_answer(to, key, &answer) {
+                engine.events.push(event);
+            }
+        }
         core::Now::EffectAnswer { to, key, part } => {
             if let Some(event) = engine.tools.render(to, key, &part, false) {
                 engine.events.push(event);

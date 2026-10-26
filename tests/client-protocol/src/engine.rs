@@ -446,6 +446,7 @@ pub fn now_event(now: core::Now) -> Option<Event> {
         | core::Now::CallBusy { .. }
         | core::Now::Relayed { .. }
         | core::Now::EffectAnswer { .. }
+        | core::Now::SettingsAnswer { .. }
         | core::Now::SettledCallRefused { .. }
         | core::Now::Call { .. }
         | core::Now::DropCall { .. }

@@ -473,6 +473,13 @@ impl Application for Testing {
                 Delivery::Now(core::Now::Call { to, run, attempt, call }) => {
                     peers.peers.opaque_answer(to, run, attempt, &call).into_iter().map(Input::Event).collect()
                 }
+                Delivery::Now(core::Now::SettingsAnswer { to, key, answer }) => peers
+                    .peers
+                    .protocol
+                    .settings_answer(to.into_token(), key, &answer)
+                    .into_iter()
+                    .map(Input::Event)
+                    .collect(),
                 Delivery::Now(core::Now::EffectAnswer { to, key, part }) => peers
                     .peers
                     .protocol
