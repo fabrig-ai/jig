@@ -469,12 +469,20 @@ pub(crate) fn task_limits(limits: &crate::Limits) -> jig_domain_tasks::Limits {
     tasks
 }
 
-/// A decision may end every old revision and drop every retained version.
+/// One decision copies/erases each old head, drops each version, and saves one extent.
 pub(crate) fn release_writes(limits: &crate::Limits) -> Option<u32> {
-    limits.settings.revisions.checked_mul(3)?.checked_add(limits.settings.versions)
+    limits.settings.revisions.checked_mul(2)?.checked_add(limits.settings.versions)?.checked_add(1)
 }
 
 /// Child output room uses the same revision limits as the child's allocation.
 pub(crate) fn task_room(limits: &crate::Limits) -> u32 {
     jig_domain_tasks::max_out(&task_limits(limits))
+}
+
+/// Released names do not expand into ordinary sibling routes. Their total
+/// cleanup writes are priced separately, once for the whole decision.
+pub(crate) fn task_route_room(limits: &crate::Limits) -> u32 {
+    task_room(limits)
+        .checked_sub(limits.settings.revisions.checked_add(1).expect("released names"))
+        .expect("child room includes released names")
 }

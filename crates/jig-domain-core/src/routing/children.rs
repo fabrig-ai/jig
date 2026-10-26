@@ -59,10 +59,14 @@ pub(super) fn tag_brief(
     mut child: Queue<brief::GatherRequest>,
     room: u32,
 ) -> Requests {
-    let task_room = crate::settings::task_room(&env.limits).checked_mul(8).expect("bounded task routes");
+    let task_room = crate::settings::task_route_room(&env.limits).checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
     let total = room.checked_add(task_room).expect("brief and task room");
-    let total = total.checked_add(party_room).expect("brief output room");
+    let total = total
+        .checked_add(party_room)
+        .expect("brief output room")
+        .checked_add(crate::settings::release_writes(&env.limits).expect("release writes"))
+        .expect("brief release room");
     let mut out = Queue::with_capacity(total.checked_add(1).expect("brief output mark"));
     for _ in 0..child.len() {
         let request = match child.pop().expect("brief output count") {
@@ -120,10 +124,14 @@ pub(super) fn tag_fleet(
     room: u32,
 ) -> Requests {
     let marked = room.checked_mul(4).expect("bounded fleet routes");
-    let task_room = crate::settings::task_room(&env.limits).checked_mul(8).expect("bounded task routes");
+    let task_room = crate::settings::task_route_room(&env.limits).checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
     let total = marked.checked_add(task_room).expect("fleet and task route room");
-    let total = total.checked_add(party_room).expect("fleet and party route room");
+    let total = total
+        .checked_add(party_room)
+        .expect("fleet and party route room")
+        .checked_add(crate::settings::release_writes(&env.limits).expect("release writes"))
+        .expect("fleet release room");
     let mut out = Queue::with_capacity(total.checked_add(1).expect("fleet output room"));
     let mut pending = Queue::with_capacity(marked);
     for _ in 0..child.len() {

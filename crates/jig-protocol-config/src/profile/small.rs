@@ -279,9 +279,10 @@ pub(super) const IO: skein_io::Limits = skein_io::Limits {
 // raise fleet max_out 21 -> 25 and core room by 8 * 4 = 32 positions.
 // Close cancels each of Small's two pending sign-ins (protocol/llm.md, 5.2).
 // Account moves add 18 core route positions (accounts::max_out: 58 -> 76).
-// Held room covers three decisions: 3 * 18,608 = 55,824.
+// Retained-revision release adds 2 * 4 heads + 8 versions + one extent = 17.
+// Held room covers three decisions: 3 * 18,625 = 55,875.
 pub(super) const JOURNAL: skein_lib::JournalLimits =
-    skein_lib::JournalLimits { commits: 3, writes: 18_608, held: 55_824, now: 256, release: 256 };
+    skein_lib::JournalLimits { commits: 3, writes: 18_625, held: 55_875, now: 256, release: 256 };
 pub(super) const LIMITS: Limits = Limits {
     core: CORE,
     store: STORE,
@@ -387,20 +388,21 @@ pub(super) const DRIVER: skein_oauth_accounts::Limits = skein_oauth_accounts::Li
 // the optional wait-bound wall adds nine bytes, so the largest row grows by 213 bytes.
 // Ending authority adds (batch + 1)^2 = (2 + 1)^2 = 9 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
+// Task/run settings revisions add nine bytes: u32 plus an optional u32.
 pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     key: 2079,
-    value: 1_567_829,
-    // Two operations per journal write, three creation rows and an orphan erase: 2 * 18,608 + 4.
-    ops: 37_220,
-    // 256 MiB values + 37,220 operations * (2,079 key + 9 framing) + 26 frame bytes.
-    commit: 346_150_842,
+    value: 1_567_838,
+    // Two operations per journal write, three creation rows and an orphan erase: 2 * 18,625 + 4.
+    ops: 37_254,
+    // 256 MiB values + 37,254 operations * (2,079 key + 9 framing) + 26 frame bytes.
+    commit: 346_221_834,
     queued: 3,
     // Three queued commits; segment holds two, snapshot follows one.
-    queued_bytes: 1_038_452_526,
+    queued_bytes: 1_038_665_502,
     budget: 268_435_456,
-    segment: 692_301_684,
-    snapshot_after: 346_150_842,
-    chunk: 1_569_928,
+    segment: 692_443_668,
+    snapshot_after: 346_221_834,
+    chunk: 1_569_937,
     // Accounting ceiling for applications' derived pages: the shipped largest
     // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
     // No row, chunk, decoder, queue or read-slot capacity changes with it.

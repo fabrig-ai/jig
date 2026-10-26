@@ -184,8 +184,9 @@ pub(super) const CLIENTS: jig_protocol_engine_clients::Limits = jig_protocol_eng
 // One extra Sources output at hello adds eight core route positions.
 // Close cancellation adds one output per pending sign-in: four in Standard (protocol/llm.md, 5.2).
 // Account moves add 56 core route positions (accounts::max_out: 206 -> 262).
+// Retained-revision release adds 2 * 8 heads + 16 versions + one extent = 33.
 const JOURNAL: skein_lib::JournalLimits =
-    skein_lib::JournalLimits { commits: 3, writes: 142_936, held: 428_808, now: 1024, release: 1024 };
+    skein_lib::JournalLimits { commits: 3, writes: 142_969, held: 428_907, now: 1024, release: 1024 };
 // Same 19.s3 composition as small; the standard domain supplies the larger value and operation bounds.
 // Its 25 choices plus the kept pin add 26 optional u32s (130 bytes) to the largest tasks row.
 // The largest tasks row can reference all 64 names; sparse and ALL rows keep only used names.
@@ -193,15 +194,16 @@ const JOURNAL: skein_lib::JournalLimits =
 // the optional wait-bound wall adds nine bytes, so the largest row grows by 413 bytes.
 // Ending authority adds (batch + 1)^2 = (4 + 1)^2 = 25 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
+// Task/run settings revisions add nine bytes: u32 plus an optional u32.
 const STORE_KV: skein_kv::Limits = skein_kv::Limits {
-    value: 10_664_757,
-    ops: 285_876,
-    commit: 865_344_570,
-    queued_bytes: 2_596_033_710,
-    segment: 1_730_689_140,
-    snapshot_after: 865_344_570,
-    chunk: 10_666_856,
-    page: skein_kv::Page { rows: 2, bytes: 10_666_836 },
+    value: 10_664_766,
+    ops: 285_942,
+    commit: 865_482_378,
+    queued_bytes: 2_596_447_134,
+    segment: 1_730_964_756,
+    snapshot_after: 865_482_378,
+    chunk: 10_666_865,
+    page: skein_kv::Page { rows: 2, bytes: 10_666_845 },
     ..small::STORE_KV
 };
 const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {

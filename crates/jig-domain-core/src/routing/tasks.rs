@@ -26,7 +26,7 @@ pub(super) fn tag_tasks(
     task_escalation: bool,
     person_escalation: bool,
 ) -> Requests {
-    let task_room = room.checked_mul(8).expect("bounded task routes");
+    let task_room = crate::settings::task_route_room(&env.limits).checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
     let route_room = task_room
         .checked_add(party_room)
