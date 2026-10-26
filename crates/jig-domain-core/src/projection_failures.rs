@@ -246,7 +246,7 @@ pub(crate) fn restore(core: &mut Core, row: ProjectionFailure) -> bool {
 pub(crate) fn consistent(core: &Core) -> bool {
     for (goal, state) in &core.projections {
         if state.closing_at.is_some()
-            && (!crate::projections::final_owner(core, *goal)
+            && (!crate::projections::final_owner(core.tasks.task(*goal))
                 || !state.milestones.is_empty()
                 || (state.pending.is_empty() && !pending(core, *goal)))
         {

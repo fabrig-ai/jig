@@ -547,8 +547,8 @@ pub(crate) fn restore(core: &mut Core, limits: &Limits, row: ProjectionRecord) -
     }
 }
 
-pub(crate) fn final_owner(core: &Core, goal: u64) -> bool {
-    match core.tasks.task(goal) {
+pub(crate) fn final_owner(owner: Option<&tasks::TaskRecord>) -> bool {
+    match owner {
         None => true,
         Some(task) => match task.phase {
             tasks::Phase::Ended(_) => true,
@@ -590,7 +590,7 @@ fn restore_goal(
             if generation == 0
                 || generation > deployment.commits
                 || generation.checked_sub(1) != fed_at
-                || !final_owner(core, goal.number)
+                || !final_owner(core.tasks.task(goal.number))
             {
                 return false;
             }

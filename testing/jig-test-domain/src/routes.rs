@@ -287,7 +287,8 @@ fn route_ask(
         }
         core::Ask::ProjectionBegun { owner, source } => {
             if let Some(source) = source {
-                let Some(goal) = domain.effects.get(&owner).and_then(|payload| payload.goal) else { return };
+                let Some(payload) = domain.effects.get(&owner) else { return };
+                let Some(goal) = payload.goal else { return };
 
                 work.push(Work::Core(core::Event::EffectStart {
                     owner,
@@ -298,7 +299,6 @@ fn route_ask(
                 drop(domain.effects.remove(&owner));
             }
         }
-        core::Ask::CommitProjectionRecovery { .. } => {}
         core::Ask::ProjectGoal { feed } => hold(decision, Delivery::Projection { connector: number, feed }),
         core::Ask::EndTopic { task, .. } => crate::topics::sync(domain, number, task, work),
         core::Ask::SubscriptionDone { request, key, subscription } => {
@@ -307,7 +307,8 @@ fn route_ask(
         core::Ask::UnsubscriptionDone { request, key } => {
             crate::topics::unsubscribed(domain, number, request, key, work);
         }
-        core::Ask::DropSubscription { .. }
+        core::Ask::CommitProjectionRecovery { .. }
+        | core::Ask::DropSubscription { .. }
         | core::Ask::ForgetProjection { .. }
         | core::Ask::Hold { .. }
         | core::Ask::RepairRefused { .. }

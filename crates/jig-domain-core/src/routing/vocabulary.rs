@@ -566,7 +566,11 @@ pub enum Event {
         watcher: Token,
     },
     /// A content call with its opaque source identity, independent of text.
-    RunCall { run: Token, attempt: Token, call: views::Call },
+    RunCall {
+        run: Token,
+        attempt: Token,
+        call: views::Call,
+    },
     /// A main completion's current tool input, before its turn commits.
     RunInput {
         run: Token,

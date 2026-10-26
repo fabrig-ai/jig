@@ -4053,3 +4053,20 @@ fn projection_final_owner_validation_waits_for_the_complete_live_task_range() {
         tasks::Phase::Ended(tasks::Ending::Done(tasks::TaskResult::Report { words: b"done".as_slice().into() }));
     assert!(projection_failures::consistent(&core), "an archived ended owner needs no live task row");
 }
+
+#[test]
+fn projection_final_owner_validation_accepts_a_present_ended_task() {
+    let (core, _) = make_tree();
+    for tracked in [true, false] {
+        let mut owner = core.tasks.task(1).unwrap().clone();
+        if !tracked {
+            owner.tracked = None;
+        }
+        assert_eq!(projections::final_owner(Some(&owner)), !tracked);
+        owner.phase =
+            tasks::Phase::Ended(tasks::Ending::Done(tasks::TaskResult::Report { words: b"done".as_slice().into() }));
+        // Ended rows cannot enter tasks' live arena. Exercise the shared
+        // eager-restore and completed-range owner check with the present row.
+        assert!(projections::final_owner(Some(&owner)), "a present Ended owner is valid regardless of tracking");
+    }
+}
