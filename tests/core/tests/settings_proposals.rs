@@ -122,7 +122,9 @@ fn rejected_settings_keep_the_reason_and_notify_the_project_member() {
 #[test]
 fn an_acceptance_refused_as_full_keeps_the_proposal_and_set_pending() {
     for running in [people::Running::Stays, people::Running::Moves] {
-        let mut world = start(64);
+        let (config, limits) = full_version_configuration();
+        let mut world = World::first_start_with_accounts(config, &limits);
+        world.client_peer = Some(ClientPeer::default());
         let owner = sign_in(&mut world);
         world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
         let chat = fixtures::chat(&world, 1, b"live task".as_slice().into());
@@ -130,13 +132,14 @@ fn an_acceptance_refused_as_full_keeps_the_proposal_and_set_pending() {
             panic!("live agent")
         };
         assert!(matches!(fixtures::live_row(&world, first).executor, tasks::Executor::Agent { charter: 1 }));
-        let items = removing_charter(&world);
+        let mut items = removing_charter(&world).into_vec();
+        items.push(settings::Item { setting: settings::Setting::Charter(2), edit: settings::Edit::Removed });
         assert!(
             items
                 .iter()
                 .any(|item| item.setting == settings::Setting::Charter(1) && item.edit == settings::Edit::Removed)
         );
-        let proposal = proposed(&propose(&mut world, owner, 2, 1, items));
+        let proposal = proposed(&propose(&mut world, owner, 2, 1, items.into_boxed_slice()));
         for request in [3, 4] {
             let before_rows = world.store.rows.clone();
             let before_task = fixtures::live_row(&world, first).clone();
@@ -169,7 +172,7 @@ fn an_acceptance_refused_as_full_keeps_the_proposal_and_set_pending() {
             assert_eq!(proposal_document(&mut world, owner, OWNER, proposal).action, before_review);
             assert!(world.store.rows.contains_key(&proposal_set_key(OWNER, proposal)));
             assert_eq!(inventory(&mut world, owner).pending.len(), 1);
-            restart(&mut world, configuration().0);
+            restart(&mut world, full_version_configuration().0);
             assert_eq!(proposal_document(&mut world, owner, OWNER, proposal).action, before_review);
         }
     }
@@ -452,4 +455,14 @@ fn a_shape_refused_proposal_can_retry_after_its_unused_model_returns_without_a_h
     ));
     assert_eq!(world.domain.settings().newest(), 2);
     assert!(!world.store.rows.contains_key(&proposal_set_key(OWNER, proposal)));
+}
+
+fn full_version_configuration() -> (root::Config, root::Limits) {
+    let (mut config, mut limits) = configuration();
+    let mut second = config.core.defaults.charters[0].clone();
+    second.number = 2;
+    config.core.defaults.charters = Box::new([config.core.defaults.charters[0].clone(), second]);
+    limits.core.settings.versions = 1;
+    peers::journal(&mut limits);
+    (config, limits)
 }

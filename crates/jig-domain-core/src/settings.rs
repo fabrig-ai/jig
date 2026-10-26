@@ -428,7 +428,8 @@ pub fn writes_worst_case(limits: &crate::Limits) -> Option<u32> {
         .checked_add(4)?;
     first
         .max(count.checked_mul(4)?.checked_add(8)?.checked_add(limits.settings.versions.checked_mul(2)?)?)
-        .checked_add(withdrawal_writes(limits)?)
+        .checked_add(withdrawal_writes(limits)?)?
+        .checked_add(move_writes(limits)?)
 }
 
 /// Each withdrawal erases the set and pending row, saves the terminal row and
@@ -485,4 +486,9 @@ pub(crate) fn task_route_room(limits: &crate::Limits) -> u32 {
     task_room(limits)
         .checked_sub(limits.settings.revisions.checked_add(1).expect("released names"))
         .expect("child room includes released names")
+}
+
+/// Each moved live record and at most two projection rows, plus release cleanup.
+pub(crate) fn move_writes(limits: &crate::Limits) -> Option<u32> {
+    limits.tasks.tasks.checked_mul(3)?.checked_add(release_writes(limits)?)
 }

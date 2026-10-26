@@ -2,7 +2,7 @@
 use crate::{Core, Event, Limits, Request, Requests, settings as s};
 use alloc::boxed::Box;
 use jig_domain_people as people;
-use skein_lib::{Env, Queue, ReplyTo, Token};
+use skein_lib::{Env, Map, Queue, ReplyTo, Token};
 
 #[expect(clippy::too_many_arguments, reason = "the keyed envelope and its value cross admission together")]
 pub(super) fn start(
@@ -105,26 +105,28 @@ pub(super) fn decide(
         return Err(malformed_refusal(failure));
     }
     let charters = s::check::changed_charters(&core.current, &change.items, &core.settings, &env.limits);
-    let (tasks, more) = core.tasks.incompatible_charters(&charters, env.limits.tasks.circle);
-    if !tasks.is_empty() || more != 0 {
-        return Err(people::Refusal::Full { revision: previous, tasks, more });
-    }
     let Some(number) = previous.checked_add(1) else {
         return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
     };
-    let keep_previous = core.tasks.holders(previous) > 0;
-    let plan = core.held.plan(
-        &core.current,
-        &change.items,
-        number,
-        if keep_previous { Some(previous) } else { None },
-        &env.limits,
-    );
-    if core.held.heads.len().checked_add(u32::from(keep_previous)).expect("held count") > env.limits.settings.revisions
-        || plan.versions() > env.limits.settings.versions
-    {
-        let revision = match core.held.heads.first() {
-            Some((&revision, _)) => revision,
+    let mut after = Map::with_capacity(env.limits.settings.revisions.checked_add(1).expect("held names"));
+    let moves = change.running == s::Running::Moves;
+    if moves {
+        core.tasks.held_after_moves(None, number, &charters, &mut after);
+    }
+    let keep_previous = if moves { after.contains_key(&previous) } else { core.tasks.holders(previous) > 0 };
+    if !moves {
+        for (&revision, _) in &core.held.heads {
+            after.insert(revision, ()).expect("existing held names");
+        }
+        if keep_previous {
+            after.insert(previous, ()).expect("previous newest name");
+        }
+    }
+    let plan = core.held.plan_held(&core.current, &change.items, number, &after, &env.limits);
+    let held_count = after.len();
+    if held_count > env.limits.settings.revisions || plan.versions() > env.limits.settings.versions {
+        let revision = match after.first() {
+            Some((&revision, ())) => revision,
             None => previous,
         };
         let (tasks, more) = core.tasks.holding(revision, env.limits.tasks.circle);
@@ -145,6 +147,8 @@ pub(super) fn decide(
     let before = out.len();
     charters |= core.held.retain(&core.current, &plan, out);
     let held_writes = out.len().checked_sub(before).expect("held writes appended");
+    drop(plan);
+    drop(after);
     if keep_previous {
         core.held.heads.insert(previous, core.current.head.clone()).expect("held heads preflighted");
     }
@@ -159,7 +163,8 @@ pub(super) fn decide(
         core.current.newest(),
         env.limits.settings.history,
         room.saturating_sub(s::withdrawal_writes(&env.limits).expect("withdrawal write bound"))
-            .saturating_sub(held_writes),
+            .saturating_sub(held_writes)
+            .saturating_sub(s::move_writes(&env.limits).expect("move write bound")),
         keep_previous,
     );
     core.current.oldest = oldest;
@@ -168,6 +173,9 @@ pub(super) fn decide(
     }
     withdraw_stale(core, env, out, proposal);
     core.tell_replaced_settings(env, rules, charters);
+    if moves {
+        move_tasks(core, env, out, None);
+    }
     if charters || rules {
         core.touch_deployment();
         core.touch_run_waits();
@@ -402,12 +410,49 @@ pub(crate) struct Moved {
     pub moved: u32,
     pub stayed: u32,
 }
-/// An owner's `MoveToNewest` (engine.md, 17.4). Only the newest is held until held revisions are built.
+/// An owner's move of a held revision (engine.md, 17.4).
 pub(super) fn move_to_newest(
     core: &mut Core,
-    _env: &Env<Limits>,
-    _out: &mut Queue<Request>,
+    env: &Env<Limits>,
+    out: &mut Queue<Request>,
     revision: u32,
 ) -> Result<Moved, people::Refusal> {
-    if revision == core.current.newest() { Ok(Moved { moved: 0, stayed: 0 }) } else { Err(people::Refusal::Unknown) }
+    if revision == core.current.newest() {
+        Ok(Moved { moved: 0, stayed: 0 })
+    } else if core.held(revision) {
+        Ok(move_tasks(core, env, out, Some(revision)))
+    } else {
+        Err(people::Refusal::Unknown)
+    }
+}
+
+fn move_tasks(core: &mut Core, env: &Env<Limits>, out: &mut Queue<Request>, from: Option<u32>) -> Moved {
+    use jig_domain_tasks as tasks;
+    let room = s::task_room(&env.limits);
+    let mut child = Queue::with_capacity(room);
+    tasks::step(
+        &mut core.tasks,
+        &Env { now: env.now, wall: env.wall, limits: s::task_limits(&env.limits) },
+        tasks::Event::MoveToNewest { from },
+        &mut child,
+    );
+    let mut counts = None;
+    for _ in 0..child.len() {
+        let request = child.pop().expect("move output count");
+        if let tasks::Request::MovedToNewest { moved, stayed } = request {
+            counts = Some(Moved { moved, stayed });
+        } else {
+            child.push(request);
+        }
+    }
+    let Requests::Out(mut routed) = super::tag_tasks(core, env, child, room, false, false, false);
+    for _ in 0..routed.len() {
+        let request = routed.pop().expect("routed move output count");
+        if let Request::Decided = request {
+        } else {
+            out.push(request);
+        }
+    }
+    core.touch_settings();
+    counts.expect("move answers counts")
 }

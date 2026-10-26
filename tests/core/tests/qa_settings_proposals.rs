@@ -564,7 +564,6 @@ fn a_stale_proposal_reports_the_newest_revision() {
 }
 
 #[test]
-#[ignore = "F (mission 3): a task records and moves to its settings revision, engine.md 17.3-17.4; E-QA-1"]
 fn acceptance_can_move_tasks_without_changing_a_live_run() {
     let mut world = world();
     let owner = world.sign_in.expect("owner sign-in");
@@ -586,7 +585,7 @@ fn acceptance_can_move_tasks_without_changing_a_live_run() {
     );
     assert_eq!(settings_document(&mut world, owner).newest, 2);
     assert!(settings_revision(&world, 2).head.moved, "acceptance records the owner's Moves choice");
-    assert_eq!(fixtures::live_row(&world, task).revision, 2);
+    assert_eq!(fixtures::live_row(&world, task).settings.task, 2);
     let assigned = world.assigned.as_ref().expect("same live run");
     assert_eq!((assigned.task, assigned.attempt), (task, attempt));
     assert_eq!(world.assignments.len(), assignments);
@@ -611,7 +610,6 @@ fn a_party_without_any_role_cannot_propose_settings() {
 }
 
 #[test]
-#[ignore = "F (mission 3): a task records and moves to its settings revision, engine.md 17.3-17.4; E-QA-1"]
 fn acceptance_moves_work_created_after_a_real_first_start() {
     let (config, limits) = configuration();
     let mut world = World::first_start_with_accounts(config, &limits);
@@ -651,7 +649,7 @@ fn acceptance_moves_work_created_after_a_real_first_start() {
     );
     assert_eq!(settings_document(&mut world, owner).newest, 2);
     assert!(settings_revision(&world, 2).head.moved, "acceptance records the owner's Moves choice");
-    assert_eq!(fixtures::live_row(&world, task).revision, 2);
+    assert_eq!(fixtures::live_row(&world, task).settings.task, 2);
 }
 
 #[test]

@@ -45,6 +45,7 @@ pub(super) fn tag_tasks(
                 super::procedure_steps::append_problem(core, task, step, problem, &mut out);
                 continue;
             }
+            tasks::Request::MovedToNewest { .. } => unreachable!("settings move consumes its counts"),
             tasks::Request::Released { revision } => {
                 core.release_revision(env, revision, &mut out);
                 continue;

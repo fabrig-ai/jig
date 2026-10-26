@@ -1355,6 +1355,8 @@ pub enum Accepted {
 /// notifications have no reply destination and may be ignored if stale. (domain/tasks.md, sections 4–5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Event {
+    /// Move eligible live agent tasks on `from`, or every older revision, to the newest (engine.md, 17.4).
+    MoveToNewest { from: Option<u32> },
     /// Replace held charter versions and name the newest settings after a commit or start
     /// (engine.md, 17.2 and 17.3).
     Charters { newest: u32, charters: Box<[crate::CharterModels]>, efforts: Box<[u8]> },
@@ -1721,6 +1723,8 @@ pub enum Event {
 /// saves/erases with effects and delays outward replies until durability. (domain/tasks.md, section 5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Request {
+    /// The selected live agent tasks moved to the newest, and those that could not move.
+    MovedToNewest { moved: u32, stayed: u32 },
     /// The last live holder of this settings revision ended in this step.
     Released { revision: u32 },
     /// Nothing was made: the first failed operation and its owner diagnostic.

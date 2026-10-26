@@ -651,6 +651,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     // Twelve charter-model slots at 88 bytes, the five-revision holder map
     // at 624 bytes, and the net-release snapshot's five u32 revision names.
     const SETTINGS_REVISIONS_BYTES: u64 = 1_056 + 624 + 20;
+    // One bounded snapshot of the sixteen task numbers moved in a settings decision.
+    const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -665,6 +667,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_HOLDERS_BYTES
                 + SETTINGS_PROPOSAL_BYTES
                 + SETTINGS_REVISIONS_BYTES
+                + SETTINGS_MOVES_BYTES
         )
     );
 }

@@ -348,6 +348,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         )?)?
         .checked_add(Map::<u32, u32>::worst_case(limits.revisions.checked_add(1)?)?)?
         .checked_add(List::<u32>::worst_case(limits.revisions.checked_add(1)?)?)?
+        .checked_add(List::<u64>::worst_case(limits.tasks)?)?
         .checked_add(u64::from(crate::MODELS))?
         // Atomic procedure admission saves every live row and finite balance.
         .checked_add(List::<crate::TaskRecord>::worst_case(limits.tasks)?)?

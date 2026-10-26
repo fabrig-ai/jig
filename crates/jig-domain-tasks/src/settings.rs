@@ -55,10 +55,14 @@ impl Domain {
 }
 
 fn add(domain: &mut Domain, revision: u32) {
-    if let Some(count) = domain.holders.get_mut(&revision) {
+    add_to(&mut domain.holders, revision);
+}
+
+fn add_to(holders: &mut skein_lib::Map<u32, u32>, revision: u32) {
+    if let Some(count) = holders.get_mut(&revision) {
         *count = count.checked_add(1).expect("bounded live agent tasks");
     } else {
-        domain.holders.insert(revision, 1).expect("held revisions fit limits.revisions plus newest");
+        holders.insert(revision, 1).expect("held revisions fit limits.revisions plus newest");
     }
 }
 
@@ -134,6 +138,26 @@ pub(crate) fn released(domain: &Domain, before: List<u32>, out: &mut Queue<Reque
     for &revision in &before {
         if domain.holders(revision) == 0 {
             out.push(Request::Released { revision });
+        }
+    }
+}
+
+/// Recount after the whole move, avoiding a temporary extra holder slot.
+pub(crate) fn recount(domain: &mut Domain) {
+    while let Some((&revision, _)) = domain.holders.first() {
+        domain.holders.remove(&revision);
+    }
+    for (_, &id) in &domain.names {
+        let task = &domain.tasks.get(id).expect("live task").record;
+        match task.executor {
+            Executor::Agent { .. } => {}
+            Executor::Procedure { .. } | Executor::Person(_) => continue,
+        }
+        add_to(&mut domain.holders, task.settings.task);
+        if let Some(run) = task.settings.run
+            && run != task.settings.task
+        {
+            add_to(&mut domain.holders, run);
         }
     }
 }
