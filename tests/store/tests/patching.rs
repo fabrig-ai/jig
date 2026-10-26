@@ -20,7 +20,7 @@ fn old_records_patch_in_order_and_the_root_continues() {
             (Owner::Jig, 2, Counts { records: 0, commits: 0 }),
         ]
     );
-    assert_eq!(last, 6); // Initial commit, four store patch pages and the seal; two secrets pages have their own numbers.
+    assert_eq!(last, 7); // Initial commit, note seed, four store patch pages and the seal; secrets use their own numbers.
     patches::whole(&mut world);
     assert_eq!(
         patches::counts(&mut world),
