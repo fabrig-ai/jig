@@ -469,9 +469,11 @@ impl Accounts {
             None => None,
         }
     }
-    pub fn work_pending(&self, now: Time) -> bool {
+    pub fn work_pending(&self, now: Time, marked: bool) -> bool {
         let starting = match &self.phase {
-            Phase::Loading { .. } => true,
+            // The driver cannot start until the store acknowledges the mark.
+            // Claiming work before then keeps delayed io from completing.
+            Phase::Loading { .. } => marked,
             Phase::Running => !self.early.is_empty(),
         };
         starting

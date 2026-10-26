@@ -205,7 +205,7 @@ impl Engine {
         let components = self.store.work_pending(now)
             || (self.store.opened || self.end.is_some())
                 && (match &self.accounts {
-                    Some(accounts) => accounts.work_pending(now),
+                    Some(accounts) => accounts.work_pending(now, self.store.component.mark_durable()),
                     None => false,
                 } || match &self.workers {
                     Some(workers) => workers.work_pending(now),
