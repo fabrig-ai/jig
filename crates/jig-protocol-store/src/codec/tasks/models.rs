@@ -88,7 +88,7 @@ fn proposal_bits(value: &d::Proposal) -> u64 {
         d::ProposalAction::Widen { authority, .. }
         | d::ProposalAction::Effect { authority, .. }
         | d::ProposalAction::ProcedureEffect { authority, .. } => authority_bits(authority),
-        d::ProposalAction::Release { .. } => 0,
+        d::ProposalAction::Settings { .. } | d::ProposalAction::Release { .. } => 0,
     }
 }
 fn referenced(row: &d::Stored) -> u64 {
@@ -179,7 +179,7 @@ fn proposal(value: &mut d::Proposal, moved: &[u64; 64]) {
         d::ProposalAction::Widen { authority: value, .. }
         | d::ProposalAction::Effect { authority: value, .. }
         | d::ProposalAction::ProcedureEffect { authority: value, .. } => authority(value, moved),
-        d::ProposalAction::Release { .. } => {}
+        d::ProposalAction::Settings { .. } | d::ProposalAction::Release { .. } => {}
     }
 }
 /// Every authority-bearing durable tasks variant, including pending policy-held proposals.

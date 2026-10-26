@@ -41,9 +41,14 @@ pub fn settings_heads(items: &[t::SettingHead]) -> List<crate::reads::RevisionIt
     }
     result
 }
-pub(super) fn review(core: &Core, limits: &Limits, proposer: u64, number: u64) -> Option<Box<SettingsReview>> {
+pub(super) fn review(
+    core: &Core,
+    limits: &Limits,
+    proposer: jig_domain_people::Proposer,
+    number: u64,
+) -> Option<Box<SettingsReview>> {
     let number = u32::try_from(number).ok()?;
-    let set = core.settings_proposals.get(&(jig_domain_people::Proposer::Party(proposer), number))?;
+    let set = core.settings_proposals.get(&(proposer, number))?;
     let mut items = List::with_capacity(t::SETTINGS_ITEMS);
     for item in &set.items {
         let (now, origin) = core.current.lookup(item.setting);
@@ -95,7 +100,7 @@ mod tests {
                     s::Proposal { against: 2, items: Box::new([s::Item { setting, edit }]) },
                 )
                 .unwrap();
-            let review = review(&core, &limits, 1, 7).unwrap();
+            let review = review(&core, &limits, jig_domain_people::Proposer::Party(1), 7).unwrap();
             let item = review.items.get(0).unwrap();
             assert_eq!(review.newest, 2);
             assert_eq!(item.now, Some(changed.clone()));
@@ -110,7 +115,7 @@ mod tests {
                 s::Proposal { against: 3, items: Box::new([s::Item { setting, edit: s::Edit::Reset }]) },
             )
             .unwrap();
-        let review = review(&core, &limits, 1, 7).unwrap();
+        let review = review(&core, &limits, jig_domain_people::Proposer::Party(1), 7).unwrap();
         let item = review.items.get(0).unwrap();
         assert_eq!(item.now, None);
         assert_eq!(item.origin, None);

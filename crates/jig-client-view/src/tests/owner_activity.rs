@@ -141,6 +141,24 @@ fn kinds() -> Box<[(OwnerMessageKind, &'static [u8])]> {
         ),
         (OwnerMessageKind::PersonStalled { task: u64::MAX }, b"Kind: person stalled"),
         (OwnerMessageKind::ProposalDecision { proposal: u64::MAX, accepted: true }, b"Kind: proposal decision"),
+        (
+            OwnerMessageKind::SettingsDecision {
+                proposal: u64::MAX,
+                outcome: SettingsOutcome::Accepted { revision: u32::MAX },
+            },
+            b"Kind: settings decision",
+        ),
+        (
+            OwnerMessageKind::SettingsDecision { proposal: u64::MAX, outcome: SettingsOutcome::Rejected },
+            b"Kind: settings decision",
+        ),
+        (
+            OwnerMessageKind::SettingsDecision {
+                proposal: u64::MAX,
+                outcome: SettingsOutcome::Stale { newest: u32::MAX },
+            },
+            b"Kind: settings decision",
+        ),
         (OwnerMessageKind::Words, b"Kind: words"),
         (OwnerMessageKind::Met { dependency: 7, removed: false }, b"T7 is done; the task can go on"),
         (OwnerMessageKind::EffectNotMade { entry: u64::MAX }, b"Kind: effect not made"),
@@ -249,8 +267,8 @@ fn assert_line_fields(tree: &Tree, line: &OwnerActivity) {
     }
 }
 #[test]
-fn owner_activity_all_fourteen_message_kinds_keep_whole_word_hits_clock_and_flags() {
-    assert_eq!(kinds().len(), 14);
+fn owner_activity_all_message_kinds_keep_whole_word_hits_clock_and_flags() {
+    assert_eq!(kinds().len(), 17);
     for (kind, label) in kinds() {
         let word = fixture(kind);
         let original = word.clone();
@@ -287,6 +305,20 @@ fn assert_kind_numbers(tree: &Tree, kind: &OwnerMessageKind) {
             assert!(has(tree, b"Proposal: 18446744073709551615"));
         }
         OwnerMessageKind::PersonStalled { .. } => assert!(has(tree, b"Task: 18446744073709551615")),
+        OwnerMessageKind::SettingsDecision { outcome, .. } => {
+            assert!(has(tree, b"Proposal: 18446744073709551615"));
+            match outcome {
+                SettingsOutcome::Accepted { .. } => {
+                    assert!(has(tree, b"Accepted"));
+                    assert!(has(tree, b"Revision: 4294967295"));
+                }
+                SettingsOutcome::Rejected => assert!(has(tree, b"Rejected")),
+                SettingsOutcome::Stale { .. } => {
+                    assert!(has(tree, b"Withdrawn as stale"));
+                    assert!(has(tree, b"Newest revision: 4294967295"));
+                }
+            }
+        }
         OwnerMessageKind::ProposalDecision { .. } => assert!(has(tree, b"Proposal: 18446744073709551615")),
         OwnerMessageKind::EffectNotMade { .. } => assert!(has(tree, b"Entry: 18446744073709551615")),
         OwnerMessageKind::Amendment { .. } => assert!(has(tree, b"Revision: 18446744073709551615")),
