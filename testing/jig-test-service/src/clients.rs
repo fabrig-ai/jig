@@ -721,6 +721,7 @@ impl Clients {
             | Event::Got { .. }
             | Event::Turns { .. }
             | Event::Unread { .. }
+            | Event::SecretsNotReady { .. }
             | Event::Corrupt { .. } => kit::SecretsAnswer::Failed,
         };
         self.down(kit::Event::Secrets(event));

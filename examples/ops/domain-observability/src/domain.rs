@@ -21,6 +21,8 @@ struct Question {
 pub struct Domain {
     pub(crate) client_subjects: Map<Token, crate::ClientSubject>,
     restart: Option<crate::RestartStage>,
+    /// Restores are passive until the scripted read-afresh step (engine.md, 6).
+    restoring: bool,
     pub(crate) templates: Map<u16, Box<[u8]>>,
     pub(crate) lead_templates: Map<u16, Box<[u8]>>,
     pub(crate) delegations: Map<(u64, u64), crate::Delegation>,
@@ -58,6 +60,7 @@ impl Domain {
             client_subjects: Map::with_capacity(limits.reads),
             templates: Map::with_capacity(limits.watches),
             restart: None,
+            restoring: false,
             closing: Map::with_capacity(
                 limits
                     .subscriptions
@@ -433,6 +436,7 @@ fn wake_watch(
 }
 
 fn restore(domain: &mut Domain, record: Record) {
+    domain.restoring = true;
     match record {
         Record::Subscription { topic, task, subscription, wake_at, keep_at } => {
             domain
@@ -655,6 +659,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::Restore { record } => restore(domain, record),
         Event::ReadAfresh => read_afresh(domain),
         Event::Restart => {
+            domain.restoring = false;
             domain.restart = Some(crate::RestartStage::Outbox);
             for (key, entry) in &domain.effects {
                 match entry.phase {
@@ -689,6 +694,9 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
 
 /// Rechecks uncertain keyed effects when their absolute retry deadline passes.
 pub fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
+    if domain.restoring {
+        return;
+    }
     assert!(out.room() >= MAX_OUT, "the root reserves MAX_OUT slots");
     for (key, entry) in &domain.effects {
         if entry.phase == Phase::Uncertain && wall_seconds(env) >= entry.deadline {
@@ -701,6 +709,9 @@ pub fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
 #[must_use]
 #[expect(clippy::manual_map, reason = "step code uses no closure-taking methods")]
 pub fn next_deadline(domain: &Domain) -> Option<Time> {
+    if domain.restoring {
+        return None;
+    }
     let mut soonest = None;
     for (_, entry) in &domain.effects {
         if entry.phase == Phase::Uncertain {
@@ -718,6 +729,7 @@ pub fn next_deadline(domain: &Domain) -> Option<Time> {
 }
 
 fn read_afresh(domain: &mut Domain) {
+    domain.restoring = false;
     domain.restart = Some(crate::RestartStage::ReadAfresh);
     for ((topic, _), _) in &domain.subscriptions {
         let service = match topic {

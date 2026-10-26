@@ -69,7 +69,33 @@ pub struct Service {
     bytes: u64,
     links: Queue<Box<[u8]>>,
 }
+/// Read-only startup evidence for the service's worlds; no private value is exposed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AccountStartup {
+    pub pending_mark: Option<u64>,
+    pub durable: bool,
+    pub driver_made: bool,
+    pub restores_waiting: u32,
+    pub wants_waiting: u32,
+    pub granted: bool,
+}
+
 impl Service {
+    #[must_use]
+    pub fn account_startup(&self, source: u32, generation: u64, now: Time) -> Option<AccountStartup> {
+        let engine = self.engine.as_ref()?;
+        let accounts = engine.accounts.as_ref()?;
+        let (driver_made, restores_waiting, wants_waiting) = accounts.startup(source);
+        Some(AccountStartup {
+            pending_mark: engine.store.component.pending_mark(),
+            durable: engine.store.component.mark_durable(),
+            driver_made,
+            restores_waiting,
+            wants_waiting,
+            granted: engine.values.accounts.value(source, generation, now).is_some(),
+        })
+    }
+
     fn new(engine: Option<Engine>, workers: List<Worker>, limits: io::Limits, bytes: u64, queue: u32) -> Self {
         Self {
             started: false,

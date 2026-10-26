@@ -34,12 +34,13 @@ fn old_records_patch_in_order_and_the_root_continues() {
     patches::kept(&original, &patches::source(&mut world), &"story");
     records.check(&mut world, 2, &"story");
     world.crash(902);
-    assert_eq!(world.open_switched(), Some(last));
+    // The fixture check committed this start's mark after the patch seal.
+    assert_eq!(world.open_switched(), Some(last + 1));
     assert!(world.patched().is_empty());
     assert_eq!(world.active(), b"2\n");
-    assert_eq!(world.commit(Box::new([Write::Save(root::header(last + 1))])), Some(last + 1));
+    assert_eq!(world.commit(Box::new([Write::Save(root::header(last + 2)), Write::Wires])), Some(last + 2));
     world.crash(903);
-    assert_eq!(world.reopen().last, last + 1);
+    assert_eq!(world.reopen().last, last + 2);
     records.check(&mut world, 2, &"story");
 }
 

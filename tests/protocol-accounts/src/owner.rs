@@ -374,7 +374,8 @@ impl Owner {
             self.ask(Time::ZERO, Wall::EPOCH, store::Request::Switch { owner: OPEN });
             assert!(matches!(self.store_above.pop(), Some(store::Event::Switched { owner: OPEN })));
         }
-        if last == 0 {
+        {
+            let number = last + 1;
             let header = core::Record::Core(core::CoreRecord::Deployment(core::Deployment {
                 id: fixtures::DEPLOYMENT,
                 tasks: 0,
@@ -386,15 +387,15 @@ impl Owner {
                 connector_rows: 0,
                 projects: 0,
                 applications: 0,
-                commits: 1,
+                commits: number,
             }));
             self.ask(
                 Time::ZERO,
                 Wall::EPOCH,
-                store::Request::Commit { number: 1, writes: Box::new([store::Write::Save(header)]) },
+                store::Request::Commit { number, writes: Box::new([store::Write::Save(header), store::Write::Wires]) },
             );
             assert!(
-                matches!(self.store_above.pop(), Some(store::Event::Committed { number: 1, .. })),
+                matches!(self.store_above.pop(), Some(store::Event::Committed { .. })),
                 "the memory store commits at once"
             );
         }
@@ -844,6 +845,7 @@ impl Owner {
                 | store::Event::Carried { .. }
                 | store::Event::Secret { .. }
                 | store::Event::SecretsLoaded { .. }
+                | store::Event::SecretsNotReady { .. }
                 | store::Event::Corrupt { .. } => unreachable!("a replace is answered kept or stale"),
             };
             self.driver(env, request);

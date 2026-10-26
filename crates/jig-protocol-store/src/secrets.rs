@@ -237,6 +237,13 @@ fn held(store: &mut Store, env: &Env<Limits>, key: &[u8], below: &mut Below) -> 
         None => Ok(None),
     }
 }
+fn ready(store: &Store) -> bool {
+    match store.phase {
+        Phase::Ready { .. } => store.mark_durable(),
+        Phase::Closed | Phase::Stopped => false,
+    }
+}
+
 pub(crate) fn secrets(
     store: &mut Store,
     env: &Env<Limits>,
@@ -245,9 +252,9 @@ pub(crate) fn secrets(
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
-    match store.phase {
-        Phase::Ready { .. } => {}
-        Phase::Closed | Phase::Stopped => return,
+    if !ready(store) {
+        above.push(Event::SecretsNotReady { owner });
+        return;
     }
     match request {
         Secrets::Keep { owner: kind, number, value } => keep(store, env, owner, (kind, number), value, above, below),
@@ -546,7 +553,11 @@ pub(crate) fn start_sweep(store: &mut Store) {
     }
 }
 pub(crate) fn sweep(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, below: &mut Below) {
-    if !store.secret_state.sweeping || store.secret_state.waiting || store.phase == Phase::Stopped {
+    if !store.mark_durable()
+        || !store.secret_state.sweeping
+        || store.secret_state.waiting
+        || store.phase == Phase::Stopped
+    {
         return;
     }
     // People's family alone. The accounts component sweeps unnamed Source

@@ -87,3 +87,11 @@ fn text_chat(chat: fixtures::Chat) -> jig_one_process_world::referee::ChatOutcom
     assert_eq!(outcome.verdict, Verdict::Passed);
     outcome.chat.expect("text scenario evidence")
 }
+
+#[test]
+fn the_accounts_driver_waits_for_the_mark() {
+    let outcome = world::accounts_mark_gate(fixtures::calm(fixtures::SEED));
+    assert_eq!(outcome.verdict, Verdict::Passed);
+    assert!(outcome.mark_gate_checked);
+    assert!(outcome.drained);
+}

@@ -75,6 +75,32 @@ pub struct Store {
     installation: [u8; 16],
     patch_sets: PatchSets,
     wires: &'static [Wire],
+    /// This start's first Wires commit, and its durability (store.md 5.3).
+    mark: Mark,
+}
+
+#[derive(Debug)]
+enum Mark {
+    Waiting,
+    Committing(u64),
+    Durable,
+}
+impl Mark {
+    fn accept(&mut self, wires: bool, number: u64) {
+        if wires {
+            match self {
+                Mark::Waiting => *self = Mark::Committing(number),
+                Mark::Committing(_) | Mark::Durable => {}
+            }
+        }
+    }
+    fn committed(&mut self, number: u64) {
+        if let Mark::Committing(mark) = self
+            && *mark == number
+        {
+            *self = Mark::Durable;
+        }
+    }
 }
 
 /// A worker wire's name and version (protocol/store.md, 5.3).
@@ -137,6 +163,7 @@ impl Store {
             installation: [0; 16],
             patch_sets: PatchSets::NONE,
             wires: &[],
+            mark: Mark::Waiting,
         }
     }
 
@@ -174,6 +201,24 @@ impl Store {
         }
         self.wires = wires;
         true
+    }
+
+    /// The first Wires commit accepted in this start, while awaiting durability.
+    #[must_use]
+    pub fn pending_mark(&self) -> Option<u64> {
+        match self.mark {
+            Mark::Committing(number) => Some(number),
+            Mark::Waiting | Mark::Durable => None,
+        }
+    }
+
+    /// Whether this start's first Wires commit is durable (store.md 5.3).
+    #[must_use]
+    pub fn mark_durable(&self) -> bool {
+        match self.mark {
+            Mark::Durable => true,
+            Mark::Waiting | Mark::Committing(_) => false,
+        }
     }
 
     #[must_use]

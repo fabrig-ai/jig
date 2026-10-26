@@ -29,7 +29,7 @@ fn a_record_a_child_refuses_before_switch_keeps_the_old_generation_active() {
     let last = world.open().expect("pending patched open");
     assert!(world.pending);
     assert_eq!(world.active(), b"1\n");
-    records.check(&mut world, 2, &"pending restore");
+    records.check_public(&mut world, 2, &"pending restore");
 
     let key = b"s/2".as_slice();
     let expected = records.rows(2).get(key).expect("story's heaviest shelf").clone();
@@ -54,9 +54,10 @@ fn a_record_a_child_refuses_before_switch_keeps_the_old_generation_active() {
     // The old binary starts against A without any operator rewriting active.
     world.patch_sets(BASE);
     assert_eq!(world.open_switched(), Some(1));
+    world.accept_recovery(1);
     assert!(world.patched().is_empty());
     assert_eq!(world.active(), b"1\n");
-    records.check(&mut world, 1, &"operator's way back");
     patches::kept(&original, &patches::source(&mut world), &"operator's way back");
+    records.check(&mut world, 1, &"operator's way back");
     assert!(!world.paths().iter().any(|path| path == b"generations/2" || path.starts_with(b"generations/2/")));
 }

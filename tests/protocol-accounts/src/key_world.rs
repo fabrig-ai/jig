@@ -55,6 +55,28 @@ impl World {
             world.down(store::Request::Switch { owner });
             assert!(matches!(world.above.pop(), Some(store::Event::Switched { .. })));
         }
+        world.down(store::Request::Commit {
+            number: 1,
+            writes: Box::new([
+                store::Write::Save(jig_domain_core::Record::Core(jig_domain_core::CoreRecord::Deployment(
+                    jig_domain_core::Deployment {
+                        id: [5; 16],
+                        tasks: 0,
+                        people: 0,
+                        sign_ins: 0,
+                        messages: 0,
+                        runs: 0,
+                        calls: 0,
+                        connector_rows: 0,
+                        projects: 0,
+                        applications: 0,
+                        commits: 1,
+                    },
+                ))),
+                store::Write::Wires,
+            ]),
+        });
+        assert!(matches!(world.above.pop(), Some(store::Event::Committed { number: 1, .. })));
         world
     }
     fn down(&mut self, request: store::Request) {
@@ -122,6 +144,7 @@ impl World {
                         | store::Event::Carried { .. }
                         | store::Event::Erased { .. }
                         | store::Event::SecretsLoaded { .. }
+                        | store::Event::SecretsNotReady { .. }
                         | store::Event::Corrupt { .. }) => panic!("LLM key exchange: {other:?}"),
                     }
                 }

@@ -44,8 +44,16 @@ pub(crate) fn operations(
     let mut drops = Queue::with_capacity(store.limits.journal.writes);
     let mut bytes = 26;
     let mut deployment = None;
+    let mut wires = false;
     for write in writes {
         match write {
+            Write::Wires => {
+                if crate::patching::switch::pending(store) {
+                    return Err(Refusal::Failed);
+                }
+                wires = true;
+                ops.push(operation(store, Write::Wires).ok_or(Refusal::Failed)?).ok().ok_or(Refusal::Failed)?;
+            }
             Write::DropTranscript { task } => {
                 if crate::patching::switch::pending(store) {
                     return Err(Refusal::Failed);
@@ -87,7 +95,6 @@ pub(crate) fn operations(
                 | Record::Accounts(_),
             )
             | Write::CopySettingsRevision(_)
-            | Write::Wires
             | Write::Erase(_)
             | Write::Put { .. }
             | Write::Remove { .. }) => {
@@ -126,6 +133,7 @@ pub(crate) fn operations(
     for op in unique(ops.into_boxed(), capacity).ok_or(Refusal::Failed)? {
         append(&mut bounded, op, &mut bytes, store.limits.store.commit).ok_or(Refusal::Failed)?;
     }
+    store.mark.accept(wires, number);
     Ok(crate::transcripts::Pending { number, frames, ops: bounded.into_boxed(), drops })
 }
 fn operation(store: &mut Store, write: Write) -> Option<skein_kv::Op> {

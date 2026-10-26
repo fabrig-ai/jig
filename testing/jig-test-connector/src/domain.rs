@@ -223,6 +223,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         }
         Event::Restart(crate::RestartStep::SettleOutbox) => {
             domain.restart_settling = true;
+            crate::outbox::activate(domain);
             crate::outbox::fire(domain, env, out);
         }
         Event::Names { task, project, resources } => names(domain, env, task, project, resources, out),

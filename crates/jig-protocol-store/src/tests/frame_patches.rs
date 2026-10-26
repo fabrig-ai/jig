@@ -200,6 +200,7 @@ fn answer_frame(disk: &mut Disk, store: &mut Store, events: Box<[Event]>, refuse
             | Event::Erased { .. }
             | Event::Secret { .. }
             | Event::SecretsLoaded { .. }
+            | Event::SecretsNotReady { .. }
             | Event::Corrupt { .. }
             | Event::Patched { .. }) => result.push(other),
         }

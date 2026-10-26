@@ -20,6 +20,7 @@ jig-client-shell-native = { path = "../../crates/jig-client-shell-native" }
 jig-test-service.workspace = true
 jig-test-domain.workspace = true
 jig-domain-core.workspace = true
+jig-domain-accounts.workspace = true
 jig-domain-people.workspace = true
 jig-domain-host.workspace = true
 jig-domain-notes.workspace = true

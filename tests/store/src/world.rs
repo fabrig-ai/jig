@@ -506,6 +506,7 @@ impl World {
                     | Event::Erased { .. }
                     | Event::Secret { .. }
                     | Event::SecretsLoaded { .. }
+                    | Event::SecretsNotReady { .. }
                     | Event::Corrupt { .. }) => panic!("open terminal: {other:?}"),
                 }
             }
@@ -805,6 +806,18 @@ impl World {
     }
 
     /// One secrets' request, its file operations counted from zero.
+    /// Finish startup before post-mark fixture checks; gate stories use raw requests.
+    pub fn mark_if_needed(&mut self) {
+        if !self.store.mark_durable() {
+            self.mark().expect("store-only start mark");
+        }
+    }
+
+    /// The start mark for store-only stories, after their public restore.
+    pub fn mark(&mut self) -> Option<u64> {
+        self.commit(Box::new([Write::Save(root::header(self.next)), Write::Wires]))
+    }
+
     pub fn secret(&mut self, request: Secrets) -> Vec<Event> {
         self.secrets(vec![request])
     }

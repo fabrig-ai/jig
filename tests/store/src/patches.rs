@@ -180,7 +180,7 @@ impl Records {
 
     #[must_use]
     pub fn writes(&self, version: u16) -> Box<[Write]> {
-        let mut writes = vec![Write::Save(root::header(1))];
+        let mut writes = vec![Write::Save(root::header(1)), Write::Wires];
         writes.extend(self.rows(version).into_iter().map(|(key, value)| Write::Put { key, value }));
         writes.into_boxed_slice()
     }
@@ -226,6 +226,7 @@ impl Records {
 
     /// Decode by each family's kept text as well as compare every modeled byte.
     pub fn check(&self, world: &mut World, version: u16, context: &dyn std::fmt::Debug) {
+        world.mark_if_needed();
         for (number, bytes) in &self.tokens {
             let events = world.secret(Secrets::Get { owner: SecretOwner::Application, number: *number });
             let [Event::Secret { value: Some(value), .. }] = events.as_slice() else {
@@ -239,6 +240,11 @@ impl Records {
             let mut decoded = skein_codec::value::Value::with_room(16);
             decoded.decode(&schema, root, Box::from(value.expose())).expect("token decodes at its level");
         }
+        self.check_public(world, version, context);
+    }
+
+    /// The copy's public restore is checked before the start can serve secrets.
+    pub fn check_public(&self, world: &mut World, version: u16, context: &dyn std::fmt::Debug) {
         let rows = world.application(false);
         assert_eq!(rows, self.rows(version), "all records belong to one whole level: {context:?}");
         for (key, bytes) in rows {

@@ -550,6 +550,7 @@ fn assert_restored_provision_timer(domain: &Domain, fact: Option<EnvironmentFact
     let mut restored = Domain::new(Backend::OperationIds, &limits());
     let state = domain.procedures.get(&7).expect("the waiting state was supplied for saving").clone();
     event(&mut restored, 3, Event::Restore { record: Record::Procedure(state) });
+    event(&mut restored, 3, Event::ReadAfresh);
     event(
         &mut restored,
         3,
@@ -633,4 +634,34 @@ fn restored_resource_reports_keep_owner_roles_holds_and_task_scopes_during_read_
         }
     }
     assert_eq!(reads, 2, "the shared service has one actual fresh read");
+}
+
+#[test]
+fn restored_effect_timers_wait_for_read_afresh() {
+    let mut domain = Domain::new(Backend::OperationIds, &limits());
+    event(
+        &mut domain,
+        2,
+        Event::Restore {
+            record: Record::Outbox(Entry {
+                project: Some(1),
+                number: 3,
+                key: key(),
+                effect: Effect::Restart { service: service(), operation: 9 },
+                attempt: 1,
+                deadline: 1,
+                phase: Phase::Uncertain,
+            }),
+        },
+    );
+    let env = Env { now: Time::from_nanos(2_000_000_000), wall: Wall::from_nanos(2_000_000_000), limits: limits() };
+    let mut out = Queue::with_capacity(MAX_OUT);
+    fire(&mut domain, &env, &mut out);
+    assert!(out.is_empty(), "no system lookup before the scripted post-mark step");
+    assert_eq!(next_deadline(&domain), None);
+    event(&mut domain, 2, Event::ReadAfresh);
+    fire(&mut domain, &env, &mut out);
+    let Some(Request::System(SystemRequest::Look { .. })) = out.pop() else {
+        panic!("system lookup resumes after read afresh");
+    };
 }

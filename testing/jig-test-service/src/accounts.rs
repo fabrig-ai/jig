@@ -34,7 +34,7 @@ pub struct AccountsRuntime {
     pub trust_roots: u32,
     pub trust_root_bytes: u32,
 }
-/// The driver starts after the store supplies its durable installation identity (llm.md, 5.4).
+/// The driver starts after the start mark is durable (llm.md, 5.4).
 enum Phase {
     Loading { crypto: CryptoRng },
     Running,
@@ -204,6 +204,23 @@ fn provider_templates(
     Ok(providers)
 }
 impl Accounts {
+    pub(super) fn startup(&self, source: u32) -> (bool, u32, u32) {
+        let mut restores = 0_u32;
+        let mut wants = 0_u32;
+        for request in &self.early {
+            if let domain::Request::Signing(domain::Signing::Restore { source: found, .. }) = request
+                && *found == source
+            {
+                restores = restores.checked_add(1).expect("bounded early queue");
+            }
+            if let domain::Request::Component(domain::ToComponent::Want { account }) = request
+                && *account == source
+            {
+                wants = wants.checked_add(1).expect("bounded early queue");
+            }
+        }
+        (self.component.is_some(), restores, wants)
+    }
     pub fn take_moved(&mut self, source: u32) -> Option<Secret> {
         self.moves.take(source)
     }
@@ -756,6 +773,7 @@ impl Accounts {
             | store::Event::Carried { .. }
             | store::Event::Erased { .. }
             | store::Event::SecretsLoaded { .. }
+            | store::Event::SecretsNotReady { .. }
             | store::Event::Corrupt { .. } => unreachable!("move exchange answers read or adoption"),
         }
     }
@@ -768,7 +786,7 @@ impl Accounts {
         self.inventory.loaded(next);
     }
     fn sweep(&mut self, store: &mut crate::store::Store) {
-        if self.aborting || !store.room() {
+        if self.aborting || !store.component.mark_durable() || !store.room() {
             return;
         }
         let Some(step) = self.inventory.step() else { return };
@@ -994,6 +1012,7 @@ impl Accounts {
                 | store::Event::Got { .. }
                 | store::Event::Turns { .. }
                 | store::Event::Unread { .. }
+                | store::Event::SecretsNotReady { .. }
                 | store::Event::Corrupt { .. } => {
                     unreachable!("the store hands the accounts only their secrets' answers")
                 }
@@ -1021,11 +1040,11 @@ impl Accounts {
         }
         self.component = Some(component);
     }
-    /// Wait for the store, then route the child's restored sources and runtime requests.
+    /// Wait for the durable start mark, then route the child's restored sources and runtime requests.
     fn start(&mut self, store: &mut crate::store::Store, values: &mut Values) {
         match &mut self.phase {
             Phase::Loading { .. } => {
-                if store.opened {
+                if store.component.mark_durable() {
                     self.opened(&store.installation);
                 }
             }

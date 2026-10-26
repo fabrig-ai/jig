@@ -180,6 +180,7 @@ pub(crate) fn decode(
                 | Event::Erased { .. }
                 | Event::Secret { .. }
                 | Event::SecretsLoaded { .. }
+                | Event::SecretsNotReady { .. }
                 | Event::Corrupt { .. }
                 | Event::Patched { .. }) => panic!("decode event {other:?}"),
             }

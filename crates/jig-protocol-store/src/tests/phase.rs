@@ -741,11 +741,6 @@ fn fixture_baseline_with_secret(bad: Option<(u32, u16, u32)>, secret: bool) -> V
     store.patch_sets(BASE);
     store.application.version = 0;
     assert_opened(&disk.open(&mut store), 0);
-    if secret {
-        let events = disk
-            .request(&mut store, Request::Secrets { owner: Token::new(2), request: fixtures::sign_in_secret(1, 7) });
-        let [Event::Kept { .. }] = events.as_ref() else { panic!("fixture secret committed: {events:?}") };
-    }
     let mut rows = vec![
         Write::Put { key: fixture_key(b'l', 0), value: label(1) },
         Write::Put { key: fixture_key(b'l', 1), value: label(1) },
@@ -768,6 +763,10 @@ fn fixture_baseline_with_secret(bad: Option<(u32, u16, u32)>, secret: bool) -> V
     for number in 1..=FIXTURE_LAST {
         let mut writes: Vec<_> = rows.by_ref().take(3).collect();
         writes.push(fixtures::header(number));
+        if number == FIXTURE_LAST {
+            // The last fixture page holds two rows, its header, and the start mark.
+            writes.push(Write::Wires);
+        }
         let events = disk.request(&mut store, fixtures::commit(number, writes.into_boxed_slice()));
         assert!(
             match events.as_ref() {
@@ -778,6 +777,11 @@ fn fixture_baseline_with_secret(bad: Option<(u32, u16, u32)>, secret: bool) -> V
         );
     }
     assert_eq!(store.stores.store.last(), FIXTURE_LAST);
+    if secret {
+        let events = disk
+            .request(&mut store, Request::Secrets { owner: Token::new(2), request: fixtures::sign_in_secret(1, 7) });
+        let [Event::Kept { .. }] = events.as_ref() else { panic!("fixture secret committed: {events:?}") };
+    }
     disk.items()
 }
 
@@ -829,6 +833,7 @@ fn secret_fixture() -> SecretFixture {
             Box::new([
                 fixtures::header(number),
                 Write::Save(jig_domain_core::Record::Accounts(jig_domain_accounts::Stored::Next { number: 97 })),
+                Write::Wires,
             ]),
         ),
     );
@@ -1903,9 +1908,10 @@ const FRESH_BEFORE: crate::PatchSets = crate::PatchSets {
 
 #[test]
 fn pending_state_and_wires_have_their_exact_resident_price() {
-    // Store gains the 16-byte static wires slice; Pending retains before/after
+    // Store gains the 16-byte static wires slice and the 16-byte Mark
+    // (8-byte discriminant, 8-byte commit number; store.md 5.3). Pending retains before/after
     // levels, the check's counts and the explicit switch's stage and owner.
-    assert_eq!(size_of::<Store>(), 3_992);
+    assert_eq!(size_of::<Store>(), 4_008);
     assert_eq!(size_of::<crate::directory::Directory>(), 280);
     assert_eq!(size_of::<Opening>(), 88);
     assert_eq!(size_of::<Patching>(), 168);
@@ -1916,6 +1922,6 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // Retained and encoded counts: two * (64 Count carriers * 32 +
     // 64 family names * 64), plus the 5,464-byte encoded manifest.
     assert_eq!(crate::patching::switch::worst_case(), Some(17_928));
-    // Baseline 581,544,799,687,077 + wires 16 + pending 17,928.
-    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_544_799_705_021));
+    // Baseline 581,544,799,687,077 + wires 16 + pending 17,928 + Mark 16.
+    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_544_799_705_037));
 }
