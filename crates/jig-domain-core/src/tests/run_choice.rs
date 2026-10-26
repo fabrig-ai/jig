@@ -936,6 +936,10 @@ fn open(core: &mut Core, limits: &Limits) {
 
 fn claim_open(core: &mut Core, limits: &Limits, attempt: u64) {
     open(core, limits);
+    claim_existing_open(core, limits, attempt);
+}
+
+fn claim_existing_open(core: &mut Core, limits: &Limits, attempt: u64) {
     send_task(core, limits, tasks::Event::Prepare { reply_to: ReplyTo::new(FIRST), task: OPEN_TASK });
     send_task(
         core,
@@ -1172,60 +1176,62 @@ fn a_repaired_source_makes_the_waiting_open_task_due() {
 }
 
 #[test]
-fn one_recheck_is_followed_by_a_choice_refusal_with_the_same_inputs() {
+fn consecutive_grants_refusals_recheck_without_spending_tries_or_refusals() {
+    // Two successive attempts exercise the unchanged Recheck transition (hosts.md, 8.1).
+    const ATTEMPTS: [u64; 2] = [OPEN_ATTEMPT, OPEN_ATTEMPT + 1];
     let (mut core, limits) = placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
-    claim_open(&mut core, &limits, OPEN_ATTEMPT);
+    open(&mut core, &limits);
     let refusals = core.tasks.task(OPEN_TASK).unwrap().refusals;
-    let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(OPEN_ATTEMPT, &[]));
-    let terminal = core.proofs.get(&OPEN_TASK).unwrap().terminal.clone().unwrap();
-    assert_eq!(terminal.end, tasks::End::Recheck);
-    let task = core.tasks.task(OPEN_TASK).unwrap().clone();
-    core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
-    for _ in 0_u8..3 {
+    for attempt in ATTEMPTS {
+        let choice = core.run_choice(OPEN_TASK).unwrap();
         assert_eq!(
-            core.run_choice(OPEN_TASK),
-            Err(RunWait::OpenProgram(OpenProgram::Source { account: 0, source: PERSONAL_SOURCE }))
+            choice.accounts.as_ref(),
+            &[authority::AccountBinding { provider: 1, account: 0, source: PERSONAL_SOURCE }]
         );
-        assert!(!core.due_ready());
+        claim_existing_open(&mut core, &limits, attempt);
+        let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(attempt, &[]));
+        assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end, tasks::End::Recheck);
+        let task = core.tasks.task(OPEN_TASK).unwrap();
+        assert_eq!(task.phase, tasks::Phase::Active(tasks::Active::Due));
+        assert_eq!(task.refusals, refusals);
+        assert_eq!(task.tries, tasks::Tries::NONE);
+        assert_eq!(task.attempt, attempt);
+        core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
+        assert!(core.due_ready());
+        assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
         assert!(core.take_due().is_none());
-        assert_eq!(core.tasks.task(OPEN_TASK).unwrap(), &task);
-        assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref(), Some(&terminal));
     }
+    assert_eq!(core.run_choice(OPEN_TASK).unwrap().accounts[0].source, PERSONAL_SOURCE);
     assert_eq!(core.proofs.len(), 1);
-    assert_eq!(task.refusals, refusals);
-    assert_eq!(task.tries, tasks::Tries::NONE);
-    assert_eq!(task.attempt, OPEN_ATTEMPT);
 }
 
 #[test]
-fn open_refuses_the_ordinary_program_without_a_key_fallback() {
+fn an_open_task_chooses_its_program_source() {
     let (mut core, limits) = placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
     open(&mut core, &limits);
+    let choice = core.run_choice(OPEN_TASK).unwrap();
     assert_eq!(
-        core.run_choice(OPEN_TASK),
-        Err(RunWait::OpenProgram(OpenProgram::Source { account: 0, source: PERSONAL_SOURCE }))
+        choice.accounts.as_ref(),
+        &[authority::AccountBinding { provider: 1, account: 0, source: PERSONAL_SOURCE }]
     );
-    assert_eq!(core.run_choice(TASK).unwrap().accounts[0].source, PERSONAL_SOURCE);
+    assert_eq!(choice, core.run_choice(TASK).unwrap());
     core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
-    for _ in 0_u8..3 {
-        assert!(!core.due_ready());
-        assert!(core.take_due().is_none());
-    }
+    assert!(core.due_ready());
+    assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
+    assert!(core.take_due().is_none());
     assert_eq!(core.tasks.task(OPEN_TASK).unwrap().attempt, 0);
     assert_eq!(core.tasks.task(OPEN_TASK).unwrap().tries, tasks::Tries::NONE);
 }
 
 #[test]
-fn open_native_runs_and_program_endpoints_are_scoped_by_number() {
+fn an_open_program_endpoint_still_checks_its_account() {
     let (mut core, limits) = ready(false);
     open(&mut core, &limits);
-    core.run_choice(OPEN_TASK).expect("native Open choice");
     let mut fleet = placement_fleet(&core, &limits);
     core::mem::swap(&mut core.fleet, &mut fleet);
     let main_endpoint = core.chosen_main(OPEN_TASK).endpoint;
     host_with_endpoints(&mut core, &limits, FIRST, &[b"scripted", b"same"], Box::new([]), Box::new([main_endpoint]));
-    assert_eq!(core.run_choice(OPEN_TASK), Err(RunWait::OpenProgram(OpenProgram::Model)));
-    core.run_choice(TASK).expect("finite program choice");
+    assert_eq!(core.run_choice(OPEN_TASK).unwrap(), core.run_choice(TASK).unwrap());
     account(&mut core, &limits, accounts::Event::Limited { account: 1, reset: None });
     assert_eq!(
         core.run_choice(OPEN_TASK),
@@ -1239,19 +1245,20 @@ fn open_native_runs_and_program_endpoints_are_scoped_by_number() {
 
 #[test]
 fn claim_rechecks_the_same_open_model_and_grant_view() {
-    let (mut core, limits) = ready(false);
-    open(&mut core, &limits);
-    let choice = core.run_choice(OPEN_TASK).unwrap();
-    let mut proof = RunProof::claimed(OPEN_TASK, 7, 7, None, choice.placement.kind);
-    proof.placement = Some(choice.placement.channel);
-    proof.accounts = choice.accounts;
-    core.proofs.insert(OPEN_TASK, proof).unwrap();
-    assert!(core.claim_bindings_usable(OPEN_TASK, 7));
-    let mut changed = placement_fleet(&core, &limits);
-    core::mem::swap(&mut core.fleet, &mut changed);
-    let endpoint = core.chosen_main(OPEN_TASK).endpoint;
-    host_with_endpoints(&mut core, &limits, FIRST, &[b"scripted", b"same"], Box::new([]), Box::new([endpoint]));
-    assert!(!core.claim_bindings_usable(OPEN_TASK, 7));
+    for task in [TASK, OPEN_TASK] {
+        let (mut core, limits) = ready(false);
+        open(&mut core, &limits);
+        let choice = core.run_choice(task).unwrap();
+        let bindings = choice.accounts.clone();
+        let mut proof = RunProof::claimed(task, OPEN_ATTEMPT, OPEN_ATTEMPT, None, choice.placement.kind);
+        proof.placement = Some(choice.placement.channel);
+        proof.accounts = choice.accounts;
+        core.proofs.insert(task, proof).unwrap();
+        assert!(core.claim_bindings_usable(task, OPEN_ATTEMPT));
+        account(&mut core, &limits, accounts::Event::Limited { account: 1, reset: None });
+        assert!(!core.claim_bindings_usable(task, OPEN_ATTEMPT));
+        assert_eq!(core.proofs.get(&task).unwrap().accounts, bindings);
+    }
 }
 
 #[test]
@@ -1338,10 +1345,7 @@ fn only_fenced_uncommitted_open_program_grants_refusals_recheck() {
         assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal, terminal);
         if wanted == tasks::Tries::NONE {
             assert_eq!(core.tasks.task(OPEN_TASK).unwrap().phase, tasks::Phase::Active(tasks::Active::Due));
-            assert_eq!(
-                core.run_choice(OPEN_TASK),
-                Err(RunWait::OpenProgram(OpenProgram::Source { account: 0, source: PERSONAL_SOURCE }))
-            );
+            assert_eq!(core.run_choice(OPEN_TASK).unwrap().accounts[0].source, PERSONAL_SOURCE);
         }
     }
 }
@@ -1398,7 +1402,7 @@ fn a_fenced_grants_refusal_rechecks_independently_of_its_end_class() {
 }
 
 #[test]
-fn open_omits_a_same_provider_alternative_on_a_program_endpoint() {
+fn an_open_task_retains_its_program_endpoint_alternative() {
     const PROGRAM_ENDPOINT: u32 = 17;
     let (mut core, limits) = ready(false);
     open(&mut core, &limits);
@@ -1407,7 +1411,11 @@ fn open_omits_a_same_provider_alternative_on_a_program_endpoint() {
     core::mem::swap(&mut core.fleet, &mut old);
     host_with_endpoints(&mut core, &limits, FIRST, &[b"scripted", b"same"], Box::new([]), Box::new([PROGRAM_ENDPOINT]));
     let choice = core.run_choice(OPEN_TASK).unwrap();
-    assert!(choice.policy.alternatives.is_empty());
+    assert_eq!(
+        choice.policy.alternatives.as_ref(),
+        core::slice::from_ref(&core.current.test_charter_mut(1).policy.alternatives[0])
+    );
+    assert_eq!(choice, core.run_choice(TASK).unwrap());
     let mut proof = RunProof::claimed(OPEN_TASK, 7, 7, None, choice.placement.kind);
     proof.placement = Some(choice.placement.channel);
     proof.accounts = choice.accounts;
@@ -1416,7 +1424,7 @@ fn open_omits_a_same_provider_alternative_on_a_program_endpoint() {
 }
 
 #[test]
-fn a_repaired_native_host_wakes_a_refused_open_task_once() {
+fn a_program_host_and_its_replacement_make_open_due() {
     let (mut core, limits) = ready(false);
     open(&mut core, &limits);
     let endpoint = core.chosen_main(OPEN_TASK).endpoint;
@@ -1424,9 +1432,11 @@ fn a_repaired_native_host_wakes_a_refused_open_task_once() {
     core::mem::swap(&mut core.fleet, &mut old);
     host_with_endpoints(&mut core, &limits, FIRST, &[b"scripted", b"same"], Box::new([]), Box::new([endpoint]));
     core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
+    assert!(core.due_ready());
+    assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
     assert!(core.take_due().is_none());
     let document = task_from_row(&core, &limits, 1, core.tasks.task(OPEN_TASK).unwrap(), Wall::EPOCH).unwrap();
-    assert_eq!(document.run_wait, Some(TaskRunWait::Refused(TaskWaitRefused::Program(OpenProgram::Model))));
+    assert_eq!(document.run_wait, None);
     let mut out = Queue::with_capacity(fleet::max_out(&limits.fleet));
     fleet::step(
         &mut core.fleet,
@@ -1435,6 +1445,9 @@ fn a_repaired_native_host_wakes_a_refused_open_task_once() {
         &mut out,
     );
     core.fleet.reclaim();
+    core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
+    assert_eq!(core.run_choice(OPEN_TASK), Err(RunWait::Host));
+    assert!(!core.due_ready());
     host(&mut core, &limits, Token::new(9), &[b"scripted", b"same"]);
     assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
     assert!(core.take_due().is_none());
@@ -1457,7 +1470,7 @@ fn program_metadata_on_an_ineligible_probe_does_not_refuse_a_native_choice() {
 #[test]
 fn an_open_start_takes_the_first_eligible_hosts_answer_in_either_order() {
     // Equal free slots probe in channel order; exchange which channel is program-marked.
-    for (program, native, refused) in [(FIRST, SECOND, true), (SECOND, FIRST, false)] {
+    for (program, native) in [(FIRST, SECOND), (SECOND, FIRST)] {
         let (mut core, limits) = ready(false);
         open(&mut core, &limits);
         let endpoint = core.chosen_main(OPEN_TASK).endpoint;
@@ -1465,16 +1478,13 @@ fn an_open_start_takes_the_first_eligible_hosts_answer_in_either_order() {
         core::mem::swap(&mut core.fleet, &mut old);
         host_with_endpoints(&mut core, &limits, program, &[b"scripted", b"same"], Box::new([]), Box::new([endpoint]));
         host(&mut core, &limits, native, &[b"scripted", b"same"]);
-        let choice = core.run_choice(OPEN_TASK);
-        if refused {
-            assert_eq!(choice, Err(RunWait::OpenProgram(OpenProgram::Model)));
-            core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
-            assert!(core.take_due().is_none());
-            assert!(core.proofs.get(&OPEN_TASK).is_none());
-            assert_eq!(core.tasks.task(OPEN_TASK).unwrap().attempt, 0);
-        } else {
-            assert_eq!(choice.unwrap().placement.channel, native);
-        }
+        assert_eq!(core.run_choice(OPEN_TASK).unwrap().placement.channel, FIRST);
+        core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
+        assert!(core.due_ready());
+        assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
+        assert!(core.take_due().is_none());
+        assert!(core.proofs.get(&OPEN_TASK).is_none());
+        assert_eq!(core.tasks.task(OPEN_TASK).unwrap().attempt, 0);
     }
 }
 
