@@ -106,13 +106,11 @@ impl Core {
         if new.llm.is_some() {
             return Ok(());
         }
-        for configured in self.tasks.charters() {
-            if configured.number == charter
-                && let Some(first) = configured.models.first()
-            {
-                let why = tasks::Refusal::Llm { model: *first, why: tasks::LlmFault::Authority };
-                return Err(tasks::Problem::new(Some(number), why));
-            }
+        if let Some(models) = self.tasks.charter_models(charter, self.tasks.newest())
+            && let Some(first) = models.first()
+        {
+            let why = tasks::Refusal::Llm { model: *first, why: tasks::LlmFault::Authority };
+            return Err(tasks::Problem::new(Some(number), why));
         }
         Ok(())
     }

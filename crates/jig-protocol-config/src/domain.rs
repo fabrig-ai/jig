@@ -198,6 +198,12 @@ pub(crate) fn whole(engine: &crate::Engine, problems: &mut Problems) {
     if limits.settings.proposals == 0 {
         problems.push(Path::root().member(b"limits").member(b"core").member(b"settings.proposals"), What::Bound);
     }
+    if limits.settings.revisions == 0 {
+        problems.push(Path::root().member(b"limits").member(b"core").member(b"settings.revisions"), What::Bound);
+    }
+    if limits.settings.versions == 0 {
+        problems.push(Path::root().member(b"limits").member(b"core").member(b"settings.versions"), What::Bound);
+    }
     if limits.settings.history == 0 {
         problems.push(settings_path, What::Bound);
     }

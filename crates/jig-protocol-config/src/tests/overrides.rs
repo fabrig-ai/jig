@@ -530,3 +530,51 @@ fn the_journal_prices_each_pending_settings_withdrawal() {
     // Set erase, pending erase, terminal row, decision archive and proposer update.
     assert_eq!(two - one, 5);
 }
+
+#[test]
+fn settings_revision_limits_are_positive_and_size_the_tasks_child() {
+    for (profile_name, revisions, versions) in [(Profile::Small, 4, 8), (Profile::Standard, 8, 16)] {
+        let limits = profile(profile_name).core;
+        assert_eq!(limits.settings.revisions, revisions);
+        assert_eq!(limits.settings.versions, versions);
+        assert_eq!(limits.tasks.revisions, revisions);
+        assert_eq!(limits.tasks.versions, versions);
+    }
+    let changed =
+        parse(br#"{"profile":"small","overrides":{"core.settings.revisions":2,"core.settings.versions":3}}"#).unwrap();
+    assert_eq!(changed.core.settings.revisions, 2);
+    assert_eq!(changed.core.tasks.revisions, 2);
+    assert_eq!(changed.core.settings.versions, 3);
+    assert_eq!(changed.core.tasks.versions, 3);
+    for (document, name) in [
+        (
+            br#"{"profile":"small","overrides":{"core.settings.revisions":0}}"#.as_slice(),
+            b"core.settings.revisions".as_slice(),
+        ),
+        (
+            br#"{"profile":"small","overrides":{"core.settings.versions":0}}"#.as_slice(),
+            b"core.settings.versions".as_slice(),
+        ),
+    ] {
+        problem(document, &[b"limits", b"overrides", name], What::Override);
+    }
+    for revisions in [true, false] {
+        let mut engine = super::fixtures::engine(super::fixtures::ENGINE_SMALL).unwrap();
+        let name = if revisions {
+            engine.limits.core.settings.revisions = 0;
+            b"settings.revisions".as_slice()
+        } else {
+            engine.limits.core.settings.versions = 0;
+            b"settings.versions".as_slice()
+        };
+        let mut problems = Problems::empty();
+        crate::domain::whole(&engine, &mut problems);
+        let mut found = false;
+        for problem in problems.problems.as_slice() {
+            if problem.path == path(&[b"limits", b"core", name]) && problem.what == What::Bound {
+                found = true;
+            }
+        }
+        assert!(found);
+    }
+}

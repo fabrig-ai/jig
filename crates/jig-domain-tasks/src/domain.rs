@@ -43,6 +43,8 @@ pub struct Domain {
     pub(crate) tasks: Slab<Task>,
     pub(crate) names: Map<u64, Id<Task>>,
     pub(crate) live_agents: u32,
+    pub(crate) newest: u32,
+    pub(crate) holders: Map<u32, u32>,
     pub(crate) stubs: Map<u64, crate::Stub>,
     pub(crate) alarms: Deadlines<u64>,
     pub(crate) grace_alarms: Deadlines<u64>,
@@ -95,7 +97,7 @@ pub fn view_phase(phase: &Phase) -> u32 {
 }
 
 impl Domain {
-    /// Live agent tasks holding the newest settings in M3 (engine.md, 17.3).
+    /// Total live agent tasks, across settings revisions (engine.md, 17.3).
     #[must_use]
     pub const fn live_agent_tasks(&self) -> u32 {
         self.live_agents
@@ -151,10 +153,11 @@ impl Domain {
                 crate::Executor::Procedure { .. } | crate::Executor::Person(_) => continue,
             };
             let mut models = None;
+            let mut revision = 0;
             for offered in charters {
-                if offered.number == charter {
-                    models = Some(offered.models.as_ref());
-                    break;
+                if offered.number == charter && offered.revision >= revision {
+                    revision = offered.revision;
+                    models = offered.models.as_deref();
                 }
             }
             let incompatible = match models {
@@ -199,13 +202,19 @@ impl Domain {
         rows.into_boxed()
     }
     /// Create restoring state from validated `limits`, deterministic `seed`, unique configured
-    /// `charters` bounded by `limits.charters`, each with its models, and `efforts`, each
+    /// charter versions bounded by `limits.charters + limits.versions`, and `efforts`, each
     /// configured model's count of declared efforts in configuration's order, at most
     /// `MODELS` (domain/tasks.md, section 3). Panics on invalid/unrepresentable limits or
     /// malformed charter configuration; no task becomes active until `Restore`/`Restored`
     /// completes.
     #[must_use]
-    pub fn new(limits: &Limits, seed: u64, charters: Box<[crate::CharterModels]>, efforts: Box<[u8]>) -> Domain {
+    pub fn new(
+        limits: &Limits,
+        seed: u64,
+        newest: u32,
+        charters: Box<[crate::CharterModels]>,
+        efforts: Box<[u8]>,
+    ) -> Domain {
         assert!(crate::worst_case(limits).is_some(), "task limits are valid");
         validate_charters(limits, &charters, &efforts);
         Domain {
@@ -215,6 +224,8 @@ impl Domain {
             tasks: Slab::with_capacity(limits.tasks),
             names: Map::with_capacity(limits.tasks),
             live_agents: 0,
+            newest,
+            holders: Map::with_capacity(limits.revisions.checked_add(1).expect("revision bound")),
             stubs: Map::with_capacity(crate::limits::stub_capacity(limits).expect("valid stub bound")),
             alarms: Deadlines::with_capacity(limits.tasks),
             grace_alarms: Deadlines::with_capacity(limits.tasks),
@@ -537,8 +548,9 @@ pub fn max_out(limits: &Limits) -> u32 {
 #[expect(clippy::too_many_lines, reason = "the closed task event vocabulary dispatches to focused handlers")]
 pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queue<Request>) {
     match event {
-        Event::Charters { charters, efforts } => {
+        Event::Charters { newest, charters, efforts } => {
             validate_charters(&env.limits, &charters, &efforts);
+            domain.newest = newest;
             domain.charters = charters;
             domain.efforts = efforts;
         }
@@ -1033,6 +1045,7 @@ fn milestone(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queu
 }
 
 pub(crate) fn publish(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue<Request>) {
+    crate::settings::publish(domain, number);
     crate::waits::refresh(domain, number);
     crate::proposals::withdraw_on_close(domain, env, number, out);
     crate::inbox::keep_refusals(domain, number, &[]);
@@ -1310,6 +1323,7 @@ pub(crate) fn make_admitted(
             published: None,
             procedure_offered: None,
             record: TaskRecord {
+                settings: crate::SettingsRevision { task: domain.newest, run: None },
                 label: new.label,
                 flags: new.flags,
                 last_activity: env.wall,
@@ -1441,17 +1455,26 @@ fn append(capacity: u32, old: &[u64], batch: &[New]) -> Box<[u64]> {
 }
 
 fn validate_charters(limits: &Limits, charters: &[crate::CharterModels], efforts: &[u8]) {
-    assert!(charters.len() <= usize::try_from(limits.charters).expect("u32 fits usize"), "configured charters fit");
+    assert!(
+        charters.len()
+            <= usize::try_from(limits.charters.checked_add(limits.versions).expect("version bound"))
+                .expect("u32 fits usize"),
+        "charter versions fit"
+    );
     let models = usize::try_from(crate::MODELS).expect("u32 fits usize");
     assert!(efforts.len() <= models, "configured models fit");
     for (at, charter) in charters.iter().enumerate() {
         for earlier in charters.iter().take(at) {
-            assert!(earlier.number != charter.number, "charters are unique");
+            assert!(
+                earlier.number != charter.number || earlier.revision != charter.revision,
+                "charter versions are unique"
+            );
         }
-        assert!(charter.models.len() <= models, "a charter's models fit");
-        for (index, model) in charter.models.iter().enumerate() {
+        let Some(configured) = &charter.models else { continue };
+        assert!(configured.len() <= models, "a charter's models fit");
+        for (index, model) in configured.iter().enumerate() {
             assert!(usize::from(*model) < efforts.len(), "a charter's models are configured");
-            for earlier in charter.models.iter().take(index) {
+            for earlier in configured.iter().take(index) {
                 assert!(earlier != model, "a charter lists each model once");
             }
         }

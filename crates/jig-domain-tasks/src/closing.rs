@@ -323,6 +323,8 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
     let endings = task.ended_below.ended(status);
     let subscriptions = task.subscriptions.clone();
     let mut ended = task.clone();
+    crate::settings::release(domain, &ended);
+    ended.settings.run = None;
     for subscription in &subscriptions {
         domain.timers.cancel(subscription.number);
         match subscription.kind {

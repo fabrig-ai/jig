@@ -56,6 +56,8 @@ pub const TASKS_LIMITS: jig_domain_tasks::Limits = jig_domain_tasks::Limits {
     saved_resources: 2,
     contract_choices: 2,
     charters: 2,
+    revisions: 4,
+    versions: 8,
     authority_grants: 2,
     authority_segments: 2,
     authority_bytes: 32,
@@ -105,7 +107,14 @@ pub const PEOPLE_LIMITS: people::Limits = people::Limits {
 };
 
 pub const CORE_LIMITS: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits {
+        revisions: 4,
+        versions: 8,
+        history: 64,
+        proposals: 4,
+        alternatives: 16,
+        permissions: 32,
+    },
     templates: 8,
     fill_mark: 1000,
     documents: core::documents::DocumentLimits {
@@ -270,6 +279,7 @@ pub fn header(commits: u64) -> core::Record {
 #[must_use]
 pub fn live_task(number: u64) -> core::Record {
     core::Record::Tasks(tasks::Stored::Live(Box::new(tasks::TaskRecord {
+        settings: tasks::SettingsRevision { task: 1, run: None },
         added: Box::new([]),
         hold_bound_since: None,
         kept_account: None,

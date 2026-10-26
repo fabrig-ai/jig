@@ -725,8 +725,9 @@ impl Core {
             due: Queue::with_capacity(limits.tasks.tasks),
             adopted: Queue::with_capacity(limits.tasks.tasks.checked_mul(2).expect("adoption room representable")),
             tasks: tasks::Domain::new(
-                &limits.tasks,
+                &settings::task_limits(limits),
                 config.seed,
+                current.newest(),
                 charters::models(&current, &config.settings, limits),
                 charters::efforts(&config.settings),
             ),

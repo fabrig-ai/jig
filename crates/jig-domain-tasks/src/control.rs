@@ -599,7 +599,7 @@ fn check_llm(domain: &Domain, old: &crate::CompoundTask<'_>, amendment: &Amendme
         None => None,
     };
     match choice {
-        Some(choice) => crate::llm::check(domain, old.executor, authority, choice),
+        Some(choice) => crate::llm::check(domain, old.executor, old.settings.task, authority, choice),
         None => Ok(()),
     }
 }

@@ -103,6 +103,8 @@ fn set_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], value: u64) -> 
         saved_resources,
         contract_choices,
         charters,
+        versions: _,
+        revisions: _,
         authority_grants,
         authority_segments,
         authority_bytes,
@@ -491,7 +493,7 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
         load_bytes,
         call_records,
         call_answer_bytes,
-        tasks: _,
+        tasks,
         authority: _,
         people: _,
         fleet: _,
@@ -510,6 +512,18 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
                 return Err(What::Override);
             }
             settings.proposals = count(value)?;
+        }
+        b"settings.revisions" | b"settings.versions" => {
+            if value == 0 {
+                return Err(What::Override);
+            }
+            if name == b"settings.revisions" {
+                settings.revisions = count(value)?;
+                tasks.revisions = count(value)?;
+            } else {
+                settings.versions = count(value)?;
+                tasks.versions = count(value)?;
+            }
         }
         b"settings.history" => {
             if value == 0 {

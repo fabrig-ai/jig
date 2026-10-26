@@ -35,7 +35,7 @@ fn pending() -> Harness {
 fn settings_heads_restore_without_a_task_or_funding() {
     let mut h = pending();
     let row = h.stored[&Key::PersonProposal(PROPOSAL)].clone();
-    h.domain = Domain::new(&LIMITS, 91, super::charters(), Box::new([0]));
+    h.domain = Domain::new(&LIMITS, 91, 1, super::charters(), Box::new([0]));
     h.send(Event::Restore { record: row });
     h.send(Event::Restored);
     assert_eq!(h.domain.person_proposal(PROPOSER, PROPOSAL), Some(proposal(1)));
@@ -127,7 +127,7 @@ fn settings_proposals_keep_the_one_pending_proposal_per_party_rule() {
 #[test]
 fn restore_refuses_two_pending_settings_proposals_from_one_party() {
     let mut h = Harness::new();
-    h.domain = Domain::new(&LIMITS, 91, super::charters(), Box::new([0]));
+    h.domain = Domain::new(&LIMITS, 91, 1, super::charters(), Box::new([0]));
     h.send(Event::Restore { record: Stored::PersonProposal(Box::new(proposal(1))) });
     let mut second = proposal(1);
     second.number += 1;
@@ -141,7 +141,7 @@ fn restore_refuses_two_pending_settings_proposals_from_one_party() {
 
 fn restored_pending() -> Harness {
     let mut h = Harness::new();
-    h.domain = Domain::new(&LIMITS, 91, super::charters(), Box::new([0]));
+    h.domain = Domain::new(&LIMITS, 91, 1, super::charters(), Box::new([0]));
     h.send(Event::Restore { record: Stored::PersonProposal(Box::new(proposal(1))) });
     h
 }

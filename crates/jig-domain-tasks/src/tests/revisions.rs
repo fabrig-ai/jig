@@ -58,6 +58,8 @@ pub(super) const LIMITS: Limits = Limits {
     saved_resources: 2,
     contract_choices: 4,
     charters: 2,
+    versions: 8,
+    revisions: 4,
     authority_grants: 4,
     authority_segments: 4,
     authority_bytes: 64,
@@ -116,7 +118,7 @@ pub(super) fn to() -> ReplyTo {
 impl Harness {
     pub(super) fn new() -> Self {
         let mut test = Self {
-            domain: Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0])),
+            domain: Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0])),
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: LIMITS },
             stored: BTreeMap::new(),
         };
@@ -186,7 +188,8 @@ impl Harness {
     }
 
     pub(super) fn restart(&mut self) {
-        self.domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+        self.domain =
+            Domain::new(&LIMITS, 91, self.domain.newest(), self.domain.charters().into(), self.domain.efforts.clone());
         let rows: Vec<_> = self
             .stored
             .values()
@@ -751,7 +754,7 @@ fn capacity_history_distinguishes_project_shape_from_room_and_survives_diagnosti
     assert_eq!(h.domain.capacity_refusals(), rows);
     assert!(h.domain.task(4).is_none());
     let mut cold = Harness::new();
-    cold.domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+    cold.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
     for row in h.stored.values() {
         match row {
             Stored::Live(_) | Stored::Ledger(_) => {
@@ -832,7 +835,7 @@ fn pending_task_proposal_room_keeps_original_action_and_excludes_wrong_project()
 fn zero_capacity_history_counts_real_source_room_without_retaining_payloads() {
     let limits = Limits { funders: 0, room_refusals: 0, ..LIMITS };
     let env = Env { now: Time::ZERO, wall: Wall::from_nanos(21), limits };
-    let mut domain = Domain::new(&limits, 1, crate::tests::charters(), Box::new([0]));
+    let mut domain = Domain::new(&limits, 1, 1, crate::tests::charters(), Box::new([0]));
     let mut out = Queue::with_capacity(max_out(&limits));
     step(&mut domain, &env, Event::Restored, &mut out);
     while out.pop().is_some() {}
@@ -944,8 +947,334 @@ fn replacing_charter_models_replaces_the_table_and_keeps_live_tasks() {
     let mut h = Harness::new();
     h.make(vec![task(1, &[])]);
     let before = h.domain.task(1).unwrap().clone();
-    let charters = Box::new([crate::CharterModels { number: 7, models: Box::new([1]) }]);
-    h.send(Event::Charters { charters: charters.clone(), efforts: Box::new([0, 0]) });
+    let charters = versions(&[(7, 2, Some(&[1]))]);
+    h.send(Event::Charters { newest: 2, charters: charters.clone(), efforts: Box::new([0, 0]) });
     assert_eq!(h.domain.charters(), charters.as_ref());
     assert_eq!(h.domain.task(1), Some(&before));
+}
+
+fn versions(rows: &[(u32, u32, Option<&[u8]>)]) -> Box<[crate::CharterModels]> {
+    rows.iter()
+        .map(|&(number, revision, models)| crate::CharterModels { number, revision, models: models.map(Box::from) })
+        .collect()
+}
+
+fn settings_charters(test: &mut Harness, newest: u32, rows: &[(u32, u32, Option<&[u8]>)]) {
+    test.send(Event::Charters { newest, charters: versions(rows), efforts: Box::new([0, 0]) });
+    assert_eq!(test.domain.newest(), newest);
+}
+
+fn settings_claim(test: &mut Harness, number: u64) -> Vec<Request> {
+    test.send(Event::Claim {
+        reply_to: to(),
+        task: number,
+        attempt: 1,
+        resumed: false,
+        budget: 10,
+        account: None,
+        writes: Box::new([]),
+    })
+}
+
+fn settings_end(test: &mut Harness, number: u64) {
+    test.send(Event::Control {
+        reply_to: to(),
+        by: Party::Person(9),
+        task: number,
+        control: Control::Cancel { reason: Box::new([]), grace: None, message: None },
+    });
+    test.send(Event::EffectsSettled { task: number });
+    test.send(Event::Settled { task: number });
+    assert!(test.domain.task(number).is_none());
+}
+
+#[test]
+fn a_task_records_the_newest_revision_whatever_its_parents() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 3, &[(1, 1, Some(&[0]))]);
+    let mut goal = task(1, &[]);
+    goal.tracked = Some(1);
+    goal.numbers.budget = 1000;
+    goal.authority.budget.spend = 1000;
+    let mut procedure = goal.clone();
+    procedure.number = 2;
+    procedure.tracked = None;
+    procedure.executor = Executor::Procedure { connector: 1, code: 1 };
+    h.make(vec![goal, procedure]);
+    settings_charters(&mut h, 4, &[(1, 1, Some(&[0]))]);
+    let mut delegate = task(3, &[]);
+    delegate.funder = Funder::Task(1);
+    let out = h.send(Event::Make { reply_to: to(), creator: Party::Task(1), batch: Box::new([delegate]) });
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Made { .. } => true,
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    let mut step_task = task(4, &[]);
+    step_task.funder = Funder::Task(2);
+    let decision = crate::ProcedureDecision {
+        batch: Box::new([step_task]),
+        ..crate::ProcedureDecision::new(crate::ProcedureEnd::Wait)
+    };
+    let out = h.send(Event::Procedure { reply_to: to(), task: 2, step: 1, read: None, decision });
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Made { .. } => true,
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    let mut person = task(5, &[]);
+    person.executor = Executor::Person(PersonAddress::Person(9));
+    h.make(vec![person]);
+    for number in [1, 2] {
+        assert_eq!(h.domain.task(number).unwrap().settings, crate::SettingsRevision { task: 3, run: None });
+    }
+    for number in [3, 4, 5] {
+        assert_eq!(h.domain.task(number).unwrap().settings, crate::SettingsRevision { task: 4, run: None });
+    }
+    assert_eq!(h.domain.holders(3), 1);
+    assert_eq!(h.domain.holders(4), 2);
+}
+
+#[test]
+fn a_run_records_its_tasks_revision_until_its_attempt_ends() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 3, &[(1, 1, Some(&[0]))]);
+    h.make(vec![task(1, &[]), task(2, &[])]);
+    settings_charters(&mut h, 4, &[(1, 1, Some(&[0]))]);
+    h.send(Event::Prepare { reply_to: to(), task: 1 });
+    assert_eq!(h.domain.task(1).unwrap().settings.run, Some(3));
+    let out = settings_claim(&mut h, 1);
+    assert!(
+        out.iter().any(|request| match request {
+            Request::Save { record: Stored::Live(row) } =>
+                row.settings == crate::SettingsRevision { task: 3, run: Some(3) },
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    h.send(Event::Activation {
+        reply_to: to(),
+        task: 1,
+        attempt: 1,
+        end: crate::End::Parked,
+        cause: crate::Cause::Unpriced,
+        saved: None,
+    });
+    assert_eq!(h.domain.task(1).unwrap().settings.run, None);
+    h.send(Event::Prepare { reply_to: to(), task: 2 });
+    assert_eq!(h.domain.task(2).unwrap().settings.run, Some(3));
+    h.send(Event::PreparationFailed { task: 2 });
+    assert_eq!(h.domain.task(2).unwrap().settings.run, None);
+}
+
+fn settings_choice(model: u8) -> crate::LlmChoice {
+    crate::LlmChoice { account: None, main: crate::ModelEffort { model, effort: None }, subagents: Box::new([]) }
+}
+
+fn settings_agent(number: u64, model: u8) -> New {
+    let mut new = task(number, &[]);
+    new.executor = Executor::Agent { charter: 7 };
+    new.authority.models = Models::Named(3);
+    new.llm = Some(settings_choice(model));
+    new
+}
+
+fn settings_amend(test: &mut Harness, number: u64, model: u8) -> Vec<Request> {
+    let mut change = amendment();
+    change.llm = Some(settings_choice(model));
+    test.send(Event::Amend {
+        places: Box::new([]),
+        funder: None,
+        reply_to: to(),
+        by: Party::Person(9),
+        task: number,
+        message: test.domain.task(number).unwrap().last_message.checked_add(1).unwrap(),
+        stop_run: false,
+        amendment: change,
+    })
+}
+
+#[test]
+fn an_amended_llm_choice_is_checked_against_its_own_charter_version() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 1, &[(7, 1, Some(&[0]))]);
+    h.make(vec![settings_agent(1, 0)]);
+    settings_charters(&mut h, 2, &[(7, 2, Some(&[1])), (7, 1, Some(&[0]))]);
+    assert_eq!(h.domain.charter_models(7, 1), Some([0].as_slice()));
+    assert_eq!(h.domain.charter_models(7, 2), Some([1].as_slice()));
+    assert_eq!(h.domain.default_llm(7, Models::All).unwrap().main.model, 1);
+    let before = h.domain.task(1).unwrap().clone();
+    let out = settings_amend(&mut h, 1, 1);
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Refused { problem, .. } =>
+                problem.why == crate::Refusal::Llm { model: 1, why: crate::LlmFault::Charter },
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    assert_eq!(h.domain.task(1), Some(&before));
+    let mut change = amendment();
+    change.llm = Some(settings_choice(0));
+    h.amend(1, change);
+    let out =
+        h.send(Event::Make { reply_to: to(), creator: Party::Person(9), batch: Box::new([settings_agent(2, 0)]) });
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Refused { problem, .. } =>
+                problem.why == crate::Refusal::Llm { model: 0, why: crate::LlmFault::Charter },
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    h.make(vec![settings_agent(2, 1)]);
+    assert_eq!(h.domain.task(2).unwrap().settings.task, 2);
+}
+
+#[test]
+fn a_removed_charters_older_version_still_serves_the_task_that_reads_it() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 1, &[(7, 1, Some(&[0]))]);
+    h.make(vec![settings_agent(1, 0)]);
+    settings_charters(&mut h, 2, &[(7, 1, Some(&[0])), (7, 2, None)]);
+    assert_eq!(h.domain.charter_models(7, 0), None);
+    assert_eq!(h.domain.charter_models(7, 1), Some([0].as_slice()));
+    assert_eq!(h.domain.charter_models(7, 2), None);
+    assert_eq!(h.domain.default_llm(7, Models::All), None);
+    let out = settings_amend(&mut h, 1, 1);
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Refused { problem, .. } =>
+                problem.why == crate::Refusal::Llm { model: 1, why: crate::LlmFault::Charter },
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    let mut change = amendment();
+    change.llm = Some(settings_choice(0));
+    h.amend(1, change);
+    let out =
+        h.send(Event::Make { reply_to: to(), creator: Party::Person(9), batch: Box::new([settings_agent(2, 0)]) });
+    assert!(
+        out.iter().any(|r| match r {
+            Request::Refused { problem, .. } => problem.why == crate::Refusal::Executor,
+            _ => false,
+        }),
+        "{out:?}"
+    );
+    h.restart();
+    assert_eq!(h.domain.task(1).unwrap().settings.task, 1);
+    assert_eq!(h.domain.holders(1), 1);
+}
+
+#[test]
+fn live_holders_count_each_revision_once_and_reach_zero_as_the_last_ends() {
+    let mut h = Harness::new();
+    let mut procedure = task(4, &[]);
+    procedure.executor = Executor::Procedure { connector: 1, code: 1 };
+    h.make(vec![task(1, &[]), task(2, &[]), procedure]);
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    h.make(vec![task(3, &[])]);
+    h.send(Event::Prepare { reply_to: to(), task: 3 });
+    settings_claim(&mut h, 3);
+    assert_eq!(h.domain.holders(1), 2);
+    assert_eq!(h.domain.holders(2), 1);
+    settings_end(&mut h, 1);
+    assert_eq!(h.domain.holders(1), 1);
+    settings_end(&mut h, 2);
+    assert_eq!(h.domain.holders(1), 0);
+    h.send(Event::Activation {
+        reply_to: to(),
+        task: 3,
+        attempt: 1,
+        end: crate::End::Parked,
+        cause: crate::Cause::Unpriced,
+        saved: None,
+    });
+    assert_eq!(h.domain.holders(2), 1);
+    settings_end(&mut h, 3);
+    assert_eq!(h.domain.holders(2), 0);
+}
+
+#[test]
+fn a_restart_keeps_each_tasks_revision_and_rebuilds_the_holders() {
+    let mut h = Harness::new();
+    h.make(vec![task(1, &[]), task(2, &[])]);
+    settings_end(&mut h, 1);
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    h.make(vec![task(3, &[])]);
+    h.send(Event::Prepare { reply_to: to(), task: 3 });
+    settings_claim(&mut h, 3);
+    let live = [h.domain.task(2).unwrap().settings, h.domain.task(3).unwrap().settings];
+    let ended = h.stored[&Key::Ended(1)].clone();
+    let counts = [h.domain.holders(1), h.domain.holders(2)];
+    h.restart();
+    assert_eq!(h.domain.newest(), 2);
+    assert_eq!(h.domain.task(2).unwrap().settings, live[0]);
+    assert_eq!(h.domain.task(3).unwrap().settings, live[1]);
+    assert_eq!(h.stored[&Key::Ended(1)], ended);
+    assert_eq!([h.domain.holders(1), h.domain.holders(2)], counts);
+}
+
+#[test]
+fn abandoned_preparations_clear_the_run_revision_but_held_attempts_keep_it() {
+    let mut h = Harness::new();
+    h.make(vec![task(1, &[]), task(2, &[]), task(3, &[])]);
+    h.send(Event::Prepare { reply_to: to(), task: 1 });
+    h.restart();
+    assert_eq!(h.domain.task(1).unwrap().settings.run, None);
+    h.send(Event::Prepare { reply_to: to(), task: 1 });
+    h.send(Event::Hold { task: 1, why: Hold::Budget });
+    assert_eq!(h.domain.task(1).unwrap().settings.run, None);
+    h.send(Event::Prepare { reply_to: to(), task: 2 });
+    settings_end(&mut h, 2);
+    let Stored::Ended(ended) = &h.stored[&Key::Ended(2)] else { panic!("ended task") };
+    assert_eq!(ended.settings.run, None);
+    h.send(Event::Prepare { reply_to: to(), task: 3 });
+    settings_claim(&mut h, 3);
+    h.send(Event::Hold { task: 3, why: Hold::Budget });
+    assert_eq!(h.domain.task(3).unwrap().settings.run, Some(1));
+    h.route(1, EscalationHolder::Person(9), 1);
+    h.route(3, EscalationHolder::Person(9), 3);
+    h.restart();
+    assert_eq!(h.domain.task(3).unwrap().settings.run, Some(1));
+    h.send(Event::Activation {
+        reply_to: to(),
+        task: 3,
+        attempt: 1,
+        end: crate::End::Parked,
+        cause: crate::Cause::Unpriced,
+        saved: None,
+    });
+    assert_eq!(h.domain.task(3).unwrap().settings.run, None);
+}
+
+#[test]
+fn restored_holders_count_a_distinct_run_revision_until_its_terminal() {
+    let mut h = Harness::new();
+    settings_charters(&mut h, 2, &[(1, 1, Some(&[0]))]);
+    h.make(vec![task(1, &[])]);
+    h.send(Event::Prepare { reply_to: to(), task: 1 });
+    settings_claim(&mut h, 1);
+    let Stored::Live(row) = h.stored.get_mut(&Key::Live(1)).unwrap() else { panic!("live claim") };
+    row.settings.run = Some(1);
+    h.restart();
+    assert_eq!(h.domain.holders(1), 1);
+    assert_eq!(h.domain.holders(2), 1);
+    h.send(Event::Activation {
+        reply_to: to(),
+        task: 1,
+        attempt: 1,
+        end: crate::End::Parked,
+        cause: crate::Cause::Unpriced,
+        saved: None,
+    });
+    assert_eq!(h.domain.holders(1), 0);
+    assert_eq!(h.domain.holders(2), 1);
+    settings_end(&mut h, 1);
+    assert_eq!(h.domain.holders(2), 0);
 }

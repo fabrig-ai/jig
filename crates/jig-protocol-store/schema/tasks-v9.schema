@@ -163,6 +163,7 @@ enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment, settin
 record PersonProposal { number: u64 proposer: u64 project: u32 action: PersonAction reason: bytes 65536 state: PersonProposalState }
 record Milestone { task: u64 position: u64 phase: Phase at: u64 }
 record Grace { by: Party until: u64 reason: bytes 65536 message: u64 }
+record SettingsRevision { task: u32 run: option u32 }
 record Revisions { hold: u64 spec: u64 person: u64 }
 record FailedRetry { class: Class count: u32 allowance: u32 }
 record RefusedRetry { count: u32 }
@@ -248,6 +249,7 @@ record TaskHistory {
     instructions: option bytes 65536
     refused: list 64 Number
     grace: option Grace
+    settings: SettingsRevision
     revisions: Revisions
     created_at: u64
     changed: u64
