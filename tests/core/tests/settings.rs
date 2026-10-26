@@ -1468,3 +1468,179 @@ fn a_restored_run_must_have_a_charter_on_its_held_revision() {
     assert!(world.stopped);
     assert_eq!(world.store.applied, commits);
 }
+
+#[test]
+fn the_bound_reached_its_named_tasks_moved_and_the_change_then_made() {
+    let (mut config, mut limits) = configuration();
+    limits.core.settings.revisions = 1;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let oldest = held_goal(&mut world, signed, 101);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    change_instructions(&mut world, signed);
+    let newest = held_goal(&mut world, signed, 103);
+    let item = instructions_edit(&world, b"Revision three after the move.");
+    let before = settings_rows(&world);
+    assert_eq!(
+        change(&mut world, signed, 104, 2, Box::new([item.clone()])),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
+            revision: 1,
+            tasks: Box::new([oldest]),
+            more: 0,
+        }))
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert_eq!(
+        ask(&mut world, signed, 105, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 2, moved: 1, stayed: 0 })
+    );
+    assert_eq!(fixtures::live_row(&world, oldest).settings.task, 2);
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    // A fresh request key retries the same edit after the named holders moved.
+    changed(&change(&mut world, signed, 106, 2, Box::new([item])), 3);
+    assert_eq!(world.domain.settings().newest(), 3);
+    assert_eq!(fixtures::live_row(&world, newest).settings.run, Some(2));
+}
+
+#[test]
+fn a_restart_adopts_a_live_run_on_its_old_version() {
+    let (mut world, signed, goal) = held_run();
+    let attempt = world.assigned.as_ref().expect("live run").attempt;
+    let policy = world.assigned.as_ref().expect("live run").run.policy.clone();
+    let claim = fixtures::live_row(&world, goal).phase.clone();
+    change_instructions(&mut world, signed);
+    seed_restart_accounts(&mut world);
+    // The worker is a separate process, keeping its run through the engine restart.
+    // Let its hello arrive while the cold store load is paused, before adoption.
+    world.hold_restore_pages = true;
+    let mut config = held_restart_configuration();
+    config.core.workers_in_process = false;
+    world.restart_with(config);
+    world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(7),
+        hello: fleet::Hello {
+            bounds: fixtures::bounds(),
+            stop_bound: Duration::from_millis(1),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([fleet::Hosted {
+                run: Token::new(goal),
+                attempt: Token::new(attempt),
+                phase: fleet::Phase::Active,
+            }]),
+        },
+    })));
+    world.finish_restore_pages();
+    assert!(world.domain.ready());
+    let signed = sign_in(&mut world);
+    assert_eq!(fixtures::live_row(&world, goal).phase, claim);
+    assert_eq!(fixtures::live_row(&world, goal).settings.run, Some(1));
+    assert_eq!(world.assigned.as_ref().expect("adopted run").attempt, attempt);
+    assert_eq!(world.assignments, [(goal, attempt)], "adoption makes no new assignment");
+    assert_eq!(world.assigned.as_ref().expect("old policy").run.policy, policy);
+    assert_eq!(
+        inventory(&mut world, signed).held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(),
+        [(1, 1), (2, 0)]
+    );
+    fixtures::finish_chat(&mut world, 0, b"Done after adoption");
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+}
+
+fn two_story_charters() -> (root::Config, root::Limits) {
+    let (mut config, limits) = configuration();
+    config.core.defaults.rules.maximum_run_spend = 20;
+    let mut second = config.core.defaults.charters[0].clone();
+    second.number = 2;
+    second.policy.instructions = b"The second charter's original instructions.".as_slice().into();
+    config.core.defaults.charters = Box::new([config.core.defaults.charters[0].clone(), second]);
+    let kinds: Box<[jig_domain_authority::Executor]> =
+        Box::new([jig_domain_authority::Executor::Charter(1), jig_domain_authority::Executor::Charter(2)]);
+    config.core.defaults.rules.ceiling.delegation.kinds.clone_from(&kinds);
+    {
+        let policy = config.core.defaults.policies.get_mut(&1).expect("future policy");
+        policy.policy.ceiling.delegation.kinds.clone_from(&kinds);
+        for role in &mut policy.policy.roles {
+            role.authority.delegation.kinds.clone_from(&kinds);
+        }
+    }
+    for project in &mut config.core.seed_projects {
+        project.policy.policy.ceiling.delegation.kinds.clone_from(&kinds);
+        for role in &mut project.policy.policy.roles {
+            role.authority.delegation.kinds.clone_from(&kinds);
+        }
+    }
+    (config, limits)
+}
+
+#[test]
+fn a_delegation_to_a_removed_charter_is_refused_while_its_version_serves_its_task() {
+    let (config, limits) = two_story_charters();
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let goal = held_goal(&mut world, signed, 101);
+    let attempt = world.assigned.as_ref().expect("old goal run").attempt;
+    let policy = world.assigned.as_ref().expect("old goal run").run.policy.clone();
+    let item = instructions_edit(&world, b"Newest first charter instructions.");
+    let items = remove_second_charter(&world, item);
+    changed(&change(&mut world, signed, 102, 1, items), 2);
+    let mut create = fixtures::chat(&world, 1, b"Removed charter".as_slice().into());
+    let people::Ask::Create { batch, .. } = &mut create else { panic!("create") };
+    batch[0].executor = people::TaskExecutor::Agent { charter: 2 };
+    assert_eq!(
+        ask(&mut world, signed, 103, create),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::NotOffered))
+    );
+    let member = fixtures::member(&world, jig_domain_tasks::Executor::Agent { charter: 2 }, b"Removed charter");
+    world.send(root::Event::Core(core::Event::DelegateValidated {
+        to: ReplyTo::new(Token::new(9001)),
+        key: core::CallKey { task: goal, attempt, completion: 1, position: 0 },
+        batch: Box::new([member]),
+        stubs: Box::new([]),
+    }));
+    assert!(world.domain.settings().charter(2).is_none());
+    assert!(fixtures::live_row(&world, goal).delegates.is_empty());
+    assert_eq!(fixtures::live_row(&world, goal).settings.run, Some(1));
+    assert_eq!(world.assigned.as_ref().expect("goal still running").run.policy, policy);
+    let answer = &world.answers.last().expect("delegation refused").2;
+    assert!(
+        matches!(
+            answer,
+            core::CallPart::DelegationRefused(jig_domain_tasks::Problem {
+                why: jig_domain_tasks::Refusal::Executor,
+                ..
+            })
+        ),
+        "a removed charter is not offered by the newest revision: {answer:?}"
+    );
+}
+
+fn remove_second_charter(world: &World, first: settings::Item) -> Box<[settings::Item]> {
+    let mut rules = world.domain.settings().rules().clone();
+    rules.ceiling.delegation.kinds = Box::new([jig_domain_authority::Executor::Charter(1)]);
+    let mut policy = world.domain.settings().policy(1).expect("future policy").clone();
+    policy.policy.ceiling.delegation.kinds.clone_from(&rules.ceiling.delegation.kinds);
+    for role in &mut policy.policy.roles {
+        role.authority.delegation.kinds.clone_from(&rules.ceiling.delegation.kinds);
+    }
+    Box::new([
+        first,
+        settings::Item { setting: settings::Setting::Charter(2), edit: settings::Edit::Removed },
+        settings::Item {
+            setting: settings::Setting::Rules,
+            edit: settings::Edit::Set(settings::Value::Rules(Box::new(rules))),
+        },
+        settings::Item {
+            setting: settings::Setting::Policy(1),
+            edit: settings::Edit::Set(settings::Value::Policy(Box::new(policy))),
+        },
+    ])
+}
