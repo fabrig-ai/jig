@@ -10,7 +10,7 @@ fn old_records_patch_in_order_and_the_root_continues() {
     let mut world = records.committed(901, BASE);
     let original = patches::source(&mut world);
     world.patch_sets(SETS);
-    let last = world.open().expect("patched open");
+    let last = world.open_switched().expect("patched open");
     assert_eq!(
         world.patched(),
         [
@@ -34,7 +34,7 @@ fn old_records_patch_in_order_and_the_root_continues() {
     patches::kept(&original, &patches::source(&mut world), &"story");
     records.check(&mut world, 2, &"story");
     world.crash(902);
-    assert_eq!(world.open(), Some(last));
+    assert_eq!(world.open_switched(), Some(last));
     assert!(world.patched().is_empty());
     assert_eq!(world.active(), b"2\n");
     assert_eq!(world.commit(Box::new([Write::Save(root::header(last + 1))])), Some(last + 1));
@@ -56,7 +56,7 @@ fn level_and_set_refusals_leave_every_file_as_it_was() {
         let mut world = records.committed_at(904, made, version);
         world.patch_sets(opened);
         let before = world.contents();
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         assert_eq!(world.refusal(), Some(&expected));
         patches::kept(&before, &world.contents(), &expected);
     }
@@ -70,7 +70,7 @@ fn an_empty_shelf_refuses_again_from_an_unchanged_source() {
     let before = patches::source(&mut world);
     world.patch_sets(SETS);
     for seed in [906, 907] {
-        assert_eq!(world.open(), None);
+        assert_eq!(world.open_switched(), None);
         let Some(OpenRefusal::Patch { owner, patch, key, halt }) = world.refusal() else {
             panic!("typed patch refusal: {:?}", world.refusal())
         };
@@ -92,7 +92,7 @@ fn every_patch_write_cut_recovers_all_records_and_no_stray() {
     let mut completed = records.committed(908, BASE);
     completed.patch_sets(SETS);
     completed.trace_writes();
-    assert!(completed.open().is_some());
+    assert!(completed.open_switched().is_some());
     let cuts = patches::cuts(&completed);
     eprintln!("patch-phase disk-changing cuts: {}", cuts.len());
     for cut in cuts {
@@ -100,9 +100,9 @@ fn every_patch_write_cut_recovers_all_records_and_no_stray() {
         world.patch_sets(SETS);
         world.trace_writes();
         world.cut_at(cut);
-        assert_eq!(world.open(), None, "cut {cut} reached");
+        assert_eq!(world.open_switched(), None, "cut {cut} reached");
         world.crash(u64::from(cut));
-        assert!(world.open().is_some(), "clean start after cut {cut}: {:?}", world.refusal());
+        assert!(world.open_switched().is_some(), "clean start after cut {cut}: {:?}", world.refusal());
         patches::whole(&mut world);
         records.check(&mut world, 2, &(908, cut));
     }
@@ -139,7 +139,7 @@ fn each_check_refusal_leaves_the_generation_before_active() {
         world.restart_with_limits(SEED, open_limits);
         let expected = OpenRefusal::Check { why };
         for seed in [SEED + 1, SEED + 2] {
-            assert_eq!(world.open(), None, "{expected:?}");
+            assert_eq!(world.open_switched(), None, "{expected:?}");
             assert_eq!(world.refusal(), Some(&expected));
             assert_eq!(world.active(), b"1\n");
             patches::kept(&before, &patches::source(&mut world), &expected);

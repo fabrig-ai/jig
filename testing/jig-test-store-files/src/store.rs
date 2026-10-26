@@ -382,9 +382,14 @@ impl Store {
     }
     fn event(&mut self, event: Event, requests: &mut VecDeque<Request>) {
         match event {
-            Event::Opened { last, .. } => {
+            Event::Opened { last, pending, owner, .. } => {
                 self.applied = last;
+                if pending {
+                    // B2: the root's switch step asks this.
+                    requests.push_back(Request::Switch { owner });
+                }
             }
+            Event::Switched { .. } => {}
             Event::Committed { number, .. } => {
                 let writes = self.inflight.remove(&number).expect("commit belongs to the root");
                 for write in &writes {

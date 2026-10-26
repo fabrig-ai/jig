@@ -31,7 +31,7 @@ fn direct_frame_bytes(transcript: &[u8]) -> u64 {
 fn committed(sets: PatchSets, bodies: &[&[u8]]) -> World {
     let mut world = World::unopened(SEED);
     world.patch_sets(sets);
-    world.open().expect("fixture store opens");
+    world.open_switched().expect("fixture store opens");
     world.commit(root::first()).expect("live task committed");
     for (index, body) in bodies.iter().enumerate() {
         let turn = FIRST_TURN + u32::try_from(index).expect("fixture turn index");
@@ -169,7 +169,7 @@ fn accepted_prefix_continues_without_skipping_after_an_unread() {
 fn fresh_closing_changes_only_the_crossed_and_window_flags() {
     const WINDOWS: &[bool] = &[true, true, false];
     let mut world = patches::fresh_committed(SEED, WINDOWS, false);
-    let last = world.open().expect("old generation opens");
+    let last = world.open_switched().expect("old generation opens");
     let core::Record::Core(core::CoreRecord::RunProof(mut already_closed)) = patches::fresh_proof(TASK + 1, true, true)
     else {
         panic!("fixture run proof");
@@ -190,7 +190,7 @@ fn fresh_closing_changes_only_the_crossed_and_window_flags() {
     let source = patches::source(&mut world);
     world.patch_sets(patches::FRESH_AFTER);
     world.crash(SEED);
-    world.open().expect("fresh upgrade opens");
+    world.open_switched().expect("fresh upgrade opens");
     assert_eq!(world.active(), b"2\n");
     patches::kept(&source, &patches::source(&mut world), &"closing preserves rollback bytes");
     for original in &before {
@@ -206,7 +206,7 @@ fn fresh_closing_changes_only_the_crossed_and_window_flags() {
     world.rewrite(b"active", b"1\n");
     world.patch_sets(patches::FRESH_BEFORE);
     world.crash(SEED);
-    world.open().expect("retained generation reopens");
+    world.open_switched().expect("retained generation reopens");
     for original in before {
         assert_eq!(world.get(original.key()), original);
     }
@@ -219,7 +219,7 @@ fn an_applied_fresh_mark_leaves_new_windows_open() {
     let expected = world.get(core::Key::Core(core::CoreKey::RunProof(TASK)));
     let active = world.active();
     world.crash(SEED);
-    world.open().expect("same binary reopens");
+    world.open_switched().expect("same binary reopens");
     assert_eq!(world.active(), active);
     assert_eq!(world.get(expected.key()), expected, "no pending mark means no new close");
 }

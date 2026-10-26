@@ -366,9 +366,14 @@ impl Owner {
         // Memory stores open no file: the root is never read.
         let root = store::Root { token: OPEN, fd: kernel::Fd::new(3) };
         self.ask(Time::ZERO, Wall::EPOCH, store::Request::Open { owner: OPEN, root, installation: drawn });
-        let Some(store::Event::Opened { owner: OPEN, last, installation }) = self.store_above.pop() else {
+        let Some(store::Event::Opened { owner: OPEN, last, installation, pending }) = self.store_above.pop() else {
             panic!("the memory store opens at once");
         };
+        if pending {
+            // B2: the root's switch step asks this.
+            self.ask(Time::ZERO, Wall::EPOCH, store::Request::Switch { owner: OPEN });
+            assert!(matches!(self.store_above.pop(), Some(store::Event::Switched { owner: OPEN })));
+        }
         if last == 0 {
             let header = core::Record::Core(core::CoreRecord::Deployment(core::Deployment {
                 id: fixtures::DEPLOYMENT,
@@ -822,7 +827,8 @@ impl Owner {
                     }
                     continue;
                 }
-                store::Event::Opened { .. }
+                store::Event::Switched { .. }
+                | store::Event::Opened { .. }
                 | store::Event::OpenRefused { .. }
                 | store::Event::Site { .. }
                 | store::Event::Patched { .. }

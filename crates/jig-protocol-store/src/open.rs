@@ -191,7 +191,7 @@ fn ready(
         return;
     }
     // A behind open crosses Ready on its way to the copy. Its map machines
-    // already exist; serving's machines belong only to the reopened result.
+    // already exist; the copy's serving machines are made after its check.
     if store.directory.patch.is_none() {
         store.transcripts.machines = match crate::transcripts::patches::make(&store.patch_sets, &store.limits) {
             Ok(machines) => machines,

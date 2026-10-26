@@ -47,6 +47,9 @@ pub(crate) fn operations(
     for write in writes {
         match write {
             Write::DropTranscript { task } => {
+                if crate::patching::switch::pending(store) {
+                    return Err(Refusal::Failed);
+                }
                 crate::transcripts::drop::queue(store, task, number).ok_or(Refusal::Failed)?;
                 ops.push(operation(store, Write::DropTranscript { task }).ok_or(Refusal::Failed)?)
                     .ok()
@@ -54,6 +57,9 @@ pub(crate) fn operations(
                 drops.push(task);
             }
             Write::Save(Record::Core(CoreRecord::Turn(turn))) => {
+                if crate::patching::switch::pending(store) {
+                    return Err(Refusal::Failed);
+                }
                 let body = crate::transcripts::frame::encode(&turn, &store.codec).ok_or(Refusal::Failed)?;
                 let bytes = u32::try_from(body.len()).ok().ok_or(Refusal::Failed)?;
                 let limit = store.limits.store.page.bytes;
@@ -81,6 +87,7 @@ pub(crate) fn operations(
                 | Record::Accounts(_),
             )
             | Write::CopySettingsRevision(_)
+            | Write::Wires
             | Write::Erase(_)
             | Write::Put { .. }
             | Write::Remove { .. }) => {
@@ -124,6 +131,10 @@ pub(crate) fn operations(
 fn operation(store: &mut Store, write: Write) -> Option<skein_kv::Op> {
     let limit = store.limits.store.key;
     match write {
+        Write::Wires => Some(skein_kv::Op::Put {
+            key: keys::encode_own(&keys::Own::Wires, limit)?,
+            value: codec::component::wires(store.wires),
+        }),
         Write::CopySettingsRevision(number) => copy_settings(store, number),
         Write::Save(record) => Some(skein_kv::Op::Put {
             key: keys::encode(&record.key(), limit)?,
@@ -158,6 +169,7 @@ fn header_id(write: &Write) -> Option<[u8; 16]> {
             | Record::Accounts(_),
         )
         | Write::CopySettingsRevision(_)
+        | Write::Wires
         | Write::Erase(_)
         | Write::Put { .. }
         | Write::Remove { .. }

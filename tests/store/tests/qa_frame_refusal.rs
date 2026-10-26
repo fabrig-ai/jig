@@ -42,7 +42,7 @@ fn opened(page: u32) -> World {
     limits.store.chunk = limits.store.chunk.max(page + KV_CHUNK_OVERHEAD);
     checked(&limits).expect("every opened world passes the shell's size check");
     let mut world = World::unopened_observed(SEED, limits, None);
-    assert_eq!(world.open(), Some(0), "open: {:?}", world.refusal());
+    assert_eq!(world.open_switched(), Some(0), "open: {:?}", world.refusal());
     world
 }
 

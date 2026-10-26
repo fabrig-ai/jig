@@ -17,6 +17,9 @@ pub enum Request {
     /// (configuration.md 8): an empty store keeps it in its first commit; a
     /// store that holds one answers its own instead.
     Open { owner: Token, root: Root, installation: [u8; 16] },
+    /// Activate the copy opened pending, once every earlier commit is durable
+    /// (store.md 10.2, step 7). Once, after `Opened`; terminal `Switched` or `OpenRefused`.
+    Switch { owner: Token },
     /// Commit `number` (store.md 6): its writes, in order, one skein-kv
     /// commit with the same number. Terminal: `Committed`, `Failed` or
     /// `FrameTooLarge`; a refusal stops the engine.
@@ -40,6 +43,8 @@ pub enum Request {
 /// One write of a commit (store.md 6).
 #[derive(Debug)]
 pub enum Write {
+    /// The start's component-owned wires row, from `Store::wires` (store.md 5.3).
+    Wires,
     /// Copy a held settings revision to history in this commit.
     CopySettingsRevision(u32),
     /// jig's save: a put of its encoded key and record; a turn's save
@@ -457,6 +462,11 @@ pub enum Event {
         owner: Token,
         last: u64,
         installation: [u8; 16],
+        pending: bool,
+    },
+    /// The pending copy's manifest is durable and active has been replaced (10.2).
+    Switched {
+        owner: Token,
     },
     OpenRefused {
         owner: Token,

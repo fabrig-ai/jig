@@ -42,6 +42,24 @@ fn assert_opened(events: &[Event], expected: u64) {
     assert_eq!(*owner, Token::new(1));
     assert_eq!(*last, expected);
 }
+
+fn bridge_open(
+    store: &mut Store,
+    env: &skein_lib::Env<crate::Limits>,
+    event: &Event,
+    switching: &mut bool,
+    above: &mut Queue<Event>,
+    below: &mut crate::Below,
+) -> bool {
+    if let Event::Opened { pending: true, owner, .. } = event
+        && !*switching
+    {
+        *switching = true;
+        // B2: the root's switch step asks this.
+        crate::down(store, env, Request::Switch { owner: *owner }, above, below);
+    }
+    if let Event::Switched { .. } = event { true } else { false }
+}
 fn baseline() -> Vec<Item> {
     baseline_with_proof(false)
 }
@@ -75,7 +93,9 @@ fn patch(disk: &mut Disk) -> Store {
     // An empty plan exercises the phase's file ordering without fixture records.
     store.directory.patch = Some(Box::new(empty_pending()));
     let events = disk.open(&mut store);
-    assert_opened(&events, store.directory.active.expect("switched").number);
+    assert_opened(&events, store.stores.store.last());
+    let events = disk.request(&mut store, Request::Switch { owner: Token::new(1) });
+    assert!({ if let [Event::Switched { owner }] = events.as_ref() { *owner == Token::new(1) } else { false } });
     store
 }
 #[test]
@@ -145,7 +165,6 @@ enum Stage {
     Sealing,
     Checking,
     Manifest,
-    Leaving,
     Switching,
 }
 fn stage(store: &Store) -> Stage {
@@ -164,9 +183,11 @@ fn stage(store: &Store) -> Stage {
             }
             Patching::Sealing { .. } => Stage::Sealing,
             Patching::Checking(_) => Stage::Checking,
-            Patching::Manifest(_) => Stage::Manifest,
-            Patching::Leaving { .. } => Stage::Leaving,
-            Patching::Switching(_) => Stage::Switching,
+        },
+        Opening::Pending(pending) => match pending.stage {
+            crate::patching::switch::Stage::Manifest { .. } => Stage::Manifest,
+            crate::patching::switch::Stage::Switching { .. } => Stage::Switching,
+            _ => Stage::Other,
         },
         _ => Stage::Other,
     }
@@ -322,9 +343,13 @@ impl Harness {
             &mut above,
             &mut below,
         );
+        let mut switching = false;
         for _ in 0_u32..10_000 {
             let mut retained = Vec::new();
             while let Some(event) = above.pop() {
+                if bridge_open(store, &env, &event, &mut switching, &mut above, &mut below) {
+                    continue;
+                }
                 if let Event::Patched { of: crate::Owner::Application, patch: 2, .. } = &event {
                     // Tests can lower the page limit after recovery, at the
                     // first written site, and restore it before sealing.
@@ -536,7 +561,7 @@ impl Harness {
     }
 }
 #[test]
-fn the_phase_closes_drops_copies_opens_manifests_closes_switches_then_reopens() {
+fn the_phase_opens_pending_then_manifests_and_switches_without_reopening() {
     let mut first = Disk::new(&baseline());
     patch(&mut first);
     let mut disk = Harness::new(&first.items());
@@ -561,11 +586,11 @@ fn the_phase_closes_drops_copies_opens_manifests_closes_switches_then_reopens() 
             Stage::Sealing,
             Stage::Checking,
             Stage::Manifest,
-            Stage::Leaving,
             Stage::Switching
         ]
     );
-    for stage in [Stage::Closing, Stage::Leaving] {
+    {
+        let stage = Stage::Closing;
         let closes: Vec<_> = disk.trace.iter().filter(|(s, _)| *s == stage).map(|(_, request)| request).collect();
         // Both KV log closes must finish before either map directory closes.
         assert_eq!(closes, [&Trace::KvClose(0), &Trace::KvClose(1), &Trace::MapClose(0), &Trace::MapClose(1)]);
@@ -585,13 +610,13 @@ fn the_phase_closes_drops_copies_opens_manifests_closes_switches_then_reopens() 
         .iter()
         .position(|(s, r)| *s == Stage::Switching && *r == Trace::Store(Box::from(b"active".as_slice())))
         .expect("switch");
-    assert_eq!(disk.trace.get(switch + 1), Some(&(Stage::Other, Trace::Load(Box::from(b"active".as_slice())))));
+    assert_eq!(switch + 1, disk.trace.len(), "the switch needs no reopen");
     assert_eq!(
         disk.trace
             .iter()
             .filter(|(_, r)| { if let Trace::Load(p) = r { p.as_ref() == b"active" } else { false } })
             .count(),
-        2
+        1
     );
 }
 #[test]
@@ -610,7 +635,13 @@ fn cuts_at_the_manifests_write_syncs_and_rename_and_copy_recovery_keep_a_whole_g
             let mut disk = Harness::new(&items);
             disk.cut = Some((cut, after));
             let mut store = disk.store(true);
-            assert!(disk.open(&mut store).is_empty(), "cut {cut} {target:?}");
+            let events = disk.open(&mut store);
+            assert_eq!(events.len(), usize::from(target.0 == Stage::Manifest), "cut {cut} {target:?}");
+            assert!(
+                events
+                    .iter()
+                    .all(|event| { if let Event::Opened { pending: true, .. } = event { true } else { false } })
+            );
             assert!(disk.halted, "cut reached");
             disk.assert_source_unchanged(1);
             let mut disk = disk.crash(u64::try_from(cut).expect("seed"));
@@ -631,7 +662,15 @@ fn a_manifest_write_fault_refuses_failed_and_the_next_start_removes_the_copy() {
     disk.fault_write = true;
     let mut store = disk.store(true);
     let events = disk.open(&mut store);
-    assert!({ if let [Event::OpenRefused { why: OpenRefusal::Failed, .. }] = events.as_ref() { true } else { false } });
+    assert!({
+        if let [Event::Opened { pending: true, .. }, Event::OpenRefused { why: OpenRefusal::Failed, .. }] =
+            events.as_ref()
+        {
+            true
+        } else {
+            false
+        }
+    });
     assert_eq!(store.phase, Phase::Stopped);
     assert!(!disk.fault_write, "fault injected into the manifest's write");
     disk.assert_source_unchanged(1);
@@ -647,7 +686,7 @@ fn a_manifest_write_fault_refuses_failed_and_the_next_start_removes_the_copy() {
 }
 
 #[test]
-fn the_run_proofs_transcript_cut_waits_until_after_the_switch() {
+fn the_run_proofs_transcript_cut_precedes_the_pending_open_and_switch() {
     let mut items = baseline_with_proof(true);
     items.push(Item::directory(b"transcripts/0000000000000000"));
     items.push(Item::file(b"transcripts/0000000000000000/0000000000000001", b"uncommitted tail"));
@@ -663,7 +702,7 @@ fn the_run_proofs_transcript_cut_waits_until_after_the_switch() {
         .map(|(index, (stage, _))| (index, *stage))
         .collect();
     assert_eq!(cuts.len(), 1);
-    assert!(cuts.iter().all(|(index, stage)| *index > switch && *stage == Stage::Other));
+    assert!(cuts.iter().all(|(index, stage)| *index < switch && *stage == Stage::Other));
     assert!(disk.bytes(b"transcripts/0000000000000000/0000000000000001").is_empty());
     disk.assert_source_unchanged(1);
 }
@@ -1867,3 +1906,22 @@ const FRESH_BEFORE: crate::PatchSets = crate::PatchSets {
         ..super::patching::SMITH
     }],
 };
+
+#[test]
+fn pending_state_and_wires_have_their_exact_resident_price() {
+    // Store gains the 16-byte static wires slice; Pending retains before/after
+    // levels, the check's counts and the explicit switch's stage and owner.
+    assert_eq!(size_of::<Store>(), 3_992);
+    assert_eq!(size_of::<crate::directory::Directory>(), 280);
+    assert_eq!(size_of::<Opening>(), 88);
+    assert_eq!(size_of::<Patching>(), 168);
+    assert_eq!(size_of::<Pending>(), 136);
+    // Pending: before 32 + after 32 + counts List 32 + switch stage 80.
+    assert_eq!(size_of::<crate::patching::switch::Pending>(), 176);
+    assert_eq!(size_of::<crate::patching::switch::Stage>(), 80);
+    // Retained and encoded counts: two * (64 Count carriers * 32 +
+    // 64 family names * 64), plus the 5,464-byte encoded manifest.
+    assert_eq!(crate::patching::switch::worst_case(), Some(17_928));
+    // Baseline 581,544,799,687,077 + wires 16 + pending 17,928.
+    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_544_799_705_021));
+}

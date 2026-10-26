@@ -1039,7 +1039,7 @@ fn cut_done(store: &mut Store, request: file::Request, mut below: Below) -> Box<
     fixtures::script(store, below, &[Answer::Cut, Answer::Synced, Answer::Closed])
 }
 fn opened(events: &[Event]) {
-    let [Event::Opened { owner, last, installation: _ }] = events else {
+    let [Event::Opened { owner, last, installation: _, pending: false }] = events else {
         panic!("open after cuts: {events:?}");
     };
     assert_eq!(*owner, Token::new(801));

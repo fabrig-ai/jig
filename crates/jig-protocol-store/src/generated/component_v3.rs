@@ -4,14 +4,18 @@ use alloc::boxed::Box;
 use skein_lib::List;
 
 /// The family's adjustable limits, each no larger than its ceiling.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Limits {
+    pub wire_name: u32,
+    pub wires_wires: u32,
     pub count_family: u32,
     pub manifest_counts: u32,
 }
 
 /// The schema's maximum limits.
 pub const CEILINGS: Limits = Limits {
+    wire_name: 32,
+    wires_wires: 16,
     count_family: 64,
     manifest_counts: 64,
 };
@@ -29,6 +33,18 @@ pub enum Path {
     LevelsApplication,
     /// Bytes after `Levels`.
     LevelsTail,
+    /// The `name` field of `Wire`.
+    WireName,
+    /// The `version` field of `Wire`.
+    WireVersion,
+    /// Bytes after `Wire`.
+    WireTail,
+    /// The `wires` field of `Wires`.
+    WiresWires,
+    /// The version of `Wires`.
+    WiresVersion,
+    /// Bytes after `Wires`.
+    WiresTail,
     /// The `component` field of `Format`.
     FormatComponent,
     /// The `core` field of `Format`.
@@ -129,6 +145,8 @@ pub fn check_limits(limits: &Limits) -> Result<(), Problem> {
 }
 
 fn check_limits_0(limits: &Limits) -> Result<(), Problem> {
+    if limits.wire_name > CEILINGS.wire_name { return Err(Problem { path: Path::WireName, reason: skein_codec::Reason::Bound }); }
+    if limits.wires_wires > CEILINGS.wires_wires { return Err(Problem { path: Path::WiresWires, reason: skein_codec::Reason::Bound }); }
     if limits.count_family > CEILINGS.count_family { return Err(Problem { path: Path::CountFamily, reason: skein_codec::Reason::Bound }); }
     if limits.manifest_counts > CEILINGS.manifest_counts { return Err(Problem { path: Path::ManifestCounts, reason: skein_codec::Reason::Bound }); }
     Ok(())
@@ -184,6 +202,89 @@ impl Levels {
     #[must_use]
     pub fn into_parts(self) -> LevelsParts { LevelsParts { skein: self.skein, smith: self.smith, jig: self.jig, application: self.application } }
 
+}
+
+/// Movable fields of `Wire`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WireParts {
+    /// The `name` field.
+    pub name: Box<[u8]>,
+    /// The `version` field.
+    pub version: u32,
+}
+
+/// `Wire` in this codec family.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Wire {
+    name: Box<[u8]>,
+    version: u32,
+}
+
+impl Wire {
+    /// Makes a value within the given limits.
+    pub fn new(limits: &Limits, parts: WireParts) -> Result<Self, Problem> {
+        let WireParts { name, version } = parts;
+        let value = Self { name, version };
+        value.check(limits)?;
+        Ok(value)
+    }
+
+    /// Reads the `name` field.
+    #[must_use]
+    pub fn name(&self) -> &[u8] { &self.name }
+
+    /// Reads the `version` field.
+    #[must_use]
+    pub fn version(&self) -> u32 { self.version }
+
+    /// Moves the fields out without copying.
+    #[must_use]
+    pub fn into_parts(self) -> WireParts { WireParts { name: self.name, version: self.version } }
+
+    fn check(&self, limits: &Limits) -> Result<(), Problem> {
+        if self.name.len() > usize::try_from(limits.wire_name.min(CEILINGS.wire_name)).expect("u32 fits usize") { return Err(Problem { path: Path::WireName, reason: skein_codec::Reason::Bound }); }
+        if !skein_codec::text_is_valid(self.name.as_ref()) { return Err(Problem { path: Path::WireName, reason: skein_codec::Reason::Utf8 }); }
+        Ok(())
+    }
+}
+
+/// Movable fields of `Wires`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WiresParts {
+    /// The `wires` field.
+    pub wires: List<Wire>,
+}
+
+/// `Wires` in this codec family.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Wires {
+    wires: List<Wire>,
+}
+
+impl Wires {
+    /// Makes a value within the given limits.
+    pub fn new(limits: &Limits, parts: WiresParts) -> Result<Self, Problem> {
+        let WiresParts { wires } = parts;
+        let value = Self { wires };
+        value.check(limits)?;
+        Ok(value)
+    }
+
+    /// Reads the `wires` field.
+    #[must_use]
+    pub fn wires(&self) -> &List<Wire> { &self.wires }
+
+    /// Moves the fields out without copying.
+    #[must_use]
+    pub fn into_parts(self) -> WiresParts { WiresParts { wires: self.wires } }
+
+    fn check(&self, limits: &Limits) -> Result<(), Problem> {
+        if self.wires.capacity() > limits.wires_wires.min(CEILINGS.wires_wires) { return Err(Problem { path: Path::WiresWires, reason: skein_codec::Reason::Bound }); }
+        for item_0 in self.wires.as_slice() {
+        item_0.check(limits)?;
+        }
+        Ok(())
+    }
 }
 
 /// Movable fields of `Format`.
@@ -642,6 +743,82 @@ impl Levels {
     }
 }
 
+impl Wire {
+    /// Measures this record's wire encoding.
+    #[must_use]
+    pub fn measure(&self) -> u32 {
+        let mut size = 0_u32;
+        let field_name = &self.name;
+        size = size.checked_add(4).expect("schema ceilings fit u32");
+        size = size.checked_add(u32::try_from(field_name.len()).expect("field ceiling fits u32")).expect("schema ceilings fit u32");
+        size = size.checked_add(4).expect("schema ceilings fit u32");
+        size
+    }
+
+    /// Writes into a writer with room for the measured bytes.
+    pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
+        let field_name = &self.name;
+        writer.put(&u32::try_from(field_name.len()).expect("field ceiling fits u32").to_be_bytes())?;
+        writer.put(field_name.as_ref())?;
+        let field_version = &self.version;
+        writer.put(&field_version.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Reads a whole record and refuses trailing bytes.
+    pub fn decode(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let value = Self::decode_from(limits, reader)?;
+        if !reader.is_empty() { return Err(Problem { path: Path::WireTail, reason: skein_codec::Reason::Trailing }); }
+        Ok(value)
+    }
+
+    fn decode_from(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let decoded_name = match skein_codec::read_text(reader, limits.wire_name.min(CEILINGS.wire_name)) { Ok(text) => text, Err(reason) => return Err(Problem { path: Path::WireName, reason }), };
+        let decoded_version = reader.u32().ok_or(Problem { path: Path::WireVersion, reason: skein_codec::Reason::Short })?;
+        Ok(Self { name: decoded_name, version: decoded_version })
+    }
+}
+
+impl Wires {
+    /// Measures this record's wire encoding.
+    #[must_use]
+    pub fn measure(&self) -> u32 {
+        let mut size = 0_u32;
+        size = size.checked_add(2).expect("schema ceilings fit u32");
+        let field_wires = &self.wires;
+        size = size.checked_add(4).expect("schema ceilings fit u32");
+        for item_0 in field_wires.as_slice() {
+        size = size.checked_add(item_0.measure()).expect("schema ceilings fit u32");
+        }
+        size
+    }
+
+    /// Writes into a writer with room for the measured bytes.
+    pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
+        writer.put(&3_u16.to_be_bytes())?;
+        let field_wires = &self.wires;
+        writer.put(&field_wires.len().to_be_bytes())?;
+        for item_0 in field_wires.as_slice() {
+        item_0.encode(writer)?;
+        }
+        Ok(())
+    }
+
+    /// Reads a whole record and refuses trailing bytes.
+    pub fn decode(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let value = Self::decode_from(limits, reader)?;
+        if !reader.is_empty() { return Err(Problem { path: Path::WiresTail, reason: skein_codec::Reason::Trailing }); }
+        Ok(value)
+    }
+
+    fn decode_from(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let version = reader.u16().ok_or(Problem { path: Path::WiresVersion, reason: skein_codec::Reason::Short })?;
+        if version != 3 { return Err(Problem { path: Path::WiresVersion, reason: skein_codec::Reason::Version }); }
+        let decoded_wires = { let count = match skein_codec::read_count(reader, limits.wires_wires.min(CEILINGS.wires_wires)) { Ok(count) => count, Err(reason) => return Err(Problem { path: Path::WiresWires, reason }), }; if count > reader.remaining() / 8 { return Err(Problem { path: Path::WiresWires, reason: skein_codec::Reason::Short }); } let mut items_0 = List::with_capacity(count); for _index in 0_u32..count { let item = Wire::decode_from(limits, reader)?; items_0.push(item).expect("count within capacity"); } items_0 };
+        Ok(Self { wires: decoded_wires })
+    }
+}
+
 impl Format {
     /// Measures this record's wire encoding.
     #[must_use]
@@ -999,6 +1176,62 @@ impl Levels {
     }
 }
 
+impl Wire {
+    /// Maximum encoded bytes under these limits.
+    #[must_use]
+    pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_bytes_within(limits)
+    }
+
+    pub(crate) fn worst_case_bytes_within(limits: &Limits) -> Option<u64> {
+        let mut size = 0_u64;
+        size = size.checked_add(4_u64.checked_add(u64::from(limits.wire_name))?)?.checked_add(4_u64)?;
+        size.checked_add(0)
+    }
+
+    /// Maximum heap held by one decoded value under these limits.
+    #[must_use]
+    pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_heap_within(limits)
+    }
+
+    pub(crate) fn worst_case_heap_within(limits: &Limits) -> Option<u64> {
+        let mut heap = 0_u64;
+        heap = heap.checked_add(u64::from(limits.wire_name))?.checked_add(0_u64)?;
+        heap.checked_add(0)
+    }
+}
+
+impl Wires {
+    /// Maximum encoded bytes under these limits.
+    #[must_use]
+    pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_bytes_within(limits)
+    }
+
+    pub(crate) fn worst_case_bytes_within(limits: &Limits) -> Option<u64> {
+        let mut size = 2_u64;
+        size = size.checked_add(4_u64.checked_add(u64::from(limits.wires_wires).checked_mul(Wire::worst_case_bytes_within(limits)?)?)?)?;
+        size.checked_add(0)
+    }
+
+    /// Maximum heap held by one decoded value under these limits.
+    #[must_use]
+    pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_heap_within(limits)
+    }
+
+    pub(crate) fn worst_case_heap_within(limits: &Limits) -> Option<u64> {
+        let mut heap = 0_u64;
+        heap = heap.checked_add(List::<Wire>::worst_case(limits.wires_wires)?.checked_add(u64::from(limits.wires_wires).checked_mul(Wire::worst_case_heap_within(limits)?)?)?)?;
+        heap.checked_add(0)
+    }
+}
+
 impl Format {
     /// Maximum encoded bytes under these limits.
     #[must_use]
@@ -1195,6 +1428,8 @@ pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
     if check_limits(limits).is_err() { return None; }
     let mut biggest = 0_u64;
     biggest = biggest.max(Levels::worst_case_bytes_within(limits)?);
+    biggest = biggest.max(Wire::worst_case_bytes_within(limits)?);
+    biggest = biggest.max(Wires::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Format::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Count::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Manifest::worst_case_bytes_within(limits)?);
@@ -1210,6 +1445,8 @@ pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
     if check_limits(limits).is_err() { return None; }
     let mut biggest = 0_u64;
     biggest = biggest.max(Levels::worst_case_heap_within(limits)?);
+    biggest = biggest.max(Wire::worst_case_heap_within(limits)?);
+    biggest = biggest.max(Wires::worst_case_heap_within(limits)?);
     biggest = biggest.max(Format::worst_case_heap_within(limits)?);
     biggest = biggest.max(Count::worst_case_heap_within(limits)?);
     biggest = biggest.max(Manifest::worst_case_heap_within(limits)?);
@@ -1221,7 +1458,7 @@ pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
 
 #[cfg(test)]
 mod golden_tests {
-    use super::{CEILINGS, Levels, LevelsParts, Format, FormatParts, Count, CountParts, Manifest, ManifestParts, Transcript, TranscriptParts, Attempt, AttemptParts, Layouts, LayoutsParts, Path};
+    use super::{CEILINGS, Levels, LevelsParts, Wire, WireParts, Wires, WiresParts, Format, FormatParts, Count, CountParts, Manifest, ManifestParts, Transcript, TranscriptParts, Attempt, AttemptParts, Layouts, LayoutsParts, Path};
     use super::Limits;
 
     use alloc::boxed::Box;
@@ -1274,9 +1511,13 @@ mod golden_tests {
         };
         at && past
     }
-    static GOLDEN_0: [Case; 14] = [
+    static GOLDEN_0: [Case; 18] = [
         ("record_levels_smallest", || { let value = Levels::new(&CEILINGS, LevelsParts { skein: None, smith: None, jig: None, application: None }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Levels::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_levels_full", || { let value = Levels::new(&CEILINGS, LevelsParts { skein: Some(u32::MAX), smith: Some(u32::MAX), jig: Some(u32::MAX), application: Some(u32::MAX) }).expect("golden within ceilings"); let bytes: &[u8] = &[1, 255, 255, 255, 255, 1, 255, 255, 255, 255, 1, 255, 255, 255, 255, 1, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Levels::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_wire_smallest", || { let value = Wire::new(&CEILINGS, WireParts { name: Box::from([].as_slice()), version: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Wire::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_wire_full", || { let value = Wire::new(&CEILINGS, WireParts { name: Box::from([97_u8, 98_u8, 99_u8].as_slice()), version: u32::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 3, 97, 98, 99, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Wire::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_wires_smallest", || { let value = Wires::new(&CEILINGS, WiresParts { wires: skein_lib::List::with_capacity(0) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Wires::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_wires_full", || { let value = Wires::new(&CEILINGS, WiresParts { wires: { let mut items = skein_lib::List::with_capacity(1); items.push(Wire::new(&CEILINGS, WireParts { name: Box::from([97_u8, 98_u8, 99_u8].as_slice()), version: u32::MAX }).expect("golden within ceilings")).expect("one slot"); items } }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 1, 0, 0, 0, 3, 97, 98, 99, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Wires::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_format_smallest", || { let value = Format::new(&CEILINGS, FormatParts { component: 0_u16, core: 0_u16, tasks: 0_u16, people: 0_u16, notes: 0_u16, accounts: 0_u16, settings: 0_u16, application: 0_u32, deployment: [0_u8; 16], levels: Levels::new(&CEILINGS, LevelsParts { skein: None, smith: None, jig: None, application: None }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Format::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_format_full", || { let value = Format::new(&CEILINGS, FormatParts { component: u16::MAX, core: u16::MAX, tasks: u16::MAX, people: u16::MAX, notes: u16::MAX, accounts: u16::MAX, settings: u16::MAX, application: u32::MAX, deployment: [165_u8; 16], levels: Levels::new(&CEILINGS, LevelsParts { skein: Some(u32::MAX), smith: Some(u32::MAX), jig: Some(u32::MAX), application: Some(u32::MAX) }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 3, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 165, 1, 255, 255, 255, 255, 1, 255, 255, 255, 255, 1, 255, 255, 255, 255, 1, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Format::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_count_smallest", || { let value = Count::new(&CEILINGS, CountParts { family: Box::from([].as_slice()), before: 0_u64, after: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Count::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -1296,7 +1537,9 @@ mod golden_tests {
         table(&GOLDEN_0);
     }
 
-    static BOUNDS_0: [Case; 2] = [
+    static BOUNDS_0: [Case; 4] = [
+        ("bound_wire_name", || bound((Path::WireName, skein_codec::Reason::Bound), &Limits { wire_name: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match Wire::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
+        ("bound_wires_wires", || bound((Path::WiresWires, skein_codec::Reason::Bound), &Limits { wires_wires: 3, ..CEILINGS }, &[0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match Wires::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_count_family", || bound((Path::CountFamily, skein_codec::Reason::Bound), &Limits { count_family: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match Count::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_manifest_counts", || bound((Path::ManifestCounts, skein_codec::Reason::Bound), &Limits { manifest_counts: 3, ..CEILINGS }, &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match Manifest::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
     ];

@@ -1,7 +1,7 @@
 //! The store's patch phase, between the open's checks and cuts (store.md 10.2).
 use super::check::{self, Checking, Counted};
 use crate::directory::{OWNER, Opening};
-use crate::generations::{Copying, Dropping, Manifesting, Map, Progress, Switching};
+use crate::generations::{Copying, Dropping, Map, Progress};
 use crate::{Arrived, Below, Event, Io, Limits, OpenRefusal, Phase, Root, Store, directory, generations, open};
 use alloc::boxed::Box;
 use skein_io::file;
@@ -18,7 +18,7 @@ pub(crate) struct Pending {
     pub found: super::plan::Levels,
 }
 
-/// Closing and Leaving count two KV close bits (1, 2), then two directory
+/// Closing counts two KV close bits (1, 2), then two directory
 /// close bits (4, 8); Recovering two KV open bits (1, 2).
 #[derive(Debug)]
 pub(crate) enum Patching {
@@ -30,9 +30,6 @@ pub(crate) enum Patching {
     Walking(Box<Walking>),
     Sealing { number: u64, before: super::plan::Levels, counts: List<Counted> },
     Checking(Box<Checking>),
-    Manifest(Manifesting),
-    Leaving { closed: u8 },
-    Switching(Switching),
 }
 fn root(store: &Store) -> Root {
     store.directory.root.expect("patching holds the deployment lock")
@@ -77,7 +74,8 @@ fn take(store: &mut Store) -> Box<Patching> {
         | Opening::SweepSync { .. }
         | Opening::SweepClose(_)
         | Opening::TranscriptsMade
-        | Opening::TranscriptsOpen => unreachable!("phase routing checked"),
+        | Opening::TranscriptsOpen
+        | Opening::Pending(_) => unreachable!("phase routing checked"),
     }
 }
 pub(crate) fn begin(
@@ -164,34 +162,6 @@ fn opened_copy(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, b
         None => refuse(store, above),
     }
 }
-fn manifesting(
-    store: &mut Store,
-    env: &Env<Limits>,
-    before: super::plan::Levels,
-    counts: &[crate::codec::component::Count],
-    below: &mut Below,
-) {
-    let number = active(store).checked_add(1).expect("begin checked the next generation");
-    let bytes = generations::manifest(
-        number,
-        Some(active(store)),
-        before,
-        super::plan::binary(&store.patch_sets),
-        counts,
-        store.stores.store.last(),
-        Some(store.stores.secrets.last()),
-        env.wall,
-    );
-    let manifesting = generations::store_manifest(root(store), number, bytes, below);
-    state(store, Patching::Manifest(manifesting));
-}
-fn switching(store: &mut Store, above: &mut Queue<Event>, below: &mut Below) {
-    let switching = generations::switch(root(store), store.directory.active.expect("active checked"), below);
-    match switching.progress() {
-        Progress::Pending => state(store, Patching::Switching(switching)),
-        Progress::Done | Progress::Failed => refuse(store, above),
-    }
-}
 pub(crate) fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue<Event>, below: &mut Below) {
     let (arrived, secret) = match io {
         Io::Store(arrived) => (arrived, false),
@@ -244,24 +214,21 @@ pub(crate) fn event(
     match event {
         skein_kv::Event::Closed { .. } => {
             let phase = take(store);
-            let (mut closed, leaving) = match *phase {
-                Patching::Closing { closed } => (closed, false),
-                Patching::Leaving { closed } => (closed, true),
+            let mut closed = match *phase {
+                Patching::Closing { closed } => closed,
                 Patching::Dropping(_)
                 | Patching::Copying(_)
                 | Patching::Mapping { .. }
                 | Patching::Recovering { .. }
                 | Patching::Walking(_)
                 | Patching::Sealing { .. }
-                | Patching::Checking(_)
-                | Patching::Manifest(_)
-                | Patching::Switching(_) => return refuse(store, above),
+                | Patching::Checking(_) => return refuse(store, above),
             };
             closed |= if secret { 2 } else { 1 };
             if closed == 3 {
                 close_directories(store, below);
             }
-            state(store, if leaving { Patching::Leaving { closed } } else { Patching::Closing { closed } });
+            state(store, Patching::Closing { closed });
         }
         skein_kv::Event::Opened { .. } => {
             let phase = take(store);
@@ -272,14 +239,11 @@ pub(crate) fn event(
                 }
                 Patching::Closing { .. }
                 | Patching::Mapping { .. }
-                | Patching::Leaving { .. }
                 | Patching::Dropping(_)
                 | Patching::Copying(_)
                 | Patching::Walking(_)
                 | Patching::Sealing { .. }
-                | Patching::Checking(_)
-                | Patching::Manifest(_)
-                | Patching::Switching(_) => refuse(store, above),
+                | Patching::Checking(_) => refuse(store, above),
             }
         }
         skein_kv::Event::Committed { owner, number } => {
@@ -305,10 +269,7 @@ pub(crate) fn event(
                 | Patching::Mapping { .. }
                 | Patching::Recovering { .. }
                 | Patching::Sealing { .. }
-                | Patching::Checking(_)
-                | Patching::Manifest(_)
-                | Patching::Leaving { .. }
-                | Patching::Switching(_) => refuse(store, above),
+                | Patching::Checking(_) => refuse(store, above),
             }
         }
         skein_kv::Event::Refused { .. }
@@ -333,13 +294,10 @@ pub(crate) fn resume(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Eve
             Patching::Recovering { .. }
             | Patching::Mapping { .. }
             | Patching::Closing { .. }
-            | Patching::Leaving { .. }
             | Patching::Dropping(_)
             | Patching::Copying(_)
             | Patching::Sealing { .. }
-            | Patching::Checking(_)
-            | Patching::Manifest(_)
-            | Patching::Switching(_) => {}
+            | Patching::Checking(_) => {}
         }
     }
 }
@@ -354,10 +312,7 @@ fn checking(store: &mut Store, above: &mut Queue<Event>, below: &mut Below) {
         | Patching::Recovering { .. }
         | Patching::Walking(_)
         | Patching::Sealing { .. }
-        | Patching::Checking(_)
-        | Patching::Manifest(_)
-        | Patching::Leaving { .. }
-        | Patching::Switching(_) => unreachable!("resume routed the durable seal"),
+        | Patching::Checking(_) => unreachable!("resume routed the durable seal"),
     };
     match check::start(store, before, counts, below) {
         Ok(checking) => state(store, Patching::Checking(Box::new(checking))),
@@ -374,8 +329,7 @@ fn file_up(
 ) {
     let phase = take(store);
     match *phase {
-        Patching::Closing { closed } => closed_directory(store, closed, false, arrived, secret, above, below),
-        Patching::Leaving { closed } => closed_directory(store, closed, true, arrived, secret, above, below),
+        Patching::Closing { closed } => closed_directory(store, closed, arrived, secret, above, below),
         Patching::Dropping(mut dropping) => match generations::dropped(&mut dropping, arrived, below) {
             Progress::Pending => state(store, Patching::Dropping(dropping)),
             Progress::Done => copying(store, above, below),
@@ -390,31 +344,17 @@ fn file_up(
         Patching::Recovering { .. } | Patching::Walking(_) | Patching::Sealing { .. } => refuse(store, above),
         Patching::Checking(mut checking) => match check::up(&mut checking, arrived, below) {
             Ok(false) => state(store, Patching::Checking(checking)),
-            Ok(true) => manifesting(store, env, checking.before(), checking.counts(), below),
+            Ok(true) => {
+                let (before, counts) = checking.into_counts();
+                super::switch::open(store, before, counts, above, below);
+            }
             Err(why) => open::refuse(store, store.directory.owner, why, above),
-        },
-        Patching::Manifest(mut manifesting) => match generations::manifested(&mut manifesting, arrived) {
-            Progress::Pending => state(store, Patching::Manifest(manifesting)),
-            Progress::Done => {
-                state(store, Patching::Leaving { closed: 0 });
-                close_stores(store, env, above, below);
-            }
-            Progress::Failed => refuse(store, above),
-        },
-        Patching::Switching(mut switching) => match generations::switched(&mut switching, arrived) {
-            Progress::Pending => state(store, Patching::Switching(switching)),
-            Progress::Done => {
-                store.directory.active = switching.active();
-                directory::reopen(store, env, above, below);
-            }
-            Progress::Failed => refuse(store, above),
         },
     }
 }
 fn closed_directory(
     store: &mut Store,
     mut closed: u8,
-    leaving: bool,
     arrived: Arrived,
     secret: bool,
     above: &mut Queue<Event>,
@@ -425,13 +365,9 @@ fn closed_directory(
     };
     closed |= if secret { 8 } else { 4 };
     if closed == 15 {
-        if leaving {
-            switching(store, above, below);
-        } else {
-            dropping(store, above, below);
-        }
+        dropping(store, above, below);
     } else {
-        state(store, if leaving { Patching::Leaving { closed } } else { Patching::Closing { closed } });
+        state(store, Patching::Closing { closed });
     }
 }
 fn opened_directory(
@@ -497,10 +433,7 @@ pub(crate) fn site(
         | Patching::Mapping { .. }
         | Patching::Recovering { .. }
         | Patching::Sealing { .. }
-        | Patching::Checking(_)
-        | Patching::Manifest(_)
-        | Patching::Leaving { .. }
-        | Patching::Switching(_) => refuse(store, above),
+        | Patching::Checking(_) => refuse(store, above),
     }
 }
 

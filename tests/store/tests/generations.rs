@@ -12,12 +12,12 @@ fn whole(world: &mut World) {
 #[test]
 fn a_first_start_cut_anywhere_is_whole_at_the_next_start() {
     let mut completed = World::unopened(18);
-    assert_eq!(completed.open(), Some(0));
+    assert_eq!(completed.open_switched(), Some(0));
     let operations = completed.operation_count();
     for cut in 0..=operations {
         let mut world = World::unopened(u64::from(cut));
         world.cut_at(cut);
-        world.open();
+        world.open_switched();
         world.crash(u64::from(cut));
         let restored = world.reopen();
         assert_eq!(restored.last, 0, "empty recovered generation, cut {cut}");
@@ -57,7 +57,7 @@ fn strays_cut_anywhere_are_gone_at_the_next_start() {
     for cut in 0..=operations {
         let mut world = committed(u64::from(cut));
         world.cut_at(cut);
-        world.open();
+        world.open_switched();
         world.crash(u64::from(cut));
         let restored = world.reopen();
         whole(&mut world);

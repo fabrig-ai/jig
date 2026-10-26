@@ -397,10 +397,7 @@ pub(super) fn resume(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Eve
         | Patching::Mapping { .. }
         | Patching::Recovering { .. }
         | Patching::Sealing { .. }
-        | Patching::Checking(_)
-        | Patching::Manifest(_)
-        | Patching::Leaving { .. }
-        | Patching::Switching(_) => unreachable!("resume routed Walking"),
+        | Patching::Checking(_) => unreachable!("resume routed Walking"),
     };
     let Some(done) = drive(store, &mut walking, above) else {
         return open::refuse(

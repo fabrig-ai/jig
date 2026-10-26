@@ -120,7 +120,7 @@ pub(crate) fn open(component: &mut store::Store, env: &Env<store::Limits>) {
         &mut above,
         &mut below,
     );
-    assert!(matches!(above.pop(), Some(Event::Opened { .. })));
+    assert!(matches!(above.pop(), Some(Event::Opened { pending: false, .. })));
 }
 pub(crate) use jig_store_world::patches::fixture_turn as turn;
 // Six file operations and two patch stops cover one small fixture frame.
@@ -166,7 +166,8 @@ pub(crate) fn decode(
                     store::down(component, env, Request::Site { owner, patcher, result }, &mut above, &mut below);
                     continue;
                 }
-                other @ (Event::Opened { .. }
+                other @ (Event::Switched { .. }
+                | Event::Opened { .. }
                 | Event::OpenRefused { .. }
                 | Event::Committed { .. }
                 | Event::Failed { .. }

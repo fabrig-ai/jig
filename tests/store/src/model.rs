@@ -28,6 +28,7 @@ impl Model {
         let mut state = self.prefixes.get(&self.acknowledged).expect("acknowledged prefix").clone();
         for write in writes {
             match write {
+                Write::Wires => {}
                 Write::Save(core::Record::Core(core::CoreRecord::Turn(turn))) => {
                     state.turns.entry(turn.task).or_default().push(turn.clone());
                 }

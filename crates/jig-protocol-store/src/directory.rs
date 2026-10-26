@@ -68,6 +68,7 @@ pub(crate) enum Opening {
     TranscriptsMade,
     TranscriptsOpen,
     Patching(Box<Patching>),
+    Pending(Box<crate::patching::switch::Pending>),
 }
 #[derive(Debug)]
 pub(crate) struct Closing {
@@ -347,7 +348,11 @@ pub(crate) fn checked(store: &mut Store, above: &mut Queue<Event>, below: &mut B
         crate::transcripts::cut::begin(store, above, below);
         return;
     }
-    sweep_open(store, SweepKind::Generations, false, below);
+    if pending(store).is_some() {
+        open_directory(deployment(store), Box::from(generations::TRANSCRIPTS), &mut below.transcripts);
+    } else {
+        sweep_open(store, SweepKind::Generations, false, below);
+    }
 }
 fn sweep_open(store: &mut Store, kind: SweepKind, dirty: bool, below: &mut Below) {
     let name = match kind {
@@ -412,6 +417,9 @@ fn sweep_next(store: &mut Store, mut sweep: Sweep, below: &mut Below) {
     }
 }
 fn directory(store: &mut Store, env: &Env<Limits>, arrived: Arrived, above: &mut Queue<Event>, below: &mut Below) {
+    if pending(store).is_some() {
+        return crate::patching::switch::up(store, arrived, above, below);
+    }
     match core::mem::replace(&mut store.directory.opening, Opening::Idle) {
         Opening::Locking => locked(store, arrived, above, below),
         Opening::Reading => active_read(store, arrived, above, below),
@@ -439,6 +447,7 @@ fn directory(store: &mut Store, env: &Env<Limits>, arrived: Arrived, above: &mut
         Opening::SweepClose(closing) => sweep_closed(store, closing, arrived, above, below),
         Opening::TranscriptsMade => transcripts_made(store, env, arrived, above, below),
         Opening::TranscriptsOpen => transcripts_opened(store, arrived, above, below),
+        Opening::Pending(_) => unreachable!("pending routed before taking opening"),
         Opening::Idle | Opening::Stores | Opening::Patching(_) => refuse(store, above),
     }
 }
@@ -856,7 +865,11 @@ pub(crate) fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue
             match store.phase {
                 Phase::Ready { .. } => {
                     if arrived.event.owner() == OWNER {
-                        directory(store, env, arrived, above, below);
+                        if pending(store).is_some() && store.directory.transcripts.is_none() {
+                            transcripts_opened(store, arrived, above, below);
+                        } else {
+                            directory(store, env, arrived, above, below);
+                        }
                     } else if arrived.event.owner() == crate::transcripts::cut::OWNER {
                         crate::transcripts::cut::arrived(store, arrived, above, below);
                     } else if arrived.event.owner() == crate::transcripts::drop::OWNER {
@@ -955,17 +968,6 @@ pub(crate) fn fire(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event
     }
 }
 
-/// Restart at 10.1 step 2, retaining the deployment lock after the switch.
-pub(crate) fn reopen(store: &mut Store, _env: &Env<Limits>, _above: &mut Queue<Event>, below: &mut Below) {
-    store.directory.opened = 0;
-    store.directory.store_root = None;
-    store.directory.private_root = None;
-    store.stores.store = skein_kv::Store::new(&store.limits.store);
-    store.stores.secrets = skein_kv::Store::new(&store.limits.secrets);
-    // The switch supplied Active; read it afresh, exactly as a normal start.
-    read_active(store, below);
-}
-
 /// The one fork shared by file and KV routing.
 pub(crate) fn patching(store: &Store) -> Option<&Patching> {
     match &store.directory.opening {
@@ -997,6 +999,77 @@ pub(crate) fn patching(store: &Store) -> Option<&Patching> {
         | Opening::SweepSync { .. }
         | Opening::SweepClose(_)
         | Opening::TranscriptsMade
-        | Opening::TranscriptsOpen => None,
+        | Opening::TranscriptsOpen
+        | Opening::Pending(_) => None,
+    }
+}
+
+pub(crate) fn pending(store: &Store) -> Option<&crate::patching::switch::Pending> {
+    match &store.directory.opening {
+        Opening::Pending(pending) => Some(pending),
+        Opening::Idle
+        | Opening::Locking
+        | Opening::Reading
+        | Opening::SurveyOpen(_)
+        | Opening::SurveyPage { .. }
+        | Opening::SurveyClose(_)
+        | Opening::Refusing(_)
+        | Opening::LeftoverOpen
+        | Opening::LeftoverRemoving { .. }
+        | Opening::LeftoverClose
+        | Opening::Making(_)
+        | Opening::FirstSecrets
+        | Opening::FirstManifest(_)
+        | Opening::FirstActive
+        | Opening::CheckingOpen
+        | Opening::CheckingPage { .. }
+        | Opening::CheckingClose
+        | Opening::StoreOpen
+        | Opening::SecretsOpen
+        | Opening::Stores
+        | Opening::SweepOpen { .. }
+        | Opening::SweepPage(_)
+        | Opening::SweepFile(_)
+        | Opening::SweepRemoving { .. }
+        | Opening::SweepSync { .. }
+        | Opening::SweepClose(_)
+        | Opening::TranscriptsMade
+        | Opening::TranscriptsOpen
+        | Opening::Patching(_) => None,
+    }
+}
+
+pub(crate) fn pending_mut(store: &mut Store) -> Option<&mut crate::patching::switch::Pending> {
+    match &mut store.directory.opening {
+        Opening::Pending(pending) => Some(pending),
+        Opening::Idle
+        | Opening::Locking
+        | Opening::Reading
+        | Opening::SurveyOpen(_)
+        | Opening::SurveyPage { .. }
+        | Opening::SurveyClose(_)
+        | Opening::Refusing(_)
+        | Opening::LeftoverOpen
+        | Opening::LeftoverRemoving { .. }
+        | Opening::LeftoverClose
+        | Opening::Making(_)
+        | Opening::FirstSecrets
+        | Opening::FirstManifest(_)
+        | Opening::FirstActive
+        | Opening::CheckingOpen
+        | Opening::CheckingPage { .. }
+        | Opening::CheckingClose
+        | Opening::StoreOpen
+        | Opening::SecretsOpen
+        | Opening::Stores
+        | Opening::SweepOpen { .. }
+        | Opening::SweepPage(_)
+        | Opening::SweepFile(_)
+        | Opening::SweepRemoving { .. }
+        | Opening::SweepSync { .. }
+        | Opening::SweepClose(_)
+        | Opening::TranscriptsMade
+        | Opening::TranscriptsOpen
+        | Opening::Patching(_) => None,
     }
 }
