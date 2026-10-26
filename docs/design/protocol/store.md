@@ -1061,8 +1061,11 @@ nothing is written.
   (`transcripts/patches.rs`, `node_bound`), so every frame the kept
   texts allow is read and none is refused for its nodes. A turn's bytes
   do not bound its nodes (a list of empty records takes none), so
-  smith's real turn, 16 messages of 64 blocks, takes 2,109,520 nodes
-  and a machine of about 298 MB from the baseline on (section 16).
+  smith's real turn, 16 messages of 64 blocks, takes 2,109,520 nodes,
+  and its machine is priced at that capacity from the baseline on, about
+  298 MB with what its tables hold while they grow (skein's `codec.md`,
+  11.7); a machine holds only what the largest record it has met needed
+  (section 16).
 - **Windows across a mark.** A patched turn is the same conversation in
   current bytes, as smith's patch makes it; one of smith's patches may
   say instead that a window across it starts fresh (`mark
@@ -1799,6 +1802,10 @@ was made (`../domain/tasks.md`, section 3):
   whole-file bound is at least that, checked at startup with the worst
   case, or the start is refused naming it; a test world's drivers are
   made with such a bound (skein-io's `FileIo::with_whole_limit`).
+- **A page read whole:** a transcript frame of up to the page is read
+  back in one read, so each file driver reads at least the page, checked
+  at startup, or the start is refused naming it; a test world that
+  raises its page raises its drivers' read with it.
 - **Checked whole at startup** with the root's and every component's
   (`configuration.md`, section 6).
 
@@ -1962,12 +1969,14 @@ Each within jig's suites' budgets.
     core's identity plan over every core record, though no row in the
     map holds a turn; a frames' root kept out of `Row`'s `Value` would
     spare that walk;
-  - smith's machine is made for the most nodes its kept turn allows
-    (8.6): from the baseline on, about 298 MB of tables per serving
-    store (`Patcher::worst_case_heap` at 2,109,520 nodes), priced and
-    reserved though a typical turn takes a few hundred nodes. The way
-    out is skein's `Patcher` growing its tables in bounded steps up to
-    its capacity (filed with skein);
+  - smith's machine is priced for the most nodes its kept turn allows
+    (8.6): from the baseline on, about 298 MB per serving store
+    (`Patcher::worst_case_heap` at 2,109,520 nodes), though a typical
+    turn takes a few hundred nodes. Its tables grow in bounded steps
+    (skein's `codec.md`, 11.7), so a store holds what its largest turn
+    needed, not the price; but it keeps that room until the machine
+    goes, so one large turn keeps it large (skein's `codec.md`, 13,
+    "Shrinking");
   - the children's rules, strictly, their live sets' limits, and the
     rows the core's census chooses, in the check before the switch
     (10.2, step 5; `../domain/engine.md`, section 6). The rules live in
