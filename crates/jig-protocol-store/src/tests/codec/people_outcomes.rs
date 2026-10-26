@@ -234,3 +234,9 @@ fn settings_asks_outcomes_and_all_faults_round_trip_under_people_13() {
         }
     }
 }
+
+#[test]
+fn move_to_newest_asks_and_outcomes_round_trip_under_people_13() {
+    super::ask_round_trip(domain::Ask::MoveToNewest { revision: 7 });
+    people_round_trip(values::answered(domain::Outcome::MovedToNewest { newest: 9, moved: 3, stayed: 1 }));
+}

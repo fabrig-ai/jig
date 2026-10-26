@@ -63,6 +63,7 @@ pub(super) fn ask(
             | people::Ask::Rename { .. }
             | people::Ask::MakeProject { .. }
             | people::Ask::ChangeSettings { .. }
+            | people::Ask::MoveToNewest { .. }
             | people::Ask::ChangePolicy { .. }
             | people::Ask::AccountSignIn { .. }
             | people::Ask::AccountSignOut { .. }

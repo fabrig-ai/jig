@@ -238,6 +238,11 @@ pub(crate) fn outcome(value: &w::Outcome, limits: &Limits) -> Result<c::Outcome,
             how: decision(row.how(), limits)?,
             at: Wall::from_nanos(row.at()),
         },
+        w::Outcome::MovedToNewest(value) => c::Outcome::MovedToNewest(c::OutcomeMovedToNewest {
+            newest: value.newest(),
+            moved: value.moved(),
+            stayed: value.stayed(),
+        }),
         w::Outcome::SettingsChanged(value) => {
             c::Outcome::SettingsChanged(super::settings::restore_outcome_settings_changed(value, limits)?)
         }

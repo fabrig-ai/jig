@@ -162,7 +162,8 @@ impl Thread {
                 | Outcome::Decided { .. }
                 | Outcome::DecidedFirst { .. }
                 | Outcome::Changed
-                | Outcome::SettingsChanged(_),
+                | Outcome::SettingsChanged(_)
+                | Outcome::MovedToNewest(_),
             )
             | Answer::Refused { .. } => None,
         };

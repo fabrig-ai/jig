@@ -1146,3 +1146,27 @@ fn held_versions_past_their_limit_refuse_the_change_without_writing_settings() {
     );
     assert_eq!(settings_rows(&world), before);
 }
+
+#[test]
+fn move_to_newest_of_the_newest_moves_nothing_and_an_unknown_revision_is_refused() {
+    let mut world = start(64);
+    let signed = sign_in(&mut world);
+    let before = settings_rows(&world);
+    let moved = people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 1, moved: 0, stayed: 0 });
+    assert_eq!(ask(&mut world, signed, 51, people::Ask::MoveToNewest { revision: 1 }), moved);
+    assert_eq!(ask(&mut world, signed, 51, people::Ask::MoveToNewest { revision: 1 }), moved);
+    assert_eq!(
+        ask(&mut world, signed, 52, people::Ask::MoveToNewest { revision: 7 }),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Unknown))
+    );
+    world.send(root::Event::Core(core::Event::People(people::Event::Roles {
+        project: people::DEPLOYMENT,
+        holdings: Box::new([people::Holding { person: OWNER, role: people::Role::Member }]),
+    })));
+    assert_eq!(
+        ask(&mut world, signed, 53, people::Ask::MoveToNewest { revision: 1 }),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Role { held: Some(people::Role::Member) }))
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert_eq!(world.domain.settings().newest(), 1);
+}

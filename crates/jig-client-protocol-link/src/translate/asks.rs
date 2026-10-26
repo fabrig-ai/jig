@@ -554,6 +554,9 @@ pub(crate) fn wire_holding(value: &c::Holding, limits: &w::Limits) -> Result<w::
 #[expect(clippy::too_many_lines, reason = "one exhaustive field translation arm per client ask")]
 pub fn ask(value: &c::Ask, limits: &w::Limits) -> Result<w::Ask, w::Problem> {
     Ok(match value {
+        c::Ask::MoveToNewest(value) => {
+            w::Ask::MoveToNewest(w::MoveToNewest::new(limits, w::MoveToNewestParts { revision: value.revision })?)
+        }
         c::Ask::ChangeSettings(value) => w::Ask::ChangeSettings(super::settings::wire_change_settings(value, limits)?),
         c::Ask::Propose { project, action, reason } => super::operations::propose(*project, action, reason, limits)?,
         c::Ask::Withdraw { project, proposal } => {

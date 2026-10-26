@@ -116,6 +116,7 @@ pub enum AnswerOn {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Ask {
     ChangeSettings(super::ChangeSettings),
+    MoveToNewest(super::MoveToNewest),
     /// Admit and create a batch together.
     Create {
         project: u32,
@@ -277,6 +278,7 @@ pub enum AccountHolder {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Outcome {
     SettingsChanged(super::OutcomeSettingsChanged),
+    MovedToNewest(super::OutcomeMovedToNewest),
     /// Whole committed owner facts, without inferred names or explanations.
     Owner(super::OwnerOutcome),
     /// A named thing was made.

@@ -580,3 +580,26 @@ fn settings_inventory_refuses_one_line_past_the_wire_and_receiving_limits() {
     wire.encode(&mut encoded).unwrap();
     assert_eq!(w::SettingsDocument::decode(&narrow, &mut Reader::new(&encoded.finish())), Err(problem));
 }
+
+#[test]
+fn move_to_newest_retains_its_revision_and_hears_both_counts() {
+    let limits = Limits::new(fixtures::limits().client, 4).expect("limits");
+    let ask = c::Ask::MoveToNewest(c::MoveToNewest { revision: 7 });
+    let wire = translate::asks::ask(&ask, &limits.wire).expect("ask");
+    assert_eq!(translate::store::restore_ask(wire, &limits), Ok(ask));
+    let outcome = w::Outcome::MovedToNewest(
+        w::OutcomeMovedToNewest::new(&limits.wire, w::OutcomeMovedToNewestParts { newest: 9, moved: 3, stayed: 1 })
+            .expect("counts"),
+    );
+    let answer = w::Final::Done(w::Done::new(&limits.wire, w::DoneParts { outcome }).expect("done"));
+    let mut bytes = Writer::new(usize::try_from(answer.measure()).expect("measure"));
+    answer.encode(&mut bytes).expect("measured answer");
+    let answer = w::KeyedAnswer::FinalAnswer(
+        w::Owned::new(&limits.wire, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() })
+            .expect("answer"),
+    );
+    assert_eq!(
+        translate::answers::answer(answer, &limits),
+        Ok(c::Answer::Done(c::Outcome::MovedToNewest(c::OutcomeMovedToNewest { newest: 9, moved: 3, stayed: 1 })))
+    );
+}

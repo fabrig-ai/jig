@@ -43,6 +43,7 @@ fn decode(
     names: &mut List<Box<[u8]>>,
 ) -> Result<p::Ask, Untranslatable> {
     Ok(match record {
+        w::Ask::MoveToNewest(value) => p::Ask::MoveToNewest { revision: value.revision() },
         w::Ask::ChangeSettings(value) => {
             let against = value.against();
             let record = w::Ask::ChangeSettings(value);

@@ -42,6 +42,7 @@ fn operation(value: &c::Operation, limits: &w::Limits) -> Result<w::Operation, w
         w::Ask::Stop(v) => w::Operation::Stop(v),
         w::Ask::MoveTask(v) => w::Operation::MoveTask(v),
         w::Ask::ChangeSettings(_)
+        | w::Ask::MoveToNewest(_)
         | w::Ask::Propose(_)
         | w::Ask::Withdraw(_)
         | w::Ask::Create(_)
@@ -94,6 +95,7 @@ pub(super) fn restore(value: w::Compound, limits: &Limits) -> Result<c::Ask, w::
             c::Ask::Stop { project, task } => c::Operation::Stop { project, task },
             c::Ask::Move { project, task, reason } => c::Operation::Move { project, task, reason },
             c::Ask::ChangeSettings(_)
+            | c::Ask::MoveToNewest(_)
             | c::Ask::Propose { .. }
             | c::Ask::Withdraw { .. }
             | c::Ask::Create { .. }

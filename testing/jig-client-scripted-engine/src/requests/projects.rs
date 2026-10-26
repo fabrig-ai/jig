@@ -14,6 +14,7 @@ impl<A: Application> Engine<A> {
             Ask::Rename { project, name } => (Some(*project), name, None),
             Ask::MakeProject { name, policy } => (None, name, Some(*policy)),
             Ask::ChangeSettings(_)
+            | Ask::MoveToNewest(_)
             | Ask::Create { .. }
             | Ask::Propose { .. }
             | Ask::Withdraw { .. }

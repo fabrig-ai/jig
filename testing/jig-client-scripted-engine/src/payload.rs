@@ -186,7 +186,7 @@ impl Payload for Ask {
                 | jig_client_domain::contract::AccountChange::MoveSource { .. }
                 | jig_client_domain::contract::AccountChange::SetUses { uses: None, .. } => Some(0),
             },
-            Self::Withdraw { .. } | Self::SignIn { .. } | Self::SignOut { .. } => Some(0),
+            Self::MoveToNewest(_) | Self::Withdraw { .. } | Self::SignIn { .. } | Self::SignOut { .. } => Some(0),
             Self::Compound { operations, .. } => operations.heap(bounds),
             Self::Message { project, task, words } => {
                 sum(&[project.heap(bounds), task.heap(bounds), words.heap(bounds)])
@@ -243,7 +243,7 @@ impl Payload for Outcome {
             Self::Proposed { proposal } => sum(&[proposal.heap(bounds)]),
             Self::Decided { by, how, at } => sum(&[by.heap(bounds), how.heap(bounds), at.heap(bounds)]),
             Self::DecidedFirst { by, how, at } => sum(&[by.heap(bounds), how.heap(bounds), at.heap(bounds)]),
-            Self::SettingsChanged(_) | Self::Changed => Some(0),
+            Self::MovedToNewest(_) | Self::SettingsChanged(_) | Self::Changed => Some(0),
         }
     }
 }
