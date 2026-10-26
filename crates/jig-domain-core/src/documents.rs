@@ -34,6 +34,7 @@ pub use accounts::{AccountLine, Accounts, LastEnd, SignInLine, SourceLine};
 pub use jig_domain_accounts::Use;
 mod deployment;
 mod settings;
+pub(crate) use settings::inventory as settings_inventory;
 mod settings_review;
 pub use settings::{Follows, HeldRevision, SettingLine, Settings, SettingsProposal};
 pub use settings_review::{ReviewItem, SettingsReview, settings_heads};

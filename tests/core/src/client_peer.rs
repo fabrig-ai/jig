@@ -142,6 +142,7 @@ impl ClientPeer {
             core::Now::SignInRefused { .. } | core::Now::WatchRefused { .. } | core::Now::RunText { .. } => true,
             core::Now::Relayed { .. }
             | core::Now::EffectAnswer { .. }
+            | core::Now::SettingsAnswer { .. }
             | core::Now::SettledCallRefused { .. }
             | core::Now::Call { .. }
             | core::Now::RelayBusy { .. }
