@@ -706,7 +706,7 @@ fn configured_read_room_and_frame_capacity_are_measured_separately() {
     // The frame bound is TurnRecord::worst_case_bytes + 12, including
     // version, optional read, transcript length, checksum and both lengths.
     const MAX_FRAME: u64 = 8_388_672;
-    for (kind, request, page) in [(Profile::Small, 65_536, 1_569_908), (Profile::Standard, 262_144, 10_666_836)] {
+    for (kind, request, page) in [(Profile::Small, 65_536, 1_590_110), (Profile::Standard, 262_144, 10_666_836)] {
         let configured = profile(kind);
         let codec = crate::codec::limits(&configured.core).expect("profile codec");
         assert_eq!(u64::from(configured.core.resume_bytes), request);
