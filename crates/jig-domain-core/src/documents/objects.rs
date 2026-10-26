@@ -352,10 +352,17 @@ fn amendment(
                     Some(change) => change.instructions.as_ref().or(row.instructions.as_ref()),
                     None => row.instructions.as_ref(),
                 };
-                Some(super::small::text(
-                    value.unwrap_or(&core.charter(charter).expect("task charter configured").policy.instructions),
-                    limits.documents.text_bytes,
-                ))
+                let value = match value {
+                    Some(value) => Some(value),
+                    None => match core.charter_at(charter, row.settings.task) {
+                        Some(charter) => Some(&charter.policy.instructions),
+                        None => None,
+                    },
+                };
+                match value {
+                    Some(value) => Some(super::small::text(value, limits.documents.text_bytes)),
+                    None => None,
+                }
             }
             tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => None,
         },

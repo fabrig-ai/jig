@@ -255,7 +255,7 @@ impl Core {
             return false;
         }
         self::role(self, &env.limits, project, name.clone(), role);
-        let mut out = Queue::with_capacity(tasks::max_out(&env.limits.tasks));
+        let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
         tasks::step(
             &mut self.tasks,
             &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },

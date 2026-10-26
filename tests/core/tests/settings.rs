@@ -913,3 +913,229 @@ fn a_revision_item_past_the_single_read_budget_answers_its_encoded_size() {
     let w::RevisionEdit::TooLarge(size) = item.edit() else { panic!("item size") };
     assert_eq!(size.bytes(), ENCODED_TEMPLATE_BYTES);
 }
+
+fn held_goal(world: &mut World, signed: u64, request: u8) -> u64 {
+    let mut goal = fixtures::chat(world, 1, b"Keep working on this goal".as_slice().into());
+    let people::Ask::Create { batch, .. } = &mut goal else { panic!("goal creation") };
+    batch[0].flags.conversation = false;
+    batch[0].flags.listed = true;
+    batch[0].budget = people::Budget::Named;
+    batch[0].authority.spend = 40;
+    let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(world, signed, request, goal) else {
+        panic!("goal admitted")
+    };
+    first
+}
+fn held_run() -> (World, u64, u64) {
+    held_run_with_history(64)
+}
+fn held_run_with_history(history: u32) -> (World, u64, u64) {
+    let (mut config, mut limits) = configuration();
+    limits.core.settings.history = history;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let goal = held_goal(&mut world, signed, 101);
+    assert_eq!(world.assigned.as_ref().expect("live goal").task, goal);
+    (world, signed, goal)
+}
+fn instructions_edit(world: &World, instructions: &[u8]) -> settings::Item {
+    let mut charter = world.domain.settings().charter(1).expect("offered charter").clone();
+    charter.policy.instructions = instructions.into();
+    settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    }
+}
+fn change_instructions(world: &mut World, signed: u64) {
+    let item = instructions_edit(world, b"Instructions from revision two.");
+    changed(&change(world, signed, 102, 1, Box::new([item])), 2);
+}
+#[test]
+fn a_charter_changed_while_its_goal_runs_keeps_the_run_and_the_goal_on_their_version() {
+    let (mut world, signed, goal) = held_run();
+    let old_policy = world.assigned.as_ref().expect("live goal").run.policy.clone();
+    let assignments = world.assignments.clone();
+    change_instructions(&mut world, signed);
+    assert_eq!(world.assignments, assignments);
+    assert_eq!(world.assigned.as_ref().expect("unchanged assignment").run.policy, old_policy);
+    assert!(world.cancellations.is_empty());
+    world.end(jig_domain_tasks::End::Parked, 0);
+    let reply =
+        ask(&mut world, signed, 103, people::Ask::Say { project: 1, task: goal, words: b"Continue".as_slice().into() });
+    assert!(matches!(reply, people::Reply::Outcome(people::Outcome::Said { .. })), "{reply:?}");
+    let next = world.assigned.as_ref().expect("goal's next run");
+    assert_eq!(next.task, goal);
+    assert!(next.attempt > assignments[0].1);
+    assert_eq!(next.run.policy.instructions, old_policy.instructions);
+    assert_eq!(fixtures::live_row(&world, goal).settings, jig_domain_tasks::SettingsRevision { task: 1, run: Some(1) });
+    fixtures::finish_chat(&mut world, 0, b"Done");
+    let new_task = held_goal(&mut world, signed, 104);
+    assert_eq!(world.assigned.as_ref().expect("new task").task, new_task);
+    assert_eq!(
+        world.assigned.as_ref().expect("new task").run.policy.instructions.as_ref(),
+        b"Instructions from revision two."
+    );
+    assert_eq!(fixtures::live_row(&world, new_task).settings.task, 2);
+}
+#[test]
+fn a_delegate_is_made_on_the_newest_whatever_its_parents_revision() {
+    let (mut world, signed, goal) = held_run();
+    let attempt = world.assigned.as_ref().expect("goal run").attempt;
+    change_instructions(&mut world, signed);
+    let member = fixtures::member(&world, jig_domain_tasks::Executor::Agent { charter: 1 }, b"A fresh delegate");
+    let delegate = fixtures::delegate(&mut world, (goal, attempt), 1, member);
+    assert_eq!(fixtures::live_row(&world, delegate).settings.task, 2);
+    assert_eq!(fixtures::live_row(&world, goal).settings.task, 1);
+    world.end(jig_domain_tasks::End::Parked, 0);
+    let assigned = world.assigned.as_ref().expect("delegate run");
+    assert_eq!(assigned.task, delegate);
+    assert_eq!(assigned.run.policy.instructions.as_ref(), b"Instructions from revision two.");
+    assert_eq!(fixtures::live_row(&world, delegate).settings.run, Some(2));
+}
+#[test]
+fn a_held_revisions_charter_reads_whole_and_the_inventory_counts_its_holders() {
+    let (mut world, signed, _) = held_run();
+    change_instructions(&mut world, signed);
+    let reads::Answer::Setting(value) =
+        client_read(&mut world, signed, reads::Read::Setting { setting: settings::Setting::Charter(1), revision: 1 })
+    else {
+        panic!("held charter")
+    };
+    let settings::Value::Charter(charter) = value.value else { panic!("charter value") };
+    assert_eq!(charter.policy.instructions.as_ref(), b"Answer within the granted authority.");
+    let document = inventory(&mut world, signed);
+    assert_eq!(document.held.iter().map(|row| (row.head.number, row.holders)).collect::<Vec<_>>(), [(1, 1), (2, 0)]);
+    assert_eq!(
+        client_read(&mut world, signed, reads::Read::Setting { setting: settings::Setting::Template(1), revision: 1 }),
+        reads::Answer::None(reads::Why::Unknown)
+    );
+    let reads::Answer::Revision(value) = client_read(&mut world, signed, reads::Read::Revision { number: 1 }) else {
+        panic!("held record")
+    };
+    assert!(matches!(*value, reads::RevisionAnswer::Revision { revision, .. } if revision.head.number == 1));
+    let reads::Answer::Revisions(page) = client_read(&mut world, signed, reads::Read::Revisions { before: None })
+    else {
+        panic!("held history page")
+    };
+    assert_eq!(page.rows.iter().map(|row| row.head.number).collect::<Vec<_>>(), [2, 1]);
+}
+#[test]
+fn a_revision_leaves_memory_as_its_last_holder_ends() {
+    let (mut world, signed, goal) = held_run();
+    change_instructions(&mut world, signed);
+    assert!(world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 1 })));
+    fixtures::finish_chat(&mut world, 0, b"Done");
+    let ended = root::Key::Core(core::Key::Tasks(jig_domain_tasks::Key::Ended(goal)));
+    let decision = world
+        .commits
+        .iter()
+        .find(|writes| writes.iter().any(|write| matches!(write, root::Write::Save(record) if record.key() == ended)))
+        .expect("ending decision");
+    assert!(decision.iter().any(|write| matches!(write, root::Write::CopySettingsRevision(1))));
+    assert!(
+        decision
+            .iter()
+            .any(|write| matches!(write, root::Write::Erase(address) if *address == key(settings::Key::Held(1))))
+    );
+    assert!(decision.iter().any(|write| matches!(write, root::Write::Erase(address) if *address == key(settings::Key::Charter { charter: 1, revision: 1 }))));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Charter { charter: 1, revision: 1 })));
+    let reads::Answer::Historical(past) = client_read(&mut world, signed, reads::Read::Task { task: goal }) else {
+        panic!("ended task")
+    };
+    let reads::Past::Task { document, .. } = past.value else { panic!("ended task document") };
+    assert!(document.instructions.is_none(), "a released revision supplies no charter fields");
+    assert_eq!(revision(&world, 1, true).head.number, 1);
+    assert_eq!(inventory(&mut world, signed).held.iter().map(|row| row.head.number).collect::<Vec<_>>(), [2]);
+    assert_eq!(
+        client_read(&mut world, signed, reads::Read::Setting { setting: settings::Setting::Charter(1), revision: 1 }),
+        reads::Answer::None(reads::Why::Unknown)
+    );
+    let reads::Answer::Revision(value) = client_read(&mut world, signed, reads::Read::Revision { number: 1 }) else {
+        panic!("archived record")
+    };
+    assert!(matches!(*value, reads::RevisionAnswer::Revision { revision, .. } if revision.head.number == 1));
+}
+#[test]
+fn held_revisions_past_their_limit_refuse_the_change_naming_the_oldest_and_its_tasks() {
+    let (config, mut limits) = configuration();
+    limits.core.settings.revisions = 1;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let first = held_goal(&mut world, signed, 101);
+    change_instructions(&mut world, signed);
+    let _second = held_goal(&mut world, signed, 103);
+    let before = settings_rows(&world);
+    let item = instructions_edit(&world, b"One revision too many.");
+    assert_eq!(
+        change(&mut world, signed, 104, 2, Box::new([item])),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
+            revision: 1,
+            tasks: Box::new([first]),
+            more: 0
+        }))
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert_eq!(world.domain.settings().newest(), 2);
+}
+
+#[test]
+fn a_held_record_below_the_history_cutoff_is_read_then_erased_without_a_copy() {
+    let (mut world, signed, goal) = held_run_with_history(1);
+    change_instructions(&mut world, signed);
+    for (request, against) in [(103, 2), (104, 3)] {
+        let item = template_edit(&world, u64::from(against) + 5);
+        changed(&change(&mut world, signed, request, against, Box::new([item])), against + 1);
+    }
+    let reads::Answer::Revision(value) = client_read(&mut world, signed, reads::Read::Revision { number: 1 }) else {
+        panic!("held record below cutoff")
+    };
+    assert!(matches!(*value, reads::RevisionAnswer::Revision { revision, .. } if revision.head.number == 1));
+    let reads::Answer::Revisions(page) = client_read(&mut world, signed, reads::Read::Revisions { before: Some(3) })
+    else {
+        panic!("held page below cutoff")
+    };
+    assert_eq!(page.rows.iter().map(|row| row.head.number).collect::<Vec<_>>(), [1]);
+    let before = world.commits.len();
+    fixtures::finish_chat(&mut world, 0, b"Done");
+    assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));
+    assert!(!world.store.rows.contains_key(&key(settings::Key::History(1))));
+    assert!(
+        !world.commits[before..].iter().flatten().any(|write| matches!(write, root::Write::CopySettingsRevision(1)))
+    );
+    assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::Tasks(jig_domain_tasks::Key::Live(goal)))));
+}
+#[test]
+fn held_versions_past_their_limit_refuse_the_change_without_writing_settings() {
+    let (config, mut limits) = configuration();
+    limits.core.settings.versions = 1;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    ready_host(&mut world);
+    let first = held_goal(&mut world, signed, 101);
+    change_instructions(&mut world, signed);
+    let _second = held_goal(&mut world, signed, 103);
+    let before = settings_rows(&world);
+    let item = instructions_edit(&world, b"One version too many.");
+    assert_eq!(
+        change(&mut world, signed, 104, 2, Box::new([item])),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
+            revision: 1,
+            tasks: Box::new([first]),
+            more: 0
+        }))
+    );
+    assert_eq!(settings_rows(&world), before);
+}

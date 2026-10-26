@@ -158,9 +158,13 @@ fn each_settings_record_round_trips_its_whole_domain_value() {
         proposal: Some((people::Proposer::Task(8), 9)),
         moved: true,
     };
-    let mut rows = skein_lib::List::with_capacity(27);
+    let mut rows = skein_lib::List::with_capacity(28);
     for row in [
         s::Record::Extent { oldest: 1 },
+        s::Record::Revision {
+            history: false,
+            revision: s::Revision { head: s::Head { number: 1, against: 0, ..head.clone() }, items: Box::new([]) },
+        },
         s::Record::Charter { charter: 1, revision: 2, value: s::CharterVersion { charter: Some(Box::new(charter())) } },
         s::Record::Charter { charter: 1, revision: 3, value: s::CharterVersion { charter: None } },
     ] {

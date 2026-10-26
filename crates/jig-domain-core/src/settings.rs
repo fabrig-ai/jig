@@ -6,6 +6,8 @@ use jig_domain_people as people;
 use skein_lib::{List, Map, Wall};
 
 mod change;
+pub(crate) mod held;
+pub use held::{Held, VersionKey};
 pub(crate) mod check;
 pub(crate) use change::{apply, change_shape, changes_current};
 pub(crate) mod restart;
@@ -364,8 +366,13 @@ pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
         Map::<Setting, bool>::worst_case(count.checked_mul(2)?)?.checked_add(Map::<Setting, ()>::worst_case(count)?)?;
     let walks = Map::<Setting, ()>::worst_case(count.checked_mul(4)?)?
         .checked_add(List::<Setting>::worst_case(count.checked_mul(4)?)?)?
-        .checked_add(List::<jig_domain_tasks::CharterModels>::worst_case(limits.tasks.charters)?)?
-        .checked_add(u64::from(limits.tasks.charters).checked_mul(u64::from(jig_domain_tasks::MODELS))?)?
+        .checked_add(List::<jig_domain_tasks::CharterModels>::worst_case(
+            limits.tasks.charters.checked_mul(2)?.checked_add(limits.settings.versions)?,
+        )?)?
+        .checked_add(
+            u64::from(limits.tasks.charters.checked_mul(2)?.checked_add(limits.settings.versions)?)
+                .checked_mul(u64::from(jig_domain_tasks::MODELS))?,
+        )?
         .checked_add(List::<u64>::worst_case(limits.tasks.circle)?)?
         .checked_add(u64::try_from(size_of::<Change>()).ok()?)?;
     set_worst_case(limits)?
@@ -373,6 +380,7 @@ pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
         .checked_add(walks)?
         .checked_add(maps)?
         .checked_add(restore)?
+        .checked_add(held::worst_case(limits)?)?
         .checked_add(u64::try_from(size_of::<Head>()).ok()?)
 }
 
@@ -418,7 +426,9 @@ pub fn writes_worst_case(limits: &crate::Limits) -> Option<u32> {
         .checked_add(limits.people.initial_owners)?
         .checked_add(limits.authority.projects.checked_mul(2)?)?
         .checked_add(4)?;
-    first.max(count.checked_mul(2)?.checked_add(8)?).checked_add(withdrawal_writes(limits)?)
+    first
+        .max(count.checked_mul(4)?.checked_add(8)?.checked_add(limits.settings.versions.checked_mul(2)?)?)
+        .checked_add(withdrawal_writes(limits)?)
 }
 
 /// Each withdrawal erases the set and pending row, saves the terminal row and
@@ -457,4 +467,14 @@ pub(crate) fn task_limits(limits: &crate::Limits) -> jig_domain_tasks::Limits {
     tasks.revisions = limits.settings.revisions;
     tasks.versions = limits.settings.versions;
     tasks
+}
+
+/// A decision may end every old revision and drop every retained version.
+pub(crate) fn release_writes(limits: &crate::Limits) -> Option<u32> {
+    limits.settings.revisions.checked_mul(3)?.checked_add(limits.settings.versions)
+}
+
+/// Child output room uses the same revision limits as the child's allocation.
+pub(crate) fn task_room(limits: &crate::Limits) -> u32 {
+    jig_domain_tasks::max_out(&task_limits(limits))
 }

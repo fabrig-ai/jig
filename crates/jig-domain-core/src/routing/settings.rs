@@ -112,6 +112,24 @@ pub(super) fn decide(
     let Some(number) = previous.checked_add(1) else {
         return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
     };
+    let keep_previous = core.tasks.holders(previous) > 0;
+    let plan = core.held.plan(
+        &core.current,
+        &change.items,
+        number,
+        if keep_previous { Some(previous) } else { None },
+        &env.limits,
+    );
+    if core.held.heads.len().checked_add(u32::from(keep_previous)).expect("held count") > env.limits.settings.revisions
+        || plan.versions() > env.limits.settings.versions
+    {
+        let revision = match core.held.heads.first() {
+            Some((&revision, _)) => revision,
+            None => previous,
+        };
+        let (tasks, more) = core.tasks.holding(revision, env.limits.tasks.circle);
+        return Err(people::Refusal::Full { revision, tasks, more });
+    }
     let mut templates = false;
     let mut rules = false;
     let mut charters = false;
@@ -124,17 +142,25 @@ pub(super) fn decide(
             }
         }
     }
+    let before = out.len();
+    charters |= core.held.retain(&core.current, &plan, out);
+    let held_writes = out.len().checked_sub(before).expect("held writes appended");
+    if keep_previous {
+        core.held.heads.insert(previous, core.current.head.clone()).expect("held heads preflighted");
+    }
     let writes = s::apply(&mut core.current, &change.items, number);
     core.current.head =
         s::Head { number, against: previous, at: env.wall, by, proposal, moved: change.running == s::Running::Moves };
     let revision = s::Revision { head: core.current.head.clone(), items: change.items };
-    let (writes, oldest) = s::revision_writes(
+    let (writes, oldest) = s::restart::revision_writes_with_hold(
         Some(revision),
         writes,
         core.current.oldest,
         core.current.newest(),
         env.limits.settings.history,
-        room.saturating_sub(s::withdrawal_writes(&env.limits).expect("withdrawal write bound")),
+        room.saturating_sub(s::withdrawal_writes(&env.limits).expect("withdrawal write bound"))
+            .saturating_sub(held_writes),
+        keep_previous,
     );
     core.current.oldest = oldest;
     for write in writes.into_boxed() {

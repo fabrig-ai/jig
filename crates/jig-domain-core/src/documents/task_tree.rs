@@ -798,13 +798,19 @@ pub fn task_from_row(
         words: super::small::text(&row.spec.words, limits.documents.text_bytes),
         parameters,
         instructions: match row.executor {
-            tasks::Executor::Agent { charter } => Some(super::small::text(
-                match &row.instructions {
-                    Some(instructions) => instructions,
-                    None => &core.charter(charter).expect("task charter configured").policy.instructions,
-                },
-                limits.documents.text_bytes,
-            )),
+            tasks::Executor::Agent { charter } => {
+                let value = match &row.instructions {
+                    Some(instructions) => Some(instructions),
+                    None => match core.charter_at(charter, row.settings.task) {
+                        Some(charter) => Some(&charter.policy.instructions),
+                        None => None,
+                    },
+                };
+                match value {
+                    Some(value) => Some(super::small::text(value, limits.documents.text_bytes)),
+                    None => None,
+                }
+            }
             tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => None,
         },
         llm: row.llm.clone(),

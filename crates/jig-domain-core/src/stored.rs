@@ -377,7 +377,7 @@ impl Core {
                     jig_domain_tasks::Executor::Procedure { .. } | jig_domain_tasks::Executor::Person(_) => None,
                 };
                 if let Some(number) = number {
-                    let valid = match self.charter(number) {
+                    let valid = match self.charter_at(number, task.settings.task) {
                         Some(charter) => match &task.llm {
                             Some(choice) => crate::llm::takes(&self.settings.models, &charter.policy, choice),
                             None => true,
@@ -515,7 +515,7 @@ impl Core {
 fn supported_task(task: &jig_domain_tasks::TaskRecord, core: &Core) -> bool {
     use jig_domain_tasks as tasks;
     let executor = match task.executor {
-        tasks::Executor::Agent { charter } => core.charter(charter).is_some(),
+        tasks::Executor::Agent { charter } => core.charter_at(charter, task.settings.task).is_some(),
         tasks::Executor::Procedure { code, .. } => code != 0,
         tasks::Executor::Person(tasks::PersonAddress::Person(person)) => person != 0,
         tasks::Executor::Person(tasks::PersonAddress::Role(_)) => true,

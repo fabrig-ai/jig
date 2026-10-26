@@ -100,7 +100,7 @@ fn activity_orders_claim_turns_person_words_and_a_delegate_result_with_their_arc
         hits: 1,
         eligible: true,
     };
-    let mut words_out = Queue::with_capacity(tasks::max_out(&limits.tasks));
+    let mut words_out = Queue::with_capacity(settings::task_room(&limits));
     tasks::step(
         &mut core.tasks,
         &Env { now: env.now, wall: env.wall, limits: limits.tasks },

@@ -35,7 +35,7 @@ pub(super) fn append_people(core: &mut Core, env: &Env<Limits>, event: people::E
 }
 
 pub(super) fn append_tasks(core: &mut Core, env: &Env<Limits>, event: tasks::Event, out: &mut Queue<Request>) {
-    let room = tasks::max_out(&env.limits.tasks);
+    let room = crate::settings::task_room(&env.limits);
     let mut child = Queue::with_capacity(room);
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut child);
     let Requests::Out(mut routed) = tag_tasks(core, env, child, room, false, false, false);
@@ -59,7 +59,7 @@ pub(super) fn tag_brief(
     mut child: Queue<brief::GatherRequest>,
     room: u32,
 ) -> Requests {
-    let task_room = tasks::max_out(&env.limits.tasks).checked_mul(8).expect("bounded task routes");
+    let task_room = crate::settings::task_room(&env.limits).checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
     let total = room.checked_add(task_room).expect("brief and task room");
     let total = total.checked_add(party_room).expect("brief output room");
@@ -120,7 +120,7 @@ pub(super) fn tag_fleet(
     room: u32,
 ) -> Requests {
     let marked = room.checked_mul(4).expect("bounded fleet routes");
-    let task_room = tasks::max_out(&env.limits.tasks).checked_mul(8).expect("bounded task routes");
+    let task_room = crate::settings::task_room(&env.limits).checked_mul(8).expect("bounded task routes");
     let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
     let total = marked.checked_add(task_room).expect("fleet and task route room");
     let total = total.checked_add(party_room).expect("fleet and party route room");

@@ -1278,3 +1278,49 @@ fn restored_holders_count_a_distinct_run_revision_until_its_terminal() {
     settings_end(&mut h, 1);
     assert_eq!(h.domain.holders(2), 0);
 }
+
+#[test]
+fn released_names_only_revisions_with_no_holders_after_the_whole_step() {
+    let mut h = Harness::new();
+    h.make(vec![task(1, &[])]);
+    let prepared = h.send(Event::Prepare { reply_to: to(), task: 1 });
+    assert!(!prepared.iter().any(|r| match r {
+        Request::Released { .. } => true,
+        _ => false,
+    }));
+    settings_claim(&mut h, 1);
+    let terminal = h.send(Event::Activation {
+        reply_to: to(),
+        task: 1,
+        attempt: 1,
+        end: crate::End::Parked,
+        cause: crate::Cause::Unpriced,
+        saved: None,
+    });
+    assert!(!terminal.iter().any(|r| match r {
+        Request::Released { .. } => true,
+        _ => false,
+    }));
+    h.make(vec![task(2, &[])]);
+    assert_eq!(h.domain.holding(1, 1), (Box::<[u64]>::from([1]), 1));
+    settings_end(&mut h, 1);
+    h.send(Event::Control {
+        reply_to: to(),
+        by: Party::Person(9),
+        task: 2,
+        control: Control::Cancel { reason: Box::new([]), grace: None, message: None },
+    });
+    h.send(Event::EffectsSettled { task: 2 });
+    let ended = h.send(Event::Settled { task: 2 });
+    assert_eq!(
+        ended
+            .iter()
+            .filter(|r| match r {
+                Request::Released { revision: 1 } => true,
+                _ => false,
+            })
+            .count(),
+        1
+    );
+    assert_eq!(h.domain.holding(1, 1), (Box::<[u64]>::from([]), 0));
+}

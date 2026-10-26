@@ -55,8 +55,19 @@ pub(crate) fn models(
     limits: &Limits,
 ) -> Box<[tasks::CharterModels]> {
     let mut charters = List::with_capacity(
-        limits.tasks.charters.checked_add(limits.settings.versions).expect("charter version bound"),
+        limits
+            .tasks
+            .charters
+            .checked_mul(2)
+            .expect("newest charter states")
+            .checked_add(limits.settings.versions)
+            .expect("charter version bound"),
     );
+    append_models(current, settings, &mut charters);
+    charters.into_boxed()
+}
+
+fn append_models(current: &crate::settings::Current, settings: &Settings, charters: &mut List<tasks::CharterModels>) {
     for setting in &current.offered() {
         let number = match setting {
             crate::settings::Setting::Charter(number) => *number,
@@ -79,7 +90,6 @@ pub(crate) fn models(
                 .expect("removed charter version bound");
         }
     }
-    charters.into_boxed()
 }
 
 pub(crate) fn one_models(charter: &Charter, revision: u32, settings: &Settings) -> tasks::CharterModels {
@@ -141,17 +151,19 @@ impl Core {
         }
     }
 
-    /// Look up a configured charter by number.
+    /// The newest charter, for work about to be made (engine.md, 17.3).
     #[must_use]
     pub fn charter(&self, number: u32) -> Option<&Charter> {
         self.current.charter(number)
     }
 
-    /// An admitted live agent task's configured charter.
+    /// An admitted live agent task's run revision, or its own when no run lives.
     #[must_use]
     pub fn charter_of(&self, task: u64) -> &Charter {
-        let charter = match self.tasks.task(task).expect("live agent task").executor {
-            tasks::Executor::Agent { charter } => self.charter(charter),
+        let row = self.tasks.task(task).expect("live agent task");
+        let revision = row.settings.run.unwrap_or(row.settings.task);
+        let charter = match row.executor {
+            tasks::Executor::Agent { charter } => self.charter_at(charter, revision),
             tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => None,
         };
         charter.expect("agent task has configured charter")
@@ -206,4 +218,26 @@ impl Core {
         }
         false
     }
+}
+
+/// The newest view plus every retained value and erased-removal barrier.
+pub(crate) fn held_models(core: &Core, limits: &Limits) -> Box<[tasks::CharterModels]> {
+    let mut values = List::with_capacity(
+        limits
+            .tasks
+            .charters
+            .checked_mul(2)
+            .expect("newest charter states")
+            .checked_add(limits.settings.versions)
+            .expect("version models"),
+    );
+    append_models(&core.current, &core.settings, &mut values);
+    for (&key, value) in &core.held.versions {
+        let models = match &value.charter {
+            Some(charter) => one_models(charter, key.revision, &core.settings),
+            None => tasks::CharterModels { number: key.charter, revision: key.revision, models: None },
+        };
+        values.push(models).expect("held model table");
+    }
+    values.into_boxed()
 }
