@@ -183,30 +183,6 @@ impl Core {
         (bindings.into_boxed(), retained.into_boxed(), eligible)
     }
 
-    pub(crate) fn open_task(&self, task: u64) -> bool {
-        match self.tasks.task(task) {
-            Some(row) => row.flags.ended_by == jig_domain_tasks::EndedBy::Requester,
-            None => false,
-        }
-    }
-
-    pub(crate) fn program_offered(&self, task: u64, bindings: &[authority::AccountBinding]) -> bool {
-        if !self.open_task(task) {
-            return false;
-        }
-        for binding in bindings {
-            if let Some(source) = self.accounts.source(binding.source)
-                && source.account == binding.account
-                && source.kind == accounts::Kind::Program
-                && let Some(account) = self.accounts.account(binding.account)
-                && account.provider() == binding.provider
-            {
-                return true;
-            }
-        }
-        false
-    }
-
     pub(crate) fn provider(&self, model: &crate::Model) -> Option<u32> {
         Some(self.settings.llm_providers.serving(&model.name)?.number)
     }

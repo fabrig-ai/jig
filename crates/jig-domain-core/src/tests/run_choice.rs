@@ -267,7 +267,6 @@ fn terminal_after_zero_reset(account_terminal: bool) -> tasks::Tries {
         &mut core,
         &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
         Event::AnswerPayload {
-            grants_refused: false,
             run: Token::new(TASK),
             attempt: Token::new(7),
             payload: Token::new(99),
@@ -1021,14 +1020,13 @@ fn crossed_worker_claims_still_count_toward_restart_admission() {
     }
 }
 
-fn grants_answer(attempt: u64, refused: &[u64]) -> Event {
+fn invalid_start_answer(attempt: u64, refused: &[u64]) -> Event {
     Event::AnswerPayload {
-        grants_refused: true,
         run: Token::new(OPEN_TASK),
         attempt: Token::new(attempt),
         payload: Token::new(99),
         cumulative: 0,
-        end: tasks::End::Refused,
+        end: tasks::End::Failed(tasks::Class::Invalid),
         saved: None,
         invalid_saved: false,
         read: None,
@@ -1042,7 +1040,8 @@ fn a_stale_grants_refusal_drops_its_payload_without_rechecking() {
     let current = OPEN_ATTEMPT + 1;
     claim_open(&mut core, &limits, current);
     let before = core.tasks.task(OPEN_TASK).unwrap().clone();
-    let out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(OPEN_ATTEMPT, &[]));
+    let out =
+        step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, invalid_start_answer(OPEN_ATTEMPT, &[]));
     assert_eq!(core.tasks.task(OPEN_TASK).unwrap(), &before);
     assert_eq!(core.tasks.task(OPEN_TASK).unwrap().refusals, before.refusals);
     assert_eq!(core.tasks.task(OPEN_TASK).unwrap().tries, tasks::Tries::NONE);
@@ -1058,7 +1057,7 @@ fn a_stale_grants_refusal_drops_its_payload_without_rechecking() {
 }
 
 #[test]
-fn an_alternatives_program_source_rechecks_too() {
+fn an_alternatives_program_source_does_not_spare_a_try() {
     let (mut core, limits) = placement_fixture(accounts::Holder::Deployment, accounts::Holder::Party(OWNER), false);
     let mut alternative = core.settings.models[2].clone();
     alternative.program = Some(b"claude_code".as_slice().into());
@@ -1070,27 +1069,34 @@ fn an_alternatives_program_source_rechecks_too() {
     ]);
     core.proofs.get_mut(&OPEN_TASK).unwrap().accounts = bindings.clone();
     let refusals = core.tasks.task(OPEN_TASK).unwrap().refusals;
-    let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(OPEN_ATTEMPT, &[]));
+    let _out =
+        step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, invalid_start_answer(OPEN_ATTEMPT, &[]));
     let proof = core.proofs.get(&OPEN_TASK).unwrap();
-    assert_eq!(proof.terminal.as_ref().unwrap().end, tasks::End::Recheck);
+    assert_eq!(proof.terminal.as_ref().unwrap().end, tasks::End::Failed(tasks::Class::Invalid));
     assert_eq!(proof.accounts.as_ref(), bindings.as_ref());
     let task = core.tasks.task(OPEN_TASK).unwrap();
-    assert_eq!(task.phase, tasks::Phase::Active(tasks::Active::Due));
-    assert_eq!(task.tries, tasks::Tries::NONE);
+    let tasks::Phase::Active(tasks::Active::BackingOff { .. }) = task.phase else {
+        panic!("an invalid start backs off before its next try");
+    };
+    assert_eq!(task.tries, tasks::Tries { invalid: 1, ..tasks::Tries::NONE });
     assert_eq!(task.refusals, refusals);
 }
 
 #[test]
-fn a_grants_refusal_with_the_wrong_provider_keeps_its_refusal() {
+fn an_invalid_start_spends_a_try_despite_wrong_provider() {
     let (mut core, limits) = placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
     claim_open(&mut core, &limits, OPEN_ATTEMPT);
     core.proofs.get_mut(&OPEN_TASK).unwrap().accounts[0].provider = 2;
     let refusals = core.tasks.task(OPEN_TASK).unwrap().refusals;
-    let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(OPEN_ATTEMPT, &[]));
-    assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end, tasks::End::Refused);
+    let _out =
+        step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, invalid_start_answer(OPEN_ATTEMPT, &[]));
+    assert_eq!(
+        core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end,
+        tasks::End::Failed(tasks::Class::Invalid)
+    );
     let task = core.tasks.task(OPEN_TASK).unwrap();
-    assert_eq!(task.refusals, refusals + 1);
-    assert_eq!(task.tries, tasks::Tries::NONE);
+    assert_eq!(task.refusals, refusals);
+    assert_eq!(task.tries, tasks::Tries { invalid: 1, ..tasks::Tries::NONE });
     assert_eq!(task.attempt, OPEN_ATTEMPT);
 }
 
@@ -1104,7 +1110,7 @@ fn a_grants_refusal_above_the_offered_message_is_invalid() {
     let _out = step(
         &mut core,
         &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-        grants_answer(OPEN_ATTEMPT, &[OFFERED + 1]),
+        invalid_start_answer(OPEN_ATTEMPT, &[OFFERED + 1]),
     );
     assert_eq!(
         core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end,
@@ -1176,32 +1182,40 @@ fn a_repaired_source_makes_the_waiting_open_task_due() {
 }
 
 #[test]
-fn consecutive_grants_refusals_recheck_without_spending_tries_or_refusals() {
-    // Two successive attempts exercise the unchanged Recheck transition (hosts.md, 8.1).
-    const ATTEMPTS: [u64; 2] = [OPEN_ATTEMPT, OPEN_ATTEMPT + 1];
+fn a_repeated_grants_refusal_spends_its_tries() {
+    // The fixture allows one Invalid retry: the second failure holds the task.
+    const LAST_INVALID_TRY: u32 = 2;
     let (mut core, limits) = placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
     open(&mut core, &limits);
-    let refusals = core.tasks.task(OPEN_TASK).unwrap().refusals;
-    for attempt in ATTEMPTS {
-        let choice = core.run_choice(OPEN_TASK).unwrap();
-        assert_eq!(
-            choice.accounts.as_ref(),
-            &[authority::AccountBinding { provider: 1, account: 0, source: PERSONAL_SOURCE }]
-        );
+    let mut env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    for (attempt, invalid) in [(OPEN_ATTEMPT, 1), (OPEN_ATTEMPT + 1, LAST_INVALID_TRY)] {
         claim_existing_open(&mut core, &limits, attempt);
-        let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, grants_answer(attempt, &[]));
-        assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end, tasks::End::Recheck);
+        let _out = step(&mut core, &env, invalid_start_answer(attempt, &[]));
+        assert_eq!(
+            core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end,
+            tasks::End::Failed(tasks::Class::Invalid)
+        );
         let task = core.tasks.task(OPEN_TASK).unwrap();
-        assert_eq!(task.phase, tasks::Phase::Active(tasks::Active::Due));
-        assert_eq!(task.refusals, refusals);
-        assert_eq!(task.tries, tasks::Tries::NONE);
+        assert_eq!(task.tries, tasks::Tries { invalid, ..tasks::Tries::NONE });
+        assert_eq!(task.refusals, 0);
         assert_eq!(task.attempt, attempt);
-        core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
-        assert!(core.due_ready());
-        assert_eq!(core.take_due().unwrap().task, OPEN_TASK);
-        assert!(core.take_due().is_none());
+        if let tasks::Phase::Active(tasks::Active::BackingOff { until }) = task.phase {
+            env.now = core.tasks.next_deadline().unwrap();
+            env.wall = until;
+            drop(fire(&mut core, &env, Timer::Tasks));
+        }
     }
-    assert_eq!(core.run_choice(OPEN_TASK).unwrap().accounts[0].source, PERSONAL_SOURCE);
+    assert_eq!(
+        core.tasks.task(OPEN_TASK).unwrap().phase,
+        tasks::Phase::Held {
+            was: tasks::Was::Active(tasks::Active::Due),
+            why: tasks::Hold::Failures(tasks::Class::Invalid),
+            source: None,
+        }
+    );
+    core.due.push(core.tasks.run_context(OPEN_TASK).unwrap());
+    assert!(!core.due_ready());
+    assert!(core.take_due().is_none());
     assert_eq!(core.proofs.len(), 1);
 }
 
@@ -1262,141 +1276,56 @@ fn claim_rechecks_the_same_open_model_and_grant_view() {
 }
 
 #[test]
-fn only_fenced_uncommitted_open_program_grants_refusals_recheck() {
-    for (open_task, program, grants_refused, invalid_saved, cumulative, read, refused, accepted_turn, wanted) in [
-        (true, true, true, false, 0, None, &[][..], false, tasks::Tries::NONE),
-        (false, true, true, false, 0, None, &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, false, true, false, 0, None, &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, false, false, 0, None, &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, true, true, 0, None, &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, true, false, 1, None, &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, true, false, 0, Some(1), &[][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, true, false, 0, None, &[0][..], false, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-        (true, true, true, false, 0, None, &[][..], true, tasks::Tries { invalid: 1, ..tasks::Tries::NONE }),
-    ] {
-        let (mut core, limits) =
-            placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
-        if open_task {
-            open(&mut core, &limits);
-        } else {
-            make_task(&mut core, &limits, OPEN_TASK);
-        }
-        send_task(&mut core, &limits, tasks::Event::Prepare { reply_to: ReplyTo::new(FIRST), task: OPEN_TASK });
-        send_task(
-            &mut core,
-            &limits,
-            tasks::Event::Claim {
-                reply_to: ReplyTo::new(FIRST),
-                task: OPEN_TASK,
-                attempt: 7,
-                resumed: false,
-                budget: 10,
-                account: Some(0),
-                writes: Box::new([]),
-            },
-        );
-        let mut proof = RunProof::claimed(OPEN_TASK, 7, 7, None, fleet::HostKind::Worker);
-        proof.placement = Some(FIRST);
-        proof.accounts = Box::new([authority::AccountBinding {
-            provider: 1,
-            account: 0,
-            source: if program { PERSONAL_SOURCE } else { 1 },
-        }]);
-        if accepted_turn {
-            proof.turn = Some(TurnProof { turn: 1, cumulative: 0, read: None });
-        }
-        core.proofs.insert(OPEN_TASK, proof).unwrap();
-        let _out = step(
-            &mut core,
-            &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-            Event::AnswerPayload {
-                grants_refused,
-                run: Token::new(OPEN_TASK),
-                attempt: Token::new(7),
-                payload: Token::new(99),
-                cumulative,
-                end: tasks::End::Failed(tasks::Class::Invalid),
-                saved: None,
-                invalid_saved,
-                read,
-                refused: Box::from(refused),
-            },
-        );
-        assert_eq!(core.tasks.task(OPEN_TASK).unwrap().tries, wanted);
-        let terminal = core.proofs.get(&OPEN_TASK).unwrap().terminal.clone();
-        let before = core.tasks.task(OPEN_TASK).unwrap().clone();
-        let _replay = step(
-            &mut core,
-            &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-            Event::AnswerPayload {
-                grants_refused: true,
-                run: Token::new(OPEN_TASK),
-                attempt: Token::new(7),
-                payload: Token::new(100),
-                cumulative: 0,
-                end: tasks::End::Failed(tasks::Class::Invalid),
-                saved: None,
-                invalid_saved: false,
-                read: None,
-                refused: Box::new([]),
-            },
-        );
-        assert_eq!(core.tasks.task(OPEN_TASK).unwrap(), &before);
-        assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal, terminal);
-        if wanted == tasks::Tries::NONE {
-            assert_eq!(core.tasks.task(OPEN_TASK).unwrap().phase, tasks::Phase::Active(tasks::Active::Due));
-            assert_eq!(core.run_choice(OPEN_TASK).unwrap().accounts[0].source, PERSONAL_SOURCE);
-        }
-    }
-}
-
-#[test]
-fn a_fenced_grants_refusal_rechecks_independently_of_its_end_class() {
-    for end in [tasks::End::Failed(tasks::Class::Invalid), tasks::End::Refused] {
-        for grants_refused in [true, false] {
-            let (mut core, limits) =
-                placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
-            open(&mut core, &limits);
-            send_task(&mut core, &limits, tasks::Event::Prepare { reply_to: ReplyTo::new(FIRST), task: OPEN_TASK });
-            send_task(
-                &mut core,
-                &limits,
-                tasks::Event::Claim {
-                    reply_to: ReplyTo::new(FIRST),
-                    task: OPEN_TASK,
-                    attempt: 7,
-                    resumed: false,
-                    budget: 10,
-                    account: Some(0),
-                    writes: Box::new([]),
-                },
-            );
-            let mut proof = RunProof::claimed(OPEN_TASK, 7, 7, None, fleet::HostKind::Worker);
-            proof.placement = Some(FIRST);
-            proof.accounts = Box::new([authority::AccountBinding { provider: 1, account: 0, source: PERSONAL_SOURCE }]);
-            core.proofs.insert(OPEN_TASK, proof).unwrap();
-            let before = core.tasks.task(OPEN_TASK).unwrap().refusals;
-            let expected = if grants_refused { tasks::End::Recheck } else { end.clone() };
-            let _out = step(
-                &mut core,
-                &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-                Event::AnswerPayload {
-                    grants_refused,
-                    run: Token::new(OPEN_TASK),
-                    attempt: Token::new(7),
-                    payload: Token::new(99),
-                    cumulative: 0,
-                    end: end.clone(),
-                    saved: None,
-                    invalid_saved: false,
-                    read: None,
-                    refused: Box::new([]),
-                },
-            );
-            assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end, expected);
-            let refusals = core.tasks.task(OPEN_TASK).unwrap().refusals;
-            let added = u32::from(!grants_refused && end == tasks::End::Refused);
-            assert_eq!(refusals, before.checked_add(added).unwrap());
+fn an_invalid_start_spends_a_try_across_fences_and_endings() {
+    for ending in [tasks::EndedBy::Result, tasks::EndedBy::Requester] {
+        for program in [true, false] {
+            for (invalid_saved, cumulative, read, refused, accepted_turn) in [
+                (false, 0, None, &[][..], false),
+                (true, 0, None, &[][..], false),
+                (false, 1, None, &[][..], false),
+                (false, 0, Some(1), &[][..], false),
+                (false, 0, None, &[0][..], false),
+                (false, 0, None, &[][..], true),
+            ] {
+                let (mut core, limits) =
+                    placement_fixture(accounts::Holder::Party(OWNER), accounts::Holder::Party(OWNER), true);
+                make_task_ended_by(&mut core, &limits, OPEN_TASK, ending);
+                claim_existing_open(&mut core, &limits, OPEN_ATTEMPT);
+                core.proofs.get_mut(&OPEN_TASK).unwrap().accounts[0].source = if program { PERSONAL_SOURCE } else { 1 };
+                if accepted_turn {
+                    core.proofs.get_mut(&OPEN_TASK).unwrap().turn =
+                        Some(TurnProof { turn: 1, cumulative: 0, read: None });
+                }
+                let _out = step(
+                    &mut core,
+                    &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
+                    Event::AnswerPayload {
+                        run: Token::new(OPEN_TASK),
+                        attempt: Token::new(OPEN_ATTEMPT),
+                        payload: Token::new(99),
+                        cumulative,
+                        end: tasks::End::Failed(tasks::Class::Invalid),
+                        saved: None,
+                        invalid_saved,
+                        read,
+                        refused: Box::from(refused),
+                    },
+                );
+                assert_eq!(
+                    core.tasks.task(OPEN_TASK).unwrap().tries,
+                    tasks::Tries { invalid: 1, ..tasks::Tries::NONE }
+                );
+                let terminal = core.proofs.get(&OPEN_TASK).unwrap().terminal.clone();
+                assert_eq!(terminal.as_ref().unwrap().end, tasks::End::Failed(tasks::Class::Invalid));
+                let before = core.tasks.task(OPEN_TASK).unwrap().clone();
+                let _replay = step(
+                    &mut core,
+                    &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
+                    invalid_start_answer(OPEN_ATTEMPT, &[]),
+                );
+                assert_eq!(core.tasks.task(OPEN_TASK).unwrap(), &before);
+                assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal, terminal);
+            }
         }
     }
 }
@@ -1494,9 +1423,8 @@ fn a_bound_failure_is_not_rechecked_while_its_account_waits() {
     claim_open(&mut core, &limits, OPEN_ATTEMPT);
     core.proofs.get_mut(&OPEN_TASK).unwrap().account_terminal = true;
     let exceeded = tasks::Exceeded { bound: tasks::Bound::Reasoning, value: 2048 };
-    let mut answer = grants_answer(OPEN_ATTEMPT, &[]);
-    let Event::AnswerPayload { end, grants_refused, .. } = &mut answer else { panic!("answer fixture") };
-    *grants_refused = false;
+    let mut answer = invalid_start_answer(OPEN_ATTEMPT, &[]);
+    let Event::AnswerPayload { end, .. } = &mut answer else { panic!("answer fixture") };
     *end = tasks::End::Exceeded(exceeded);
     let _out = step(&mut core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, answer);
     assert_eq!(core.proofs.get(&OPEN_TASK).unwrap().terminal.as_ref().unwrap().end, tasks::End::Exceeded(exceeded));

@@ -548,7 +548,6 @@ pub enum Event {
     },
     /// Root-translated contents of a host answer payload.
     AnswerPayload {
-        grants_refused: bool,
         run: Token,
         attempt: Token,
         payload: Token,

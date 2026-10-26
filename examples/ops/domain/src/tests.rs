@@ -822,8 +822,8 @@ fn chat_request(limits: &core::Limits, words: &[u8]) -> jig_domain_people::Ask {
 }
 
 #[test]
-fn a_host_start_refusal_assembles_its_grants_cause_with_a_refused_end() {
-    for (cause, expected) in [(host::StartCause::Grants, true), (host::StartCause::Other, false)] {
+fn either_start_refusal_cause_assembles_an_invalid_end() {
+    for cause in [host::StartCause::Grants, host::StartCause::Other] {
         let (mut domain, _env) = fixture();
         let run = Token::new(1);
         let attempt = Token::new(7);
@@ -852,15 +852,13 @@ fn a_host_start_refusal_assembles_its_grants_cause_with_a_refused_end() {
             attempt: answered_attempt,
             payload: answered_payload,
             end,
-            grants_refused,
             ..
         })) = work.pop()
         else {
             panic!("one assembled answer")
         };
         assert_eq!((answered_run, answered_attempt, answered_payload), (run, attempt, payload));
-        assert_eq!(end, jig_domain_tasks::End::Refused);
-        assert_eq!(grants_refused, expected);
+        assert_eq!(end, jig_domain_tasks::End::Failed(jig_domain_tasks::Class::Invalid));
         assert!(work.is_empty());
     }
 }

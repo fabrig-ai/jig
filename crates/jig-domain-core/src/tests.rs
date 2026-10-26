@@ -3363,7 +3363,6 @@ fn an_answer_payload_for_a_replaced_attempt_is_dropped() {
     let (mut core, limits) = watch_core();
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
     let event = Event::AnswerPayload {
-        grants_refused: false,
         read: None,
         refused: Box::new([]),
         run: Token::new(1),
