@@ -123,7 +123,10 @@ fn signed_out(events: &mut Queue<root::Event>, old: u32) -> Option<bool> {
 }
 
 fn carry_llm_key(engine: &mut crate::Engine, value: &[u8]) -> u64 {
-    let _later = engine.store.secrets(Token::new(123), store::Secrets::Carry { value: Secret::new(value.into()) });
+    let _later = engine.store.secrets(
+        Token::new(123),
+        store::Secrets::Carry { kind: jig_protocol_store::CarriedKind::Key, value: Secret::new(value.into()) },
+    );
     let Some(store::Event::Carried { number, .. }) = engine.store.above.pop() else { panic!("carried LLM key") };
     number
 }
@@ -189,7 +192,7 @@ fn service_restart_restores_an_llm_key_before_want_and_sweeps_only_unnamed_sourc
         store::Secrets::Keep {
             owner: store::SecretOwner::Source,
             number: 8,
-            value: Secret::new(b"orphaned-source-value".as_slice().into()),
+            value: jig_protocol_store::SecretValue::Record(Secret::new(b"orphaned-source-value".as_slice().into())),
         },
     );
     while engine.store.above.pop().is_some() {}
@@ -284,7 +287,11 @@ fn restarted_signed_in_source() -> (crate::Service, Accounts) {
     let value = oauth::encode_record(&saved, &limits.client.document).expect("signed-in record");
     let _later = engine.store.secrets(
         Token::new(123),
-        store::Secrets::Keep { owner: store::SecretOwner::Source, number: 9001, value: Secret::new(value) },
+        store::Secrets::Keep {
+            owner: store::SecretOwner::Source,
+            number: 9001,
+            value: jig_protocol_store::SecretValue::Record(Secret::new(value)),
+        },
     );
     while engine.store.above.pop().is_some() {}
     let mut fresh = fixtures::started(&fixtures::accounts_document());
@@ -337,7 +344,7 @@ fn a_restart_keeps_the_named_signed_in_record_and_sweeps_an_unnamed_record() {
         store::Secrets::Keep {
             owner: store::SecretOwner::Source,
             number: 9002,
-            value: Secret::new(b"unnamed-control".as_slice().into()),
+            value: jig_protocol_store::SecretValue::Record(Secret::new(b"unnamed-control".as_slice().into())),
         },
     );
     while engine.store.above.pop().is_some() {}
@@ -349,5 +356,30 @@ fn a_restart_keeps_the_named_signed_in_record_and_sweeps_an_unnamed_record() {
             panic!("source secret answer");
         };
         assert_eq!(value.is_some(), exists, "source {number}");
+    }
+}
+
+#[test]
+fn a_restored_sources_wrong_kind_stops_the_engine() {
+    for (kind, value) in [
+        (domain::Kind::Key, store::SecretValue::Record(Secret::new(Box::from(b"record".as_slice())))),
+        (domain::Kind::SignIn, store::SecretValue::Key(Secret::new(Box::from(b"key".as_slice())))),
+    ] {
+        let mut service = fixtures::started(&fixtures::accounts_document());
+        for _ in 0_u32..8 {
+            fixtures::turn(&mut service);
+        }
+        let engine = fixtures::engine(&mut service);
+        let mut accounts = engine.accounts.take().expect("accounts runtime");
+        engine
+            .store
+            .secrets(Token::new(123), store::Secrets::Keep { owner: store::SecretOwner::Source, number: 7, value });
+        accounts.dispatch(
+            domain::Request::Signing(domain::Signing::Restore { source: 7, provider: 1, kind }),
+            &mut engine.store,
+            &mut engine.values,
+        );
+        crate::store::answer(engine);
+        let Some(crate::End::Stopped(_)) = &engine.end else { panic!("wrong restored kind must stop: {kind:?}") };
     }
 }

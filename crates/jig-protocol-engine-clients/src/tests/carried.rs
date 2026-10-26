@@ -15,6 +15,9 @@ fn carrying(owner: w::Owner, value: &[u8]) -> Box<[u8]> {
         w::Owner::Jig => (f::encode_ask(&f::start(&f::wire())), 19),
         w::Owner::Family(_) => (f::family_request(Box::from(b"abc".as_slice())), 2),
     };
+    keyed_value(owner, version, request, value)
+}
+fn keyed_value(owner: w::Owner, version: u32, request: Box<[u8]>, value: &[u8]) -> Box<[u8]> {
     let record = w::Keyed::new(
         &f::wire(),
         w::KeyedParts { key: [5; 16], owner, version, request, value: Some(Secret::new(Box::from(value))) },
@@ -32,7 +35,7 @@ fn family() -> w::Owner {
 fn sent(exchange: &mut Exchange, value: &[u8]) -> (Token, Token) {
     let owner = exchange.send(crate::Message::Request(carrying(family(), value)));
     exchange.authenticate();
-    let Some(Request::Secrets(SecretsRequest::Carry { exchange: name, value: kept })) = exchange.out.pop() else {
+    let Some(Request::Secrets(SecretsRequest::Carry { exchange: name, value: kept, .. })) = exchange.out.pop() else {
         panic!("carry asked");
     };
     assert_eq!(kept.expose(), value);
@@ -147,4 +150,53 @@ fn a_value_on_an_ordinary_jig_ask_is_not_a_record() {
     exchange.authenticate();
     assert_eq!(exchange.response(owner).0, 400);
     assert!(exchange.out.is_empty(), "nothing kept");
+}
+
+#[test]
+fn every_carrying_request_names_its_values_kind() {
+    // One application request and the three account requests that persist a value.
+    const CARRYING_REQUESTS: u32 = 1 + 3;
+    let limits = f::wire();
+    let value = b"carried request payload";
+    let digest = skein_lib::sha256::digest(value);
+    let changes = [
+        (
+            w::AccountChange::AddKey(
+                w::AccountChangeAddKey::new(&limits, w::AccountChangeAddKeyParts { provider: 3, join: None, digest })
+                    .expect("add key"),
+            ),
+            crate::CarriedKind::Key,
+        ),
+        (
+            w::AccountChange::ReplaceKey(
+                w::AccountChangeReplaceKey::new(&limits, w::AccountChangeReplaceKeyParts { source: 29, digest })
+                    .expect("replace key"),
+            ),
+            crate::CarriedKind::Key,
+        ),
+        (
+            w::AccountChange::MoveIn(
+                w::AccountChangeMoveIn::new(&limits, w::AccountChangeMoveInParts { digest }).expect("move in"),
+            ),
+            crate::CarriedKind::Moved,
+        ),
+    ];
+    let mut rows = skein_lib::List::with_capacity(CARRYING_REQUESTS);
+    rows.push((carrying(family(), value), crate::CarriedKind::Value)).expect("application row");
+    for (change, kind) in changes {
+        let ask = w::Ask::AccountChange(
+            w::AskAccountChange::new(&limits, w::AskAccountChangeParts { holder: w::AccountHolder::Own, change })
+                .expect("account change"),
+        );
+        rows.push((keyed_value(w::Owner::Jig, 19, f::encode_ask(&ask), value), kind)).expect("account row");
+    }
+    for (request, expected) in rows.into_boxed() {
+        let mut exchange = Exchange::new();
+        exchange.send(crate::Message::Request(request));
+        exchange.authenticate();
+        let Some(Request::Secrets(SecretsRequest::Carry { kind, .. })) = exchange.out.pop() else {
+            panic!("persistent carry")
+        };
+        assert_eq!(kind, expected);
+    }
 }

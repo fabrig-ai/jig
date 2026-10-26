@@ -484,7 +484,8 @@ pub(super) fn worst_case(
         .checked_add(u64::from(room).checked_mul(512)?)?
         .checked_add(Queue::<kit::SecretsRequest>::worst_case(room)?)?
         .checked_add(Map::<Token, Asked>::worst_case(room)?)?
-        .checked_add(u64::from(room).checked_mul(40)?)?
+        // Each queued Keep owns its 32-byte credential digest; row encoding is the store's.
+        .checked_add(u64::from(room).checked_mul(32)?)?
         // A carried value waits here on its way to the store.
         .checked_add(u64::from(room).checked_mul(u64::from(limits.wire.keyed_value_some))?)?
         .checked_add(Map::<u64, Endings>::worst_case(journal.commits)?)?
@@ -740,10 +741,11 @@ fn secret_request(request: kit::SecretsRequest) -> (Asked, jig_protocol_store::S
     match request {
         kit::SecretsRequest::Keep { owner, value } => {
             let (kind, number) = place(owner);
-            let mut writer = skein_lib::Writer::new(40);
-            writer.put(&value.expires.as_nanos().to_be_bytes()).expect("expiry bytes");
-            writer.put(value.digest.expose()).expect("32-byte digest");
-            (Asked::Owner(owner), Secrets::Keep { owner: kind, number, value: skein_lib::Secret::new(writer.finish()) })
+            let value = jig_protocol_store::SecretValue::Digest {
+                expiry: value.expires.as_nanos(),
+                digest: value.digest.expose().try_into().expect("credential digest is 32 bytes"),
+            };
+            (Asked::Owner(owner), Secrets::Keep { owner: kind, number, value })
         }
         kit::SecretsRequest::Erase { owner } => {
             let (kind, number) = place(owner);
@@ -754,7 +756,14 @@ fn secret_request(request: kit::SecretsRequest) -> (Asked, jig_protocol_store::S
             (Asked::Owner(owner), Secrets::Get { owner: kind, number })
         }
         kit::SecretsRequest::Hold { exchange, value } => (Asked::Carry(exchange), Secrets::Hold { value }),
-        kit::SecretsRequest::Carry { exchange, value } => (Asked::Carry(exchange), Secrets::Carry { value }),
+        kit::SecretsRequest::Carry { exchange, value, kind } => {
+            let kind = match kind {
+                kit::CarriedKind::Key => jig_protocol_store::CarriedKind::Key,
+                kit::CarriedKind::Value => jig_protocol_store::CarriedKind::Value,
+                kit::CarriedKind::Moved => jig_protocol_store::CarriedKind::Moved,
+            };
+            (Asked::Carry(exchange), Secrets::Carry { value, kind })
+        }
     }
 }
 /// Where the store keeps an owner's value; a carried value is the
@@ -767,13 +776,17 @@ fn place(owner: kit::SecretOwner) -> (jig_protocol_store::SecretOwner, u64) {
         kit::SecretOwner::Carried(number) => (SecretOwner::Application, number),
     }
 }
-fn kept(value: skein_lib::Secret) -> Option<kit::Kept> {
-    let bytes = value.expose();
-    if bytes.len() != 40 {
-        return None;
+fn kept(value: jig_protocol_store::SecretValue) -> Option<kit::Kept> {
+    match value {
+        jig_protocol_store::SecretValue::Digest { expiry, digest } => {
+            Some(kit::Kept { digest: skein_lib::Secret::new(Box::new(digest)), expires: Wall::from_nanos(expiry) })
+        }
+        jig_protocol_store::SecretValue::Record(_)
+        | jig_protocol_store::SecretValue::Key(_)
+        | jig_protocol_store::SecretValue::Carried { .. }
+        | jig_protocol_store::SecretValue::Application(_)
+        | jig_protocol_store::SecretValue::Held(_) => None,
     }
-    let expires = u64::from_be_bytes(bytes.get(..8)?.try_into().ok()?);
-    Some(kit::Kept { digest: skein_lib::Secret::new(Box::from(bytes.get(8..)?)), expires: Wall::from_nanos(expires) })
 }
 pub(super) fn printed(address: ::core::net::SocketAddr, secret: &skein_lib::Secret) -> Box<[u8]> {
     let host = address_text(address).expect("bound listener address");

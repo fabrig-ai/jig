@@ -135,10 +135,17 @@ pub enum SecretsRequest {
     Get { owner: SecretOwner },
     // Keep the value `exchange`'s request carried, under a number the store
     // draws itself (store.md 9): answered `Carried`.
-    Carry { exchange: Token, value: Secret },
+    Carry { exchange: Token, value: Secret, kind: CarriedKind },
     // Hold `exchange`'s value in memory, never written (store.md 9):
     // answered `Carried` as a carry is.
     Hold { exchange: Token, value: Secret },
+}
+/// The kind of a persistent request value (store.md 9).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CarriedKind {
+    Key,
+    Value,
+    Moved,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SecretOwner {

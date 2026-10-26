@@ -281,17 +281,16 @@ impl Component {
                 unreachable!("only a request carries a value")
             }
         };
-        let hold = match &request {
-            CarriedRequest::AccountKey { ask, .. } => held_address(ask),
-            CarriedRequest::Application(_) => false,
+        let kind = match &request {
+            CarriedRequest::AccountKey { ask, .. } => carried_kind(ask),
+            CarriedRequest::Application(_) => Some(crate::CarriedKind::Value),
         };
         let waiting = Waiting::Carry { sign_in, family, version, request: Box::new(request) };
         self.pending.carried.insert(exchange, None).expect("carried below its capacity");
         self.pending.exchanges.insert(exchange, waiting).expect("get released slot");
-        let request = if hold {
-            crate::SecretsRequest::Hold { exchange, value }
-        } else {
-            crate::SecretsRequest::Carry { exchange, value }
+        let request = match kind {
+            None => crate::SecretsRequest::Hold { exchange, value },
+            Some(kind) => crate::SecretsRequest::Carry { exchange, value, kind },
         };
         out.push(Request::Secrets(request));
     }
@@ -394,14 +393,16 @@ fn carried_bound(ask: &w::Ask, key_bytes: u32, moved_bytes: u64, redirect_bytes:
     }
 }
 /// The pasted address is the sole jig value held without a durable carry.
-fn held_address(ask: &people::Ask) -> bool {
+fn carried_kind(ask: &people::Ask) -> Option<crate::CarriedKind> {
     match ask {
         people::Ask::AccountChange { change, .. } => match change {
-            people::AccountChange::FinishSignIn { .. } => true,
+            people::AccountChange::FinishSignIn { .. } => None,
+            people::AccountChange::AddKey { .. } | people::AccountChange::ReplaceKey { .. } => {
+                Some(crate::CarriedKind::Key)
+            }
+            people::AccountChange::MoveIn { .. } => Some(crate::CarriedKind::Moved),
             people::AccountChange::DeclareProgram { .. }
             | people::AccountChange::CheckProgram { .. }
-            | people::AccountChange::AddKey { .. }
-            | people::AccountChange::ReplaceKey { .. }
             | people::AccountChange::RemoveKey { .. }
             | people::AccountChange::Resume { .. }
             | people::AccountChange::Remove { .. }
@@ -409,8 +410,9 @@ fn held_address(ask: &people::Ask) -> bool {
             | people::AccountChange::MoveSource { .. }
             | people::AccountChange::SetUses { .. }
             | people::AccountChange::MoveOut { .. }
-            | people::AccountChange::Written { .. }
-            | people::AccountChange::MoveIn { .. } => false,
+            | people::AccountChange::Written { .. } => {
+                unreachable!("only a key, moved file or pasted address carries a value")
+            }
         },
         people::Ask::ChangeSettings { .. }
         | people::Ask::Compound { .. }
@@ -440,6 +442,8 @@ fn held_address(ask: &people::Ask) -> bool {
         | people::Ask::SetPool { .. }
         | people::Ask::DecideEscalation { .. }
         | people::Ask::AccountSignIn { .. }
-        | people::Ask::AccountSignOut { .. } => false,
+        | people::Ask::AccountSignOut { .. } => {
+            unreachable!("only a key, moved file or pasted address carries a value")
+        }
     }
 }

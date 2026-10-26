@@ -54,7 +54,7 @@ fn real_generation() -> Disk {
             request: Secrets::Keep {
                 owner: SecretOwner::Application,
                 number: SECRET_NUMBER,
-                value: Secret::new(Box::from(SECRET)),
+                value: crate::SecretValue::Application(Secret::new(Box::from(SECRET))),
             },
         },
     );
@@ -112,7 +112,7 @@ fn read_rows(disk: &mut Disk, store: &mut Store) {
     );
     assert!(
         {
-            if let [Event::Secret { value: Some(value), .. }] = events.as_ref() {
+            if let [Event::Secret { value: Some(crate::SecretValue::Application(value)), .. }] = events.as_ref() {
                 value.expose() == SECRET
             } else {
                 false

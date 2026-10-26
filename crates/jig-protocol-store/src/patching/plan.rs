@@ -311,7 +311,8 @@ fn held_family(schema: &skein_codec::schema::Schema, mut ty: skein_codec::schema
     for _ in 0..schema.text().len() {
         match schema.ty(ty) {
             Type::Option(item) | Type::List { item, .. } => ty = item,
-            Type::Bytes { held: Held::Record { family, .. }, .. } => return Some(schema.spelled(family)),
+            Type::Bytes { held: Held::Record { family, .. }, .. }
+            | Type::Secret { held: Held::Record { family, .. }, .. } => return Some(schema.spelled(family)),
             Type::U8
             | Type::U16
             | Type::U32
@@ -319,7 +320,7 @@ fn held_family(schema: &skein_codec::schema::Schema, mut ty: skein_codec::schema
             | Type::Bool
             | Type::Duration
             | Type::Fixed(_)
-            | Type::Secret { .. }
+            | Type::Secret { held: Held::Opaque | Held::Pieces(_), .. }
             | Type::Text(_)
             | Type::Named(_)
             | Type::Bytes { held: Held::Opaque | Held::Pieces(_), .. } => return None,

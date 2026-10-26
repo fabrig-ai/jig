@@ -8,6 +8,8 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dev-dependencies]
+skein-oauth.workspace = true
+jig-client-protocol-wire.workspace = true
 skein-scratch.workspace = true
 jig-domain-core.workspace = true
 jig-domain-people.workspace = true

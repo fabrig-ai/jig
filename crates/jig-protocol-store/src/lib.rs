@@ -16,7 +16,7 @@ mod open;
 mod pages;
 mod patching;
 pub use patching::Counts;
-pub use patching::sets::{KeptFamily, KeptMap, Keys, Owner, PatchSet, PatchSets};
+pub use patching::sets::{JIG, KeptFamily, KeptMap, Keys, Owner, PatchSet, PatchSets};
 mod reads;
 mod restore;
 mod secrets;
@@ -317,8 +317,8 @@ pub mod tasks_v9;
 pub mod core_v6;
 pub mod keys;
 pub use boundary::{
-    Arrived, Below, CARRIED, Check, Cursor, Event, Family, Generations, Get, HELD, Io, Load, Older, OpenRefusal,
-    Request, Restore, Root, Row, SecretOwner, SecretRow, Secrets, TranscriptRead, Write,
+    Arrived, Below, CARRIED, CarriedKind, Check, Cursor, Event, Family, Generations, Get, HELD, Io, Load, Older,
+    OpenRefusal, Request, Restore, Root, Row, SecretOwner, SecretRow, SecretValue, Secrets, TranscriptRead, Write,
 };
 
 #[cfg(test)]
@@ -333,3 +333,7 @@ pub mod component_v3;
 #[rustfmt::skip]
 #[path = "generated/layouts.rs"]
 mod layouts;
+
+#[rustfmt::skip]
+#[path = "generated/secrets_v1.rs"]
+pub mod secrets_v1;

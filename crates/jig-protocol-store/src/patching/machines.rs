@@ -93,7 +93,8 @@ impl Machines {
                                     use skein_codec::schema::{Held, Type};
                                     match schema.ty(ty) {
                                         Type::List { item, .. } | Type::Option(item) => ty = item,
-                                        Type::Bytes { held: Held::Record { family, .. }, .. } => {
+                                        Type::Bytes { held: Held::Record { family, .. }, .. }
+                                        | Type::Secret { held: Held::Record { family, .. }, .. } => {
                                             if let Some(held) = self.named(schema.spelled(family))
                                                 && *selected.get(held.0).expect("held family's bit")
                                             {
@@ -108,7 +109,7 @@ impl Machines {
                                         | Type::Bool
                                         | Type::Duration
                                         | Type::Fixed(_)
-                                        | Type::Secret { .. }
+                                        | Type::Secret { held: Held::Opaque | Held::Pieces(_), .. }
                                         | Type::Text(_)
                                         | Type::Named(_)
                                         | Type::Bytes { held: Held::Opaque | Held::Pieces(_), .. } => break,

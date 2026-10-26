@@ -147,7 +147,7 @@ fn a_move_in_keeps_its_value_and_erases_a_replays_unused_value() {
     let digest = skein_lib::sha256::digest(b"file");
     for replay in 0..2 {
         let owner = carried(&mut exchange, 2, b"file", digest);
-        let Some(Request::Secrets(SecretsRequest::Carry { exchange: token, value })) = exchange.out.pop() else {
+        let Some(Request::Secrets(SecretsRequest::Carry { exchange: token, value, .. })) = exchange.out.pop() else {
             panic!("keep file")
         };
         assert_eq!(value.expose(), b"file");

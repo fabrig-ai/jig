@@ -1,5 +1,5 @@
 //! Full golden rows decode within their heap worst cases (skein's codec.md, 6).
-use jig_protocol_store::{accounts_v2, component_v3, core_v6, notes_v1, people_v13, tasks_v9};
+use jig_protocol_store::{accounts_v2, component_v3, core_v6, notes_v1, people_v13, secrets_v1, tasks_v9};
 use skein_heap::{Counting, Meter};
 use skein_lib::Reader;
 
@@ -173,4 +173,24 @@ fn added_dependencies_kept_lines_and_circle_payloads_fit_their_heap_bounds() {
     check("tasks", "circle", tasks_v9::Circle::worst_case_heap(&limits).expect("circle bound"), |golden| {
         tasks_v9::Circle::decode(&limits, &mut Reader::new(golden)).expect("full circle")
     });
+}
+
+#[test]
+fn each_full_secrets_row_decodes_within_its_heap_bound() {
+    let limits = &secrets_v1::CEILINGS;
+    check("secrets", "digest", secrets_v1::Digest::worst_case_heap(limits).expect("digest heap"), |golden| {
+        secrets_v1::Digest::decode(limits, &mut Reader::new(golden)).expect("full digest")
+    });
+    check("secrets", "source", secrets_v1::Source::worst_case_heap(limits).expect("source heap"), |golden| {
+        secrets_v1::Source::decode(limits, &mut Reader::new(golden)).expect("full source")
+    });
+    check("secrets", "carried", secrets_v1::Carried::worst_case_heap(limits).expect("carried heap"), |golden| {
+        secrets_v1::Carried::decode(limits, &mut Reader::new(golden)).expect("full carried")
+    });
+    check(
+        "secrets",
+        "next_carried",
+        secrets_v1::NextCarried::worst_case_heap(limits).expect("counter heap"),
+        |golden| secrets_v1::NextCarried::decode(limits, &mut Reader::new(golden)).expect("full counter"),
+    );
 }

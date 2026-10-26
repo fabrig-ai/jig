@@ -406,7 +406,7 @@ impl Peer {
                         }
                     }
                     Request::Secrets(
-                        SecretsRequest::Hold { exchange, value } | SecretsRequest::Carry { exchange, value },
+                        SecretsRequest::Hold { exchange, value } | SecretsRequest::Carry { exchange, value, .. },
                     ) => {
                         self.carries.push_back((exchange, value));
                     }

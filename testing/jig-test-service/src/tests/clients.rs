@@ -528,7 +528,10 @@ fn a_kept_digest_reaches_the_store_s_secrets() {
     let engine = ready_client(&mut service);
     decisions_open(engine);
     let (bearer, value) = credential();
-    let expected = f::join(&[&value.expires.as_nanos().to_be_bytes(), value.digest.expose()]);
+    let expected = jig_protocol_store::SecretValue::Digest {
+        expiry: value.expires.as_nanos(),
+        digest: value.digest.expose().try_into().expect("credential digest"),
+    };
     engine
         .clients
         .as_mut()
@@ -543,7 +546,7 @@ fn a_kept_digest_reaches_the_store_s_secrets() {
         panic!("same-pass stored digest get: {answer:?}")
     };
     assert_eq!(owner, Token::new(77));
-    assert_eq!(value.expose(), expected.as_ref());
+    assert_eq!(value, expected);
     let mut peer = Peer::new(engine, b"GET", b"/jig/v1/stream", &[], Some(&bearer));
     peer.pump(engine);
     assert_eq!(engine.clients.as_ref().expect("clients").secrets.len(), 1, "credential get staged");
