@@ -87,6 +87,8 @@ pub const TASKS_LIMITS: jig_domain_tasks::Limits = jig_domain_tasks::Limits {
     saved_resources: 2,
     contract_choices: 2,
     charters: 2,
+    revisions: 4,
+    versions: 8,
     authority_grants: 2,
     authority_segments: 2,
     authority_bytes: 32,
@@ -614,7 +616,14 @@ pub fn people_asks() -> Box<[people::Ask]> {
 }
 
 pub const CORE_LIMITS: core::Limits = core::Limits {
-    settings: core::settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
+    settings: core::settings::Limits {
+        revisions: 4,
+        versions: 8,
+        history: 64,
+        proposals: 4,
+        alternatives: 16,
+        permissions: 32,
+    },
     templates: 8,
     fill_mark: 1000,
     documents: core::documents::DocumentLimits {

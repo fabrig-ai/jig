@@ -47,7 +47,7 @@ fn requester_ending_survives_restore_only_with_its_existing_person_authority() {
         let mut broken = original.clone();
         broken.requester = requester;
         let mut cold = Harness::new();
-        cold.domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+        cold.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
         let out = cold.send(Event::Restore { record: Stored::Live(Box::new(broken)) });
         let mut refused = false;
         for request in out {

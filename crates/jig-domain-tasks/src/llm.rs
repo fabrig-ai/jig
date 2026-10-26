@@ -61,14 +61,16 @@ pub enum LlmFault {
     Repeated,
 }
 
-/// One configured charter and its models: its main model, then those its sub-agents may use,
-/// each once, in its order (`../protocol/configuration.md`, section 3).
+/// One charter version's models, in charter order; a removal offers none
+/// (domain/engine.md, 17.3).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CharterModels {
     /// The charter's number.
     pub number: u32,
-    /// Its models, configured indices in the charter's order, at most `MODELS`.
-    pub models: Box<[u8]>,
+    /// The revision that set this charter value.
+    pub revision: u32,
+    /// Its configured model indices, at most `MODELS`; none marks a removal.
+    pub models: Option<Box<[u8]>>,
 }
 
 /// Whether `choice` has the shape a task keeps: its sub-agents at most `MODELS`.
@@ -92,6 +94,7 @@ pub(crate) fn valid_member(new: &crate::New) -> bool {
 pub(crate) fn check(
     domain: &Domain,
     executor: Executor,
+    revision: u32,
     authority: &Authority,
     choice: &LlmChoice,
 ) -> Result<(), Refusal> {
@@ -101,7 +104,7 @@ pub(crate) fn check(
             return Err(Refusal::Llm { model: choice.main.model, why: LlmFault::Procedure });
         }
     };
-    let models = charter_models(domain, charter);
+    let models = domain.charter_models(charter, revision).unwrap_or(&[]);
     fits(domain, models, authority.models, choice.main)?;
     for (at, chosen) in choice.subagents.iter().enumerate() {
         for earlier in choice.subagents.iter().take(at) {
@@ -148,15 +151,6 @@ fn allows(models: Models, model: u8) -> bool {
     }
 }
 
-fn charter_models(domain: &Domain, charter: u32) -> &[u8] {
-    for configured in &domain.charters {
-        if configured.number == charter {
-            return &configured.models;
-        }
-    }
-    &[]
-}
-
 fn first_effort(domain: &Domain, model: u8) -> Option<u8> {
     match domain.efforts.get(usize::from(model)) {
         Some(0) | None => None,
@@ -172,7 +166,7 @@ impl Domain {
     /// declares none. `None` when the charter is not configured or allows none of `models`.
     #[must_use]
     pub fn default_llm(&self, charter: u32, models: Models) -> Option<LlmChoice> {
-        let configured = charter_models(self, charter);
+        let configured = self.charter_models(charter, self.newest())?;
         let mut main = None;
         let mut subagents =
             List::with_capacity(u32::try_from(configured.len()).expect("a charter's models fit `MODELS`"));

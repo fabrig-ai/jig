@@ -70,6 +70,8 @@ pub(crate) fn limits() -> Limits {
         saved_resources: 2,
         contract_choices: 1,
         charters: 1,
+        revisions: 4,
+        versions: 8,
         authority_grants: 1,
         authority_segments: 1,
         authority_bytes: 32,
@@ -132,7 +134,14 @@ pub(crate) fn limits() -> Limits {
         history: 2,
     };
     Limits {
-        settings: settings::Limits { history: 64, proposals: 4, alternatives: 16, permissions: 32 },
+        settings: settings::Limits {
+            revisions: 4,
+            versions: 8,
+            history: 64,
+            proposals: 4,
+            alternatives: 16,
+            permissions: 32,
+        },
         templates: 8,
         fill_mark: 1000,
         documents: DocumentLimits {

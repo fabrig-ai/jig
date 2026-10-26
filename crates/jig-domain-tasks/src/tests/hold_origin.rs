@@ -92,7 +92,7 @@ fn hold_origin_shape_is_checked_on_admission_and_cold_restore() {
             since: Wall::EPOCH,
         };
         let mut cold = Harness::new();
-        cold.domain = Domain::new(&LIMITS, 91, crate::tests::charters(), Box::new([0]));
+        cold.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
         let mut refused = false;
         for request in cold.send(Event::Restore { record: Stored::Live(Box::new(broken)) }) {
             let Request::RestoreRefused { .. } = request else { continue };

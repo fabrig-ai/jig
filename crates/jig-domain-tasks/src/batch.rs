@@ -258,13 +258,7 @@ fn check_members(
         }
         match new.executor {
             Executor::Agent { charter } => {
-                let mut known = false;
-                for configured in &domain.charters {
-                    if configured.number == charter {
-                        known = true;
-                    }
-                }
-                if !known {
+                if domain.charter_models(charter, domain.newest()).is_none() {
                     return Err(problem(number, Refusal::Executor));
                 }
             }
@@ -294,7 +288,7 @@ fn check_members(
             return Err(problem(number, Refusal::AuthorityShape));
         }
         if let Some(choice) = &new.llm
-            && let Err(why) = crate::llm::check(domain, new.executor, &new.authority, choice)
+            && let Err(why) = crate::llm::check(domain, new.executor, domain.newest(), &new.authority, choice)
         {
             return Err(problem(number, why));
         }

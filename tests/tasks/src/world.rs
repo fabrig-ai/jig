@@ -51,6 +51,8 @@ pub const LIMITS: Limits = Limits {
     saved_resources: 2,
     contract_choices: 4,
     charters: 2,
+    versions: 8,
+    revisions: 4,
     authority_grants: 4,
     authority_segments: 4,
     authority_bytes: 64,
@@ -82,15 +84,15 @@ pub const EFFORTS: [u8; 4] = [2, 0, 1, 0];
 #[must_use]
 pub fn charters() -> Box<[CharterModels]> {
     Box::new([
-        CharterModels { number: 1, models: Box::new([0, 1, 2]) },
-        CharterModels { number: 2, models: Box::new([3]) },
+        CharterModels { number: 1, revision: 1, models: Some(Box::new([0, 1, 2])) },
+        CharterModels { number: 2, revision: 1, models: Some(Box::new([3])) },
     ])
 }
 
 /// A tasks domain configured with `charters` and `EFFORTS`.
 #[must_use]
 pub fn domain(limits: &Limits, seed: u64) -> Domain {
-    Domain::new(limits, seed, charters(), Box::new(EFFORTS))
+    Domain::new(limits, seed, 1, charters(), Box::new(EFFORTS))
 }
 
 #[must_use]

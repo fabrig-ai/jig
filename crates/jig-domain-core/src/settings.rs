@@ -111,6 +111,8 @@ pub struct Failure {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
+    pub revisions: u32,
+    pub versions: u32,
     pub history: u32,
     pub proposals: u32,
     pub alternatives: u32,
@@ -447,4 +449,12 @@ pub fn proposal_heads(items: &[Item]) -> Box<[jig_domain_tasks::SettingHead]> {
             .expect("bounded heads");
     }
     heads.into_boxed()
+}
+
+/// The tasks child's revision tables are bounded by the core's settings limits.
+pub(crate) fn task_limits(limits: &crate::Limits) -> jig_domain_tasks::Limits {
+    let mut tasks = limits.tasks;
+    tasks.revisions = limits.settings.revisions;
+    tasks.versions = limits.settings.versions;
+    tasks
 }

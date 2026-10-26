@@ -175,6 +175,8 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.accounts.program_hosts < limits.fleet.configured_workers.checked_add(1)?
         || limits.people.operations > limits.tasks.tasks
         || limits.accounts.program_names > limits.fleet.program_sources
+        || limits.settings.revisions == 0
+        || limits.settings.versions == 0
         || limits.settings.history == 0
         || limits.settings.proposals == 0
         || limits.templates == 0
@@ -197,7 +199,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     )?;
     let route = crate::routing::room_max(limits)?;
     let children = [
-        tasks::worst_case(&limits.tasks)?,
+        tasks::worst_case(&crate::settings::task_limits(limits))?,
         authority::worst_case(&limits.authority)?,
         people::worst_case(&limits.people)?,
         fleet::worst_case(&limits.fleet)?,
