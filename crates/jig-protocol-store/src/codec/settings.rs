@@ -1713,7 +1713,6 @@ pub fn decode(
     bytes: &[u8],
     limits: &wire::Limits,
     names: &[settings::ModelName],
-    domain: &core::Limits,
 ) -> Result<settings::Record, wire::Problem> {
     let mut reader = Reader::new(bytes);
     let record = match key {
@@ -1735,10 +1734,13 @@ pub fn decode(
                 | settings::Key::Proposal { .. }
                 | settings::Key::Extent => unreachable!("revision key"),
             };
-            settings::Record::Revision {
-                history,
-                revision: decode_revision(wire::Revision::decode(limits, &mut reader)?, limits, names)?,
+            // Restart keeps only the head; old values may exceed a lowered
+            // policy bound. Whole history reads validate at both load boundaries.
+            let revision = decode_revision(wire::Revision::decode(limits, &mut reader)?, limits, names)?;
+            if !reader.is_empty() {
+                return Err(revision_problem(skein_codec::Reason::Malformed));
             }
+            settings::Record::Revision { history, revision }
         }
         settings::Key::Extent => {
             settings::Record::Extent { oldest: wire::Extent::decode(limits, &mut reader)?.into_parts().oldest }
@@ -1754,14 +1756,6 @@ pub fn decode(
             value: decode_proposal(wire::Proposal::decode(limits, &mut reader)?, limits, names)?,
         },
     };
-    if let settings::Record::Revision { revision, .. } = &record {
-        if !core::reads::settings::valid_revision(revision, domain) {
-            return Err(revision_problem(skein_codec::Reason::Bound));
-        }
-        if !reader.is_empty() {
-            return Err(revision_problem(skein_codec::Reason::Malformed));
-        }
-    }
     Ok(record)
 }
 

@@ -440,10 +440,45 @@ fn revision_piece_bounds_and_malformed_lengths_name_the_items() {
         let wire = w::Revision::new(&w::CEILINGS, parts.clone()).unwrap();
         let mut out = Writer::new(usize::try_from(wire.measure()).unwrap());
         wire.encode(&mut out).unwrap();
-        let error =
-            codec::settings::decode(&s::Key::History(2), &out.finish(), &limits.settings, &[], &limits.settings_domain)
-                .unwrap_err();
+        let error = codec::settings::decode(&s::Key::History(2), &out.finish(), &limits.settings, &[]).unwrap_err();
         assert_eq!(error.path, w::Path::RevisionItems);
         assert_eq!(error.reason, reason);
     }
+}
+
+#[test]
+fn a_held_revision_decodes_before_restart_names_a_lowered_policy_bound() {
+    let mut domain = fixtures::CORE_LIMITS;
+    domain.authority.executors = 3;
+    let old = codec::limits(&domain).unwrap();
+    let names = [catalogue_name(b"one"), catalogue_name(b"two")];
+    let revision = s::Revision {
+        head: s::Head {
+            number: 2,
+            against: 1,
+            at: Wall::EPOCH,
+            by: s::Decider::Party(1),
+            proposal: None,
+            moved: false,
+        },
+        items: Box::new([s::RevisionItem {
+            setting: s::Setting::Policy(1),
+            edit: s::Edit::Set(s::Value::Policy(Box::new(policy()))),
+            replaced: s::Replaced::Default,
+        }]),
+    };
+    assert!(core::reads::settings::valid_revision(&revision, &domain));
+    let row = core::Record::Core(core::CoreRecord::Settings(s::Record::Revision {
+        history: false,
+        revision: revision.clone(),
+    }));
+    let bytes = codec::encode(&row, &old, &names).unwrap();
+    domain.policy_bytes = 16;
+    let lowered = codec::limits(&domain).unwrap();
+    assert!(!core::reads::settings::valid_revision(&revision, &domain), "whole history reads enforce the new bound");
+    assert_eq!(
+        codec::decode(&row.key(), &bytes, &lowered, &names),
+        Some(row),
+        "restart can restore the head before checking current settings"
+    );
 }
