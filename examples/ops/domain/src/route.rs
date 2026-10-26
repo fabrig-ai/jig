@@ -1542,6 +1542,7 @@ fn core_now(domain: &mut Domain, env: &Env<Limits>, value: core::Now, work: &mut
         }
         other @ (core::Now::Call { .. }
         | core::Now::EffectAnswer { .. }
+        | core::Now::SettingsAnswer { .. }
         | core::Now::NoteBusy { .. }
         | core::Now::SettledCallRefused { .. }
         | core::Now::CallBusy { .. }
