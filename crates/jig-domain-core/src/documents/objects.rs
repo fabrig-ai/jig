@@ -381,6 +381,12 @@ fn action(
     value: &tasks::ProposalAction,
 ) -> Result<ProposalAction, Missing> {
     Ok(match value {
+        tasks::ProposalAction::Settings { against, items } => ProposalAction::Settings {
+            against: *against,
+            items: super::settings_review::settings_heads(items),
+            review: None,
+            made: None,
+        },
         tasks::ProposalAction::Batch(batch) => {
             if batch.len() > bound(limits) {
                 return Err(Missing::TooLarge);
@@ -480,7 +486,7 @@ fn reviewed_party_action(
     let (mut action, kind) = party::action(core, limits, party, &value.action)?;
     match &mut action {
         ProposalAction::Settings { review, .. } => {
-            *review = super::settings_review::review(core, limits, value.proposer, value.number);
+            *review = super::settings_review::review(core, limits, Proposer::Party(value.proposer), value.number);
         }
         ProposalAction::Batch(_)
         | ProposalAction::Effect { .. }
@@ -501,8 +507,9 @@ pub(super) fn proposal(
 ) -> Result<Proposal, Missing> {
     let (project, reason, mut made, as_holder, waiting) = match proposer {
         Proposer::Task(task) => {
-            let row = super::small::visible(core, party, task)?;
+            let row = core.tasks.task(task).ok_or(Missing::Ended)?;
             let value = row.proposal.as_ref().ok_or(Missing::Ended)?;
+            let made = reviewed_task_action(core, limits, party, task, value)?;
             if value.number != number {
                 return Err(Missing::Ended);
             }
@@ -515,7 +522,7 @@ pub(super) fn proposal(
             (
                 value.project,
                 super::small::text(&value.reason, limits.documents.text_bytes),
-                action(core, limits, party, number, &value.action)?,
+                made,
                 value.as_holder,
                 waiting,
             )
@@ -812,7 +819,7 @@ pub fn history_from_row(limits: &Limits, row: &tasks::History) -> Result<History
         },
         proposal: match &row.proposal {
             Some(value) => Some(ProposalHistory {
-                action: retained_action(limits, value.number, &value.action)?,
+                action: history_action(limits, value)?,
                 number: value.number,
                 proposer: value.proposer,
                 as_holder: value.as_holder,
@@ -859,6 +866,11 @@ pub(super) fn worst_case(limits: &super::DocumentLimits) -> Option<u64> {
 /// Convert an immutable retained action, without borrowing its ended target.
 pub fn retained_action(limits: &Limits, number: u64, value: &tasks::ProposalAction) -> Result<RetainedAction, Missing> {
     Ok(match value {
+        tasks::ProposalAction::Settings { against, items } => RetainedAction::Settings {
+            against: *against,
+            items: super::settings_review::settings_heads(items),
+            made: None,
+        },
         tasks::ProposalAction::Batch(batch) => {
             if batch.len() > bound(limits) {
                 return Err(Missing::TooLarge);
@@ -969,4 +981,36 @@ fn settings(limits: &Limits, row: &tasks::Settings) -> Result<AmendmentState, Mi
         dependencies: numbers(limits, &row.dependencies),
         cut: row.dependencies.len() > bound(limits),
     })
+}
+
+fn history_action(limits: &Limits, value: &tasks::Proposal) -> Result<RetainedAction, Missing> {
+    let mut action = retained_action(limits, value.number, &value.action)?;
+    if let RetainedAction::Settings { against, made, .. } = &mut action
+        && let tasks::ProposalState::Accepted { .. } = value.state
+    {
+        // A settings decision always makes the immediate successor of its checked basis.
+        *made = against.checked_add(1);
+    }
+    Ok(action)
+}
+
+fn reviewed_task_action(
+    core: &Core,
+    limits: &Limits,
+    party: u64,
+    task: u64,
+    value: &tasks::Proposal,
+) -> Result<ProposalAction, Missing> {
+    if let tasks::ProposalAction::Settings { .. } = value.action {
+        if core.people.role(party, jig_domain_people::DEPLOYMENT) != Some(jig_domain_people::Role::Owner) {
+            return Err(Missing::NotAllowed);
+        }
+    } else {
+        super::small::visible(core, party, task)?;
+    }
+    let mut made = action(core, limits, party, value.number, &value.action)?;
+    if let ProposalAction::Settings { review, .. } = &mut made {
+        *review = super::settings_review::review(core, limits, Proposer::Task(task), value.number);
+    }
+    Ok(made)
 }

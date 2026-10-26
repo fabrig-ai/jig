@@ -105,7 +105,8 @@ impl Core {
             tasks::ProposalAction::Amend { task, amendment, .. } => {
                 self.amendment_account(*task, amendment, Some(funder))
             }
-            tasks::ProposalAction::Effect { .. }
+            tasks::ProposalAction::Settings { .. }
+            | tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. }
@@ -131,7 +132,8 @@ impl Core {
                 executor(row.executor, amendment.llm.as_ref())?;
                 self.account_hint(amendment.llm.as_ref(), None, row.kept_account)
             }
-            tasks::ProposalAction::Effect { .. }
+            tasks::ProposalAction::Settings { .. }
+            | tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. }

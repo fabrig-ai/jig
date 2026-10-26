@@ -5,7 +5,6 @@ use jig_domain_people as people;
 
 #[expect(
     clippy::too_many_lines,
-    clippy::manual_map,
     reason = "one exhaustive keyed entrance uses concrete matches and preserves live dispatch precedence"
 )]
 pub(crate) fn request(
@@ -47,7 +46,16 @@ pub(crate) fn request(
                     None => None,
                 },
                 people::Proposer::Task(task) => match core.tasks.proposal(*task, *proposal) {
-                    Some(_) => Some(false),
+                    Some(row) => Some(match row.action {
+                        jig_domain_tasks::ProposalAction::Settings { .. } => true,
+                        jig_domain_tasks::ProposalAction::Batch(_)
+                        | jig_domain_tasks::ProposalAction::Effect { .. }
+                        | jig_domain_tasks::ProposalAction::ProcedureEffect { .. }
+                        | jig_domain_tasks::ProposalAction::Amend { .. }
+                        | jig_domain_tasks::ProposalAction::Widen { .. }
+                        | jig_domain_tasks::ProposalAction::Release { .. }
+                        | jig_domain_tasks::ProposalAction::ReleasePlaced { .. } => false,
+                    }),
                     None => None,
                 },
             };

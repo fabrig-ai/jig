@@ -276,3 +276,38 @@ fn settings_actions_refuse_one_head_past_the_ceiling() {
     t::wire_owner_proposal_action_settings(&pending, &limits.wire).expect_err("one past the pending head bound");
     t::wire_owner_retained_action_settings(&retained, &limits.wire).expect_err("one past the retained head bound");
 }
+
+#[test]
+fn a_settings_decision_keeps_its_three_outcomes_through_the_wire_and_link() {
+    let limits = fixtures::limits();
+    for (outcome, expected) in [
+        (
+            w::SettingsOutcome::Accepted(
+                w::SettingsAccepted::new(&limits.wire, w::SettingsAcceptedParts { revision: 7 }).unwrap(),
+            ),
+            c::SettingsOutcome::Accepted { revision: 7 },
+        ),
+        (w::SettingsOutcome::Rejected, c::SettingsOutcome::Rejected),
+        (
+            w::SettingsOutcome::Stale(
+                w::SettingsStale::new(&limits.wire, w::SettingsStaleParts { newest: 9 }).unwrap(),
+            ),
+            c::SettingsOutcome::Stale { newest: 9 },
+        ),
+    ] {
+        let value = w::OwnerMessageKind::SettingsDecision(
+            w::OwnerMessageKindSettingsDecision::new(
+                &limits.wire,
+                w::OwnerMessageKindSettingsDecisionParts { proposal: 41, outcome },
+            )
+            .unwrap(),
+        );
+        let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("measured settings decision"));
+        value.encode(&mut writer).unwrap();
+        let value = w::OwnerMessageKind::decode(&limits.wire, &mut Reader::new(&writer.finish())).unwrap();
+        assert_eq!(
+            translate::pages::owner_message_kind_fields(&value, &limits).unwrap(),
+            c::OwnerMessageKind::SettingsDecision { proposal: 41, outcome: expected }
+        );
+    }
+}

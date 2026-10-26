@@ -713,6 +713,7 @@ fn object(
                     | tasks::MessageKind::FinishRequested { .. }
                     | tasks::MessageKind::Amendment { .. }
                     | tasks::MessageKind::Proposal { .. }
+                    | tasks::MessageKind::SettingsDecision { .. }
                     | tasks::MessageKind::ProposalDecision { .. }
                     | tasks::MessageKind::Escalation { .. }
                     | tasks::MessageKind::Notice { .. }

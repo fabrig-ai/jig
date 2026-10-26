@@ -90,6 +90,8 @@ pub enum MessageKind {
     PersonStalled { task: u64 },
     /// Final accepted or rejected proposal, delivered to its proposer.
     ProposalDecision { proposal: u64, accepted: bool },
+    /// A settings proposal outcome, delivered using its reserved inbox room.
+    SettingsDecision { proposal: u64, outcome: crate::SettingsOutcome },
     /// Whole words from a person or referenced task.
     Words,
     /// A person settled the numbered uncertain effect as not made.
@@ -169,6 +171,7 @@ impl Word {
             MessageKind::Escalation { .. }
             | MessageKind::Proposal { .. }
             | MessageKind::PersonStalled { .. }
+            | MessageKind::SettingsDecision { .. }
             | MessageKind::ProposalDecision { .. }
             | MessageKind::Words
             | MessageKind::EffectNotMade { .. }
@@ -202,6 +205,7 @@ impl Word {
             | MessageKind::Escalation { .. }
             | MessageKind::Proposal { .. }
             | MessageKind::PersonStalled { .. }
+            | MessageKind::SettingsDecision { .. }
             | MessageKind::ProposalDecision { .. }
             | MessageKind::Words
             | MessageKind::EffectNotMade { .. }
@@ -1444,6 +1448,8 @@ pub enum Event {
         by: Party,
         decision: crate::ProposalDecision,
     },
+    /// Root completes a settings proposal atomically with its revision or stale withdrawal.
+    DecideSettingsProposal { reply_to: Option<ReplyTo>, decision: crate::SettingsDecision },
     /// Proposer withdraws its own pending action before it closes.
     WithdrawProposal { reply_to: ReplyTo, proposer: u64, proposal: u64 },
     /// Root routes one pending proposal only from the holder and revision it checked.

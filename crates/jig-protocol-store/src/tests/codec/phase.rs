@@ -192,6 +192,13 @@ fn each_proposal_action_reads_back() {
         ProposalAction::Amend { task: 17, revision: 0, amendment: fixtures::task_amendment() },
         ProposalAction::Widen { task: 17, authority: fixtures::task_authority() },
         ProposalAction::Release { task: 17 },
+        ProposalAction::Settings {
+            against: 1,
+            items: Box::new([jig_domain_tasks::SettingHead {
+                setting: jig_domain_tasks::Setting::Charter(1),
+                edit: jig_domain_tasks::SettingEdit::Set,
+            }]),
+        },
     ] {
         let mut source = fixtures::task_proposal();
         source.action = action;

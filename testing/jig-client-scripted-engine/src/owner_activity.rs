@@ -31,6 +31,7 @@ impl Payload for OwnerMessageKind {
             Self::Escalation { .. }
             | Self::Proposal { .. }
             | Self::PersonStalled { .. }
+            | Self::SettingsDecision { .. }
             | Self::ProposalDecision { .. }
             | Self::Words
             | Self::EffectNotMade { .. }

@@ -690,7 +690,8 @@ pub(crate) fn proposal_hold(action: &crate::ProposalAction) -> Option<(u64, u64)
         | crate::ProposalAction::ProcedureEffect { .. }
         | crate::ProposalAction::Amend { .. }
         | crate::ProposalAction::Widen { .. }
-        | crate::ProposalAction::Release { .. } => None,
+        | crate::ProposalAction::Release { .. }
+        | crate::ProposalAction::Settings { .. } => None,
     }
 }
 

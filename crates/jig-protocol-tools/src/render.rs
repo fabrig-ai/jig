@@ -34,6 +34,7 @@ pub fn problem(tool: &[u8], problem: &Problem) -> Rendered {
 #[must_use]
 pub fn render(part: &CallPart) -> Rendered {
     match part {
+        CallPart::SettingsRefused(why) => settings_refused(why),
         CallPart::Effect { entry, outcome, .. } => {
             let status: &[u8] = match outcome {
                 None => b"pending",
@@ -545,6 +546,23 @@ fn proposed(proposal: u64, holder: jig_domain_tasks::ProposalHolder) -> Rendered
         }),
     };
     text(&[b"Proposed ", Decimal::of(proposal).as_bytes(), b", to ", &to], false)
+}
+
+fn settings_refused(why: &jig_domain_people::Refusal) -> Rendered {
+    use jig_domain_people::{Lack, LimitKind, Refusal};
+    if let Refusal::Stale { newest } = why {
+        return text(&[b"Settings refused: stale; newest ", Decimal::of(u64::from(*newest)).as_bytes()], true);
+    }
+    let words: &[u8] = if let Refusal::NotWellFormed { .. } = why {
+        b"malformed set"
+    } else if let Refusal::Limit { which: LimitKind::SettingsProposals } = why {
+        b"pending settings proposals limit"
+    } else if let Refusal::Authority { lacking: Lack::Approver, .. } = why {
+        b"no owner to accept"
+    } else {
+        b"refused"
+    };
+    text(&[b"Settings refused: ", words], true)
 }
 
 #[cfg(test)]

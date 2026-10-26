@@ -173,18 +173,7 @@ impl Core {
                 findings: Box::new([authority::Finding::UnknownProject]),
             });
         };
-        let family = match &kind {
-            ToolKind::Delegate => self.settings.tools.delegate,
-            ToolKind::Message { .. } => self.settings.tools.message,
-            ToolKind::Control => self.settings.tools.control,
-            ToolKind::Decide => self.settings.tools.decide,
-            ToolKind::Propose => self.settings.tools.propose,
-            ToolKind::Subscribe => self.settings.tools.subscribe,
-            ToolKind::Effect => self.settings.tools.effect,
-            ToolKind::Note { .. } => self.settings.tools.note,
-            ToolKind::Recall { .. } => self.settings.tools.recall,
-            ToolKind::Read => self.settings.tools.read,
-        };
+        let family = self.tool_family(&kind);
         let call = match kind {
             ToolKind::Message { target } => authority::Call::Message {
                 referenced: task.requester == tasks::Party::Task(target)
@@ -246,7 +235,8 @@ impl Core {
             | ToolKind::Propose
             | ToolKind::Subscribe
             | ToolKind::Effect
-            | ToolKind::Read => authority::Call::Tool,
+            | ToolKind::Read
+            | ToolKind::Settings => authority::Call::Tool,
         };
         let mut why = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("bounded findings"));
         let answer = authority::check_call(
@@ -267,6 +257,22 @@ impl Core {
             findings.push(why.pop().expect("finding count")).expect("finding room");
         }
         Some(CallPart::ToolDenied { answer, findings: findings.into_boxed() })
+    }
+
+    fn tool_family(&self, kind: &ToolKind) -> authority::Tools {
+        match kind {
+            ToolKind::Delegate => self.settings.tools.delegate,
+            ToolKind::Message { .. } => self.settings.tools.message,
+            ToolKind::Control => self.settings.tools.control,
+            ToolKind::Decide => self.settings.tools.decide,
+            ToolKind::Propose => self.settings.tools.propose,
+            ToolKind::Subscribe => self.settings.tools.subscribe,
+            ToolKind::Effect => self.settings.tools.effect,
+            ToolKind::Note { .. } => self.settings.tools.note,
+            ToolKind::Recall { .. } => self.settings.tools.recall,
+            ToolKind::Read => self.settings.tools.read,
+            ToolKind::Settings => authority::Tools(self.settings.tools.settings),
+        }
     }
 
     /// A named recall may read only notes in this task's project and goal, or deployment notes.

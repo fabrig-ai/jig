@@ -916,7 +916,8 @@ fn complete_accept(
             EffectPurpose::Call { attempt, completion, position }
         }
         tasks::ProposalAction::ProcedureEffect { purpose, .. } => EffectPurpose::Procedure { purpose },
-        tasks::ProposalAction::Batch(_)
+        tasks::ProposalAction::Settings { .. }
+        | tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
         | tasks::ProposalAction::ReleasePlaced { .. }
@@ -1074,7 +1075,8 @@ fn check(
                 | tasks::ProposalAction::ProcedureEffect { connector, authority, purpose, .. } => {
                     (*connector, authority, *purpose)
                 }
-                tasks::ProposalAction::Batch(_)
+                tasks::ProposalAction::Settings { .. }
+                | tasks::ProposalAction::Batch(_)
                 | tasks::ProposalAction::Amend { .. }
                 | tasks::ProposalAction::Widen { .. }
                 | tasks::ProposalAction::ReleasePlaced { .. }
@@ -1362,6 +1364,7 @@ fn settled(
             | CallPart::Moved { .. }
             | CallPart::Again { .. }
             | CallPart::PassedUp { .. }
+            | CallPart::SettingsRefused(_)
             | CallPart::Unavailable => {}
         }
     }

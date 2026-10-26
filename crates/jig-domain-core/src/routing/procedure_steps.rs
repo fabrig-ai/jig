@@ -181,7 +181,8 @@ fn proposals(
             tasks::ProposalAction::Batch(_)
             | tasks::ProposalAction::Amend { .. }
             | tasks::ProposalAction::Widen { .. } => {}
-            tasks::ProposalAction::Effect { .. }
+            tasks::ProposalAction::Settings { .. }
+            | tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. } => {

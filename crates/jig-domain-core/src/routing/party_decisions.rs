@@ -243,7 +243,8 @@ pub(super) fn person_proposal_accept(
                 work.push(Event::Tasks(event));
             }
         }
-        tasks::ProposalAction::Batch(_)
+        tasks::ProposalAction::Settings { .. }
+        | tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Effect { .. }
         | tasks::ProposalAction::ProcedureEffect { .. }
         | tasks::ProposalAction::ReleasePlaced { .. }
@@ -264,13 +265,15 @@ pub(super) fn person_proposal_accept(
             });
             return;
         }
-        tasks::ProposalAction::Batch(_)
+        tasks::ProposalAction::Settings { .. }
+        | tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
         | tasks::ProposalAction::ReleasePlaced { .. }
         | tasks::ProposalAction::Release { .. } => {}
     }
     let event = match proposal.action {
+        tasks::ProposalAction::Settings { .. } => unreachable!("settings has its own acceptance"),
         tasks::ProposalAction::Effect { .. } | tasks::ProposalAction::ProcedureEffect { .. } => {
             unreachable!("effect accepted through its connector")
         }
@@ -535,25 +538,14 @@ pub(super) fn proposal_request(
                     }
                     let key =
                         (people::Proposer::Party(number), u32::try_from(proposal).expect("settings proposal identity"));
-                    let set = core.settings_proposals.get(&key).expect("pending settings set").clone();
-                    let room = super::settings::room(&env.limits)
-                        .expect("settings decision room")
-                        .writes
-                        .saturating_sub(1)
-                        .saturating_sub(people::max_out(&env.limits.people));
-                    let outcome = super::settings::decide(
+                    let outcome = super::settings::accept(
                         core,
                         env,
                         work,
                         out,
-                        crate::settings::Decider::Party(person),
-                        Some(key),
-                        crate::settings::Change {
-                            against: set.against,
-                            items: set.items,
-                            running: running.expect("settings acceptance"),
-                        },
-                        room,
+                        person,
+                        key,
+                        running.expect("settings acceptance"),
                     );
                     match outcome {
                         Ok(revision) => {
@@ -582,6 +574,12 @@ pub(super) fn proposal_request(
             }
         }
         people::Proposer::Task(number) => {
+            if let Some(row) = core.tasks.proposal(number, proposal)
+                && let tasks::ProposalAction::Settings { .. } = row.action
+            {
+                task_settings_decide(core, env, work, out, (request, person, project), row, (decision, running));
+                return;
+            }
             if running.is_some() {
                 pool_refused(work, request, people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running });
                 return;
@@ -644,4 +642,88 @@ fn proposal_act(choice: &people::ProposalDecision) -> crate::acts::Act {
         people::ProposalDecision::Reject { .. } => crate::acts::Act::Reject,
         people::ProposalDecision::Pass => crate::acts::Act::PassUp,
     }
+}
+
+fn task_settings_decide(
+    core: &mut Core,
+    env: &Env<Limits>,
+    work: &mut Queue<Event>,
+    out: &mut Queue<Request>,
+    caller: (Token, u64, u32),
+    row: tasks::Proposal,
+    choice: (people::ProposalDecision, Option<people::Running>),
+) {
+    let (request, person, project) = caller;
+    let (choice, running) = choice;
+    let accepts = choice == people::ProposalDecision::Accept;
+    if running.is_some() != accepts {
+        return pool_refused(work, request, people::Refusal::NotWellFormed { at: 0, why: people::Malformed::Running });
+    }
+    if project != people::DEPLOYMENT {
+        return pool_refused(work, request, people::Refusal::Unknown);
+    }
+    if let Err(why) = crate::acts::proposal(
+        core,
+        &env.limits,
+        person,
+        proposal_act(&choice),
+        crate::documents::Proposer::Task(row.proposer),
+        row.number,
+        env.wall,
+    ) {
+        return pool_refused(work, request, why);
+    }
+    let reason = match &choice {
+        people::ProposalDecision::Reject { reason } => reason.clone(),
+        people::ProposalDecision::Accept => Box::new([]),
+        people::ProposalDecision::Pass => return pool_refused(work, request, people::Refusal::NoFurther),
+    };
+    if reason.len() > usize::try_from(env.limits.tasks.message_bytes).expect("message bound") {
+        return pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Words });
+    }
+    let messages = u64::from(env.limits.tasks.tasks)
+        .checked_mul(2)
+        .expect("move messages")
+        .checked_add(u64::from(env.limits.settings.proposals))
+        .expect("stale messages")
+        .checked_add(1)
+        .expect("outcome message");
+    if core.counters.deployment().messages.checked_add(messages).is_none() {
+        return pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+    }
+    let outcome = if accepts {
+        let key =
+            (people::Proposer::Task(row.proposer), u32::try_from(row.number).expect("settings proposal identity"));
+        match super::settings::accept(core, env, work, out, person, key, running.expect("acceptance running choice")) {
+            Ok(revision) => tasks::SettingsOutcome::Accepted { revision },
+            Err(why) => return pool_refused(work, request, why),
+        }
+    } else {
+        tasks::SettingsOutcome::Rejected
+    };
+    let message =
+        crate::fresh(&mut core.counters, crate::Family::Message).expect("settings outcome number preflighted");
+    core.routing_people_proposals
+        .insert(
+            request,
+            PersonProposalRoute::Deciding {
+                request,
+                proposer: row.proposer,
+                proposal: row.number,
+                by: person,
+                moved: None,
+            },
+        )
+        .expect("one settings terminal route");
+    work.push(Event::PersonProposal(tasks::Event::DecideSettingsProposal {
+        reply_to: Some(ReplyTo::new(request)),
+        decision: tasks::SettingsDecision {
+            proposer: row.proposer,
+            proposal: row.number,
+            message,
+            by: tasks::Party::Person(person),
+            outcome,
+            reason,
+        },
+    }));
 }

@@ -531,8 +531,8 @@ fn the_journal_prices_each_pending_settings_withdrawal() {
     let one = jig_domain_core::settings::writes_worst_case(&limits).expect("write room");
     limits.settings.proposals = 2;
     let two = jig_domain_core::settings::writes_worst_case(&limits).expect("write room");
-    // Set erase, pending erase, terminal row, decision archive and proposer update.
-    assert_eq!(two - one, 5);
+    // Task withdrawal: set erase, terminal history, two activity rows and up to three live rows.
+    assert_eq!(two - one, 7);
 }
 
 #[test]

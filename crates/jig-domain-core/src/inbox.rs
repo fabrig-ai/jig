@@ -257,6 +257,8 @@ impl Core {
                         people::EntryKind::Proposal { number: proposal.number },
                         since,
                     ),
+                    tasks::ProposalHolder::Policy { kind: tasks::ProposalKind::Settings, .. }
+                    | tasks::ProposalHolder::Task(_) => {}
                     tasks::ProposalHolder::Policy { project, kind } => {
                         if let Some(project_policy) = self.authority.policy(project) {
                             for policy in &project_policy.roles {
@@ -273,7 +275,6 @@ impl Core {
                             }
                         }
                     }
-                    tasks::ProposalHolder::Task(_) => {}
                 },
                 tasks::ProposalState::Accepted { .. }
                 | tasks::ProposalState::Rejected { .. }

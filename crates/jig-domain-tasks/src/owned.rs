@@ -232,6 +232,7 @@ fn kind_bytes(kind: &crate::MessageKind) -> Option<u64> {
         | crate::MessageKind::Escalation { .. }
         | crate::MessageKind::Proposal { .. }
         | crate::MessageKind::PersonStalled { .. }
+        | crate::MessageKind::SettingsDecision { .. }
         | crate::MessageKind::ProposalDecision { .. }
         | crate::MessageKind::Words
         | crate::MessageKind::EffectNotMade { .. }
@@ -262,6 +263,7 @@ fn word_bytes(word: &crate::Word) -> Option<u64> {
         | crate::MessageKind::Escalation { .. }
         | crate::MessageKind::Proposal { .. }
         | crate::MessageKind::PersonStalled { .. }
+        | crate::MessageKind::SettingsDecision { .. }
         | crate::MessageKind::ProposalDecision { .. }
         | crate::MessageKind::Words
         | crate::MessageKind::EffectNotMade { .. }
@@ -345,6 +347,9 @@ fn proposal_bytes(proposal: &Proposal) -> Option<u64> {
         ProposalState::Pending { .. } | ProposalState::Accepted { .. } | ProposalState::Withdrawn => {}
     }
     match &proposal.action {
+        ProposalAction::Settings { items, .. } => {
+            total = total.checked_add(bytes(size_of_val(items.as_ref()))?)?;
+        }
         ProposalAction::Batch(batch) => {
             total = total.checked_add(bytes(size_of_val(&**batch))?)?;
             for member in batch {

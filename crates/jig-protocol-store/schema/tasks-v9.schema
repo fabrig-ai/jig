@@ -144,7 +144,12 @@ record ProposedProcedureEffect { connector: u16 authority: Authority step: u64 p
 record ProposedAmendment { task: u64 revision: u64 amendment: Amendment }
 record ProposedWidening { task: u64 authority: Authority }
 record ReleasePlaced { task: u64 hold: u64 revision: u64 }
-enum ProposalAction { batch: ProposedBatch, effect: ProposedEffect, procedure_effect: ProposedProcedureEffect, amend: boxed ProposedAmendment, widen: ProposedWidening, release: Task, release_placed: ReleasePlaced }
+record SettingNumber { number: u32 }
+enum Setting { charter: SettingNumber, template: SettingNumber, policy: SettingNumber, rules }
+enum SettingEdit { set, removed, reset }
+record SettingHead { setting: Setting edit: SettingEdit }
+record ProposedSettings { against: u32 items: list 128 SettingHead }
+enum ProposalAction { batch: ProposedBatch, effect: ProposedEffect, procedure_effect: ProposedProcedureEffect, amend: boxed ProposedAmendment, widen: ProposedWidening, release: Task, release_placed: ReleasePlaced, settings: ProposedSettings }
 record Proposal { number: u64 proposer: u64 project: u32 action: ProposalAction reason: bytes 65536 as_holder: bool state: ProposalState }
 enum Change { cancelled, released, amended, moved, proposed, proposal_passed, proposal_accepted, proposal_rejected, proposal_withdrawn }
 record Settings { tracked: option u32 addressed: option PersonAddress taken_by: option u64 instructions: option bytes 65536 spec: Spec wake: WakePolicy dependencies: list 64 Number authority: Authority llm: option LlmChoice }
@@ -155,11 +160,6 @@ record RejectedPersonProposal { by: Party reason: bytes 65536 message: u64 at: u
 record WithdrawnPersonProposal { at: u64 }
 record SettingsAccepted { by: Party revision: u32 }
 enum PersonProposalState { pending: PendingPersonProposal, accepted: AcceptedProposal, rejected: RejectedPersonProposal, withdrawn: WithdrawnPersonProposal, settings_accepted: SettingsAccepted }
-record SettingNumber { number: u32 }
-enum Setting { charter: SettingNumber, template: SettingNumber, policy: SettingNumber, rules }
-enum SettingEdit { set, removed, reset }
-record SettingHead { setting: Setting edit: SettingEdit }
-record ProposedSettings { against: u32 items: list 128 SettingHead }
 enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment, settings: ProposedSettings }
 record PersonProposal { number: u64 proposer: u64 project: u32 action: PersonAction reason: bytes 65536 state: PersonProposalState }
 record Milestone { task: u64 position: u64 phase: Phase at: u64 }
@@ -183,6 +183,10 @@ record EscalationMessage { task: u64 revision: u64 }
 record ProposalMessage { proposer: u64 proposal: u64 kind: ProposalKind }
 record StalledMessage { task: u64 }
 record DecisionMessage { proposal: u64 accepted: bool }
+record SettingsAcceptedRevision { revision: u32 }
+record SettingsStaleRevision { newest: u32 }
+enum SettingsOutcome { accepted: SettingsAcceptedRevision, rejected, stale: SettingsStaleRevision }
+record SettingsDecisionMessage { proposal: u64 outcome: SettingsOutcome }
 record EffectMessage { entry: u64 }
 record AmendmentMessage { revision: u64 }
 record AnswerMessage { question: u64 }
@@ -191,7 +195,7 @@ record TimerMessage { subscription: u64 }
 record NewsMessage { subscription: u64 class: NewsClass }
 record ResultMessage { kind: ResultKind }
 record MetMessage { dependency: u64 removed: bool }
-enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage }
+enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage, settings_decision: SettingsDecisionMessage }
 record Word { number: u64 from: Party kind: MessageKind words: bytes 65536 at: u64 hits: u32 eligible: bool }
 record FailedEnd { class: Class }
 enum EndKind { parked, finished, cancelled, failed: FailedEnd, refused }

@@ -865,7 +865,8 @@ pub(super) fn tag_tasks(
                                             }),
                                         });
                                     }
-                                    tasks::ProposalAction::Batch(_)
+                                    tasks::ProposalAction::Settings { .. }
+                                    | tasks::ProposalAction::Batch(_)
                                     | tasks::ProposalAction::Amend { .. }
                                     | tasks::ProposalAction::Widen { .. }
                                     | tasks::ProposalAction::ReleasePlaced { .. }
