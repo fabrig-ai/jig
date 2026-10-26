@@ -190,6 +190,9 @@ pub fn action(
     moved: Option<&[u64; 64]>,
 ) -> Result<wire::ProposalAction, wire::Problem> {
     Ok(match source {
+        domain::ProposalAction::Settings { against, items } => {
+            wire::ProposalAction::Settings(setting_heads(*against, items, limits)?)
+        }
         domain::ProposalAction::Batch(value) => wire::ProposalAction::Batch(wire::ProposedBatch::new(
             limits,
             wire::ProposedBatchParts { members: batch(value, limits, moved)? },
@@ -243,6 +246,14 @@ pub fn read_action(
     limits: &wire::Limits,
 ) -> Result<domain::ProposalAction, wire::Problem> {
     Ok(match source {
+        wire::ProposalAction::Settings(value) => {
+            let value = value.into_parts();
+            let mut items = List::with_capacity(value.items.len());
+            for item in value.items.into_boxed() {
+                items.push(read_setting_head(item)).expect("decoded settings heads");
+            }
+            domain::ProposalAction::Settings { against: value.against, items: items.into_boxed() }
+        }
         wire::ProposalAction::Batch(value) => {
             let wire::ProposedBatchParts { members } = value.into_parts();
             domain::ProposalAction::Batch(read_batch(members, limits)?)
@@ -522,20 +533,7 @@ pub fn person_proposal(
     let domain::PersonProposal { number, proposer, project, action, reason, state } = source;
     let action = match action {
         domain::PersonAction::Settings { against, items } => {
-            if items.len() > usize::try_from(limits.proposed_settings_items).expect("item bound fits") {
-                return Err(wire::Problem {
-                    path: wire::Path::ProposedSettingsItems,
-                    reason: skein_codec::Reason::Bound,
-                });
-            }
-            let mut heads = List::with_capacity(domain::SETTINGS_ITEMS);
-            for item in items {
-                heads.push(setting_head(item, limits)?).expect("bounded heads");
-            }
-            wire::PersonAction::Settings(wire::ProposedSettings::new(
-                limits,
-                wire::ProposedSettingsParts { against: *against, items: heads },
-            )?)
+            wire::PersonAction::Settings(setting_heads(*against, items, limits)?)
         }
         domain::PersonAction::Batch(members) => wire::PersonAction::Batch(wire::ProposedBatch::new(
             limits,
@@ -846,4 +844,19 @@ fn read_setting_head(item: wire::SettingHead) -> domain::SettingHead {
             wire::SettingEdit::Reset => domain::SettingEdit::Reset,
         },
     }
+}
+
+fn setting_heads(
+    against: u32,
+    items: &[domain::SettingHead],
+    limits: &wire::Limits,
+) -> Result<wire::ProposedSettings, wire::Problem> {
+    if items.len() > usize::try_from(limits.proposed_settings_items).expect("item bound fits") {
+        return Err(wire::Problem { path: wire::Path::ProposedSettingsItems, reason: skein_codec::Reason::Bound });
+    }
+    let mut heads = List::with_capacity(domain::SETTINGS_ITEMS);
+    for item in items {
+        heads.push(setting_head(item, limits)?).expect("bounded heads");
+    }
+    wire::ProposedSettings::new(limits, wire::ProposedSettingsParts { against, items: heads })
 }

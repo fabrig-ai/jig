@@ -551,6 +551,17 @@ fn derive_amendment(domain: &core::Limits, limits: &mut wire::Limits) -> Option<
 
 mod account_hosts;
 
+/// Reuse the people family's refusal vocabulary inside a decided core call.
+pub(crate) fn refusal_bytes(value: &domain::Refusal) -> Result<Box<[u8]>, wire::Problem> {
+    let value = outcomes::encode_refusal(value, &wire::CEILINGS)?;
+    let mut writer = Writer::new(usize::try_from(value.measure()).expect("refusal size"));
+    value.encode(&mut writer).expect("measured refusal");
+    Ok(writer.finish())
+}
+pub(crate) fn read_refusal(bytes: &[u8]) -> Result<domain::Refusal, wire::Problem> {
+    Ok(outcomes::decode_refusal(wire::Refusal::decode(&wire::CEILINGS, &mut Reader::new(bytes))?))
+}
+
 #[cfg(test)]
 mod envelope_tests {
     use super::{core, derived_limits, wire};

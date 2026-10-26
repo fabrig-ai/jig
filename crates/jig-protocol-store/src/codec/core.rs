@@ -23,6 +23,10 @@ pub fn limits(domain: &domain::Limits) -> Option<Limits> {
     let tasks = crate::codec::tasks::limits(&domain.tasks)?;
     let notes = crate::codec::notes::limits(&domain.notes)?;
     let core = wire::Limits {
+        settings_refusal_value: u32::try_from(crate::people_v13::Refusal::worst_case_bytes(
+            &crate::people_v13::CEILINGS,
+        )?)
+        .ok()?,
         phase_bytes_value: u32::try_from(crate::tasks_v9::PhaseRecord::worst_case_bytes(&tasks)?).ok()?,
         change_bytes_value: u32::try_from(crate::tasks_v9::ChangeRecord::worst_case_bytes(&tasks)?).ok()?,
         end_bytes_value: u32::try_from(crate::tasks_v9::EndRecord::worst_case_bytes(&tasks)?).ok()?,

@@ -125,7 +125,8 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
     let Some(proposal) = &task.proposal else { return !task.result_proposal };
     let result_batch = match proposal.action {
         crate::ProposalAction::Batch(_) => true,
-        crate::ProposalAction::Effect { .. }
+        crate::ProposalAction::Settings { .. }
+        | crate::ProposalAction::Effect { .. }
         | crate::ProposalAction::ProcedureEffect { .. }
         | crate::ProposalAction::Amend { .. }
         | crate::ProposalAction::Widen { .. }
@@ -136,7 +137,7 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
     }
     if proposal.number == 0
         || proposal.proposer != task.number
-        || proposal.project != task.project
+        || !crate::proposals::proposal_scope(task.project, proposal)
         || proposal.reason.len() > usize::try_from(limits.message_bytes).expect("u32 fits usize")
         || task.revision == 0
     {
@@ -152,9 +153,10 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
         crate::ProposalHolder::Task(number) => number != 0 && number != task.number,
         crate::ProposalHolder::Person(number) => number != 0,
         crate::ProposalHolder::Policy { project, kind } => {
-            project == task.project
+            project == proposal.project
                 && kind
                     == match proposal.action {
+                        crate::ProposalAction::Settings { .. } => crate::ProposalKind::Settings,
                         crate::ProposalAction::Batch(_) => crate::ProposalKind::Batch,
                         crate::ProposalAction::Effect { .. } | crate::ProposalAction::ProcedureEffect { .. } => {
                             crate::ProposalKind::Effect
@@ -169,6 +171,7 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
         return false;
     }
     let action_valid = match &proposal.action {
+        crate::ProposalAction::Settings { .. } => true,
         crate::ProposalAction::Batch(batch) => {
             if batch.is_empty() || batch.len() > usize::try_from(limits.batch).expect("u32 fits usize") {
                 return false;
@@ -392,6 +395,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             }
             crate::MessageKind::Escalation { .. }
             | crate::MessageKind::Proposal { .. }
+            | crate::MessageKind::SettingsDecision { .. }
             | crate::MessageKind::ProposalDecision { .. }
             | crate::MessageKind::EffectNotMade { .. }
             | crate::MessageKind::Words
@@ -480,6 +484,20 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 Party::Task(_) => true,
                 Party::Person(_) | Party::Deployment { .. } => false,
             },
+            crate::MessageKind::SettingsDecision { proposal, outcome } => {
+                let owner = match word.from {
+                    Party::Person(_) => true,
+                    Party::Task(_) | Party::Deployment { .. } => false,
+                };
+                proposal > 0
+                    && match outcome {
+                        crate::SettingsOutcome::Accepted { revision } => revision > 0 && owner,
+                        crate::SettingsOutcome::Rejected => owner,
+                        crate::SettingsOutcome::Stale { newest } => {
+                            newest > 0 && word.from == Party::Deployment { project: 0 }
+                        }
+                    }
+            }
             crate::MessageKind::ProposalDecision { .. } => match word.from {
                 Party::Task(_) | Party::Person(_) => true,
                 Party::Deployment { .. } => false,
@@ -496,6 +514,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
         } else {
             match &word.kind {
                 crate::MessageKind::Words
+                | crate::MessageKind::SettingsDecision { .. }
                 | crate::MessageKind::ProposalDecision { .. }
                 | crate::MessageKind::FinishRequested { .. }
                 | crate::MessageKind::Amendment { .. }
@@ -524,6 +543,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 | crate::MessageKind::Escalation { .. }
                 | crate::MessageKind::PersonStalled { .. }
                 | crate::MessageKind::Result(_)
+                | crate::MessageKind::SettingsDecision { .. }
                 | crate::MessageKind::ProposalDecision { .. }
                 | crate::MessageKind::FinishRequested { .. }
                 | crate::MessageKind::Amendment { .. }
@@ -975,6 +995,7 @@ fn links(domain: &Domain, env: &Env<Limits>, task: &TaskRecord) -> bool {
             | crate::MessageKind::PersonStalled { .. }
             | crate::MessageKind::Proposal { .. }
             | crate::MessageKind::Escalation { .. }
+            | crate::MessageKind::SettingsDecision { .. }
             | crate::MessageKind::ProposalDecision { .. }
             | crate::MessageKind::Question
             | crate::MessageKind::Answer { .. }

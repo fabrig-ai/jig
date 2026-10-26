@@ -98,6 +98,18 @@ fn owner_activity_approved_absent_empty_nonempty_and_invalid_presence_are_whole_
 #[test]
 fn owner_activity_every_scalar_message_and_all_result_metadata_price_without_fabricating_text() {
     let scalar: Box<[OwnerMessageKind]> = Box::new([
+        OwnerMessageKind::SettingsDecision {
+            proposal: u64::MAX,
+            outcome: jig_client_domain::contract::SettingsOutcome::Accepted { revision: u32::MAX },
+        },
+        OwnerMessageKind::SettingsDecision {
+            proposal: u64::MAX,
+            outcome: jig_client_domain::contract::SettingsOutcome::Rejected,
+        },
+        OwnerMessageKind::SettingsDecision {
+            proposal: u64::MAX,
+            outcome: jig_client_domain::contract::SettingsOutcome::Stale { newest: u32::MAX },
+        },
         OwnerMessageKind::Escalation { task: u64::MAX, revision: u64::MAX },
         OwnerMessageKind::Proposal { proposer: u64::MAX, proposal: u64::MAX, kind: OwnerMessageProposalKind::Release },
         OwnerMessageKind::PersonStalled { task: u64::MAX },
@@ -112,7 +124,7 @@ fn owner_activity_every_scalar_message_and_all_result_metadata_price_without_fab
         OwnerMessageKind::News { subscription: u64::MAX, class: OwnerNewsClass::Dropped },
         OwnerMessageKind::Result(OwnerWordResult::Report),
     ]);
-    assert_eq!(scalar.len(), 13);
+    assert_eq!(scalar.len(), 16);
     for kind in scalar {
         let value = word(kind);
         assert_eq!(word_bytes(&value, &bounds()), Some(u64::try_from(size_of::<OwnerWord>()).unwrap() + 2));

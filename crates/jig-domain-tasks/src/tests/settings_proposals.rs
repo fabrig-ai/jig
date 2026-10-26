@@ -176,3 +176,90 @@ fn explicit_withdrawal_waits_until_task_restoration_finishes() {
     }));
     assert!(h.domain.person_proposal(PROPOSER, PROPOSAL).is_some());
 }
+
+#[test]
+fn a_tasks_settings_proposal_waits_for_deployment_owners_and_its_outcome_wakes_it() {
+    for outcome in
+        [SettingsOutcome::Accepted { revision: 2 }, SettingsOutcome::Rejected, SettingsOutcome::Stale { newest: 2 }]
+    {
+        let mut h = Harness::new();
+        h.make([super::revisions::task(1, &[])].into());
+        let offered = Proposal {
+            number: PROPOSAL,
+            proposer: 1,
+            project: 0,
+            action: ProposalAction::Settings {
+                against: 1,
+                items: Box::new([SettingHead { setting: Setting::Charter(1), edit: SettingEdit::Set }]),
+            },
+            reason: b"please review".as_slice().into(),
+            as_holder: false,
+            state: ProposalState::Pending {
+                holder: ProposalHolder::Policy { project: 0, kind: ProposalKind::Settings },
+                since: Wall::EPOCH,
+            },
+        };
+        let out = h.send(Event::Propose { reply_to: to(), proposal: offered.clone() });
+        assert!(
+            out.iter().any(|r| match r {
+                Request::Done { .. } => true,
+                _ => false,
+            }),
+            "{out:?}"
+        );
+        assert_eq!(h.domain.proposal(1, PROPOSAL), Some(offered.clone()));
+        let refused = h.send(Event::Propose { reply_to: to(), proposal: Proposal { number: PROPOSAL + 1, ..offered } });
+        assert!(refused.iter().any(|r| match r {
+            Request::Refused { .. } => true,
+            _ => false,
+        }));
+        domain::task_mut(&mut h.domain, 1).unwrap().record.phase = Phase::Active(Active::Idle);
+        let reason: Box<[u8]> =
+            if outcome == SettingsOutcome::Rejected { b"later".as_slice().into() } else { Box::new([]) };
+        let by = if let SettingsOutcome::Stale { .. } = outcome {
+            Party::Deployment { project: 0 }
+        } else {
+            Party::Person(OWNER)
+        };
+        let out = h.send(Event::DecideSettingsProposal {
+            reply_to: None,
+            decision: SettingsDecision {
+                proposer: 1,
+                proposal: PROPOSAL,
+                message: PROPOSAL + 1,
+                by,
+                outcome,
+                reason: reason.clone(),
+            },
+        });
+        let row = h.domain.task(1).unwrap();
+        assert!(row.proposal.is_none());
+        assert_eq!(row.phase, Phase::Active(Active::Due));
+        assert!(
+            !out.iter().any(|r| match r {
+                Request::Refused { .. } => true,
+                _ => false,
+            }),
+            "{out:?}"
+        );
+        let word = row
+            .inbox
+            .iter()
+            .find(|w| match w.kind {
+                MessageKind::SettingsDecision { .. } => true,
+                _ => false,
+            })
+            .unwrap();
+        assert_eq!(word.kind, MessageKind::SettingsDecision { proposal: PROPOSAL, outcome });
+        assert_eq!(word.words, reason);
+        h.restart();
+        assert!(
+            h.domain
+                .task(1)
+                .unwrap()
+                .inbox
+                .iter()
+                .any(|w| w.kind == MessageKind::SettingsDecision { proposal: PROPOSAL, outcome })
+        );
+    }
+}

@@ -202,6 +202,7 @@ fn answers_question(answer: &OwnerActivityLine, message: u64) -> bool {
             OwnerMessageKind::Escalation { .. }
             | OwnerMessageKind::Proposal { .. }
             | OwnerMessageKind::PersonStalled { .. }
+            | OwnerMessageKind::SettingsDecision { .. }
             | OwnerMessageKind::ProposalDecision { .. }
             | OwnerMessageKind::Words
             | OwnerMessageKind::EffectNotMade { .. }
