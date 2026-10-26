@@ -70,9 +70,9 @@ pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<SecretRow>::worst_case(limits.secrets.page.rows)?)?
         .checked_add(List::<skein_kv::Row>::worst_case(limits.secrets.page.rows)?)?
         .checked_add(List::<skein_kv::Op>::worst_case(limits.secrets.ops)?)?
-        // A conditional write holds its encoded replacement while decoding
-        // a durable row into its payload: three value buffers at that peak.
-        .checked_add(u64::from(limits.secrets.value).checked_mul(3)?)?
+        // A conditional write holds its encoded replacement and durable row;
+        // its digest borrows that row's payload without a decoded buffer.
+        .checked_add(u64::from(limits.secrets.value).checked_mul(2)?)?
         .checked_add(32)?
         .checked_add(u64::from(limits.secrets.page.bytes).checked_mul(2)?)
 }
@@ -239,8 +239,7 @@ fn held(store: &mut Store, env: &Env<Limits>, key: &[u8], below: &mut Below) -> 
     match durable(store, env, Box::from(key), below)? {
         Some(value) => {
             let (kind, number) = read_key(key).ok_or(())?;
-            let value = codec::decode(kind, number, value).ok_or(())?;
-            Ok(Some(codec::digest(&value)))
+            Ok(Some(codec::durable_digest(kind, number, &value).ok_or(())?))
         }
         None => Ok(None),
     }
