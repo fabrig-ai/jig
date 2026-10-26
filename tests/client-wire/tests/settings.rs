@@ -698,3 +698,28 @@ fn move_to_newest_records_round_trip() {
     assert_eq!(w::Outcome::decode(&w::CEILINGS, &mut input), Ok(outcome));
     assert!(input.is_empty());
 }
+
+#[test]
+fn replaced_values_and_sizes_round_trip_their_wire_bytes() {
+    for bytes in [
+        include_bytes!("../../../crates/jig-client-protocol-wire/golden/enum_revision_replaced_value_full.bin")
+            .as_slice(),
+        include_bytes!("../../../crates/jig-client-protocol-wire/golden/enum_revision_replaced_too_large_full.bin")
+            .as_slice(),
+        include_bytes!("../../../crates/jig-client-protocol-wire/golden/enum_revision_replaced_default_smallest.bin")
+            .as_slice(),
+        include_bytes!("../../../crates/jig-client-protocol-wire/golden/enum_revision_replaced_removed_smallest.bin")
+            .as_slice(),
+        include_bytes!(
+            "../../../crates/jig-client-protocol-wire/golden/enum_revision_replaced_not_offered_smallest.bin"
+        )
+        .as_slice(),
+    ] {
+        let mut input = Reader::new(bytes);
+        let value = w::RevisionReplaced::decode(&w::CEILINGS, &mut input).expect("before-state decodes");
+        assert!(input.is_empty());
+        let mut out = Writer::new(usize::try_from(value.measure()).expect("measured bytes"));
+        value.encode(&mut out).expect("measured before-state");
+        assert_eq!(out.finish().as_ref(), bytes);
+    }
+}

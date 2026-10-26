@@ -112,7 +112,7 @@ fn policy() -> core::ConfiguredPolicy {
         }]),
     }
 }
-fn template() -> core::Template {
+pub(super) fn template() -> core::Template {
     core::Template {
         number: 1,
         name: Box::from(b"template".as_slice()),
@@ -158,7 +158,7 @@ fn each_settings_record_round_trips_its_whole_domain_value() {
         proposal: Some((people::Proposer::Task(8), 9)),
         moved: true,
     };
-    let mut rows = skein_lib::List::with_capacity(28);
+    let mut rows = skein_lib::List::with_capacity(52);
     for row in [
         s::Record::Extent { oldest: 1 },
         s::Record::Revision {
@@ -183,20 +183,31 @@ fn each_settings_record_round_trips_its_whole_domain_value() {
         rows.push(s::Record::Changed { setting, changed: s::Changed { value: None, revision: 3 } })
             .expect("settings fixture count");
         let items = Box::new([
-            s::Item { setting, edit: s::Edit::Set(value) },
+            s::Item { setting, edit: s::Edit::Set(value.clone()) },
             s::Item { setting, edit: s::Edit::Removed },
             s::Item { setting, edit: s::Edit::Reset },
         ]);
-        rows.push(s::Record::Revision {
-            history: false,
-            revision: s::Revision { head: head.clone(), items: items.clone() },
-        })
-        .expect("settings fixture count");
-        rows.push(s::Record::Revision {
-            history: true,
-            revision: s::Revision { head: head.clone(), items: items.clone() },
-        })
-        .expect("settings fixture count");
+        for replaced in [
+            s::Replaced::Value(Box::new(value.clone())),
+            s::Replaced::Default,
+            s::Replaced::Removed,
+            s::Replaced::NotOffered,
+        ] {
+            for history in [false, true] {
+                rows.push(s::Record::Revision {
+                    history,
+                    revision: s::Revision {
+                        head: head.clone(),
+                        items: Box::new([s::RevisionItem {
+                            setting,
+                            edit: s::Edit::Set(value.clone()),
+                            replaced: replaced.clone(),
+                        }]),
+                    },
+                })
+                .expect("settings fixture count");
+            }
+        }
         rows.push(s::Record::Proposal {
             proposer: people::Proposer::Party(6),
             proposal: 7,
@@ -322,4 +333,117 @@ fn live_settings_remap_efforts_by_name_and_refuse_missing_efforts() {
     };
     let s::Value::Template(value) = changed.value.unwrap() else { panic!("template") };
     assert_eq!(value.llm.unwrap().main.model, u8::MAX);
+}
+
+#[test]
+fn replaced_masks_and_template_choices_follow_a_reordered_catalogue() {
+    let mut domain = fixtures::CORE_LIMITS;
+    domain.authority.executors = 3;
+    let limits = codec::limits(&domain).unwrap();
+    let before = [catalogue_name(b"one"), catalogue_name(b"two")];
+    let after = [before[1].clone(), before[0].clone()];
+    let mut policy = policy();
+    policy.policy.ceiling.models = a::Models::Named(1);
+    policy.policy.roles[0].authority.models = a::Models::Named(1);
+    let mut rules = rules();
+    rules.ceiling.models = a::Models::Named(1);
+    let revision = s::Revision {
+        head: s::Head {
+            number: 2,
+            against: 1,
+            at: Wall::EPOCH,
+            by: s::Decider::Party(1),
+            proposal: None,
+            moved: false,
+        },
+        items: Box::new([
+            s::RevisionItem {
+                setting: s::Setting::Policy(1),
+                edit: s::Edit::Removed,
+                replaced: s::Replaced::Value(Box::new(s::Value::Policy(Box::new(policy)))),
+            },
+            s::RevisionItem {
+                setting: s::Setting::Template(1),
+                edit: s::Edit::Removed,
+                replaced: s::Replaced::Value(Box::new(s::Value::Template(Box::new(template())))),
+            },
+            s::RevisionItem {
+                setting: s::Setting::Rules,
+                edit: s::Edit::Reset,
+                replaced: s::Replaced::Value(Box::new(s::Value::Rules(Box::new(rules)))),
+            },
+        ]),
+    };
+    let row = core::Record::Core(core::CoreRecord::Settings(s::Record::Revision { history: true, revision }));
+    let bytes = codec::encode(&row, &limits, &before).unwrap();
+    let core::Record::Core(core::CoreRecord::Settings(s::Record::Revision { revision, .. })) =
+        codec::decode(&row.key(), &bytes, &limits, &after).unwrap()
+    else {
+        panic!("revision")
+    };
+    let s::Replaced::Value(value) = &revision.items[0].replaced else { panic!("policy before-state") };
+    let s::Value::Policy(policy) = value.as_ref() else { panic!("policy") };
+    assert_eq!(policy.policy.ceiling.models, a::Models::Named(2));
+    assert_eq!(policy.policy.roles[0].authority.models, a::Models::Named(2));
+    let s::Replaced::Value(value) = &revision.items[1].replaced else { panic!("template before-state") };
+    let s::Value::Template(template) = value.as_ref() else { panic!("template") };
+    let llm = template.llm.as_ref().unwrap();
+    assert_eq!(llm.main.model, 1);
+    assert_eq!(llm.subagents[0].model, 0);
+    let s::Replaced::Value(value) = &revision.items[2].replaced else { panic!("rules before-state") };
+    let s::Value::Rules(rules) = value.as_ref() else { panic!("rules") };
+    assert_eq!(rules.ceiling.models, a::Models::Named(2));
+}
+
+#[test]
+fn revision_piece_bounds_and_malformed_lengths_name_the_items() {
+    use crate::settings_v1 as w;
+    use skein_lib::{Reader, Writer};
+    let limits = codec::limits(&fixtures::CORE_LIMITS).unwrap();
+    let row = s::Record::Revision {
+        history: true,
+        revision: s::Revision {
+            head: s::Head {
+                number: 2,
+                against: 1,
+                at: Wall::EPOCH,
+                by: s::Decider::Party(1),
+                proposal: None,
+                moved: false,
+            },
+            items: Box::new([s::RevisionItem {
+                setting: s::Setting::Template(1),
+                edit: s::Edit::Removed,
+                replaced: s::Replaced::Default,
+            }]),
+        },
+    };
+    let encoded = codec::settings::encode(&row, &limits.settings, &[]).unwrap();
+    let mut parts = w::Revision::decode(&limits.settings, &mut Reader::new(&encoded)).unwrap().into_parts();
+    let valid = parts.items.clone();
+    let mut oversized = Writer::new(usize::try_from(limits.settings.revision_items).unwrap() + 1);
+    for _ in 0..=limits.settings.revision_items {
+        oversized.put(&[0]).unwrap();
+    }
+    let mut trailing = Writer::new(valid.len() + 1);
+    trailing.put(&valid).unwrap();
+    trailing.put(&[0]).unwrap();
+    let mut short = valid.clone();
+    short[3] += 1;
+    for (items, reason) in [
+        (oversized.finish(), skein_codec::Reason::Bound),
+        (Box::from([0_u8].as_slice()), skein_codec::Reason::Malformed),
+        (trailing.finish(), skein_codec::Reason::Malformed),
+        (short, skein_codec::Reason::Malformed),
+    ] {
+        parts.items = items;
+        let wire = w::Revision::new(&w::CEILINGS, parts.clone()).unwrap();
+        let mut out = Writer::new(usize::try_from(wire.measure()).unwrap());
+        wire.encode(&mut out).unwrap();
+        let error =
+            codec::settings::decode(&s::Key::History(2), &out.finish(), &limits.settings, &[], &limits.settings_domain)
+                .unwrap_err();
+        assert_eq!(error.path, w::Path::RevisionItems);
+        assert_eq!(error.reason, reason);
+    }
 }

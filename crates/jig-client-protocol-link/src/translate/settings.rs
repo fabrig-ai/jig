@@ -651,12 +651,37 @@ pub fn restore_revision_edit(value: &w::RevisionEdit, limits: &Limits) -> Result
         w::RevisionEdit::Reset => c::RevisionEdit::Reset,
     })
 }
+pub fn wire_revision_replaced(
+    value: &c::RevisionReplaced,
+    limits: &w::Limits,
+) -> Result<w::RevisionReplaced, w::Problem> {
+    Ok(match value {
+        c::RevisionReplaced::Value(v) => w::RevisionReplaced::Value(wire_setting_set(v, limits)?),
+        c::RevisionReplaced::TooLarge(v) => w::RevisionReplaced::TooLarge(wire_size(v, limits)?),
+        c::RevisionReplaced::Default => w::RevisionReplaced::Default,
+        c::RevisionReplaced::Removed => w::RevisionReplaced::Removed,
+        c::RevisionReplaced::NotOffered => w::RevisionReplaced::NotOffered,
+    })
+}
+pub fn restore_revision_replaced(
+    value: &w::RevisionReplaced,
+    limits: &Limits,
+) -> Result<c::RevisionReplaced, w::Problem> {
+    Ok(match value {
+        w::RevisionReplaced::Value(v) => c::RevisionReplaced::Value(restore_setting_set(v, limits)?),
+        w::RevisionReplaced::TooLarge(v) => c::RevisionReplaced::TooLarge(restore_size(v, limits)?),
+        w::RevisionReplaced::Default => c::RevisionReplaced::Default,
+        w::RevisionReplaced::Removed => c::RevisionReplaced::Removed,
+        w::RevisionReplaced::NotOffered => c::RevisionReplaced::NotOffered,
+    })
+}
 pub fn wire_revision_item(value: &c::RevisionItem, limits: &w::Limits) -> Result<w::RevisionItem, w::Problem> {
     w::RevisionItem::new(
         limits,
         w::RevisionItemParts {
             setting: wire_setting(&value.setting, limits)?,
             edit: wire_revision_edit(&value.edit, limits)?,
+            replaced: wire_revision_replaced(&value.replaced, limits)?,
         },
     )
 }
@@ -664,6 +689,7 @@ pub fn restore_revision_item(value: &w::RevisionItem, limits: &Limits) -> Result
     Ok(c::RevisionItem {
         setting: restore_setting(value.setting(), limits)?,
         edit: restore_revision_edit(value.edit(), limits)?,
+        replaced: restore_revision_replaced(value.replaced(), limits)?,
     })
 }
 pub fn wire_revision_document(

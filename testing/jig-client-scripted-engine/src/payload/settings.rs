@@ -62,7 +62,7 @@ fields!(HeldRevision { head, holders });
 fields!(SettingsProposal { proposer, number });
 fields!(SettingsDocument { newest, settings, held, pending });
 fields!(SettingDocument { setting, revision, value });
-fields!(RevisionItem { setting, edit });
+fields!(RevisionItem { setting, edit, replaced });
 fields!(RevisionDocument { head, items });
 fields!(RevisionItemHead { setting, edit });
 fields!(RevisionRow { head, items, more });
@@ -134,5 +134,14 @@ impl Payload for OwnerProposalActionSettings {
 impl Payload for OwnerRetainedActionSettings {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         self.items.heap(&Bounds { rows: 128, ..*bounds })
+    }
+}
+
+impl Payload for jig_client_domain::contract::RevisionReplaced {
+    fn heap(&self, bounds: &Bounds) -> Option<u64> {
+        match self {
+            Self::Value(v) => v.heap(bounds),
+            Self::TooLarge(_) | Self::Default | Self::Removed | Self::NotOffered => Some(0),
+        }
     }
 }

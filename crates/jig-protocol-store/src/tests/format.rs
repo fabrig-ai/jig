@@ -72,21 +72,21 @@ fn a_key_limit_below_the_largest_note_line_is_refused() {
 fn a_value_limit_below_the_largest_task_record_is_refused() {
     let mut limits = store();
     limits.value = 1;
-    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Value { needs: 369_330, has: 1 }));
+    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Value { needs: 377_108, has: 1 }));
 }
 fn a_value_limit_below_the_largest_core_turn_is_refused() {
     let mut limits = store();
     limits.value = 80_948;
-    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Value { needs: 369_330, has: 80_948 }));
+    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Value { needs: 377_108, has: 80_948 }));
 }
 fn a_page_smaller_than_one_row_is_refused() {
     let mut limits = store();
     limits.page.bytes = 81_060;
-    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Page { needs: 369_442, has: 81_060 }));
+    assert_eq!(check(&limits), Err(sizes::SizeRefusal::Page { needs: 377_220, has: 81_060 }));
 }
 #[test]
 fn fixture_limits_fit_their_store() {
-    assert_eq!(check(&store()), Ok(sizes::Sizes { key: 112, value: 369_330, ops: 11, commit: 17_741 }));
+    assert_eq!(check(&store()), Ok(sizes::Sizes { key: 112, value: 377_108, ops: 11, commit: 17_741 }));
 }
 fn too_few_operations_are_refused() {
     let mut limits = store();
@@ -197,7 +197,7 @@ fn a_journal_whose_operation_count_overflows_is_refused() {
 #[test]
 fn a_map_budget_past_the_commit_envelope_is_refused() {
     for (label, budget, expected) in [
-        ("exact_u32_commit", 4_294_965_938, Ok(sizes::Sizes { key: 112, value: 369_330, ops: 11, commit: u32::MAX })),
+        ("exact_u32_commit", 4_294_965_938, Ok(sizes::Sizes { key: 112, value: 377_108, ops: 11, commit: u32::MAX })),
         ("one_byte_past_u32", 4_294_965_939, Err(sizes::SizeRefusal::Ceiling)),
         ("u64_sum_overflows", u64::MAX, Err(sizes::SizeRefusal::Ceiling)),
     ] {
