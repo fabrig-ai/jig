@@ -35,11 +35,7 @@ impl Setup {
         self.phase == 3
     }
     pub(crate) fn act(&mut self, procs: &mut [Proc], story: Story, done: bool) {
-        let link = if self.linked {
-            None
-        } else {
-            procs.iter_mut().find_map(|p| if let Proc::Engine(e) = p { e.service.links().pop() } else { None })
-        };
+        let link = if self.linked { None } else { ready_link(procs) };
         let Some(client) = procs.iter_mut().find_map(|p| if let Proc::Client(c) = p { Some(c) } else { None }) else {
             return;
         };
@@ -249,6 +245,19 @@ impl Setup {
         ));
     }
 }
+fn ready_link(procs: &mut [Proc]) -> Option<Box<[u8]>> {
+    procs.iter_mut().find_map(|p| {
+        if let Proc::Engine(e) = p
+            // A printed link may precede the mark; this fixture signs in once.
+            && e.service.account_startup(0, 1, skein_lib::Time::ZERO).is_some_and(|state| state.durable)
+        {
+            e.service.links().pop()
+        } else {
+            None
+        }
+    })
+}
+
 fn key(number: u64) -> Key {
     Key { asker: Asker(77), number }
 }
