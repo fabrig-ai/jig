@@ -562,6 +562,37 @@ fn settings_refused(why: &jig_domain_people::Refusal) -> Rendered {
     text(&[b"Settings refused: ", words], true)
 }
 
+/// A short protocol-stand summary; applications render the complete documents.
+#[must_use]
+pub fn settings_answer(answer: &core::SettingsAnswer) -> Rendered {
+    match answer {
+        core::SettingsAnswer::Inventory(value) => text(
+            &[
+                b"Settings newest ",
+                Decimal::of(u64::from(value.newest)).as_bytes(),
+                b"; pending ",
+                Decimal::of(u64::from(value.pending.len())).as_bytes(),
+            ],
+            false,
+        ),
+        core::SettingsAnswer::Setting(value) => {
+            text(&[b"Setting at revision ", Decimal::of(u64::from(value.revision)).as_bytes()], false)
+        }
+        core::SettingsAnswer::Revision(core::reads::RevisionAnswer::Revision { revision, .. }) => {
+            text(&[b"Revision ", Decimal::of(u64::from(revision.head.number)).as_bytes()], false)
+        }
+        core::SettingsAnswer::Revision(core::reads::RevisionAnswer::Forgotten { oldest }) => {
+            text(&[b"Forgotten; oldest ", Decimal::of(u64::from(*oldest)).as_bytes()], true)
+        }
+        core::SettingsAnswer::Revision(core::reads::RevisionAnswer::Unknown) | core::SettingsAnswer::Unknown => {
+            text(&[b"Unknown settings"], true)
+        }
+        core::SettingsAnswer::Revisions(value) => {
+            text(&[b"Revisions: ", Decimal::of(u64::from(value.rows.len())).as_bytes(), b" rows"], false)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

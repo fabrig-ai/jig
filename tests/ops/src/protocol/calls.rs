@@ -43,6 +43,9 @@ impl Stand {
             position: name.position,
         };
         let event = match protocol::decode(&call.tool, &call.input, &self.limits) {
+            protocol::Decoded::Action(core::NamedAction::Settings(read)) if !call.writes => {
+                root::Event::Core(core::Event::NamedAction { to, key, action: core::NamedAction::Settings(read) })
+            }
             protocol::Decoded::Action(action) if call.writes => {
                 root::Event::Core(core::Event::NamedAction { to, key, action })
             }
@@ -81,6 +84,24 @@ impl Stand {
         };
         self.calls.insert(key, (call.name.clone(), call.tool.clone()));
         event
+    }
+
+    pub fn settings_answer(
+        &mut self,
+        to: ReplyTo,
+        key: core::CallKey,
+        answer: &core::SettingsAnswer,
+    ) -> Option<root::Event> {
+        let (_, tool) = self.calls.remove(&key)?;
+        let rendered = protocol::settings_answer(answer);
+        Some(root::Event::CallAnswered {
+            to,
+            call: core::SettledCall {
+                serial: 0,
+                tool,
+                answer: core::SettledAnswer::Host { error: rendered.error, body: rendered.text },
+            },
+        })
     }
 
     pub fn answer(&mut self, to: ReplyTo, key: core::CallKey, part: &core::CallPart, durable: bool) -> root::Event {
