@@ -67,6 +67,7 @@ pub use projections::{
 mod proposals;
 /// Authenticated one-shot reads whose answers wait for durability.
 pub mod reads;
+pub use reads::{SettingsAnswer, SettingsRead};
 mod relays;
 mod resources;
 mod restart;

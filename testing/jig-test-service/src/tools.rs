@@ -48,6 +48,24 @@ impl Tools {
         self.calls.insert(key, (call.name.clone(), call.tool.clone())).expect("admitted call correlation");
         root::Event::Core(event)
     }
+    pub fn settings_answer(
+        &mut self,
+        to: ReplyTo,
+        key: core::CallKey,
+        answer: &core::SettingsAnswer,
+    ) -> Option<root::Event> {
+        let (_, tool) = self.calls.remove(&key)?;
+        let rendered = kit::settings_answer(answer);
+        Some(root::Event::CallAnswered {
+            to,
+            call: core::SettledCall {
+                serial: 0,
+                tool,
+                answer: core::SettledAnswer::Host { error: rendered.error, body: rendered.text },
+            },
+        })
+    }
+
     pub fn render(
         &mut self,
         to: ReplyTo,
