@@ -189,8 +189,24 @@ fn a_restored_circle_from_an_older_rule_holds_its_queue_waiter() {
     for row in rows {
         jig_domain_tasks::step(&mut domain, &world.env, Event::Restore { record: row }, &mut out);
     }
-    jig_domain_tasks::step(&mut domain, &world.env, Event::Restored, &mut out);
-    assert!(!out.iter().any(|request| matches!(request, jig_domain_tasks::Request::RestoreRefused { .. })));
+    jig_domain_tasks::step(&mut domain, &world.env, Event::Check, &mut out);
+    assert!(domain.checked());
+    assert!(!out.iter().any(|request| matches!(
+        request,
+        jig_domain_tasks::Request::RestoreRefused { .. }
+            | jig_domain_tasks::Request::Activate { .. }
+            | jig_domain_tasks::Request::Adopt { .. }
+            | jig_domain_tasks::Request::Stop { .. }
+            | jig_domain_tasks::Request::Close { .. }
+            | jig_domain_tasks::Request::Release { .. }
+    )));
+    assert!(
+        out.iter().any(|request| matches!(request,
+            jig_domain_tasks::Request::Save { record: Stored::Live(row) }
+            if row.number == WAITER && matches!(row.phase, Phase::Held { why: Hold::Circle, .. })
+        )),
+        "the hold is written at Check"
+    );
     let waiter = domain.task(WAITER).expect("restored waiter");
     let Phase::Held { why: Hold::Circle, source: Some(source), .. } = &waiter.phase else { panic!("circle hold") };
     let HoldSource::Circle(circle) = source.as_ref() else { panic!("circle source") };
@@ -638,8 +654,24 @@ fn a_restored_two_holder_pool_circle_holds_its_waiter() {
     for row in rows {
         jig_domain_tasks::step(&mut domain, &world.env, Event::Restore { record: row }, &mut out);
     }
-    jig_domain_tasks::step(&mut domain, &world.env, Event::Restored, &mut out);
-    assert!(!out.iter().any(|request| matches!(request, jig_domain_tasks::Request::RestoreRefused { .. })));
+    jig_domain_tasks::step(&mut domain, &world.env, Event::Check, &mut out);
+    assert!(domain.checked());
+    assert!(!out.iter().any(|request| matches!(
+        request,
+        jig_domain_tasks::Request::RestoreRefused { .. }
+            | jig_domain_tasks::Request::Activate { .. }
+            | jig_domain_tasks::Request::Adopt { .. }
+            | jig_domain_tasks::Request::Stop { .. }
+            | jig_domain_tasks::Request::Close { .. }
+            | jig_domain_tasks::Request::Release { .. }
+    )));
+    assert!(
+        out.iter().any(|request| matches!(request,
+            jig_domain_tasks::Request::Save { record: Stored::Live(row) }
+            if row.number == WAITER && matches!(row.phase, Phase::Held { why: Hold::Circle, .. })
+        )),
+        "the hold is written at Check"
+    );
     let waiter = domain.task(WAITER).expect("restored waiter");
     let Phase::Held { why: Hold::Circle, source: Some(source), .. } = &waiter.phase else { panic!("circle hold") };
     let HoldSource::Circle(circle) = source.as_ref() else { panic!("circle source") };

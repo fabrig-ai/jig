@@ -7,8 +7,9 @@
 //!
 //! `Domain::new` starts restoring. `Stored::Live`, `Stored::Ledger`, `Stored::Stub`,
 //! `Stored::Writer` and `Stored::Pool`
-//! enter `Restore`; `Restored` validates the complete live graph and authentic
-//! financial reservations before bounded activation/adoption outputs. Historical
+//! enter `Restore`; `Check` validates the complete live graph and authentic
+//! financial reservations before the store switches. `Restored` replays bounded
+//! activation/adoption outputs after the start's mark is durable. Historical
 //! ended rows remain in root storage and cannot re-enter live state
 
 //!

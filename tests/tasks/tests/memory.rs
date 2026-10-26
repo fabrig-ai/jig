@@ -56,6 +56,7 @@ impl Measured {
     }
 
     fn bootstrap(&mut self) {
+        self.event(Event::Check);
         self.event(Event::Restored);
         for period in [0, 7] {
             let reply_to = self.to();
@@ -248,6 +249,7 @@ fn full_delegate_tree_dependency_edges_and_cold_restored_claims_fit() {
     for row in source.records.values() {
         m.event(Event::Restore { record: row.clone() });
     }
+    m.event(Event::Check);
     m.event(Event::Restored);
     let reply_to = m.to();
     m.event(Event::Activation {
@@ -428,6 +430,7 @@ fn borrowed_stored_bytes_matches_allocator_for_every_retained_row() {
 fn the_complete_maximum_recurring_batch_and_retained_ids_fit_the_owner_bound() {
     let limits = Limits { tasks: 5, project_tasks: 5, tree_tasks: 5, depth: 2, delegates: 4, batch: 4, ..LIMITS };
     let mut measured = Measured::new(&limits);
+    measured.event(Event::Check);
     measured.event(Event::Restored);
     let reply_to = measured.to();
     measured.event(Event::OpenPeriod { reply_to, project: 1, period: 7, budget: 100_000 });
@@ -703,6 +706,7 @@ fn retained_root_holds_and_new_live_holds_fit_the_index_together() {
     for row in world.records.values().filter(|row| row.key().live()) {
         measured.event(Event::Restore { record: row.clone() });
     }
+    measured.event(Event::Check);
     measured.event(Event::Restored);
     assert_eq!(measured.d.task(ROOT).expect("retaining root").holdings.len(), LIVE_TASKS as usize);
     assert!(measured.d.task(LIVE_CHILD).expect("new child").holds_taken);

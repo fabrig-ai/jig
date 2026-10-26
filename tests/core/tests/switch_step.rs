@@ -185,3 +185,36 @@ fn stopping_with_the_mark_held_does_not_adopt_runs() {
     assert_eq!(world.store.applied, mark);
     assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
 }
+
+#[test]
+fn a_broken_task_set_refuses_before_the_switch() {
+    let mut world = before();
+    let mut row = jig_core_world::fixtures::live_row(&world, world.task()).clone();
+    // Valid on its own, but its declared root is absent from the restored set.
+    row.root = u64::MAX;
+    world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
+    world.store.crash(f::SEED);
+    let source = world.store.generation_contents(b"generations/1");
+    let rows = world.store.rows.clone();
+    let last = world.store.applied;
+    let assignments = world.assignments.clone();
+    world.restart_with_patch_sets(f::SEED, false, f::AFTER);
+    assert!(world.stopped);
+    assert_eq!(world.domain.restart_failure(), Some(core::RestartStep::Switch));
+    assert_eq!(world.store.switch_requests, 0);
+    assert_eq!(world.store.file_bytes(b"active"), Some(b"1\n".to_vec()));
+    assert_eq!(world.store.generation_contents(b"generations/1"), source);
+    assert_eq!(world.store.file_bytes(b"generations/2/manifest"), None);
+    assert_eq!(world.assignments, assignments);
+    assert!(!world.restart_steps.iter().any(|step| matches!(
+        step,
+        core::RestartStep::Switch
+            | core::RestartStep::AdoptRuns
+            | core::RestartStep::ReadAfresh { .. }
+            | core::RestartStep::SettleOutbox { .. }
+    )));
+    world.store.patch_sets(f::BEFORE);
+    world.store.crash(f::SEED);
+    assert_eq!(world.store.applied, last);
+    assert_eq!(world.store.rows, rows);
+}

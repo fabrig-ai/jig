@@ -76,6 +76,7 @@ fn recurring_lines_join_the_supplied_period_and_its_durable_opening_fact() {
         let record = Box::new(core.tasks.task(row.number).unwrap().clone());
         tasks::step(&mut restored, &env, tasks::Event::Restore { record: tasks::Stored::Live(record) }, &mut requests);
     }
+    tasks::step(&mut restored, &env, tasks::Event::Check, &mut requests);
     tasks::step(&mut restored, &env, tasks::Event::Restored, &mut requests);
     while let Some(request) = requests.pop() {
         if let tasks::Request::RestoreRefused { problem } = request {

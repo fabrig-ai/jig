@@ -119,6 +119,7 @@ fn restore(mut h: Harness) -> Harness {
             _ => false,
         }));
     }
+    h.send(Event::Check);
     let out = h.send(Event::Restored);
     assert!(
         !out.iter().any(|r| match r {

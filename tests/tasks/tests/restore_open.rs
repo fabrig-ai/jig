@@ -86,6 +86,7 @@ fn restoring_a_proposal_requires_its_open_members_shape() {
             for record in &supporting {
                 tasks::step(&mut domain, &env, Event::Restore { record: record.clone() }, &mut out);
             }
+            tasks::step(&mut domain, &env, Event::Check, &mut out);
             tasks::step(&mut domain, &env, Event::Restored, &mut out);
             let mut refusals = Vec::new();
             let mut saves = Vec::new();

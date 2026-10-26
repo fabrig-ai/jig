@@ -120,6 +120,7 @@ impl Harness {
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: LIMITS },
             stored: BTreeMap::new(),
         };
+        test.send(Event::Check);
         test.send(Event::Restored);
         test.send(Event::OpenPeriod { reply_to: to(), project: 1, period: 0, budget: 10_000 });
         test
@@ -206,6 +207,7 @@ impl Harness {
                 "{out:?}"
             );
         }
+        self.send(Event::Check);
         let out = self.send(Event::Restored);
         assert!(
             !out.iter().any(|request| match request {
@@ -760,6 +762,7 @@ fn capacity_history_distinguishes_project_shape_from_room_and_survives_diagnosti
             _ => {}
         }
     }
+    cold.send(Event::Check);
     cold.send(Event::Restored);
     assert!(cold.domain.ready());
     assert!(cold.domain.capacity_refusals().is_empty(), "room history is live-only");
@@ -834,6 +837,7 @@ fn zero_capacity_history_counts_real_source_room_without_retaining_payloads() {
     let env = Env { now: Time::ZERO, wall: Wall::from_nanos(21), limits };
     let mut domain = Domain::new(&limits, 1, crate::tests::charters(), Box::new([0]));
     let mut out = Queue::with_capacity(max_out(&limits));
+    step(&mut domain, &env, Event::Check, &mut out);
     step(&mut domain, &env, Event::Restored, &mut out);
     while out.pop().is_some() {}
     step(&mut domain, &env, Event::OpenPeriod { reply_to: to(), project: 1, period: 4, budget: 100 }, &mut out);

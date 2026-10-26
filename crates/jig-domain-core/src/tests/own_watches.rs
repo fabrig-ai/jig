@@ -216,6 +216,7 @@ fn a_role_change_marks_an_open_accounts_watch() {
 #[test]
 fn a_period_ledger_save_leaves_an_accounts_watch_unmarked() {
     let (mut core, limits) = watching_accounts();
+    drop(watch_outputs(&mut core, &limits, Event::Tasks(tasks::Event::Check)));
     drop(watch_outputs(&mut core, &limits, Event::Tasks(tasks::Event::Restored)));
     let out = watch_outputs(
         &mut core,

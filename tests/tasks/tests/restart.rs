@@ -193,7 +193,7 @@ fn restore_rejects_corrupt_links_cycles_and_contracts_without_panicking() {
             }
             step(&mut domain, &env, Event::Restore { record: Stored::Live(Box::new(record)) }, &mut out);
         }
-        step(&mut domain, &env, Event::Restored, &mut out);
+        step(&mut domain, &env, Event::Check, &mut out);
         let mut rejected = false;
         while let Some(request) = out.pop() {
             if matches!(request, Request::RestoreRefused { .. }) {
@@ -323,6 +323,10 @@ fn restore_refuses_unrepresentable_eventual_funding_postings() {
         if let Stored::Ledger(ledger) = row
             && ledger.funder == (Funder::Period { project: 1, period: 0 })
         {
+            // Keep the row individually representable; only the eventual
+            // aggregate with the live task overflows at Check.
+            ledger.numbers.budget = u64::MAX;
+            ledger.numbers.reserved = 0;
             ledger.numbers.spent_below = u64::MAX;
         }
     }
@@ -331,7 +335,7 @@ fn restore_refuses_unrepresentable_eventual_funding_postings() {
     for record in rows {
         step(&mut domain, &source.env, Event::Restore { record }, &mut out);
     }
-    step(&mut domain, &source.env, Event::Restored, &mut out);
+    step(&mut domain, &source.env, Event::Check, &mut out);
     assert!(std::iter::from_fn(|| out.pop()).any(|request| matches!(request, Request::RestoreRefused { .. })));
 }
 
@@ -379,7 +383,7 @@ fn restore_refuses_a_missing_unfinished_live_dependency_before_activation() {
         for record in rows {
             step(&mut domain, &source.env, Event::Restore { record }, &mut out);
         }
-        step(&mut domain, &source.env, Event::Restored, &mut out);
+        step(&mut domain, &source.env, Event::Check, &mut out);
         let mut refused = false;
         while let Some(request) = out.pop() {
             assert!(!matches!(request, Request::Activate { .. } | Request::Adopt { .. }));
@@ -464,7 +468,7 @@ fn restore_refuses_task_funding_outside_its_requester_ancestry() {
     for record in rows {
         step(&mut domain, &source.env, Event::Restore { record }, &mut out);
     }
-    step(&mut domain, &source.env, Event::Restored, &mut out);
+    step(&mut domain, &source.env, Event::Check, &mut out);
     assert!(std::iter::from_fn(|| out.pop()).any(|request| matches!(request, Request::RestoreRefused { .. })));
 }
 
@@ -535,6 +539,7 @@ fn waiting_restore_requests_recheck_once_and_identical_recipient_changes_nothing
             step(&mut domain, &source.env, Event::Restore { record }, &mut out);
         }
         assert!(out.is_empty());
+        step(&mut domain, &source.env, Event::Check, &mut out);
         step(&mut domain, &source.env, Event::Restored, &mut out);
         let requests = std::iter::from_fn(|| out.pop()).collect::<Vec<_>>();
         assert_eq!(

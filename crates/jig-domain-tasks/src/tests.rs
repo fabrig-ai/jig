@@ -51,3 +51,5 @@ mod account;
 mod waits;
 
 mod settings_proposals;
+
+mod startup;

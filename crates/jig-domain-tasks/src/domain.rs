@@ -28,6 +28,7 @@ pub(crate) struct Task {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Startup {
     Restoring,
+    Checked,
     Ready,
     Failed,
 }
@@ -202,7 +203,7 @@ impl Domain {
     /// `charters` bounded by `limits.charters`, each with its models, and `efforts`, each
     /// configured model's count of declared efforts in configuration's order, at most
     /// `MODELS` (domain/tasks.md, section 3). Panics on invalid/unrepresentable limits or
-    /// malformed charter configuration; no task becomes active until `Restore`/`Restored`
+    /// malformed charter configuration; no task becomes active until `Restore`/`Check`/`Restored`
     /// completes.
     #[must_use]
     pub fn new(limits: &Limits, seed: u64, charters: Box<[crate::CharterModels]>, efforts: Box<[u8]>) -> Domain {
@@ -480,6 +481,12 @@ impl Domain {
         crate::waiting::next(self, task, after)
     }
 
+    /// Whether the restored whole set passed its pre-switch checks (domain/engine.md, 6).
+    #[must_use]
+    pub fn checked(&self) -> bool {
+        self.startup == Startup::Checked
+    }
+
     #[must_use]
     pub(crate) fn ready(&self) -> bool {
         self.startup == Startup::Ready
@@ -737,9 +744,11 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             crate::wake::met(domain, env, task, dependency, removed, by, message, out);
         }
         Event::Restore { record } => crate::stored::restore(domain, env, record, out),
+        Event::Check => crate::stored::check(domain, env, out),
         Event::Restored => {
+            let replay = domain.checked();
             crate::stored::restored(domain, env, out);
-            if domain.ready() {
+            if replay && domain.ready() {
                 crate::proposals::rearm_all(domain, env);
                 crate::proposals::wake_restored(domain, env, out);
                 crate::escalation::rearm_all(domain, env);

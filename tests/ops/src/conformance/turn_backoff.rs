@@ -44,6 +44,7 @@ impl World {
         for event in [
             core::Event::People(people::Event::Roles { project: 1, holdings: Box::new([]) }),
             core::Event::People(people::Event::Restored),
+            core::Event::Tasks(tasks::Event::Check),
             core::Event::Tasks(tasks::Event::Restored),
             core::Event::Period { project: 1, period: 1, budget: 1000, next: None },
             core::Event::Fleet(fleet::Event::Loaded),

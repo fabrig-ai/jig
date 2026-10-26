@@ -73,6 +73,11 @@ pub(crate) fn work(
             host_out(domain, env, decision, &mut out, work);
         }
         Work::Restart(request) => crate::restart::route(domain, env, decision, request, work),
+        Work::SwitchChecked => {
+            if domain.core.restart_checked() {
+                held(decision, Output::Switch);
+            }
+        }
         Work::AdoptClaims => {
             // Tasks's restoration terminal produces the claims. Feed it first,
             // then carry the complete range to the fleet as the core asks.
