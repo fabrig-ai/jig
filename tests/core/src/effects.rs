@@ -45,6 +45,8 @@ pub struct World {
     pub inbound: Vec<tasks::Word>,
     pub answers: Vec<(Token, core::CallKey, core::CallPart)>,
     pub assigned: Option<root::Assignment>,
+    /// The worker's opaque answered calls after application routing.
+    pub assigned_answers: Box<[jig_domain_host::AnsweredCall]>,
     last_read: Option<u64>,
     received_grant: Option<(Token, Token, Token, fleet::Grant)>,
     grant_follows_assignment: bool,
@@ -144,6 +146,11 @@ pub struct World {
 }
 
 impl World {
+    /// Keep application evidence under the call's key, independently of core rows.
+    pub fn keep_delivery_evidence(&mut self, key: core::CallKey, evidence: Box<[u8]>) {
+        self.protocol.delivery_evidence.entry(key).or_insert(evidence);
+    }
+
     /// Supply monotonic time and wall time independently, including wall corrections.
     pub fn set_clock(&mut self, now: Time, wall: Wall) {
         if self.supplied_wall.is_some() {
@@ -382,7 +389,12 @@ impl World {
             }
             if !self.stopped {
                 match self.store.tick(false) {
-                    Ok(Some(number)) => self.events.push_front(root::Event::Committed { number, fill: self.fill }),
+                    Ok(Some(number)) => {
+                        self.protocol.delivery_evidence.retain(|key, _| {
+                            self.store.rows.contains_key(&root::Key::Core(core::Key::Core(core::CoreKey::Call(*key))))
+                        });
+                        self.events.push_front(root::Event::Committed { number, fill: self.fill });
+                    }
                     Ok(None) => {}
                     Err(number) => self.events.push_front(root::Event::Failed { number }),
                 }

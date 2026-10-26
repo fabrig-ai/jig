@@ -142,7 +142,10 @@ impl Workers {
         Some(delivery(
             now,
             channel,
-            host::LinkDown::Assign { assignment: tools::charter(value, self.endpoints.as_slice(), &self.deployment)? },
+            host::LinkDown::Assign {
+                // This application's charter exposes no delivery tool, so it keeps no delivery evidence.
+                assignment: tools::charter(value, self.endpoints.as_slice(), &self.deployment, &[])?,
+            },
             values,
         ))
     }

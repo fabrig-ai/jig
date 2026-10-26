@@ -7,13 +7,12 @@ fn settled(answer: SettledAnswer) -> SettledCall {
 
 #[test]
 fn a_settled_calls_owned_bytes_are_tool_and_answer_alone() {
-    // Four bytes of tool and six bytes of host body or delivery evidence.
-    const OWNED: u64 = 10;
-    for answer in [
-        SettledAnswer::Host { error: false, body: b"answer".as_slice().into() },
-        SettledAnswer::Delivery { outcome: DeliveryOutcome::Delivered, evidence: b"proof!".as_slice().into() },
+    // Four bytes of tool; a delivery has no owned answer payload.
+    for (answer, owned) in [
+        (SettledAnswer::Host { error: false, body: b"answer".as_slice().into() }, 10),
+        (SettledAnswer::Delivery { outcome: DeliveryOutcome::Delivered }, 4),
     ] {
-        assert_eq!(settled(answer).owned_bytes(), Some(OWNED));
+        assert_eq!(settled(answer).owned_bytes(), Some(owned));
     }
 }
 
@@ -40,4 +39,19 @@ fn a_settlement_refusal_preserves_its_opaque_live_reply_address() {
     );
     let Some(Request::Decided) = out.pop() else { panic!("the decision closes") };
     assert!(out.is_empty());
+}
+
+#[test]
+fn a_delivery_accepts_its_tools_bytes_at_the_limit() {
+    let mut limits = limits();
+    // The fixture's tool is four bytes; the delivery owns no payload.
+    limits.call_answer_bytes = 4;
+    assert!(settled(SettledAnswer::Delivery { outcome: DeliveryOutcome::Delivered }).valid(&limits));
+}
+
+#[test]
+fn a_delivery_refuses_a_tool_one_byte_past_the_limit() {
+    let mut limits = limits();
+    limits.call_answer_bytes = 3;
+    assert!(!settled(SettledAnswer::Delivery { outcome: DeliveryOutcome::Delivered }).valid(&limits));
 }

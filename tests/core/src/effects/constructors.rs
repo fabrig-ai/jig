@@ -305,6 +305,7 @@ impl World {
             inbound: Vec::new(),
             answers: Vec::new(),
             assigned: None,
+            assigned_answers: Box::new([]),
             last_read: None,
             received_grant: None,
             grant_follows_assignment: false,

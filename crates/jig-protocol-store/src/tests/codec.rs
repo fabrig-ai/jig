@@ -754,10 +754,7 @@ fn a_settled_call_reads_back() {
     use jig_domain_core as core;
     for answer in [
         core::SettledAnswer::Host { error: true, body: Box::from(b"denied".as_slice()) },
-        core::SettledAnswer::Delivery {
-            outcome: core::DeliveryOutcome::Stale,
-            evidence: Box::from(b"receipt".as_slice()),
-        },
+        core::SettledAnswer::Delivery { outcome: core::DeliveryOutcome::Stale },
     ] {
         let core::CoreRecord::Call(mut row) = fixtures::calls::call(core::CallPart::Unavailable) else {
             panic!("call fixture")

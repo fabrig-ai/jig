@@ -20,6 +20,7 @@ jig-test-connector.workspace = true
 jig-test-connector-world = { path = "../test-connector" }
 jig-test-system.workspace = true
 jig-domain-core.workspace = true
+jig-domain-host.workspace = true
 jig-domain-tasks.workspace = true
 jig-domain-people.workspace = true
 jig-domain-authority.workspace = true

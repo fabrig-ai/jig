@@ -15,15 +15,10 @@ pub(super) fn encode_settled_answer(
             &limits.core,
             wire::SettledAnswerHostParts { error: *error, body: body.clone() },
         )?),
-        domain::SettledAnswer::Delivery { outcome, evidence } => {
-            wire::SettledAnswer::Delivery(wire::SettledAnswerDelivery::new(
-                &limits.core,
-                wire::SettledAnswerDeliveryParts {
-                    outcome: encode_delivery_outcome(outcome, limits),
-                    evidence: evidence.clone(),
-                },
-            )?)
-        }
+        domain::SettledAnswer::Delivery { outcome } => wire::SettledAnswer::Delivery(wire::SettledAnswerDelivery::new(
+            &limits.core,
+            wire::SettledAnswerDeliveryParts { outcome: encode_delivery_outcome(outcome, limits) },
+        )?),
     })
 }
 pub(super) fn decode_settled_answer(value: wire::SettledAnswer, limits: &Limits) -> domain::SettledAnswer {
@@ -33,8 +28,8 @@ pub(super) fn decode_settled_answer(value: wire::SettledAnswer, limits: &Limits)
             domain::SettledAnswer::Host { error, body }
         }
         wire::SettledAnswer::Delivery(value) => {
-            let wire::SettledAnswerDeliveryParts { outcome, evidence } = value.into_parts();
-            domain::SettledAnswer::Delivery { outcome: decode_delivery_outcome(outcome, limits), evidence }
+            let wire::SettledAnswerDeliveryParts { outcome } = value.into_parts();
+            domain::SettledAnswer::Delivery { outcome: decode_delivery_outcome(outcome, limits) }
         }
     }
 }
