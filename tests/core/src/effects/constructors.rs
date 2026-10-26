@@ -291,6 +291,7 @@ impl World {
         } else {
             crate::fixtures::create_chat(&creating, 1, 0, b"make an effect".as_slice().into())
         };
+        let protocol = crate::protocol::Stand::with_models(limits.core, &configuration.core.settings.models);
         let store = Store::with_patch_sets(limits, &configuration.core.settings.models, sets);
         let move_provider = configuration.core.settings.llm_providers.providers.first().map(|provider| provider.number);
         World {
@@ -299,7 +300,7 @@ impl World {
             domain: root::Domain::new(configuration, limits),
             store,
             systems: [System::new(), System::new()],
-            protocol: crate::protocol::Stand::new(limits.core),
+            protocol,
             host_calls: Vec::new(),
             host_answers: Vec::new(),
             inbound: Vec::new(),

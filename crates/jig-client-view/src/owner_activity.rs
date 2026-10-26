@@ -56,6 +56,7 @@ fn message_fits(kind: &OwnerMessageKind, words: &Text, limits: &Limits) -> Optio
         OwnerMessageKind::Escalation { .. }
         | OwnerMessageKind::Proposal { .. }
         | OwnerMessageKind::PersonStalled { .. }
+        | OwnerMessageKind::SettingsDecision { .. }
         | OwnerMessageKind::ProposalDecision { .. }
         | OwnerMessageKind::Words
         | OwnerMessageKind::EffectNotMade { .. }
@@ -207,6 +208,21 @@ fn kind(b: &mut Builder, value: &OwnerMessageKind, words: &Words) {
         OwnerMessageKind::PersonStalled { task } => {
             caption(b, words, P::PersonStalled);
             number(b, words, P::TaskIdentity, *task);
+        }
+        OwnerMessageKind::SettingsDecision { proposal, outcome } => {
+            caption(b, words, P::SettingsDecision);
+            number(b, words, P::ProposalNumber, *proposal);
+            match outcome {
+                jig_client::contract::SettingsOutcome::Accepted { revision } => {
+                    caption(b, words, P::Accepted);
+                    number(b, words, P::Revision, u64::from(*revision));
+                }
+                jig_client::contract::SettingsOutcome::Rejected => caption(b, words, P::Rejected),
+                jig_client::contract::SettingsOutcome::Stale { newest } => {
+                    caption(b, words, P::SettingsStale);
+                    number(b, words, P::Newest, u64::from(*newest));
+                }
+            }
         }
         OwnerMessageKind::ProposalDecision { proposal, accepted } => {
             caption(b, words, P::ProposalDecision);
