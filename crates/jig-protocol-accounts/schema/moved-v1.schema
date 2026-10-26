@@ -1,0 +1,10 @@
+family jig-accounts 1
+
+versioned record Moved {
+    application: bytes 64
+    issuer: bytes 2048
+    client_id: bytes 255
+    subject: bytes 255
+    display: bytes 64
+    record: secret 274497 holds skein-oauth SavedToken
+}

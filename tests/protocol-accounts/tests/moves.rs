@@ -149,3 +149,12 @@ fn adoption_preserves_the_stored_record_and_expires_only_the_drivers_copy() {
         "the next keep replaces the unmodified durable row"
     );
 }
+
+#[test]
+fn the_small_profile_file_bound_loses_the_magic_bytes() {
+    // protocol/llm.md, 5.6: 26 fixed bytes, outer caps totaling 2,686,
+    // and the small profile's 65,536-byte record allowance.
+    const FILE_BYTES: u64 = 68_248;
+    let profile = jig_protocol_config::profile(jig_protocol_config::Profile::Small);
+    assert_eq!(jig_protocol_accounts::moved::bound(&profile.driver.client.document), FILE_BYTES);
+}
