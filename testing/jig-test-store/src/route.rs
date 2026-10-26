@@ -192,7 +192,7 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
         }
         Event::Committed { number, fill } => into.push(Up::Root(root::Event::Committed { number, fill })),
         Event::Failed { number } | Event::FrameTooLarge { number, .. } => {
-            into.push(Up::Root(root::Event::Failed { number }))
+            into.push(Up::Root(root::Event::Failed { number }));
         }
         Event::Restored { owner, rows, next } => restored(routes, owner, rows, next, into),
         Event::Read { owner, result } => {
@@ -200,24 +200,7 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
                 into.push(Up::Root(root::Event::Core(core::Event::ReadLoaded { load, result })));
             }
         }
-        Event::Loaded { owner, rows, next } => {
-            if let Some(Flight::Notes(owner)) = routes.pending.remove(&owner) {
-                let mut records = List::with_capacity(u32::try_from(rows.len()).expect("bounded page"));
-                for row in rows {
-                    match row {
-                        Row::Jig(core::Record::Notes(record)) => {
-                            records.push(record).expect("same count");
-                        }
-                        Row::Jig(_) | Row::Application { .. } => {
-                            stop(routes, into);
-                            return;
-                        }
-                    }
-                }
-                let event = notes::Event::Loaded { owner, rows: notes::Rows { records }, more: next.is_some() };
-                into.push(Up::Root(root::Event::Core(core::Event::Notes(event))));
-            }
-        }
+        Event::Loaded { owner, rows, next } => loaded(routes, owner, rows, next, into),
         Event::Got { owner, row } => {
             if let Some(Flight::Historical(now)) = routes.pending.remove(&owner) {
                 let row = match row {
@@ -287,6 +270,24 @@ pub fn up(routes: &mut Routes, event: Event, into: &mut Queue<Up>) {
         | Event::Erased { .. }
         | Event::Secret { .. }
         | Event::SecretsLoaded { .. } => {}
+    }
+}
+fn loaded(routes: &mut Routes, owner: Token, rows: Box<[Row]>, next: Option<store::Cursor>, into: &mut Queue<Up>) {
+    if let Some(Flight::Notes(owner)) = routes.pending.remove(&owner) {
+        let mut records = List::with_capacity(u32::try_from(rows.len()).expect("bounded page"));
+        for row in rows {
+            match row {
+                Row::Jig(core::Record::Notes(record)) => {
+                    records.push(record).expect("same count");
+                }
+                Row::Jig(_) | Row::Application { .. } => {
+                    stop(routes, into);
+                    return;
+                }
+            }
+        }
+        let event = notes::Event::Loaded { owner, rows: notes::Rows { records }, more: next.is_some() };
+        into.push(Up::Root(root::Event::Core(core::Event::Notes(event))));
     }
 }
 fn restored(routes: &mut Routes, owner: Token, rows: Box<[Row]>, next: Option<store::Cursor>, into: &mut Queue<Up>) {
