@@ -1586,6 +1586,14 @@ Its referee holds the core to core.md, section 11, seen from outside;
 applications' worlds reuse it on jig's conformance world (testing.md,
 section 5).
 
+Projection failure receipts (connectors.md, 8) have their stories in the
+core's world: one news per episode across duplicate failures and
+restart; live news when room returns; news owed to an ended goal, whether
+the failure came before or after its end, read one at a time, delivered
+once across both commit crash cuts and a restart; a forgotten goal's debt
+settled without a line, its late read discarded; a recovery answer lost
+to a restart and asked again; and a final forget waiting for owed news.
+
 ## 16. Open questions
 
 - **Commits in flight:** how many, and whether the store should take

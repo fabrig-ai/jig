@@ -940,7 +940,10 @@ live destination, slot and byte admission. Tracked news reserves merged
 room; untracked news takes all ordinary refusal credits. A successful
 delivery is quiet Kept news and records Activity, Heard and the durable
 inbox together. Full or missing destinations change nothing. The emitted
-requests stay within the tasks child's declared maximum output.
+requests stay within the tasks child's declared maximum output. An Ended record
+takes projection news through `archived_projection_news` (connectors.md,
+8.4): a line in its Activity and its message positions, never its phase,
+its result or its indexes.
 
 - **Durable.** A message is in the inbox once the commit that sent it
   is; it is taken once the commit of the run's turn, the procedure's

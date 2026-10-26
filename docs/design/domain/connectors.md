@@ -647,7 +647,8 @@ At most one receipt is delivered in a decision. News is owed and delivered
 only while the core is not stopping, restart is Open, a fresh number is
 available and the destination has room. Full, missing and exhausted
 destinations preserve Pending and cause no busy continuation. A later
-eligible decision retries. Archived delivery is a separate continuation.
+eligible decision retries. A goal with no live row takes its news in its
+archived record (8.4).
 
 ### 8.3 Final feeds and durable acceptance
 
@@ -672,6 +673,42 @@ is nonzero and no newer than the committed counter, and `closing_at =
 Some(g)` requires `fed_at = Some(g - 1)`;
 a header without it has an empty cohort; an empty final cohort retains
 Pending news. The final owner is absent, Ended or untracked.
+
+### 8.4 News after the goal ends
+
+A Pending receipt whose goal has no live row is owed to the goal's
+archived record. The core reads that record with the ended-task load that
+preparations use, through the same bounded map of result reads, one such
+read at a time, and only when live news could be delivered: not stopping,
+restart Open, a fresh Message number, and no news yet in this decision.
+
+The read's answer is applied in one decision:
+
+- **An Ended record:** the tasks child adds the quiet Kept line
+  `Projection N failed` to its Activity and message positions, at the
+  receipt's wall time and with a fresh Message number. The core saves the
+  record in place: its phase, its result, its result position and its
+  indexes stay as its ending wrote them. It marks the goal's watchers
+  changed, records Reported, and finishes the projection's deferred
+  forget when this was its last debt.
+- **No record, or one whose Activity can take no more:** no one can read
+  the news. The core records Reported without a line, and finishes the
+  deferred forget in the same way.
+- **A busy store:** nothing changes, and a later decision reads again.
+
+Retention does not wait for projection news. The decision that forgets a
+task forgotten once read records each of its Pending receipts Reported
+without a line, and drops its news read in flight, so that a late answer
+cannot write the forgotten record back. Nothing new is stored: the read in
+flight is transient, and once restart is Open the core reads again for
+each Pending receipt whose goal is not live. Reported commits with the
+line, so a restart neither loses nor repeats it.
+
+A recovery whose Held answer a restart lost is asked again by its
+requester. Its receipt is Armed by then, so the core answers the same
+`Recovered { after }` with no write and no connector reset. A newer
+Pending episode answers Busy, and a projection settled and forgotten
+answers Missing.
 
 ## 9. Reads and brief sections
 
