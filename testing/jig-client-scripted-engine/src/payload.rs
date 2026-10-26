@@ -481,7 +481,9 @@ impl Payload for ChipPhase {
         }
     }
 }
+fields!(jig_client_domain::contract::TaskSettings { task, run, newest });
 fields!(Task {
+    settings,
     dependency_facts,
     label, flags, last_activity, waits_on, llm, kept_account, run_wait,
     chip,

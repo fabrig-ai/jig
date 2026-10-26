@@ -189,9 +189,23 @@ pub enum Parameter {
     Resource { name: u32, part: Part },
 }
 
+/// The settings revisions an agent task's runs read their charter from
+/// (client/domain/contract.md, 5.1; domain/engine.md, 17.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TaskSettings {
+    /// The revision the task records.
+    pub task: u32,
+    /// Its live run's, only while that run was prepared under another.
+    pub run: Option<u32>,
+    /// The newest revision's number.
+    pub newest: u32,
+}
+
 /// A task page's header, overview, funding, authority and current held decision.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Task {
+    /// None for a procedure's or a person's task.
+    pub settings: Option<TaskSettings>,
     pub waits_on: super::WaitsOn,
     pub label: u32,
     pub flags: tasks::Flags,
@@ -773,6 +787,17 @@ pub fn task_from_row(
     let acts = super::offers::task(core, limits, party, row, decision)?;
     let authority = authority(limits, &row.authority)?;
     Ok(Task {
+        settings: match row.executor {
+            tasks::Executor::Agent { .. } => Some(TaskSettings {
+                task: row.settings.task,
+                run: match row.settings.run {
+                    Some(run) if run != row.settings.task => Some(run),
+                    Some(_) | None => None,
+                },
+                newest: core.current.newest(),
+            }),
+            tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => None,
+        },
         waits_on: crate::waits::from_row(core, limits, row),
         label: row.label,
         flags: row.flags,

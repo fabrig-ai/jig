@@ -71,7 +71,7 @@ mod task_wait;
 pub use task_tree::{
     AuthorityLine, BudgetLine, ContractLine, Dependency, Ending, EscalationState, FoldedCount, GrantLine, HoldLine,
     NoteScope, Parameter, Part, PartKey, PartKind, PatternEnd, PhaseCounts, PriorPhase, ProposalRef, ResourceLine,
-    ResultValue, Task, TaskLink, Tree, TreeRow, task_from_row,
+    ResultValue, Task, TaskLink, TaskSettings, Tree, TreeRow, task_from_row,
 };
 pub use task_wait::{OpenProgram, TaskRunWait, TaskSourceState, TaskWaitRefused, TaskWaitWhy};
 

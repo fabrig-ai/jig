@@ -177,6 +177,7 @@ pub fn task() -> Task {
         dependency_facts: skein_lib::List::with_capacity(0),
         kept_account: None,
         run_wait: None,
+        settings: Some(TaskSettings { task: 1, run: None, newest: 1 }),
         llm: None,
         label: 0,
         flags: TaskFlags { ended_by: EndedBy::Result, conversation: false, listed: true, retention: Retention::Kept },

@@ -127,6 +127,10 @@ pub fn task_record() -> w::Task {
             dependency_facts: List::with_capacity(0),
             kept_account: None,
             run_wait: None,
+            settings: Some(
+                w::TaskSettings::new(&lim, w::TaskSettingsParts { task: 1, run: None, newest: 1 })
+                    .expect("fixture settings"),
+            ),
             llm: None,
             label: 0,
             flags: w::TaskFlags::new(

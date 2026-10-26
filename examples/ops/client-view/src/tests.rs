@@ -426,6 +426,7 @@ fn task() -> Task {
         dependency_facts: List::with_capacity(0),
         kept_account: None,
         run_wait: None,
+        settings: None,
         llm: None,
         label: 0,
         flags: TaskFlags { ended_by: EndedBy::Result, conversation: false, listed: true, retention: Retention::Kept },

@@ -370,6 +370,17 @@ pub(crate) fn task_fields(value: &w::Task, limits: &Limits) -> Result<c::Task, w
         None => None,
     };
     Ok(c::Task {
+        settings: match value.settings() {
+            Some(settings) => Some(c::TaskSettings {
+                task: settings.task(),
+                run: match settings.run() {
+                    Some(run) => Some(*run),
+                    None => None,
+                },
+                newest: settings.newest(),
+            }),
+            None => None,
+        },
         dependency_facts: crate::translate::facts::dependencies(value.dependency_facts(), limits),
         label: value.label(),
         flags: crate::translate::queries::flags(value.flags()),

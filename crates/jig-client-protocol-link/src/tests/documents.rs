@@ -274,3 +274,27 @@ fn a_redirect_bound_past_the_wire_bound_is_refused() {
     let limits = fixtures::limits();
     assert_eq!(documents::frame(redirect_frame(limits.wire.keyed_value_some + 1), &limits), Err(Undecodable::TooLarge));
 }
+
+#[test]
+fn task_settings_revisions_cross_into_the_client_document() {
+    for settings in [
+        None,
+        Some(c::TaskSettings { task: 7, run: None, newest: 9 }),
+        Some(c::TaskSettings { task: 7, run: Some(6), newest: 9 }),
+    ] {
+        let mut parts = fixtures::task_record().into_parts();
+        parts.settings = None;
+        if let Some(value) = settings {
+            parts.settings = Some(
+                w::TaskSettings::new(
+                    &w::CEILINGS,
+                    w::TaskSettingsParts { task: value.task, run: value.run, newest: value.newest },
+                )
+                .expect("settings"),
+            );
+        }
+        let record = w::Task::new(&w::CEILINGS, parts).expect("task record");
+        let task = documents::task(record, &fixtures::limits()).expect("task document");
+        assert_eq!(task.settings, settings);
+    }
+}
