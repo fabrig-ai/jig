@@ -119,6 +119,15 @@ pub fn message_kind(source: &domain::MessageKind, limits: &wire::Limits) -> Resu
             limits,
             wire::StalledMessageParts { task: *task },
         )?),
+        domain::MessageKind::SettingsDecision { proposal, outcome } => {
+            wire::MessageKind::SettingsDecision(wire::SettingsDecisionMessage::new(
+                limits,
+                wire::SettingsDecisionMessageParts {
+                    proposal: *proposal,
+                    outcome: settings_outcome(*outcome, limits)?,
+                },
+            )?)
+        }
         domain::MessageKind::ProposalDecision { proposal, accepted } => {
             wire::MessageKind::ProposalDecision(wire::DecisionMessage::new(
                 limits,
@@ -187,6 +196,13 @@ pub fn read_message_kind(
         wire::MessageKind::PersonStalled(source) => {
             let wire::StalledMessageParts { task } = source.into_parts();
             domain::MessageKind::PersonStalled { task }
+        }
+        wire::MessageKind::SettingsDecision(source) => {
+            let source = source.into_parts();
+            domain::MessageKind::SettingsDecision {
+                proposal: source.proposal,
+                outcome: read_settings_outcome(source.outcome),
+            }
         }
         wire::MessageKind::ProposalDecision(source) => {
             let wire::DecisionMessageParts { proposal, accepted } = source.into_parts();
@@ -401,4 +417,27 @@ pub fn read_activity_line(
 ) -> Result<domain::ActivityLine, wire::Problem> {
     let wire::ActivityLineParts { task, position, at, line } = source.into_parts();
     Ok(domain::ActivityLine { task, position, at: Wall::from_nanos(at), line: read_line(line, limits)? })
+}
+
+fn settings_outcome(
+    value: domain::SettingsOutcome,
+    limits: &wire::Limits,
+) -> Result<wire::SettingsOutcome, wire::Problem> {
+    Ok(match value {
+        domain::SettingsOutcome::Accepted { revision } => wire::SettingsOutcome::Accepted(
+            wire::SettingsAcceptedRevision::new(limits, wire::SettingsAcceptedRevisionParts { revision })?,
+        ),
+        domain::SettingsOutcome::Rejected => wire::SettingsOutcome::Rejected,
+        domain::SettingsOutcome::Stale { newest } => wire::SettingsOutcome::Stale(wire::SettingsStaleRevision::new(
+            limits,
+            wire::SettingsStaleRevisionParts { newest },
+        )?),
+    })
+}
+fn read_settings_outcome(value: wire::SettingsOutcome) -> domain::SettingsOutcome {
+    match value {
+        wire::SettingsOutcome::Accepted(value) => domain::SettingsOutcome::Accepted { revision: value.revision() },
+        wire::SettingsOutcome::Rejected => domain::SettingsOutcome::Rejected,
+        wire::SettingsOutcome::Stale(value) => domain::SettingsOutcome::Stale { newest: value.newest() },
+    }
 }

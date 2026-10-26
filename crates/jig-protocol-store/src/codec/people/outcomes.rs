@@ -3,8 +3,8 @@ use super::{domain, wire};
 use skein_lib::{Token, Wall};
 mod facts;
 use facts::{
-    decode_again, decode_escalation_choice, decode_proposal_choice, decode_refusal, encode_again,
-    encode_escalation_choice, encode_proposal_choice, encode_refusal,
+    decode_again, decode_escalation_choice, decode_proposal_choice, encode_again, encode_escalation_choice,
+    encode_proposal_choice,
 };
 #[expect(clippy::too_many_lines, reason = "one exhaustive permanent outcome translation table")]
 pub(super) fn encode_outcome(value: &domain::Outcome, limits: &wire::Limits) -> Result<wire::Outcome, wire::Problem> {
@@ -419,3 +419,5 @@ fn encode_proposed(proposal: u64, to: u32, limits: &wire::Limits) -> Result<wire
 fn encode_withdrawn(proposal: u64, limits: &wire::Limits) -> Result<wire::Outcome, wire::Problem> {
     Ok(wire::Outcome::Withdrawn(wire::OutcomeWithdrawn::new(limits, wire::OutcomeWithdrawnParts { proposal })?))
 }
+
+pub(crate) use facts::{decode_refusal, encode_refusal};

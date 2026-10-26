@@ -17,6 +17,7 @@ pub struct Limits {
     pub call_part_delegated_value: u32,
     pub note_bytes_value: u32,
     pub call_part_note_recalled_entries: u32,
+    pub settings_refusal_value: u32,
     pub phase_bytes_value: u32,
     pub change_bytes_value: u32,
     pub end_bytes_value: u32,
@@ -43,6 +44,7 @@ pub const CEILINGS: Limits = Limits {
     call_part_delegated_value: 1_024,
     note_bytes_value: 2_097_152,
     call_part_note_recalled_entries: 16,
+    settings_refusal_value: 65_536,
     phase_bytes_value: 134_217_728,
     change_bytes_value: 268_435_456,
     end_bytes_value: 1_073_741_824,
@@ -425,6 +427,10 @@ pub enum Path {
     CallPartEffectRefusedValue,
     /// Bytes after `CallPartEffectRefused`.
     CallPartEffectRefusedTail,
+    /// The `value` field of `SettingsRefusal`.
+    SettingsRefusalValue,
+    /// Bytes after `SettingsRefusal`.
+    SettingsRefusalTail,
     /// The tag of `CallPart`.
     CallPartTag,
     /// The `key` field of `CallRecord`.
@@ -728,6 +734,7 @@ fn check_limits_0(limits: &Limits) -> Result<(), Problem> {
     if limits.call_part_delegated_value > CEILINGS.call_part_delegated_value { return Err(Problem { path: Path::CallPartDelegatedValue, reason: skein_codec::Reason::Bound }); }
     if limits.note_bytes_value > CEILINGS.note_bytes_value { return Err(Problem { path: Path::NoteBytesValue, reason: skein_codec::Reason::Bound }); }
     if limits.call_part_note_recalled_entries > CEILINGS.call_part_note_recalled_entries { return Err(Problem { path: Path::CallPartNoteRecalledEntries, reason: skein_codec::Reason::Bound }); }
+    if limits.settings_refusal_value > CEILINGS.settings_refusal_value { return Err(Problem { path: Path::SettingsRefusalValue, reason: skein_codec::Reason::Bound }); }
     if limits.phase_bytes_value > CEILINGS.phase_bytes_value { return Err(Problem { path: Path::PhaseBytesValue, reason: skein_codec::Reason::Bound }); }
     if limits.change_bytes_value > CEILINGS.change_bytes_value { return Err(Problem { path: Path::ChangeBytesValue, reason: skein_codec::Reason::Bound }); }
     if limits.end_bytes_value > CEILINGS.end_bytes_value { return Err(Problem { path: Path::EndBytesValue, reason: skein_codec::Reason::Bound }); }
@@ -3542,6 +3549,42 @@ impl CallPartEffectRefused {
     }
 }
 
+/// Movable fields of `SettingsRefusal`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SettingsRefusalParts {
+    /// The `value` field.
+    pub value: Box<[u8]>,
+}
+
+/// `SettingsRefusal` in this codec family.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SettingsRefusal {
+    value: Box<[u8]>,
+}
+
+impl SettingsRefusal {
+    /// Makes a value within the given limits.
+    pub fn new(limits: &Limits, parts: SettingsRefusalParts) -> Result<Self, Problem> {
+        let SettingsRefusalParts { value } = parts;
+        let value = Self { value };
+        value.check(limits)?;
+        Ok(value)
+    }
+
+    /// Reads the `value` field.
+    #[must_use]
+    pub fn value(&self) -> &[u8] { &self.value }
+
+    /// Moves the fields out without copying.
+    #[must_use]
+    pub fn into_parts(self) -> SettingsRefusalParts { SettingsRefusalParts { value: self.value } }
+
+    fn check(&self, limits: &Limits) -> Result<(), Problem> {
+        if self.value.len() > usize::try_from(limits.settings_refusal_value.min(CEILINGS.settings_refusal_value)).expect("u32 fits usize") { return Err(Problem { path: Path::SettingsRefusalValue, reason: skein_codec::Reason::Bound }); }
+        Ok(())
+    }
+}
+
 /// `CallPart` in this codec family.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CallPart {
@@ -3605,6 +3648,8 @@ pub enum CallPart {
     Unavailable,
     /// `effect_refused` carrying `CallPartEffectRefused`.
     EffectRefused(CallPartEffectRefused),
+    /// `settings_refused` carrying `SettingsRefusal`.
+    SettingsRefused(SettingsRefusal),
 }
 
 impl CallPart {
@@ -3628,6 +3673,7 @@ impl CallPart {
             Self::DelegationRefused(record) => CallPartDelegationRefused::check(record, limits),
             Self::NoteRecalled(record) => CallPartNoteRecalled::check(record, limits),
             Self::EffectRefused(record) => CallPartEffectRefused::check(record, limits),
+            Self::SettingsRefused(record) => SettingsRefusal::check(record, limits),
             Self::Again(_) | Self::PassedUp(_) | Self::Revised(_) | Self::Moved(_) | Self::Effect(_) | Self::Connector(_) | Self::EscalationDecided(_) | Self::Proposed(_) | Self::ProposalDecided(_) | Self::Controlled | Self::ControlDenied(_) | Self::Sent(_) | Self::Introduced | Self::Subscribed(_) | Self::Unsubscribed | Self::NoteWritten(_) | Self::NoteRefused(_) | Self::Unavailable => Ok(()),
         }?;
         Ok(())
@@ -8214,6 +8260,38 @@ impl CallPartEffectRefused {
     }
 }
 
+impl SettingsRefusal {
+    /// Measures this record's wire encoding.
+    #[must_use]
+    pub fn measure(&self) -> u32 {
+        let mut size = 0_u32;
+        let field_value = &self.value;
+        size = size.checked_add(4).expect("schema ceilings fit u32");
+        size = size.checked_add(u32::try_from(field_value.len()).expect("field ceiling fits u32")).expect("schema ceilings fit u32");
+        size
+    }
+
+    /// Writes into a writer with room for the measured bytes.
+    pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
+        let field_value = &self.value;
+        writer.put(&u32::try_from(field_value.len()).expect("field ceiling fits u32").to_be_bytes())?;
+        writer.put(field_value.as_ref())?;
+        Ok(())
+    }
+
+    /// Reads a whole record and refuses trailing bytes.
+    pub fn decode(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let value = Self::decode_from(limits, reader)?;
+        if !reader.is_empty() { return Err(Problem { path: Path::SettingsRefusalTail, reason: skein_codec::Reason::Trailing }); }
+        Ok(value)
+    }
+
+    fn decode_from(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let decoded_value = { let length = match skein_codec::read_len(reader, limits.settings_refusal_value.min(CEILINGS.settings_refusal_value)) { Ok(length) => length, Err(reason) => return Err(Problem { path: Path::SettingsRefusalValue, reason }), }; Box::from(reader.bytes(length).ok_or(Problem { path: Path::SettingsRefusalValue, reason: skein_codec::Reason::Short })?) };
+        Ok(Self { value: decoded_value })
+    }
+}
+
 impl CallPart {
     /// Measures this variant's wire encoding.
     #[must_use]
@@ -8245,6 +8323,7 @@ impl CallPart {
             Self::NoteRecalled(record) => 1_u32.checked_add(CallPartNoteRecalled::measure(record)).expect("schema ceilings fit u32"),
             Self::NoteRefused(record) => 1_u32.checked_add(CallPartNoteRefused::measure(record)).expect("schema ceilings fit u32"),
             Self::EffectRefused(record) => 1_u32.checked_add(CallPartEffectRefused::measure(record)).expect("schema ceilings fit u32"),
+            Self::SettingsRefused(record) => 1_u32.checked_add(SettingsRefusal::measure(record)).expect("schema ceilings fit u32"),
             Self::Controlled | Self::Introduced | Self::Unsubscribed | Self::Unavailable => 1,
         }
     }
@@ -8282,6 +8361,7 @@ impl CallPart {
             Self::NoteRefused(record) => { writer.put(&[27_u8])?; record.encode(writer)?; }
             Self::Unavailable => writer.put(&[28_u8])?,
             Self::EffectRefused(record) => { writer.put(&[29_u8])?; record.encode(writer)?; }
+            Self::SettingsRefused(record) => { writer.put(&[30_u8])?; record.encode(writer)?; }
         }
         Ok(())
     }
@@ -8326,6 +8406,7 @@ impl CallPart {
             27 => Self::NoteRefused(CallPartNoteRefused::decode_from(limits, reader)?),
             28 => Self::Unavailable,
             29 => Self::EffectRefused(CallPartEffectRefused::decode_from(limits, reader)?),
+            30 => Self::SettingsRefused(SettingsRefusal::decode_from(limits, reader)?),
             _ => return Err(Problem { path: Path::CallPartTag, reason: skein_codec::Reason::Tag }),
         };
         Ok(value)
@@ -12155,6 +12236,34 @@ impl CallPartEffectRefused {
     }
 }
 
+impl SettingsRefusal {
+    /// Maximum encoded bytes under these limits.
+    #[must_use]
+    pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_bytes_within(limits)
+    }
+
+    pub(crate) fn worst_case_bytes_within(limits: &Limits) -> Option<u64> {
+        let mut size = 0_u64;
+        size = size.checked_add(4_u64.checked_add(u64::from(limits.settings_refusal_value))?)?;
+        size.checked_add(0)
+    }
+
+    /// Maximum heap held by one decoded value under these limits.
+    #[must_use]
+    pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_heap_within(limits)
+    }
+
+    pub(crate) fn worst_case_heap_within(limits: &Limits) -> Option<u64> {
+        let mut heap = 0_u64;
+        heap = heap.checked_add(u64::from(limits.settings_refusal_value))?;
+        heap.checked_add(0)
+    }
+}
+
 impl CallPart {
     /// Maximum encoded bytes among variants.
     #[must_use]
@@ -12178,6 +12287,7 @@ impl CallPart {
         biggest = biggest.max(CallPartDelegationDenied::worst_case_bytes_within(limits)?).max(CallPartDelegationRefused::worst_case_bytes_within(limits)?);
         biggest = biggest.max(CallPartNoteWritten::worst_case_bytes_within(limits)?).max(CallPartNoteRecalled::worst_case_bytes_within(limits)?);
         biggest = biggest.max(CallPartNoteRefused::worst_case_bytes_within(limits)?).max(CallPartEffectRefused::worst_case_bytes_within(limits)?);
+        biggest = biggest.max(SettingsRefusal::worst_case_bytes_within(limits)?);
         1_u64.checked_add(biggest)
     }
 
@@ -12203,6 +12313,7 @@ impl CallPart {
         biggest = biggest.max(CallPartDelegationDenied::worst_case_heap_within(limits)?).max(CallPartDelegationRefused::worst_case_heap_within(limits)?);
         biggest = biggest.max(CallPartNoteWritten::worst_case_heap_within(limits)?).max(CallPartNoteRecalled::worst_case_heap_within(limits)?);
         biggest = biggest.max(CallPartNoteRefused::worst_case_heap_within(limits)?).max(CallPartEffectRefused::worst_case_heap_within(limits)?);
+        biggest = biggest.max(SettingsRefusal::worst_case_heap_within(limits)?);
         biggest.checked_add(0)
     }
 }
@@ -13296,6 +13407,7 @@ fn worst_case_bytes_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(CallPartAgain::worst_case_bytes_within(limits)?);
     biggest = biggest.max(CallPartPassedUp::worst_case_bytes_within(limits)?);
     biggest = biggest.max(CallPartEffectRefused::worst_case_bytes_within(limits)?);
+    biggest = biggest.max(SettingsRefusal::worst_case_bytes_within(limits)?);
     biggest = biggest.max(CallPart::worst_case_bytes_within(limits)?);
     biggest = biggest.max(CallRecord::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Deployment::worst_case_bytes_within(limits)?);
@@ -13303,11 +13415,11 @@ fn worst_case_bytes_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(ChangeBytes::worst_case_bytes_within(limits)?);
     biggest = biggest.max(EndBytes::worst_case_bytes_within(limits)?);
     biggest = biggest.max(PartyTask::worst_case_bytes_within(limits)?);
-    biggest = biggest.max(PartyPerson::worst_case_bytes_within(limits)?);
     Some(biggest)
 }
 
 fn worst_case_bytes_1(limits: &Limits, mut biggest: u64) -> Option<u64> {
+    biggest = biggest.max(PartyPerson::worst_case_bytes_within(limits)?);
     biggest = biggest.max(PartyDeployment::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Party::worst_case_bytes_within(limits)?);
     biggest = biggest.max(ProjectionGoal::worst_case_bytes_within(limits)?);
@@ -13430,6 +13542,7 @@ fn worst_case_heap_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(CallPartAgain::worst_case_heap_within(limits)?);
     biggest = biggest.max(CallPartPassedUp::worst_case_heap_within(limits)?);
     biggest = biggest.max(CallPartEffectRefused::worst_case_heap_within(limits)?);
+    biggest = biggest.max(SettingsRefusal::worst_case_heap_within(limits)?);
     biggest = biggest.max(CallPart::worst_case_heap_within(limits)?);
     biggest = biggest.max(CallRecord::worst_case_heap_within(limits)?);
     biggest = biggest.max(Deployment::worst_case_heap_within(limits)?);
@@ -13437,11 +13550,11 @@ fn worst_case_heap_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(ChangeBytes::worst_case_heap_within(limits)?);
     biggest = biggest.max(EndBytes::worst_case_heap_within(limits)?);
     biggest = biggest.max(PartyTask::worst_case_heap_within(limits)?);
-    biggest = biggest.max(PartyPerson::worst_case_heap_within(limits)?);
     Some(biggest)
 }
 
 fn worst_case_heap_1(limits: &Limits, mut biggest: u64) -> Option<u64> {
+    biggest = biggest.max(PartyPerson::worst_case_heap_within(limits)?);
     biggest = biggest.max(PartyDeployment::worst_case_heap_within(limits)?);
     biggest = biggest.max(Party::worst_case_heap_within(limits)?);
     biggest = biggest.max(ProjectionGoal::worst_case_heap_within(limits)?);
@@ -13473,7 +13586,7 @@ fn worst_case_heap_1(limits: &Limits, mut biggest: u64) -> Option<u64> {
 
 #[cfg(test)]
 mod golden_tests {
-    use super::{CEILINGS, ProposerTask, ProposerTaskParts, ProposerParty, ProposerPartyParts, Proposer, ProposalChoice, EscalationDecisionReject, EscalationDecisionRejectParts, EscalationDecision, ProposalKind, EscalationOutcomePassed, EscalationOutcomePassedParts, EscalationOutcome, ProposalOutcome, Source, Lacks, LacksParts, Judge, JudgeParts, Answer, FindingAuthority, FindingAuthorityParts, FindingExecutor, FindingExecutorParts, FindingTasks, FindingTasksParts, FindingSpend, FindingSpendParts, FindingGrant, FindingGrantParts, FindingPrice, FindingPriceParts, FindingScope, FindingScopeParts, FindingRequired, FindingRequiredParts, FindingFailed, FindingFailedParts, FindingUnguarded, FindingUnguardedParts, Finding, HostKind, OutboxOutcomeHeld, OutboxOutcomeHeldParts, OutboxOutcome, DeliveryOutcome, SettledAnswerHost, SettledAnswerHostParts, SettledAnswerDelivery, SettledAnswerDeliveryParts, SettledAnswer, SettledCall, SettledCallParts, CallKey, CallKeyParts, CallPartEffect, CallPartEffectParts, CallPartConnector, CallPartConnectorParts, CallPartEffectDenied, CallPartEffectDeniedParts, CallPartToolDenied, CallPartToolDeniedParts, CallPartEscalationDecided, CallPartEscalationDecidedParts, Number, NumberParts, PolicyHolder, PolicyHolderParts, ProposalHolder, CallPartProposed, CallPartProposedParts, CallPartProposalDecided, CallPartProposalDecidedParts, CallPartControlDenied, CallPartControlDeniedParts, CallPartSent, CallPartSentParts, CallPartSubscribed, CallPartSubscribedParts, CallPartDelegationDenied, CallPartDelegationDeniedParts, CallPartNoteWritten, CallPartNoteWrittenParts, TaskBytes, TaskBytesParts, CallPartEscalationRefused, CallPartEscalationRefusedParts, CallPartProposalRefused, CallPartProposalRefusedParts, CallPartControlRefused, CallPartControlRefusedParts, CallPartMessageRefused, CallPartMessageRefusedParts, CallPartSubscriptionRefused, CallPartSubscriptionRefusedParts, CallPartDelegationRefused, CallPartDelegationRefusedParts, Made, MadeParts, CallPartDelegated, CallPartDelegatedParts, NoteBytes, NoteBytesParts, CallPartNoteRecalled, CallPartNoteRecalledParts, NoteRefusalMoved, NoteRefusalMovedParts, NoteRefusal, CallPartNoteRefused, CallPartNoteRefusedParts, CallPartRevised, CallPartRevisedParts, FailureClass, HoldReasonFailures, HoldReasonFailuresParts, HoldReasonDependency, HoldReasonDependencyParts, HoldReasonStoppedBy, HoldReasonStoppedByParts, HoldReasonUncertain, HoldReasonUncertainParts, HoldReasonPoolLost, HoldReasonPoolLostParts, Bound, Exceeded, ExceededParts, HoldReason, MovedHold, MovedHoldParts, MovedSpec, MovedSpecParts, MovedPerson, MovedPersonParts, MovedNote, MovedNoteParts, Moved, CallPartMoved, CallPartMovedParts, CallPartAgain, CallPartAgainParts, CallPartPassedUp, CallPartPassedUpParts, CallPartEffectRefused, CallPartEffectRefusedParts, CallPart, CallRecord, CallRecordParts, Deployment, DeploymentParts, PhaseBytes, PhaseBytesParts, ChangeBytes, ChangeBytesParts, EndBytes, EndBytesParts, PartyTask, PartyTaskParts, PartyPerson, PartyPersonParts, PartyDeployment, PartyDeploymentParts, Party, ProjectionGoal, ProjectionGoalParts, ProjectionTask, ProjectionTaskParts, MilestoneLifecycle, MilestoneLifecycleParts, MilestoneRevision, MilestoneRevisionParts, MilestoneId, ProjectionMilestone, ProjectionMilestoneParts, Connector, ConnectorParts, ProjectionGoalRow, ProjectionGoalRowParts, ProjectionTaskRow, ProjectionTaskRowParts, ProjectionMilestoneRow, ProjectionMilestoneRowParts, ProjectionRecord, TerminalRecord, TerminalRecordParts, TurnProof, TurnProofParts, Window, WindowParts, Credential, CredentialParts, AccountBinding, AccountBindingParts, RunProof, RunProofParts, TurnRecord, TurnRecordParts, Created, CreatedParts, ProposalDecisionRecord, ProposalDecisionRecordParts, EscalationDecisionRecord, EscalationDecisionRecordParts, ProjectionValue, ProjectionValueParts, Value, Row, RowParts, Path};
+    use super::{CEILINGS, ProposerTask, ProposerTaskParts, ProposerParty, ProposerPartyParts, Proposer, ProposalChoice, EscalationDecisionReject, EscalationDecisionRejectParts, EscalationDecision, ProposalKind, EscalationOutcomePassed, EscalationOutcomePassedParts, EscalationOutcome, ProposalOutcome, Source, Lacks, LacksParts, Judge, JudgeParts, Answer, FindingAuthority, FindingAuthorityParts, FindingExecutor, FindingExecutorParts, FindingTasks, FindingTasksParts, FindingSpend, FindingSpendParts, FindingGrant, FindingGrantParts, FindingPrice, FindingPriceParts, FindingScope, FindingScopeParts, FindingRequired, FindingRequiredParts, FindingFailed, FindingFailedParts, FindingUnguarded, FindingUnguardedParts, Finding, HostKind, OutboxOutcomeHeld, OutboxOutcomeHeldParts, OutboxOutcome, DeliveryOutcome, SettledAnswerHost, SettledAnswerHostParts, SettledAnswerDelivery, SettledAnswerDeliveryParts, SettledAnswer, SettledCall, SettledCallParts, CallKey, CallKeyParts, CallPartEffect, CallPartEffectParts, CallPartConnector, CallPartConnectorParts, CallPartEffectDenied, CallPartEffectDeniedParts, CallPartToolDenied, CallPartToolDeniedParts, CallPartEscalationDecided, CallPartEscalationDecidedParts, Number, NumberParts, PolicyHolder, PolicyHolderParts, ProposalHolder, CallPartProposed, CallPartProposedParts, CallPartProposalDecided, CallPartProposalDecidedParts, CallPartControlDenied, CallPartControlDeniedParts, CallPartSent, CallPartSentParts, CallPartSubscribed, CallPartSubscribedParts, CallPartDelegationDenied, CallPartDelegationDeniedParts, CallPartNoteWritten, CallPartNoteWrittenParts, TaskBytes, TaskBytesParts, CallPartEscalationRefused, CallPartEscalationRefusedParts, CallPartProposalRefused, CallPartProposalRefusedParts, CallPartControlRefused, CallPartControlRefusedParts, CallPartMessageRefused, CallPartMessageRefusedParts, CallPartSubscriptionRefused, CallPartSubscriptionRefusedParts, CallPartDelegationRefused, CallPartDelegationRefusedParts, Made, MadeParts, CallPartDelegated, CallPartDelegatedParts, NoteBytes, NoteBytesParts, CallPartNoteRecalled, CallPartNoteRecalledParts, NoteRefusalMoved, NoteRefusalMovedParts, NoteRefusal, CallPartNoteRefused, CallPartNoteRefusedParts, CallPartRevised, CallPartRevisedParts, FailureClass, HoldReasonFailures, HoldReasonFailuresParts, HoldReasonDependency, HoldReasonDependencyParts, HoldReasonStoppedBy, HoldReasonStoppedByParts, HoldReasonUncertain, HoldReasonUncertainParts, HoldReasonPoolLost, HoldReasonPoolLostParts, Bound, Exceeded, ExceededParts, HoldReason, MovedHold, MovedHoldParts, MovedSpec, MovedSpecParts, MovedPerson, MovedPersonParts, MovedNote, MovedNoteParts, Moved, CallPartMoved, CallPartMovedParts, CallPartAgain, CallPartAgainParts, CallPartPassedUp, CallPartPassedUpParts, CallPartEffectRefused, CallPartEffectRefusedParts, SettingsRefusal, SettingsRefusalParts, CallPart, CallRecord, CallRecordParts, Deployment, DeploymentParts, PhaseBytes, PhaseBytesParts, ChangeBytes, ChangeBytesParts, EndBytes, EndBytesParts, PartyTask, PartyTaskParts, PartyPerson, PartyPersonParts, PartyDeployment, PartyDeploymentParts, Party, ProjectionGoal, ProjectionGoalParts, ProjectionTask, ProjectionTaskParts, MilestoneLifecycle, MilestoneLifecycleParts, MilestoneRevision, MilestoneRevisionParts, MilestoneId, ProjectionMilestone, ProjectionMilestoneParts, Connector, ConnectorParts, ProjectionGoalRow, ProjectionGoalRowParts, ProjectionTaskRow, ProjectionTaskRowParts, ProjectionMilestoneRow, ProjectionMilestoneRowParts, ProjectionRecord, TerminalRecord, TerminalRecordParts, TurnProof, TurnProofParts, Window, WindowParts, Credential, CredentialParts, AccountBinding, AccountBindingParts, RunProof, RunProofParts, TurnRecord, TurnRecordParts, Created, CreatedParts, ProposalDecisionRecord, ProposalDecisionRecordParts, EscalationDecisionRecord, EscalationDecisionRecordParts, ProjectionValue, ProjectionValueParts, Value, Row, RowParts, Path};
     use super::Limits;
 
     use alloc::boxed::Box;
@@ -13526,7 +13639,7 @@ mod golden_tests {
         };
         at && past
     }
-    static GOLDEN_0: [Case; 524] = [
+    static GOLDEN_0: [Case; 528] = [
         ("record_proposer_task_smallest", || { let value = ProposerTask::new(&CEILINGS, ProposerTaskParts { value: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ProposerTask::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_proposer_task_full", || { let value = ProposerTask::new(&CEILINGS, ProposerTaskParts { value: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ProposerTask::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_proposer_party_smallest", || { let value = ProposerParty::new(&CEILINGS, ProposerPartyParts { value: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ProposerParty::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -13901,6 +14014,8 @@ mod golden_tests {
         ("record_call_part_passed_up_full", || { let value = CallPartPassedUp::new(&CEILINGS, CallPartPassedUpParts { task: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPartPassedUp::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_call_part_effect_refused_smallest", || { let value = CallPartEffectRefused::new(&CEILINGS, CallPartEffectRefusedParts { value: TaskBytes::new(&CEILINGS, TaskBytesParts { value: Box::from([].as_slice()) }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPartEffectRefused::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_call_part_effect_refused_full", || { let value = CallPartEffectRefused::new(&CEILINGS, CallPartEffectRefusedParts { value: TaskBytes::new(&CEILINGS, TaskBytesParts { value: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPartEffectRefused::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_settings_refusal_smallest", || { let value = SettingsRefusal::new(&CEILINGS, SettingsRefusalParts { value: Box::from([].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettingsRefusal::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_settings_refusal_full", || { let value = SettingsRefusal::new(&CEILINGS, SettingsRefusalParts { value: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, SettingsRefusal::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_call_part_again_smallest", || { let value = CallPart::Again(CallPartAgain::new(&CEILINGS, CallPartAgainParts { task: 0_u64, required: false }).expect("golden within ceilings")); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_call_part_again_full", || { let value = CallPart::Again(CallPartAgain::new(&CEILINGS, CallPartAgainParts { task: u64::MAX, required: true }).expect("golden within ceilings")); let bytes: &[u8] = &[0, 255, 255, 255, 255, 255, 255, 255, 255, 1]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_call_part_passed_up_smallest", || { let value = CallPart::PassedUp(CallPartPassedUp::new(&CEILINGS, CallPartPassedUpParts { task: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[1, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -13961,6 +14076,8 @@ mod golden_tests {
         ("enum_call_part_unavailable_full", || { let value = CallPart::Unavailable; let bytes: &[u8] = &[28]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_call_part_effect_refused_smallest", || { let value = CallPart::EffectRefused(CallPartEffectRefused::new(&CEILINGS, CallPartEffectRefusedParts { value: TaskBytes::new(&CEILINGS, TaskBytesParts { value: Box::from([].as_slice()) }).expect("golden within ceilings") }).expect("golden within ceilings")); let bytes: &[u8] = &[29, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_call_part_effect_refused_full", || { let value = CallPart::EffectRefused(CallPartEffectRefused::new(&CEILINGS, CallPartEffectRefusedParts { value: TaskBytes::new(&CEILINGS, TaskBytesParts { value: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings") }).expect("golden within ceilings")); let bytes: &[u8] = &[29, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_call_part_settings_refused_smallest", || { let value = CallPart::SettingsRefused(SettingsRefusal::new(&CEILINGS, SettingsRefusalParts { value: Box::from([].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[30, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_call_part_settings_refused_full", || { let value = CallPart::SettingsRefused(SettingsRefusal::new(&CEILINGS, SettingsRefusalParts { value: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings")); let bytes: &[u8] = &[30, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallPart::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_call_record_smallest", || { let value = CallRecord::new(&CEILINGS, CallRecordParts { key: CallKey::new(&CEILINGS, CallKeyParts { task: 0_u64, attempt: 0_u64, completion: 0_u32, position: 0_u32 }).expect("golden within ceilings"), part: CallPart::Again(CallPartAgain::new(&CEILINGS, CallPartAgainParts { task: 0_u64, required: false }).expect("golden within ceilings")), settled: None }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallRecord::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_call_record_full", || { let value = CallRecord::new(&CEILINGS, CallRecordParts { key: CallKey::new(&CEILINGS, CallKeyParts { task: u64::MAX, attempt: u64::MAX, completion: u32::MAX, position: u32::MAX }).expect("golden within ceilings"), part: CallPart::Again(CallPartAgain::new(&CEILINGS, CallPartAgainParts { task: u64::MAX, required: true }).expect("golden within ceilings")), settled: Some(SettledCall::new(&CEILINGS, SettledCallParts { serial: u64::MAX, tool: Box::from([0_u8, 127_u8, 255_u8].as_slice()), answer: SettledAnswer::Host(SettledAnswerHost::new(&CEILINGS, SettledAnswerHostParts { error: true, body: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings")) }).expect("golden within ceilings")) }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 1, 1, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 3, 0, 127, 255, 0, 1, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, CallRecord::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_deployment_smallest", || { let value = Deployment::new(&CEILINGS, DeploymentParts { id: [0_u8; 16], tasks: 0_u64, people: 0_u64, sign_ins: 0_u64, messages: 0_u64, runs: 0_u64, calls: 0_u64, connector_rows: 0_u64, applications: 0_u64, commits: 0_u64, projects: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Deployment::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -14058,7 +14175,7 @@ mod golden_tests {
         table(&GOLDEN_0);
     }
 
-    static BOUNDS_0: [Case; 22] = [
+    static BOUNDS_0: [Case; 23] = [
         ("bound_escalation_decision_reject_reason", || bound((Path::EscalationDecisionRejectReason, skein_codec::Reason::Bound), &Limits { escalation_decision_reject_reason: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match EscalationDecisionReject::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_settled_answer_host_body", || bound((Path::SettledAnswerHostBody, skein_codec::Reason::Bound), &Limits { settled_answer_host_body: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match SettledAnswerHost::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_settled_answer_delivery_evidence", || bound((Path::SettledAnswerDeliveryEvidence, skein_codec::Reason::Bound), &Limits { settled_answer_delivery_evidence: 3, ..CEILINGS }, &[0, 0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match SettledAnswerDelivery::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
@@ -14070,6 +14187,7 @@ mod golden_tests {
         ("bound_call_part_delegated_value", || bound((Path::CallPartDelegatedValue, skein_codec::Reason::Bound), &Limits { call_part_delegated_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match CallPartDelegated::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_note_bytes_value", || bound((Path::NoteBytesValue, skein_codec::Reason::Bound), &Limits { note_bytes_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match NoteBytes::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_call_part_note_recalled_entries", || bound((Path::CallPartNoteRecalledEntries, skein_codec::Reason::Bound), &Limits { call_part_note_recalled_entries: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], |limits, bytes| match CallPartNoteRecalled::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
+        ("bound_settings_refusal_value", || bound((Path::SettingsRefusalValue, skein_codec::Reason::Bound), &Limits { settings_refusal_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match SettingsRefusal::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_phase_bytes_value", || bound((Path::PhaseBytesValue, skein_codec::Reason::Bound), &Limits { phase_bytes_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match PhaseBytes::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_change_bytes_value", || bound((Path::ChangeBytesValue, skein_codec::Reason::Bound), &Limits { change_bytes_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match ChangeBytes::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),
         ("bound_end_bytes_value", || bound((Path::EndBytesValue, skein_codec::Reason::Bound), &Limits { end_bytes_value: 3, ..CEILINGS }, &[0, 0, 0, 3, 0, 0, 0], &[0, 0, 0, 4, 0, 0, 0, 0], |limits, bytes| match EndBytes::decode(limits, &mut skein_lib::Reader::new(bytes)) { Ok(value) => Ok(value), Err(problem) => Err((problem.path, problem.reason)) })),

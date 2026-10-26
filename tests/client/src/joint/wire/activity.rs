@@ -78,6 +78,16 @@ pub fn kind(value: &tasks::MessageKind, limits: &Limits) -> Result<client::Owner
         tasks::MessageKind::ProposalDecision { proposal, accepted } => {
             client::OwnerMessageKind::ProposalDecision { proposal: *proposal, accepted: *accepted }
         }
+        tasks::MessageKind::SettingsDecision { proposal, outcome } => client::OwnerMessageKind::SettingsDecision {
+            proposal: *proposal,
+            outcome: match outcome {
+                tasks::SettingsOutcome::Accepted { revision } => {
+                    client::SettingsOutcome::Accepted { revision: *revision }
+                }
+                tasks::SettingsOutcome::Rejected => client::SettingsOutcome::Rejected,
+                tasks::SettingsOutcome::Stale { newest } => client::SettingsOutcome::Stale { newest: *newest },
+            },
+        },
         tasks::MessageKind::Words => client::OwnerMessageKind::Words,
         tasks::MessageKind::EffectNotMade { entry } => client::OwnerMessageKind::EffectNotMade { entry: *entry },
         tasks::MessageKind::Amendment { revision } | tasks::MessageKind::FinishRequested { revision } => {

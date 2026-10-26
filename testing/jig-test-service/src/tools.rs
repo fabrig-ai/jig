@@ -41,6 +41,7 @@ impl Tools {
         let event = match kit::decode(&call.tool, &call.input, &self.limits) {
             kit::Decoded::Action(action) => core::Event::NamedAction { to, key, action },
             kit::Decoded::Delegate(batch) => core::Event::DelegateValidated { to, key, batch, stubs: Box::default() },
+            kit::Decoded::Settings { .. } => return invalid(to, call, b"set", kit::Why::Range),
             kit::Decoded::Problem(problem) => return invalid(to, call, problem.field, problem.why),
             kit::Decoded::NotMine => return invalid(to, call, b"tool", kit::Why::Range),
         };

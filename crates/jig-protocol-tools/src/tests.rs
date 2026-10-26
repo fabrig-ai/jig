@@ -17,7 +17,11 @@ fn a_cancel_call_decodes_to_its_named_action() {
             target: 3,
             control: jig_domain_tasks::Control::Cancel { .. },
         }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -27,7 +31,11 @@ fn a_cancel_call_decodes_to_its_named_action() {
 fn a_release_call_decodes_to_its_named_action() {
     match crate::decode(b"release", fixtures::RELEASE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Release { target: 3, revision: 1, again: Some(false) }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -37,7 +45,11 @@ fn a_release_call_decodes_to_its_named_action() {
 fn a_introduce_call_decodes_to_its_named_action() {
     match crate::decode(b"introduce", fixtures::INTRODUCE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Introduce { left: 3, right: 4 }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -47,7 +59,11 @@ fn a_introduce_call_decodes_to_its_named_action() {
 fn a_decide_call_decodes_to_its_named_action() {
     match crate::decode(b"decide", fixtures::DECIDE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::DecideProposal { proposer: 3, proposal: 2, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -57,7 +73,11 @@ fn a_decide_call_decodes_to_its_named_action() {
 fn a_withdraw_call_decodes_to_its_named_action() {
     match crate::decode(b"withdraw", fixtures::WITHDRAW, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::WithdrawProposal { proposal: 2 }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -67,7 +87,11 @@ fn a_withdraw_call_decodes_to_its_named_action() {
 fn a_subscribe_call_decodes_to_its_named_action() {
     match crate::decode(b"subscribe", fixtures::SUBSCRIBE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Subscribe { .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -77,7 +101,11 @@ fn a_subscribe_call_decodes_to_its_named_action() {
 fn a_unsubscribe_call_decodes_to_its_named_action() {
     match crate::decode(b"unsubscribe", fixtures::UNSUBSCRIBE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Unsubscribe { subscription: 1 }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -87,7 +115,11 @@ fn a_unsubscribe_call_decodes_to_its_named_action() {
 fn a_amend_call_decodes_to_its_named_action() {
     match crate::decode(b"amend", fixtures::AMEND, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Amend { target: 3, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -97,7 +129,11 @@ fn a_amend_call_decodes_to_its_named_action() {
 fn a_decide_escalation_call_decodes_to_its_named_action() {
     match crate::decode(b"decide", fixtures::DECIDE_ESCALATION, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::DecideEscalation { task: 3, revision: 1, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -107,7 +143,11 @@ fn a_decide_escalation_call_decodes_to_its_named_action() {
 fn a_propose_call_decodes_to_its_named_action() {
     match crate::decode(b"propose", fixtures::PROPOSE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::ProposeBatch { .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -117,7 +157,11 @@ fn a_propose_call_decodes_to_its_named_action() {
 fn a_note_call_decodes_to_its_named_action() {
     match crate::decode(b"note", fixtures::NOTE, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Note { .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -127,7 +171,11 @@ fn a_note_call_decodes_to_its_named_action() {
 fn a_recall_call_decodes_to_its_named_action() {
     match crate::decode(b"recall", fixtures::RECALL, &fixtures::LIMITS) {
         Decoded::Action(core::NamedAction::Recall { .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -141,7 +189,11 @@ fn a_message_call_decodes_to_its_named_action() {
             assert_eq!(words.as_ref(), b"is the build green?");
             assert_eq!(kind, jig_domain_tasks::MessageKind::Words);
         }
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("message decoded as {other:?}")
         }
     }
@@ -154,7 +206,7 @@ fn a_delegate_call_decodes_its_batch_in_order() {
             assert_eq!(batch[0].spec.words.as_ref(), b"check");
             assert_eq!(batch[1].spec.words.as_ref(), b"report");
         }
-        other @ (Decoded::Action(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_) | Decoded::Settings { .. } | Decoded::Problem(_) | Decoded::NotMine) => {
             panic!("delegate decoded as {other:?}")
         }
     }
@@ -163,7 +215,11 @@ fn a_delegate_call_decodes_its_batch_in_order() {
 fn a_call_missing_a_required_field_names_it() {
     match crate::decode(b"message", br#"{"form":"words","words":"is the build green?"}"#, &fixtures::LIMITS) {
         Decoded::Problem(Problem { field: b"target", why: Why::Missing }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -172,7 +228,11 @@ fn a_call_missing_a_required_field_names_it() {
 fn a_call_with_the_wrong_field_type_names_it() {
     match crate::decode(b"message", br#"{"target":"three","form":"words","words":"hi"}"#, &fixtures::LIMITS) {
         Decoded::Problem(Problem { field: b"target", why: Why::Type }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -181,7 +241,11 @@ fn a_call_with_the_wrong_field_type_names_it() {
 fn a_call_that_is_not_json_is_malformed() {
     match crate::decode(b"message", b"not JSON", &fixtures::LIMITS) {
         Decoded::Problem(Problem { why: Why::Malformed, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -191,7 +255,11 @@ fn an_input_past_its_bound_is_too_large() {
     let limits = crate::Limits { input_bytes: 1, ..fixtures::LIMITS };
     match crate::decode(b"message", fixtures::MESSAGE, &limits) {
         Decoded::Problem(Problem { why: Why::TooLarge, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -200,7 +268,7 @@ fn an_input_past_its_bound_is_too_large() {
 fn another_applications_tool_is_not_mine() {
     match crate::decode(b"another_tool", b"not JSON", &fixtures::LIMITS) {
         Decoded::NotMine => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_)) => {
+        other @ (Decoded::Action(_) | Decoded::Settings { .. } | Decoded::Delegate(_) | Decoded::Problem(_)) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -210,7 +278,11 @@ fn a_batch_past_its_bound_names_the_batch() {
     let limits = crate::Limits { batch: 1, ..fixtures::LIMITS };
     match crate::decode(b"delegate", fixtures::DELEGATE, &limits) {
         Decoded::Problem(Problem { field: b"batch", why: Why::TooLarge }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -263,7 +335,11 @@ fn a_problem_renders_the_tools_name_and_missing_field() {
 fn a_call_with_duplicate_fields_is_malformed() {
     match crate::decode(b"release", br#"{"target":3,"target":4}"#, &fixtures::LIMITS) {
         Decoded::Problem(Problem { why: Why::Malformed, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -373,7 +449,11 @@ fn words_past_their_bound_name_the_field() {
     let limits = crate::Limits { words: 8, ..fixtures::LIMITS };
     match crate::decode(b"message", fixtures::MESSAGE, &limits) {
         Decoded::Problem(Problem { field: b"words", why: Why::TooLarge }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -383,7 +463,11 @@ fn nesting_past_its_bound_is_too_large() {
     let limits = crate::Limits { depth: 1, ..fixtures::LIMITS };
     match crate::decode(b"delegate", fixtures::DELEGATE, &limits) {
         Decoded::Problem(Problem { why: Why::TooLarge, .. }) => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+        other @ (Decoded::Action(_)
+        | Decoded::Settings { .. }
+        | Decoded::Delegate(_)
+        | Decoded::Problem(_)
+        | Decoded::NotMine) => {
             panic!("unexpected decoded input {other:?}")
         }
     }
@@ -463,7 +547,7 @@ fn decide_escalation_is_no_longer_a_declared_tool() {
     }
     match crate::decode(b"decide_escalation", b"{}", &fixtures::LIMITS) {
         Decoded::NotMine => {}
-        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_)) => {
+        other @ (Decoded::Action(_) | Decoded::Settings { .. } | Decoded::Delegate(_) | Decoded::Problem(_)) => {
             panic!("removed tool decoded: {other:?}")
         }
     }
@@ -623,4 +707,23 @@ fn a_decided_proposal_answer_names_its_outcome() {
         assert_eq!(answer.text.as_ref(), expected, "{outcome:?}");
         assert!(!answer.error, "{outcome:?}");
     }
+}
+
+#[test]
+fn the_settings_call_decodes_its_revision_whole_set_and_reason() {
+    let Decoded::Settings { against, set, reason } =
+        crate::decode(b"propose_settings", br#"{"against":3,"set":"0080ff","reason":"review"}"#, &fixtures::LIMITS)
+    else {
+        panic!("settings input")
+    };
+    assert_eq!(against, 3);
+    assert_eq!(set.as_ref(), &[0, 128, 255]);
+    assert_eq!(reason.as_ref(), b"review");
+    let Decoded::Problem(problem) =
+        crate::decode(b"propose_settings", br#"{"against":3,"set":"00gg","reason":"review"}"#, &fixtures::LIMITS)
+    else {
+        panic!("malformed settings bytes")
+    };
+    assert_eq!(problem.why, Why::Range);
+    schema(b"propose_settings");
 }

@@ -39,7 +39,8 @@ impl Core {
             }
             tasks::ProposalAction::Amend { task, amendment, .. } => self.keep_models(*task, amendment),
             tasks::ProposalAction::Widen { task, authority } => authority.models = self.kept_models(*task),
-            tasks::ProposalAction::Effect { .. }
+            tasks::ProposalAction::Settings { .. }
+            | tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::Release { .. } => {}
         }

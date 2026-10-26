@@ -343,3 +343,37 @@ fn review_values_hold_at_the_document_bound_and_give_the_size_one_past_it() {
         }
     }
 }
+
+#[test]
+fn settings_decisions_translate_the_revision_and_stale_newest_without_changing_rejection_words() {
+    use jig_domain_tasks as t;
+    let limits = f::wire();
+    for (outcome, expected) in [
+        (
+            t::SettingsOutcome::Accepted { revision: 7 },
+            w::SettingsOutcome::Accepted(
+                w::SettingsAccepted::new(&limits, w::SettingsAcceptedParts { revision: 7 }).unwrap(),
+            ),
+        ),
+        (t::SettingsOutcome::Rejected, w::SettingsOutcome::Rejected),
+        (
+            t::SettingsOutcome::Stale { newest: 9 },
+            w::SettingsOutcome::Stale(w::SettingsStale::new(&limits, w::SettingsStaleParts { newest: 9 }).unwrap()),
+        ),
+    ] {
+        let word = t::Word {
+            number: 43,
+            from: t::Party::Person(1),
+            kind: t::MessageKind::SettingsDecision { proposal: 41, outcome },
+            words: b"review reason".as_slice().into(),
+            at: Wall::EPOCH,
+            hits: 1,
+            eligible: true,
+        };
+        let value = crate::translate::objects::question_answer::word(&word, &limits).unwrap();
+        let w::OwnerMessageKind::SettingsDecision(kind) = value.kind() else { panic!("settings decision") };
+        assert_eq!(kind.proposal(), 41);
+        assert_eq!(kind.outcome(), &expected);
+        assert_eq!(value.words(), b"review reason");
+    }
+}

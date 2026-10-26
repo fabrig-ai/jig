@@ -10,6 +10,7 @@ use skein_lib::{Env, Queue, ReplyTo, Time, Wall};
 
 fn kind(action: &ProposalAction) -> ProposalKind {
     match action {
+        ProposalAction::Settings { .. } => ProposalKind::Settings,
         ProposalAction::Batch(_) => ProposalKind::Batch,
         ProposalAction::Effect { .. } | ProposalAction::ProcedureEffect { .. } => ProposalKind::Effect,
         ProposalAction::Amend { .. } => ProposalKind::Amend,
@@ -81,6 +82,8 @@ fn wake_holder(domain: &mut Domain, env: &Env<Limits>, proposal: &Proposal, out:
     reason = "a proposed amendment stays inline, as `Event::Amend` carries it, and is priced by size_of"
 )]
 pub enum ProposalAction {
+    /// Settings values stay in the core (engine.md, 17.6).
+    Settings { against: u32, items: Box<[SettingHead]> },
     /// Whole batch with IDs allocated on proposal admission, before reservation.
     Batch(Box<[New]>),
     /// Connector-owned payload retained under this proposal's number. Only
@@ -624,8 +627,9 @@ pub(crate) fn admission_problem(domain: &Domain, limits: &Limits, proposal: &Pro
     let Some(task) = record(domain, proposal.proposer) else {
         return Some(proposal_problem(proposal.proposer, Refusal::Unknown));
     };
-    if task.project != proposal.project || task.proposal.is_some() || task.revision == u64::MAX {
-        if task.project == proposal.project
+    let same_scope = proposal_scope(task.project, proposal);
+    if !same_scope || task.proposal.is_some() || task.revision == u64::MAX {
+        if same_scope
             && task.revision != u64::MAX
             && let Some(prior) = &task.proposal
         {
@@ -743,7 +747,8 @@ pub(crate) fn check_result(domain: &Domain, env: &Env<Limits>, task: u64, propos
         (Phase::Waiting | Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_), _, _)
         | (
             Phase::Active(_),
-            ProposalAction::Effect { .. }
+            ProposalAction::Settings { .. }
+            | ProposalAction::Effect { .. }
             | ProposalAction::ProcedureEffect { .. }
             | ProposalAction::Amend { .. }
             | ProposalAction::Widen { .. }
@@ -971,4 +976,119 @@ pub(crate) fn withdraw(
     domain.proposal_alarms.cancel(proposer);
     publish(domain, env, proposer, out);
     out.push(Request::ProposalDecided { reply_to: to, proposer, number, outcome: ProposalOutcome::Withdrawn });
+}
+
+/// Settings wait in deployment scope from the start; ordinary actions stay in their task's project.
+pub(crate) fn proposal_scope(project: u32, proposal: &Proposal) -> bool {
+    match &proposal.action {
+        ProposalAction::Settings { against, items } => {
+            let owners = match proposal.state {
+                ProposalState::Pending { holder, .. } => {
+                    holder == ProposalHolder::Policy { project: 0, kind: ProposalKind::Settings }
+                }
+                ProposalState::Accepted { .. } | ProposalState::Rejected { .. } | ProposalState::Withdrawn => false,
+            };
+            proposal.project == 0
+                && !proposal.as_holder
+                && *against > 0
+                && crate::person_proposals::valid_settings(items)
+                && owners
+        }
+        ProposalAction::Batch(_)
+        | ProposalAction::Effect { .. }
+        | ProposalAction::ProcedureEffect { .. }
+        | ProposalAction::Amend { .. }
+        | ProposalAction::Widen { .. }
+        | ProposalAction::Release { .. } => proposal.project == project,
+    }
+}
+
+/// Settings decisions name the made revision, or the revision that made them stale.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SettingsOutcome {
+    Accepted { revision: u32 },
+    Rejected,
+    Stale { newest: u32 },
+}
+/// Root-authenticated settings terminal; its message was reserved at proposal admission.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SettingsDecision {
+    pub proposer: u64,
+    pub proposal: u64,
+    pub message: u64,
+    pub by: Party,
+    pub outcome: SettingsOutcome,
+    pub reason: Box<[u8]>,
+}
+
+pub(crate) fn decide_settings(
+    domain: &mut Domain,
+    env: &Env<Limits>,
+    to: Option<ReplyTo>,
+    decision: SettingsDecision,
+    out: &mut Queue<Request>,
+) {
+    let SettingsDecision { proposer, proposal: number, message, by, outcome, reason } = decision;
+    let mut proposal = context(domain, proposer, number).expect("root checked settings proposal");
+    let against = match proposal.action {
+        ProposalAction::Settings { against, .. } => against,
+        ProposalAction::Batch(_)
+        | ProposalAction::Effect { .. }
+        | ProposalAction::ProcedureEffect { .. }
+        | ProposalAction::Amend { .. }
+        | ProposalAction::Widen { .. }
+        | ProposalAction::Release { .. } => unreachable!("settings terminal has settings action"),
+    };
+    let row = record(domain, proposer).expect("settings proposer live");
+    assert!(
+        message > row.last_message && reason.len() <= usize::try_from(env.limits.message_bytes).expect("word bound"),
+        "checked settings outcome"
+    );
+    let (terminal, change) = match outcome {
+        SettingsOutcome::Accepted { revision } => {
+            assert!(revision > against && holder_is(proposal.state.clone(), by), "checked acceptance");
+            proposal.state = ProposalState::Accepted { by };
+            (ProposalOutcome::Accepted, Change::ProposalAccepted)
+        }
+        SettingsOutcome::Rejected => {
+            assert!(holder_is(proposal.state.clone(), by), "checked rejection");
+            proposal.state = ProposalState::Rejected { by, reason: reason.clone() };
+            (ProposalOutcome::Rejected, Change::ProposalRejected)
+        }
+        SettingsOutcome::Stale { newest } => {
+            assert!(newest > against, "stale settings basis");
+            proposal.state = ProposalState::Withdrawn;
+            (ProposalOutcome::Withdrawn, Change::ProposalWithdrawn)
+        }
+    };
+    task_mut(domain, proposer).expect("settings proposer live").record.proposal = None;
+    crate::positions::history(domain, env, proposal, by, change, out);
+    publish(domain, env, proposer, out);
+    domain.proposal_alarms.cancel(proposer);
+    crate::inbox::proposal_decision(
+        domain,
+        env,
+        proposer,
+        crate::Word {
+            number: message,
+            from: by,
+            kind: crate::MessageKind::SettingsDecision { proposal: number, outcome },
+            words: reason,
+            at: env.wall,
+            hits: 1,
+            eligible: true,
+        },
+        out,
+    );
+    if let Some(reply_to) = to {
+        out.push(Request::ProposalDecided { reply_to, proposer, number, outcome: terminal });
+    }
+}
+
+impl Domain {
+    /// A parent retaining settings values preflights the same child admission before keeping them.
+    #[must_use]
+    pub fn proposal_problem(&self, limits: &Limits, proposal: &Proposal) -> Option<crate::Problem> {
+        admission_problem(self, limits, proposal)
+    }
 }
