@@ -26,6 +26,10 @@ skein-oauth-accounts.workspace = true
 skein-io.workspace = true
 skein-heap.workspace = true
 
+[dev-dependencies]
+skein-codegen.workspace = true
+skein-scratch.workspace = true
+
 [lints.rust]
 unsafe_code = "forbid"
 elided_lifetimes_in_paths = "deny"
