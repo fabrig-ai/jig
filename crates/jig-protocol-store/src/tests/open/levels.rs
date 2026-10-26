@@ -10,8 +10,16 @@ use skein_lib::{Queue, Token};
 
 const FOUR: PatchSets = PatchSets {
     sets: &[
-        PatchSet { owner: Owner::Skein, ..BASE.sets[1] },
-        PatchSet { owner: Owner::Smith, ..BASE.sets[1] },
+        PatchSet {
+            owner: Owner::Skein,
+            families: &[KeptFamily { keys: &[], ..BASE.sets[1].families[0] }],
+            ..BASE.sets[1]
+        },
+        PatchSet {
+            owner: Owner::Smith,
+            families: &[KeptFamily { keys: &[], ..BASE.sets[1].families[0] }],
+            ..BASE.sets[1]
+        },
         BASE.sets[1],
         BASE.sets[0],
     ],
@@ -234,4 +242,23 @@ fn a_family_past_the_manifests_bounds_refuses_set_before_any_write() {
         manifest.expect("first manifest").counts,
         fixtures::manifest_counts(&[(BOUND, 0, 0), ("fixture-note", 0, 0)])
     );
+}
+
+#[test]
+fn every_open_checks_ranges_before_comparing_levels() {
+    for &(label, sets, owner) in crate::tests::patching::RANGE_FAULTS {
+        for found in [crate::patching::plan::binary(&sets), ZERO] {
+            let mut store = store(found, sets);
+            let events = open(&mut store);
+            let [Event::OpenRefused { why, .. }] = events.as_ref() else { panic!("{label}: {events:?}") };
+            assert_eq!(why, &OpenRefusal::Set { owner, patch: 0 }, "{label}");
+        }
+    }
+}
+
+#[test]
+fn valid_sets_serve_stores_already_at_the_binary_levels() {
+    for sets in [BASE, SETS] {
+        assert_opened(&open(&mut store(crate::patching::plan::binary(&sets), sets)), 1);
+    }
 }

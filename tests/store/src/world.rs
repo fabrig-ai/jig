@@ -672,6 +672,29 @@ impl World {
     }
 
     fn file(&mut self, driver: usize, request: file::Request) {
+        let mut events = self.file_events(driver, request);
+        let io = self.io.get(driver).expect("three drivers");
+        while let Some(event) = events.pop() {
+            let fd = if let file::Event::Opened { file, .. } = &event { io.descriptor(*file) } else { None };
+            let input = if self.observer.is_some() { file_heap(&event) } else { 0 };
+            let arrived = Arrived { event, fd };
+            let event = match driver {
+                0 => Io::Store(arrived),
+                1 => Io::Secrets(arrived),
+                2 => Io::Transcripts(arrived),
+                _ => panic!("three drivers"),
+            };
+            if let Some(observe) = self.observer {
+                observe(Step::Begin { input, patching: jig_protocol_store::sizes::is_patching(&self.store) });
+            }
+            jig_protocol_store::up(&mut self.store, &self.env, event, &mut self.above, &mut self.below);
+            if let Some(observe) = self.observer {
+                observe(Step::End { patching: jig_protocol_store::sizes::is_patching(&self.store) });
+            }
+        }
+    }
+
+    fn file_events(&mut self, driver: usize, request: file::Request) -> Queue<file::Event> {
         let io = self.io.get_mut(driver).expect("three drivers");
         assert!(io.takes());
         let mut events = Queue::with_capacity(QUEUE);
@@ -692,7 +715,7 @@ impl World {
                         }
                         if self.cut == Some(self.operations) {
                             self.halted = true;
-                            return;
+                            return events;
                         }
                         self.operations += 1;
                         skein_fake_machine::step(&mut self.machine, call, &mut answers);
@@ -712,24 +735,96 @@ impl World {
         }
         assert!(io.takes(), "a calm file operation settles");
         assert!(!events.is_empty(), "one file terminal");
-        while let Some(event) = events.pop() {
-            let fd = if let file::Event::Opened { file, .. } = &event { io.descriptor(*file) } else { None };
-            let input = if self.observer.is_some() { file_heap(&event) } else { 0 };
-            let arrived = Arrived { event, fd };
-            let event = match driver {
-                0 => Io::Store(arrived),
-                1 => Io::Secrets(arrived),
-                2 => Io::Transcripts(arrived),
-                _ => panic!("three drivers"),
-            };
-            if let Some(observe) = self.observer {
-                observe(Step::Begin { input, patching: jig_protocol_store::sizes::is_patching(&self.store) });
+        events
+    }
+
+    /// Relocate fixture-only notes after normal startup and its commits. The
+    /// caller restarts immediately afterward; no production decoder knows Note.
+    pub fn seed_fixture_notes(&mut self, rows: &BTreeMap<Box<[u8]>, Box<[u8]>>) {
+        let number = self.next;
+        let header = root::header(number);
+        let codec = jig_protocol_store::codec::limits(&self.env.limits.core).expect("fixture limits");
+        let Write::Save(record) = &header else { panic!("deployment header") };
+        let mut ops = vec![skein_kv::Op::Put {
+            key: jig_protocol_store::keys::encode(&record.key(), self.env.limits.store.key).expect("header key"),
+            value: jig_protocol_store::codec::encode(record, &codec, &[]).expect("header"),
+        }];
+        for (key, value) in rows.iter().filter(|(key, _)| key.starts_with(b"n/")) {
+            let mut full = vec![1];
+            full.extend_from_slice(key);
+            ops.extend([
+                skein_kv::Op::Erase {
+                    key: jig_protocol_store::keys::application(key, self.env.limits.store.key).expect("note key"),
+                },
+                skein_kv::Op::Put { key: full.into_boxed_slice(), value: value.clone() },
+            ]);
+        }
+        self.model.stage(number, &[header]);
+        let replacement = Store::over(
+            &self.env.limits,
+            root::APPLICATION,
+            &[],
+            jig_protocol_store::Stores {
+                store: skein_kv::Store::memory(&self.env.limits.store),
+                secrets: skein_kv::Store::memory(&self.env.limits.secrets),
+            },
+        );
+        let mut maps = std::mem::replace(&mut self.store, replacement).into_stores();
+        assert_eq!(maps.store.last().checked_add(1), Some(number), "fixture seed follows normal commits");
+        let mut above =
+            self.fixture_kv(&mut maps.store, skein_kv::Request::Commit { owner: OWNER, ops: ops.into_boxed_slice() });
+        let Some(skein_kv::Event::Committed { number: found, .. }) = above.pop() else {
+            panic!("fixture seed commit: {above:?}")
+        };
+        assert_eq!(found, number, "fixture seed commit");
+        self.model.acknowledge(number);
+        self.next = number.checked_add(1).expect("fixture next commit");
+    }
+
+    /// Read fixture-only jig rows through a separate KV reader; no production
+    /// domain decoder knows the fixture schema.
+    pub(crate) fn fixture_notes(&mut self) -> BTreeMap<Box<[u8]>, Box<[u8]>> {
+        let generation = String::from_utf8(self.active()).expect("active");
+        let path = format!("generations/{}/store", generation.trim()).into_bytes().into_boxed_slice();
+        let mut events = self.file_events(
+            0,
+            file::Request::OpenDirectory { owner: OWNER, root: self.root.fd, name: path, no_follow: true },
+        );
+        let Some(file::Event::Opened { file, .. }) = events.pop() else { panic!("fixture map directory") };
+        let fd = self.io[0].descriptor(file).expect("directory descriptor");
+        let mut map = skein_kv::Store::new(&self.env.limits.store);
+        self.fixture_kv(&mut map, skein_kv::Request::Open { owner: OWNER, root: fd });
+        let mut result = BTreeMap::new();
+        let mut range = skein_kv::Range::prefix(&[1, b'n']);
+        loop {
+            let mut events = self.fixture_kv(
+                &mut map,
+                skein_kv::Request::Load { owner: OWNER, range: range.clone(), max: self.env.limits.store.page },
+            );
+            let Some(skein_kv::Event::Loaded { rows, next, .. }) = events.pop() else { panic!("fixture notes page") };
+            for row in rows {
+                result.insert(Box::from(&row.key[1..]), row.value);
             }
-            jig_protocol_store::up(&mut self.store, &self.env, event, &mut self.above, &mut self.below);
-            if let Some(observe) = self.observer {
-                observe(Step::End { patching: jig_protocol_store::sizes::is_patching(&self.store) });
+            let Some(next) = next else { break };
+            range.start = next.into_vec().into_iter().chain([0]).collect::<Vec<_>>().into_boxed_slice();
+        }
+        self.fixture_kv(&mut map, skein_kv::Request::Close { owner: OWNER });
+        self.file_events(0, file::Request::Close { owner: OWNER, file });
+        result
+    }
+
+    fn fixture_kv(&mut self, map: &mut skein_kv::Store, request: skein_kv::Request) -> Queue<skein_kv::Event> {
+        let env = Env { now: self.env.now, wall: self.env.wall, limits: self.env.limits.store };
+        let mut above = Queue::with_capacity(QUEUE);
+        let mut below = Queue::with_capacity(QUEUE);
+        skein_kv::down(map, &env, request, &mut above, &mut below);
+        while let Some(request) = below.pop() {
+            let mut events = self.file_events(0, request);
+            while let Some(event) = events.pop() {
+                skein_kv::up(map, &env, event, &mut above, &mut below);
             }
         }
+        above
     }
 
     pub fn application(&mut self, load: bool) -> BTreeMap<Box<[u8]>, Box<[u8]>> {
