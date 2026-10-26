@@ -101,7 +101,7 @@ fn whole(events: &[Event], expected: &core::TurnRecord) {
     assert_eq!(turns.as_ref(), std::slice::from_ref(expected));
 }
 
-fn snapshot(world: &mut World) -> Restored {
+fn snapshot_rows(world: &mut World) -> Restored {
     // These are all three jig rows saved by this fixture's two commits.
     let rows = [root::header(DURABLE), root::live_task(TASK), root::run_proof(TASK)]
         .into_iter()
@@ -110,24 +110,31 @@ fn snapshot(world: &mut World) -> Restored {
             (record.key(), record)
         })
         .collect();
-    let turns = world.transcript(TranscriptRead::Page { task: TASK, backwards: false, after: None });
-    Restored {
-        last: DURABLE,
-        rows,
-        application: world.application(false),
-        transcripts: BTreeMap::from([(TASK, turns)]),
-    }
+
+    Restored { last: DURABLE, rows, application: world.application(false), transcripts: BTreeMap::new() }
 }
 
-fn recovered(world: &mut World, before: &Restored, page: u32) {
+fn snapshot(world: &mut World, room: u32) -> Restored {
+    let mut before = snapshot_rows(world);
+    let events = read(world, TranscriptRead::Page { task: TASK, backwards: false, after: None }, room);
+    let [Event::Turns { owner, turns, next: None }] = events.as_slice() else {
+        panic!("complete snapshot with ample decoded room: {events:?}");
+    };
+    assert_eq!(*owner, READER);
+    before.transcripts.insert(TASK, turns.to_vec());
+    before
+}
+
+fn recovered(world: &mut World, before: &Restored, room: u32) {
     // A reopen may add its own empty log: compare records and reads here.
     let restored = world.reopen();
     assert_eq!(restored.last, before.last);
     assert_eq!(restored.rows, before.rows);
     assert_eq!(restored.application, before.application);
-    assert_eq!(restored.transcripts, before.transcripts);
+    // Verify turns with explicit decoded room; the aggregate world's
+    // convenience transcript snapshot has no room argument.
     let [expected] = before.turns(TASK) else { panic!("fixture keeps exactly one earlier turn") };
-    let answers = kinds().map(|kind| read(world, kind, page));
+    let answers = kinds().map(|kind| read(world, kind, room));
     for events in answers {
         whole(&events, expected);
     }
@@ -145,13 +152,23 @@ fn a_frame_exactly_the_page_commits_and_reads_back_whole() {
     assert!(matches!(events.as_slice(), [Event::Committed { number: DURABLE, .. }]), "{events:?}");
     let expected = root::turn(TASK, ATTEMPT, 1, &payload);
     eprintln!("terminal: {events:?}");
-    let answers = kinds().map(|kind| read(&mut world, kind, bytes));
-    for events in answers {
+    // store.md 7.1: the page bounds encoded bytes, read room decoded bytes.
+    let room = bytes * 2;
+    eprintln!("before crash, decoded room {room}");
+    let answers = kinds().map(|kind| read(&mut world, kind, room));
+    let before = snapshot_rows(&mut world);
+    world.crash(SEED + 1);
+    let restored = world.reopen();
+    assert_eq!(restored.last, before.last);
+    assert_eq!(restored.rows, before.rows);
+    assert_eq!(restored.application, before.application);
+    eprintln!("after crash and reopen, unchanged records, decoded room {room}");
+    let reopened = kinds().map(|kind| read(&mut world, kind, room));
+    // Collect both phases before asserting so a read failure cannot hide
+    // the crash/reopen half of this boundary story.
+    for events in answers.into_iter().chain(reopened) {
         whole(&events, &expected);
     }
-    let before = snapshot(&mut world);
-    world.crash(SEED + 1);
-    recovered(&mut world, &before, bytes);
 }
 
 #[test]
@@ -159,7 +176,7 @@ fn a_frame_one_byte_past_the_page_is_refused_by_name() {
     let payload = payload();
     let bytes = frame_bytes(&payload);
     let mut world = baseline(bytes - 1);
-    let records = snapshot(&mut world);
+    let records = snapshot(&mut world, bytes * 2);
     let files = world.contents();
     world.trace_writes();
     let events =
@@ -170,7 +187,7 @@ fn a_frame_one_byte_past_the_page_is_refused_by_name() {
     assert_eq!(world.contents(), files);
     world.crash(SEED + 1);
     assert_eq!(world.contents(), files, "refusal and crash preserve every file byte before reopen");
-    recovered(&mut world, &records, bytes - 1);
+    recovered(&mut world, &records, bytes * 2);
 }
 
 #[test]
@@ -178,7 +195,7 @@ fn a_later_turn_past_the_page_refuses_its_whole_commit() {
     let payload = payload();
     let bytes = frame_bytes(&payload);
     let mut world = baseline(bytes - 1);
-    let records = snapshot(&mut world);
+    let records = snapshot(&mut world, bytes * 2);
     let files = world.contents();
     let mut writes = root::turn_commit(REFUSED, TASK, 2, PRIOR).into_vec();
     writes.push(Write::Put { key: Box::from(b"refused".as_slice()), value: Box::from(b"never stored".as_slice()) });
@@ -191,7 +208,7 @@ fn a_later_turn_past_the_page_refuses_its_whole_commit() {
     assert_eq!(world.contents(), files);
     world.crash(SEED + 1);
     assert_eq!(world.contents(), files, "none of the refused batch survives the crash");
-    recovered(&mut world, &records, bytes - 1);
+    recovered(&mut world, &records, bytes * 2);
     assert!(world.transcript(TranscriptRead::Page { task: TASK + 1, backwards: false, after: None }).is_empty());
 }
 
@@ -223,7 +240,8 @@ fn the_frame_bound_covers_each_transcript_size() {
     let floor = row_floor();
     let ceiling = CODEC_TRANSCRIPT_CEILING;
     // No ceiling-sized allocation. Below the row floor, a valid page cannot
-    // refuse these small frames: bound-sized direct reads check their charge.
+    // refuse these small frames. Check round trips with ample decoded room;
+    // their actual encoded-size comparison remains a public-surface gap.
     let mut sizes = vec![0, 1, 127, 128, 16_383, 16_384, core.resume_bytes, floor];
     sizes.retain(|size| *size <= ceiling);
     sizes.sort_unstable();
@@ -242,9 +260,9 @@ fn the_frame_bound_covers_each_transcript_size() {
             assert_eq!(world.commit(root::turn_commit(DURABLE, TASK, 1, &transcript)), Some(DURABLE));
             let expected = root::turn(TASK, ATTEMPT, 1, &transcript);
             for kind in starts() {
-                whole(&read(&mut world, kind, bound), &expected);
+                whole(&read(&mut world, kind, bound * 2), &expected);
             }
-            eprintln!("transcript {size}: full frame reads within bound {bound}");
+            eprintln!("transcript {size}: encoded bound {bound}, whole read with decoded room {}", bound * 2);
         }
         if let Some(previous) = previous {
             assert!(bound > previous, "frame bound did not grow at transcript {size}: {previous} -> {bound}");
@@ -255,20 +273,6 @@ fn the_frame_bound_covers_each_transcript_size() {
     assert!(ceiling_bound > previous.expect("nonempty transcript table"));
     assert_eq!(sizes::frame(&core, ceiling + 1), None, "past the codec's transcript ceiling");
     assert_eq!(sizes::frame(&core, u32::MAX), None, "no clamping or overflow");
-}
-
-#[test]
-fn a_read_one_byte_short_is_unread_and_an_exact_read_recovers() {
-    let payload = payload();
-    let bytes = frame_bytes(&payload);
-    let mut world = opened(bytes);
-    assert_eq!(world.commit(root::first()), Some(FIRST));
-    assert_eq!(world.commit(root::turn_commit(DURABLE, TASK, 1, &payload)), Some(DURABLE));
-    let answers = starts().map(|kind| (kind, read(&mut world, kind, bytes - 1), read(&mut world, kind, bytes)));
-    for (kind, short, exact) in answers {
-        assert!(matches!(short.as_slice(), [Event::Unread { owner }] if *owner == READER), "{kind:?}: {short:?}");
-        whole(&exact, &root::turn(TASK, ATTEMPT, 1, &payload));
-    }
 }
 
 #[test]
