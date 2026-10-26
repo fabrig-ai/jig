@@ -46,30 +46,16 @@ fn both_shipped_profiles_round_trip_the_settled_call_sum() {
     }
 }
 
-const STORE: skein_kv::Limits = skein_kv::Limits {
-    key: 2_079,
-    value: 268_435_456,
-    ops: 1_000_000,
-    commit: 1_073_741_824,
-    queued: 3,
-    queued_bytes: 3_221_225_472,
-    budget: 268_435_456,
-    segment: 1_073_741_824,
-    snapshot_after: 268_435_456,
-    chunk: 268_437_555,
-    page: skein_kv::Page { rows: 2, bytes: 268_437_535 },
-    deadline: skein_lib::Duration::from_nanos(1_000_000_000),
-};
-
 #[test]
 fn both_shipped_profiles_are_admitted_by_the_store() {
     let application = jig_protocol_store::sizes::Application { version: 1, key: 2_078, value: 4_304 };
-    assert!(STORE.is_usable());
     for profile_name in [Profile::Small, Profile::Standard] {
         let limits = profile(profile_name);
         assert!(codec::limits(&limits.core).is_some(), "{profile_name:?}");
-        let sizes = jig_protocol_store::sizes::check(&limits.core, &application, &limits.journal, &STORE, 1)
-            .expect("shipped profile fits the map-budget commit envelope");
+        let store = &limits.store.store;
+        assert!(store.is_usable(), "{profile_name:?} store");
+        let sizes = jig_protocol_store::sizes::check(&limits.core, &application, &limits.journal, store, 1)
+            .expect("shipped profile fits its configured map-budget commit envelope");
         println!(
             "{profile_name:?}: largest key={}, value={}, commit={}, ops={}",
             sizes.key, sizes.value, sizes.commit, sizes.ops
