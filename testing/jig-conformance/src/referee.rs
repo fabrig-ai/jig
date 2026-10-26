@@ -485,8 +485,9 @@ impl Referee {
     )]
     fn durable(&mut self, number: u64, snapshot: Snapshot, now: u64) -> Result<(), Violation> {
         require(number == self.commit + 1, Promise::Commit, "commits apply whole in number order")?;
-        settings::durable(&self.last, &snapshot)?;
         for task in snapshot.tasks.values() {
+            let before = self.last.tasks.get(&task.number);
+            settings::task(before, task, snapshot.newest)?;
             require(
                 !self.last.accepted_tasks.contains_key(&task.number)
                     || snapshot.accepted_tasks.contains_key(&task.number),
@@ -495,7 +496,7 @@ impl Referee {
             )?;
             if let Some(accepted) = snapshot.accepted_tasks.get(&task.number) {
                 let known = self.last.accepted_tasks.get(&task.number) == Some(accepted);
-                let existing = self.last.tasks.contains_key(&task.number);
+                let existing = before.is_some();
                 let party = self
                     .last
                     .party_proposals
@@ -525,7 +526,7 @@ impl Referee {
                     "task lacks a durable covered-holder acceptance",
                 )?;
             }
-            if !self.last.tasks.get(&task.number).is_some_and(|old| {
+            if !before.is_some_and(|old| {
                 old.scope == task.scope
                     && old.source == task.source
                     && self.last.accepted_tasks.get(&task.number) == snapshot.accepted_tasks.get(&task.number)
@@ -585,7 +586,7 @@ impl Referee {
                     Promise::Order,
                     "task ended before its delegates closed",
                 )?;
-                if !self.last.tasks.get(&task.number).is_some_and(Task::closed) {
+                if !before.is_some_and(Task::closed) {
                     self.waiting.entry(Receipt::Ended(task.number)).or_insert(now + self.policy.delivery_bound);
                 }
             }

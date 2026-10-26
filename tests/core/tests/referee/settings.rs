@@ -33,6 +33,26 @@ fn the_referee_catches_an_assignment_on_another_revision() {
 }
 
 #[test]
+fn unchanged_old_tasks_do_not_hide_a_later_creation_or_move_on_an_old_revision() {
+    for moved in [false, true] {
+        let mut fake = Fake::new(Recovery::Keyed);
+        let mut rows = snapshot();
+        if moved {
+            rows.tasks.insert(2, task(2));
+        }
+        fake.commit(1, rows.clone()).expect("tasks made on revision zero");
+        rows.newest = 2;
+        fake.commit(2, rows.clone()).expect("unchanged tasks keep their revision when newest advances");
+        let mut later = task(2);
+        later.settings.task = 1;
+        rows.tasks.insert(2, later);
+        let violation = fake.commit(3, rows).expect_err("later row was made or moved before newest");
+        assert_eq!(violation.promise, Promise::Ownership);
+        assert!(violation.why.contains("task 2 was made or moved"));
+    }
+}
+
+#[test]
 fn moving_a_task_preserves_its_live_runs_revision_and_survives_restart() {
     let mut fake = Fake::ready(Recovery::Keyed);
     let mut rows = snapshot();
