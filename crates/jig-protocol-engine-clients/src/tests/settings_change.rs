@@ -302,3 +302,24 @@ fn move_to_newest_translates_the_revision_and_both_counts() {
     let w::Outcome::MovedToNewest(value) = answer.outcome() else { panic!("counts") };
     assert_eq!((value.newest(), value.moved(), value.stayed()), (9, 3, 1));
 }
+
+#[test]
+fn public_settings_items_share_model_resolution_and_name_invalid_fields() {
+    let limits = f::wire();
+    let w::Ask::ChangeSettings(request) = ask() else { panic!("settings fixture") };
+    let mut models = f::models();
+    models[0].name = b"model".as_slice().into();
+    models[1].name = b"other".as_slice().into();
+    let (first, rest) = models.split_at_mut_checked(1).expect("two models");
+    ::core::mem::swap(first.first_mut().expect("first model"), rest.first_mut().expect("second model"));
+    let expected = translate::settings::change(request.clone(), &models, &limits).expect("existing translation");
+    let decoded = translate::settings::items(request.items().into(), &models, &limits).expect("public entrance");
+    assert_eq!(decoded, expected.items);
+    assert_eq!(decoded.len(), 4);
+    let s::Edit::Set(s::Value::Template(template)) = &decoded[1].edit else { panic!("template") };
+    assert_eq!(template.llm.as_ref().expect("model selection").main.model, 1);
+    let bad = translate::settings::items(Box::new([0]), &models, &limits).expect_err("truncated item length");
+    assert_eq!(bad.field, w::Path::ChangeSettingsItems);
+    let bad = translate::settings::items(request.items().into(), &[], &limits).expect_err("unconfigured model");
+    assert_eq!(bad.field, w::Path::TemplateLlm);
+}
