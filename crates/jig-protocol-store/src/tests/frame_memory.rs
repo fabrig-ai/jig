@@ -236,7 +236,7 @@ fn copied_bounds(schema: &schema::Schema) -> (usize, [u32; SMITH_BOUNDS]) {
                     schema::Type::List { bound, .. }
                     | schema::Type::Bytes { bound, .. }
                     | schema::Type::Text(bound)
-                    | schema::Type::Secret(bound) => {
+                    | schema::Type::Secret { bound, .. } => {
                         *copied.get_mut(count).expect("no more bounds than smith's") = bound;
                         count = count.checked_add(1).expect("bounds");
                         break;
@@ -303,7 +303,7 @@ fn maximum_type(schema: &schema::Schema, ty: schema::TypeIx) -> (u32, u32) {
         Type::Fixed(size) => (1, size),
         Type::U8 | Type::Bool => (1, 1),
         Type::U16 => (1, 2),
-        Type::U32 | Type::Bytes { .. } | Type::Secret(_) | Type::Text(_) => (1, 4),
+        Type::U32 | Type::Bytes { .. } | Type::Secret { .. } | Type::Text(_) => (1, 4),
         Type::U64 | Type::Duration => (1, 8),
     }
 }

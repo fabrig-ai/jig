@@ -135,7 +135,7 @@ fn type_nodes(schema: &Schema, first: TypeIx, nodes: &List<u32>) -> Option<u32> 
             | Type::Bool
             | Type::Duration
             | Type::Fixed(_)
-            | Type::Secret(_)
+            | Type::Secret { .. }
             | Type::Text(_)
             | Type::Named(_)
             | Type::Bytes { .. } => break,
@@ -154,7 +154,7 @@ fn type_nodes(schema: &Schema, first: TypeIx, nodes: &List<u32>) -> Option<u32> 
             | Type::Bool
             | Type::Duration
             | Type::Fixed(_)
-            | Type::Secret(_)
+            | Type::Secret { .. }
             | Type::Text(_)
             | Type::Bytes { .. } => 1,
         };
