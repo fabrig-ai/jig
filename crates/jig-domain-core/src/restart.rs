@@ -3,6 +3,7 @@
 //! done. Only the core chooses the next step or opens decisions.
 
 mod census;
+mod joins;
 use crate::{Core, fleet};
 pub use census::{Census, ReadResults};
 
@@ -90,11 +91,26 @@ pub enum RestartRequest {
     ProjectPolicy {
         project: u32,
     },
+    /// A restored record whose references or child rules cannot be resolved
+    /// before the switch (domain/engine.md, 6). Accounts counts rows left.
+    Unresolved {
+        child: RestoreChild,
+        records: u32,
+    },
     Step(RestartStep),
     Idle,
     Refused {
         step: RestartStep,
     },
+}
+
+/// The child holding a record refused before the switch (domain/engine.md, 6).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RestoreChild {
+    People,
+    Tasks,
+    Accounts,
+    Core,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -109,13 +125,48 @@ impl Core {
     /// At the switch step, after the children's checks were stepped:
     /// false refuses the start at `Switch`, before anything switches.
     pub fn restart_checked(&mut self) -> bool {
-        match self.restart {
-            Restart::Waiting(RestartStep::Switch) if self.tasks.checked() => true,
-            Restart::Cold | Restart::Waiting(_) | Restart::Open | Restart::Failed(_) => {
-                let _request = self.restart_refuse();
-                false
+        if self.restart != Restart::Waiting(RestartStep::Switch) {
+            let _request = self.restart_refuse();
+            return false;
+        }
+        if !self.tasks.checked() {
+            self.restart_unresolved(RestoreChild::Tasks, 1);
+            return false;
+        }
+        // Both roots send Want at LoadInbox. It finishes terminal program
+        // rows and drops empty accounts before the census or connectors run.
+        if !self.accounts.restore_finished() {
+            let _request = self.restart_refuse();
+            return false;
+        }
+        if self.restart_pending && self.accounts.unrestored() != 0 {
+            let records = u32::try_from(self.accounts.unrestored()).unwrap_or(u32::MAX);
+            self.restart_unresolved(RestoreChild::Accounts, records);
+            return false;
+        }
+        let records = self.unresolved_tasks();
+        if records != 0 {
+            self.restart_unresolved(RestoreChild::Tasks, records);
+            return false;
+        }
+        let mut records = 0_u32;
+        for ((_, task), _) in self.people.read_conversations() {
+            if self.tasks.task(*task).is_none() {
+                records = records.saturating_add(1);
             }
         }
+        if records != 0 {
+            self.restart_unresolved(RestoreChild::People, records);
+            return false;
+        }
+        true
+    }
+
+    pub(crate) fn restart_unresolved(&mut self, child: RestoreChild, records: u32) {
+        if self.restore_failure.is_none() {
+            self.restore_failure = Some(RestartRequest::Unresolved { child, records });
+        }
+        let _request = self.restart_refuse();
     }
 
     /// Check all loaded claims together before the fleet can settle any of
@@ -185,7 +236,7 @@ impl Core {
         }
     }
 
-    /// The named settings or project-policy refusal, retained for the shell's report.
+    /// The named restore refusal, retained for the shell's report.
     #[must_use]
     pub const fn restore_failure(&self) -> Option<RestartRequest> {
         self.restore_failure

@@ -71,7 +71,7 @@ mod relays;
 mod resources;
 mod restart;
 mod stopping;
-pub use restart::{Census, ReadResults, RestartRequest, RestartStep, RestoreRange};
+pub use restart::{Census, ReadResults, RestartRequest, RestartStep, RestoreChild, RestoreRange};
 mod host_rule;
 mod revisions;
 mod roles;

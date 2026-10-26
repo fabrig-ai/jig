@@ -174,6 +174,9 @@ impl Core {
             }
             tasks::Party::Task(_) | tasks::Party::Deployment { .. } => {}
         }
+        // Resolve while the validated ended owner is held, before the bounded
+        // archive cache can evict it. Historical owners are not joined.
+        self.people.restore_ended_conversation(row.number);
         if seen.is_some() || !self.archived_chats.contains_key(&row.number) {
             self.cache_archived_chat(limits, row, seen);
         }

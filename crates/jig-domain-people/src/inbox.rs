@@ -11,7 +11,7 @@ use crate::{
     Stored, Update, Whom,
 };
 use alloc::boxed::Box;
-use skein_lib::{Env, Id, List, Queue, Token, Wall};
+use skein_lib::{Env, Id, List, Map, Queue, Token, Wall};
 
 impl Domain {
     /// Last explicitly accepted results position for a known party, zero before any mark.
@@ -179,6 +179,28 @@ impl Domain {
     pub fn chat_owner(&self, task: u64) -> Option<u64> {
         let chat = self.chat_totals.get(&task)?;
         Some(chat.party)
+    }
+
+    /// Live read positions for the core's join after its task census (engine.md, 6).
+    #[must_use]
+    pub fn read_conversations(&self) -> &Map<(u64, u64), u64> {
+        &self.conversations_seen
+    }
+
+    /// An ended owner witnessed by the core's census resolves any leftover live
+    /// positions. Ended positions are loaded separately, never kept as live ones.
+    pub fn restore_ended_conversation(&mut self, task: u64) {
+        loop {
+            let mut resolved = None;
+            for ((party, conversation), _) in &self.conversations_seen {
+                if *conversation == task {
+                    resolved = Some((*party, *conversation));
+                    break;
+                }
+            }
+            let Some(key) = resolved else { break };
+            let _old = self.conversations_seen.remove(&key);
+        }
     }
 
     /// Last position explicitly marked seen over one conversation, zero before any mark.
