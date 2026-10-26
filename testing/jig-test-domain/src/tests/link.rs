@@ -394,7 +394,7 @@ fn stopping_continues_a_projection_deferred_watch_without_another_commit() {
         crate::routes::route_core(&mut domain, &env, &mut decision, requests, &mut work);
     }
     assert!(work.is_empty(), "ordinary handoffs finish before the projection pass");
-    let requests = core::finish_decision(&mut domain.core, &core_env);
+    let requests = core::finish_decision(&mut domain.core, &core_env, !domain.decision_wrote);
     let core::Requests::Out(ref outputs) = requests;
     let mut feeds = 0_u32;
     for request in outputs {

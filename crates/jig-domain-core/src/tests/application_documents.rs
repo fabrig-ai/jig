@@ -20,7 +20,8 @@ fn mark(core: &mut Core, limits: &Limits, connector: u16) {
     subjects.push(Token::new(500)).unwrap();
     let out = watch_outputs(core, limits, Event::Marked { connector, subjects });
     assert_eq!(document_asks(&out), 0);
-    let Requests::Out(mut out) = finish_decision(core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits });
+    let Requests::Out(mut out) =
+        finish_decision(core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits }, true);
     while let Some(request) = out.pop() {
         if let Request::Ask { ask: Ask::Document { .. }, .. } = request {
             panic!("a mark waits for the delivery acknowledgement");

@@ -2254,7 +2254,7 @@ fn assert_watch_refusal(request: &Request, why: WatchRefusal) {
 fn finish_watch_outputs(core: &mut Core, limits: &Limits) -> Box<[Request]> {
     for _ in 0_u32..8 {
         let Requests::Out(mut out) =
-            finish_decision(core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits });
+            finish_decision(core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits }, true);
         let mut requests = List::with_capacity(out.len());
         let mut handoff = false;
         while let Some(request) = out.pop() {

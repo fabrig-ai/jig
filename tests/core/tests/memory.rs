@@ -98,7 +98,7 @@ fn settled_finishing_queries_allocate_nothing_and_empty_closure_prices_one_outpu
     meter.check(queries, bound, &limits);
     meter.start();
     let core::Requests::Out(mut out) =
-        core::finish_decision(&mut domain, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits });
+        core::finish_decision(&mut domain, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, true);
     let closed = meter.end();
     assert!(matches!(out.pop(), Some(core::Request::Decided)));
     assert!(out.is_empty());

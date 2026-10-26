@@ -325,6 +325,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 let requests = core::finish_decision(
                     &mut domain.core,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.core },
+                    !domain.wrote,
                 );
                 crate::route::core_out(domain, env, &mut decision, requests, &mut work);
                 let Some(next) = work.pop() else { break };

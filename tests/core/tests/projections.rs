@@ -626,13 +626,63 @@ fn projection_heard(world: &World, goal: u64) -> Vec<tasks::Word> {
 }
 
 #[test]
+fn projection_news_waits_for_a_write_free_continuation_decision() {
+    use jig_core_world::effects::Cut;
+    let mut world = World::new(993, false);
+    let goal = tracked_goal(&mut world);
+    let source = projection_source(&mut world, goal, 1, 9930);
+    let first = world.store.applied + 1;
+    let before = world.commits.len();
+    world.cut = Some(Cut::Durable(first));
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    assert_eq!(world.reached_cut, Some(Cut::Durable(first)));
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Pending(_)));
+    assert!(projection_heard(&world, goal).is_empty(), "receipt write defers publication");
+    assert_eq!(world.commits.len(), before + 1);
+    assert_eq!(world.commits[before].len(), 2, "only Pending and deployment are committed");
+
+    world.cut = Some(Cut::Durable(first + 1));
+    world.drain();
+    assert_eq!(world.reached_cut, Some(Cut::Durable(first + 1)));
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)));
+    assert_eq!(projection_heard(&world, goal).len(), 1);
+    for write in &world.commits[before + 1] {
+        let root::Write::Save(root::Record::Core(record)) = write else { panic!("news writes only its core rows") };
+        match record {
+            core::Record::Core(core::CoreRecord::Deployment(_)) => {}
+            core::Record::Core(core::CoreRecord::Projection(core::ProjectionRecord::Failure(row))) => {
+                assert_eq!((row.goal, row.connector), (goal, 1));
+                assert!(matches!(row.state, core::ProjectionFailureState::Reported(_)));
+            }
+            core::Record::Core(core::CoreRecord::Projection(core::ProjectionRecord::Goal { goal: row, .. })) => {
+                assert_eq!(row.number, goal);
+            }
+            core::Record::Core(core::CoreRecord::Projection(core::ProjectionRecord::Task { goal: owner, .. })) => {
+                assert_eq!(*owner, goal);
+            }
+            core::Record::Tasks(tasks::Stored::Live(row)) => assert_eq!(row.number, goal),
+            core::Record::Tasks(tasks::Stored::Activity(row)) => assert_eq!(row.task, goal),
+            core::Record::Core(_)
+            | core::Record::Tasks(_)
+            | core::Record::People(_)
+            | core::Record::Notes(_)
+            | core::Record::Accounts(_) => {
+                panic!("the continuation contains only the news publication, receipt and header");
+            }
+        }
+    }
+    world.drain();
+    assert_eq!(world.commits.len(), before + 2, "settled news owes no further commit");
+}
+
+#[test]
 fn projection_publication_and_reported_receipt_are_atomic_across_both_commit_crash_cuts() {
     use jig_core_world::effects::Cut;
     for durable in [false, true] {
         let mut world = World::new(991, false);
         let goal = tracked_goal(&mut world);
         let source = projection_source(&mut world, goal, 1, 9910);
-        let next = world.store.applied + 1;
+        let next = world.store.applied + 2;
         let cut = if durable { Cut::Durable(next) } else { Cut::Submitted(next) };
         world.cut = Some(cut);
         world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));

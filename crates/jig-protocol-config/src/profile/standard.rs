@@ -176,7 +176,7 @@ pub(super) const CLIENTS: jig_protocol_engine_clients::Limits = jig_protocol_eng
 // Close cancellation adds one output per pending sign-in: four in Standard (protocol/llm.md, 5.2).
 // Account moves add 56 core route positions (accounts::max_out: 206 -> 262).
 const JOURNAL: skein_lib::JournalLimits =
-    skein_lib::JournalLimits { commits: 3, writes: 211_549, held: 634_647, now: 1024, release: 1024 };
+    skein_lib::JournalLimits { commits: 3, writes: 142_936, held: 428_808, now: 1024, release: 1024 };
 // Same 19.s3 composition as small; the standard domain supplies the larger value and operation bounds.
 // Its 25 choices plus the kept pin add 26 optional u32s (130 bytes) to the largest tasks row.
 // The largest tasks row can reference all 64 names; sparse and ALL rows keep only used names.
@@ -186,28 +186,19 @@ const JOURNAL: skein_lib::JournalLimits =
 // its recurring members and its proposed creations with their recurring members.
 const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     value: 10_664_757,
-    ops: 423_102,
-    commit: 1_151_872_458,
-    queued_bytes: 3_455_617_374,
-    segment: 2_303_744_916,
-    snapshot_after: 1_151_872_458,
-    chunk: 10_666_856,
-    page: skein_kv::Page { rows: 2, bytes: 10_666_836 },
-    ..small::STORE_KV
-};
-// Preserve the independent credential queue and its existing patching batch.
-const SECRETS_KV: skein_kv::Limits = skein_kv::Limits {
     ops: 285_876,
     commit: 865_344_570,
     queued_bytes: 2_596_033_710,
     segment: 1_730_689_140,
     snapshot_after: 865_344_570,
-    ..STORE_KV
+    chunk: 10_666_856,
+    page: skein_kv::Page { rows: 2, bytes: 10_666_836 },
+    ..small::STORE_KV
 };
 const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {
     core: CORE,
     store: STORE_KV,
-    secrets: SECRETS_KV,
+    secrets: STORE_KV,
     journal: JOURNAL,
     held: CLIENTS.exchanges.checked_mul(2).expect("clients carried capacity"),
     joins: 16,

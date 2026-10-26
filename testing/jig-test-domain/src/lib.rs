@@ -685,8 +685,11 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
     work.push(first);
     for _ in 0..env.limits.routes {
         let Some(next) = work.pop() else {
-            let requests =
-                core::finish_decision(&mut domain.core, &Env { now: env.now, wall: env.wall, limits: env.limits.core });
+            let requests = core::finish_decision(
+                &mut domain.core,
+                &Env { now: env.now, wall: env.wall, limits: env.limits.core },
+                !domain.decision_wrote,
+            );
             let core::Requests::Out(ref out) = requests;
             let done = out.len() == 1;
             route_core(domain, env, &mut decision, requests, &mut work);

@@ -305,25 +305,29 @@ fn route_room_checked(limits: &Limits) -> Option<u32> {
     let people = people::max_out(&limits.people).checked_mul(8)?;
     let fleet = fleet::max_out(&limits.fleet).checked_mul(8)?;
     let brief = brief::gather_max_out(&limits.brief).checked_mul(4)?;
-    let bound =
-        tasks
-            .checked_add(people)?
-            .checked_add(limits.people.inbox_tasks)?
-            .checked_add(fleet)?
-            .checked_add(brief)?
-            .checked_add(accounts::max_out(&limits.accounts))?
-            .checked_add(limits.people.pending.checked_mul(2)?)?
-            .checked_add(limits.authority.projects.checked_mul(2)?)?
-            .checked_add(limits.people.initial_owners)?
-            .checked_add(limits.tasks.tasks.checked_mul(
-                limits.tasks.tree_tasks.checked_add(limits.connectors.checked_mul(2)?)?.checked_add(4)?,
-            )?)?
-            .checked_add(limits.views.watchers.checked_mul(4)?)?
-            .checked_add(8)?
-            .checked_add(tasks::max_out(&limits.tasks).checked_mul(8)?)?
-            .checked_add(people::max_out(&limits.people).checked_mul(4)?)?
-            .checked_add(1)?;
-    Some(bound.max(settings::room(limits)?.writes))
+    let bound = tasks
+        .checked_add(people)?
+        .checked_add(limits.people.inbox_tasks)?
+        .checked_add(fleet)?
+        .checked_add(brief)?
+        .checked_add(accounts::max_out(&limits.accounts))?
+        .checked_add(limits.people.pending.checked_mul(2)?)?
+        .checked_add(limits.authority.projects.checked_mul(2)?)?
+        .checked_add(limits.people.initial_owners)?
+        .checked_add(
+            limits.tasks.tasks.checked_mul(limits.tasks.tree_tasks.checked_add(limits.connectors)?.checked_add(4)?)?,
+        )?
+        .checked_add(limits.views.watchers.checked_mul(4)?)?
+        .checked_add(8)?;
+    // News runs in a write-free decision. Its task/people publication and
+    // receipt can also finish one closing projection, never an ordinary cohort.
+    let news = tasks::max_out(&limits.tasks)
+        .checked_mul(8)?
+        .checked_add(people::max_out(&limits.people).checked_mul(4)?)?
+        .checked_add(limits.tasks.tree_tasks)?
+        .checked_add(limits.connectors.checked_mul(2)?)?
+        .checked_add(2)?;
+    Some(bound.max(news).max(settings::room(limits)?.writes))
 }
 
 fn route_room(limits: &Limits) -> u32 {

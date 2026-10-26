@@ -336,13 +336,17 @@ pub(crate) fn owed(core: &Core) -> bool {
 
 /// Complete a composed root decision's projection handoffs. Repeated calls
 /// retain subsequent changes but never feed a goal twice under one commit.
-pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
+/// `write_free` reports whether the root has accepted any writes in this
+/// decision. News waits for a separate decision after ordinary writes settle.
+pub fn finish_decision(core: &mut Core, env: &Env<Limits>, write_free: bool) -> Requests {
+    if core.projection_news_at == Some(core.counters.deployment().commits) {
+        return crate::routing::finish_watches(core, env);
+    }
     if !owed(core) && !crate::projection_failures::owed(core) {
         return crate::routing::finish_watches(core, env);
     }
     let room = core.room_max.writes;
     let mut out = Queue::with_capacity(room.checked_add(1).expect("feed mark"));
-    crate::projection_failures::deliver(core, env, &mut out);
     let commit = core.counters.deployment().commits;
     let mut goals = List::with_capacity(core.projections.len());
     for (number, _) in &core.projections {
@@ -405,6 +409,9 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
         if (ended || untracked) && core.connectors.is_empty() && !crate::projection_failures::pending(core, *number) {
             forget(core, *number, &mut out);
         }
+    }
+    if out.is_empty() && write_free && !core.counters.dirty() {
+        crate::projection_failures::deliver(core, env, &mut out);
     }
     if out.is_empty() {
         let Requests::Out(mut watches) = crate::routing::finish_watches(core, env);
