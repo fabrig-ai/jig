@@ -3,7 +3,7 @@
 //! staged connector reset and advances its fence in one synchronous decision.
 use crate::{
     Ask, Core, CoreKey, CoreRecord, Family, Held, Key, Limits, ProjectionKey, ProjectionRecord, Record, Request,
-    Requests, Write, fresh,
+    Requests, Write, fresh, routing::result_reads,
 };
 use alloc::boxed::Box;
 use jig_domain_tasks as tasks;
@@ -136,7 +136,8 @@ pub(crate) fn owed(core: &Core) -> bool {
         if match row.state {
             ProjectionFailureState::Pending(_) => true,
             ProjectionFailureState::Armed | ProjectionFailureState::Reported(_) => false,
-        } && core.tasks.projection_news_room(&core.projection_task_limits, row.goal, news_bytes(row.connector))
+        } && (core.tasks.projection_news_room(&core.projection_task_limits, row.goal, news_bytes(row.connector))
+            || (core.tasks.task(row.goal).is_none() && result_reads::news_room(core)))
         {
             return true;
         }
@@ -161,22 +162,28 @@ pub(crate) fn deliver(core: &mut Core, env: &Env<Limits>, out: &mut Queue<Reques
             | ProjectionFailureState::Reported(_) => {}
         }
     }
-    let Some(((goal, connector), source)) = chosen else { return };
-    let number = fresh(&mut core.counters, Family::Message).expect("news counter checked");
-    let digits = Decimal::of(u64::from(connector));
-    let mut words = Writer::new(usize::try_from(news_bytes(connector)).expect("small news"));
-    words.put(b"Projection ").expect("measured prefix");
-    words.put(digits.as_bytes()).expect("measured connector");
-    words.put(b" failed").expect("measured suffix");
-    let word = tasks::Word {
-        number,
-        from: tasks::Party::Task(goal),
-        kind: tasks::MessageKind::News { subscription: 0, class: tasks::NewsClass::Kept },
-        words: words.finish(),
-        at: source.at,
-        hits: 1,
-        eligible: false,
+    let Some(((goal, connector), source)) = chosen else {
+        if result_reads::news_room(core) {
+            let mut archived = None;
+            for (_, row) in &core.projection_failures {
+                match row.state {
+                    ProjectionFailureState::Pending(_) if core.tasks.task(row.goal).is_none() => {
+                        archived = Some((row.goal, row.connector));
+                        break;
+                    }
+                    ProjectionFailureState::Armed
+                    | ProjectionFailureState::Pending(_)
+                    | ProjectionFailureState::Reported(_) => {}
+                }
+            }
+            if let Some((goal, connector)) = archived {
+                result_reads::news(core, goal, connector, out);
+            }
+        }
+        return;
     };
+    let number = fresh(&mut core.counters, Family::Message).expect("news counter checked");
+    let word = news_word(goal, connector, number, source);
     let room = tasks::max_out(&env.limits.tasks);
     let mut child = Queue::with_capacity(room);
     let result = tasks::projection_news(
@@ -187,6 +194,11 @@ pub(crate) fn deliver(core: &mut Core, env: &Env<Limits>, out: &mut Queue<Reques
         &mut child,
     );
     assert!(result == tasks::ProjectionNewsResult::Delivered, "room and delivery share admission");
+    route_news(core, env, child, room, out);
+    reported(core, goal, connector, source, out);
+}
+
+fn route_news(core: &mut Core, env: &Env<Limits>, child: Queue<tasks::Request>, room: u32, out: &mut Queue<Request>) {
     let Requests::Out(mut tagged) = crate::routing::task_routes::tag_tasks(core, env, child, room, false, false, false);
     for _ in 0..tagged.len() {
         match tagged.pop().expect("tagged news") {
@@ -198,10 +210,86 @@ pub(crate) fn deliver(core: &mut Core, env: &Env<Limits>, out: &mut Queue<Reques
             | Request::ProjectMade { .. }) => out.push(request),
         }
     }
+}
+
+fn news_word(goal: u64, connector: u16, number: u64, source: ProjectionFailureSource) -> tasks::Word {
+    let digits = Decimal::of(u64::from(connector));
+    let mut words = Writer::new(usize::try_from(news_bytes(connector)).expect("small news"));
+    words.put(b"Projection ").expect("measured prefix");
+    words.put(digits.as_bytes()).expect("measured connector");
+    words.put(b" failed").expect("measured suffix");
+    tasks::Word {
+        number,
+        from: tasks::Party::Task(goal),
+        kind: tasks::MessageKind::News { subscription: 0, class: tasks::NewsClass::Kept },
+        words: words.finish(),
+        at: source.at,
+        hits: 1,
+        eligible: false,
+    }
+}
+
+fn reported(core: &mut Core, goal: u64, connector: u16, source: ProjectionFailureSource, out: &mut Queue<Request>) {
     let row = core.projection_failures.get_mut(&(goal, connector)).expect("pending receipt retained");
     row.state = ProjectionFailureState::Reported(source);
     save(out, *row);
     core.projection_news_at = Some(core.counters.deployment().commits);
+    crate::projections::finish_forget(core, goal, out);
+}
+
+pub(crate) fn archived(
+    core: &mut Core,
+    env: &Env<Limits>,
+    goal: u64,
+    connector: u16,
+    row: Option<Box<tasks::TaskRecord>>,
+    busy: bool,
+    out: &mut Queue<Request>,
+) {
+    // Even a busy answer must not start another read in its answering decision.
+    let deliverable = can_deliver(core);
+    core.projection_news_at = Some(core.counters.deployment().commits);
+    if busy || !deliverable {
+        return;
+    }
+    let Some(receipt) = core.projection_failures.get(&(goal, connector)) else { return };
+    let source = match receipt.state {
+        ProjectionFailureState::Pending(source) => source,
+        ProjectionFailureState::Armed | ProjectionFailureState::Reported(_) => return,
+    };
+    if let Some(mut task) = row {
+        assert!(task.number == goal, "ended load names its requested owner");
+        let number = fresh(&mut core.counters, Family::Message).expect("news counter checked");
+        let word = news_word(goal, connector, number, source);
+        let mut child = Queue::with_capacity(1);
+        match tasks::archived_projection_news(&mut task, &env.limits.tasks, word, &mut child) {
+            tasks::ProjectionNewsResult::Delivered => {
+                route_news(core, env, child, 1, out);
+                crate::routing::watch_marks::touch_task(core, &env.limits, &task);
+                // This is an in-place header update, not the ending route that
+                // allocates a result position and publishes its indexes.
+                out.push(Request::Write(Write::Save(Record::Tasks(tasks::Stored::Ended(task)))));
+            }
+            tasks::ProjectionNewsResult::Full | tasks::ProjectionNewsResult::Missing => {}
+            tasks::ProjectionNewsResult::Invalid => unreachable!("core constructs valid projection news"),
+        }
+    }
+    reported(core, goal, connector, source, out);
+}
+
+pub(crate) fn forgotten(core: &mut Core, goal: u64, out: &mut Queue<Request>) {
+    result_reads::forget_news(core, goal);
+    for &connector in core.connectors.as_ref() {
+        if let Some(row) = core.projection_failures.get_mut(&(goal, connector)) {
+            match row.state {
+                ProjectionFailureState::Pending(source) => {
+                    row.state = ProjectionFailureState::Reported(source);
+                    save(out, *row);
+                }
+                ProjectionFailureState::Armed | ProjectionFailureState::Reported(_) => {}
+            }
+        }
+    }
     crate::projections::finish_forget(core, goal, out);
 }
 pub(crate) fn pending(core: &Core, goal: u64) -> bool {

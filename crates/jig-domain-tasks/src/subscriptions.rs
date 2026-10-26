@@ -408,3 +408,36 @@ pub fn projection_news(
     publish(domain, env, task, out);
     ProjectionNewsResult::Delivered
 }
+
+/// Projection news for an archived Ended record (connectors.md, 8.4): a line
+/// in its Activity and message positions; the caller saves the record.
+pub fn archived_projection_news(
+    task: &mut crate::TaskRecord,
+    limits: &Limits,
+    word: Word,
+    out: &mut Queue<Request>,
+) -> ProjectionNewsResult {
+    match task.phase {
+        Phase::Ended(_) => {}
+        Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } => {
+            return ProjectionNewsResult::Missing;
+        }
+    }
+    if word.kind != (MessageKind::News { subscription: 0, class: NewsClass::Kept })
+        || word.from != crate::Party::Task(task.number)
+        || word.number == 0
+        || word.words.is_empty()
+        || word.words.len() > usize::try_from(limits.message_bytes).expect("u32 fits usize")
+    {
+        return ProjectionNewsResult::Invalid;
+    }
+    if task.activity.checked_add(1).is_none() || task.last_message.checked_add(1).is_none() {
+        return ProjectionNewsResult::Full;
+    }
+    if word.number <= task.last_message {
+        return ProjectionNewsResult::Invalid;
+    }
+    task.last_message = word.number;
+    crate::activity::message(task, &word, limits.inbox_messages, out);
+    ProjectionNewsResult::Delivered
+}

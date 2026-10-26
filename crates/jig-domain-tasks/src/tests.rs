@@ -145,3 +145,114 @@ fn projection_news_checks_bytes_and_all_outstanding_credits_before_mutation() {
     assert_eq!(crate::projection_news(&mut test.domain, &test.env, 1, word, &mut out), ProjectionNewsResult::Delivered);
     assert!(out.len() <= crate::max_out(&test.env.limits), "publication fits declared max_out");
 }
+
+#[test]
+fn archived_projection_news_delivers_without_changing_the_ending() {
+    use self::revisions::{Harness, task, to};
+    use crate::{Event, MessageKind, NewsClass, Party, ProjectionNewsResult, Word};
+    use skein_lib::{Queue, Wall};
+    let mut test = Harness::new();
+    test.send(Event::Make { reply_to: to(), creator: Party::Person(9), batch: Box::new([task(1, &[])]) });
+    let mut row = test.domain.task(1).unwrap().clone();
+    row.phase =
+        crate::Phase::Ended(crate::Ending::Done(crate::TaskResult::Report { words: b"done".as_slice().into() }));
+    row.ended_at = Some(Wall::from_nanos(5));
+    row.result_position = 7;
+    let before = row.clone();
+    let word = Word {
+        number: row.last_message + 1,
+        from: Party::Task(1),
+        kind: MessageKind::News { subscription: 0, class: NewsClass::Kept },
+        words: b"Projection 1 failed".as_slice().into(),
+        at: Wall::from_nanos(17),
+        hits: 1,
+        eligible: false,
+    };
+    let mut out = Queue::with_capacity(1);
+    assert_eq!(
+        crate::archived_projection_news(&mut row, &test.env.limits, word.clone(), &mut out),
+        ProjectionNewsResult::Delivered
+    );
+    let Some(crate::Request::Save { record: crate::Stored::Activity(line) }) = out.pop() else {
+        panic!("archived activity")
+    };
+    assert_eq!(line.at, word.at);
+    assert_eq!(line.position, before.activity + 1);
+    assert_eq!(line.line, crate::Line::Heard(word.clone()));
+    assert_eq!(row.last_message, word.number);
+    assert_eq!(row.activity, before.activity + 1);
+    row.last_message = before.last_message;
+    row.activity = before.activity;
+    assert_eq!(row, before, "only message and Activity positions advance");
+}
+
+#[test]
+fn archived_projection_news_refuses_full_missing_and_invalid_without_mutation() {
+    use self::revisions::{Harness, task, to};
+    use crate::{Event, MessageKind, NewsClass, Party, ProjectionNewsResult, Word};
+    use skein_lib::{Queue, Wall};
+    let mut test = Harness::new();
+    test.send(Event::Make { reply_to: to(), creator: Party::Person(9), batch: Box::new([task(1, &[])]) });
+    let live = test.domain.task(1).unwrap().clone();
+    for case in 0_u8..10 {
+        let mut row = live.clone();
+        row.phase =
+            crate::Phase::Ended(crate::Ending::Done(crate::TaskResult::Report { words: b"done".as_slice().into() }));
+        let mut word = Word {
+            number: row.last_message + 1,
+            from: Party::Task(1),
+            kind: MessageKind::News { subscription: 0, class: NewsClass::Kept },
+            words: b"Projection 1 failed".as_slice().into(),
+            at: Wall::EPOCH,
+            hits: 1,
+            eligible: false,
+        };
+        let expected = match case {
+            0 => {
+                row.activity = u64::MAX;
+                ProjectionNewsResult::Full
+            }
+            1 => {
+                row.last_message = u64::MAX;
+                ProjectionNewsResult::Full
+            }
+            2 => {
+                row.phase = live.phase.clone();
+                ProjectionNewsResult::Missing
+            }
+            3 => {
+                word.kind = MessageKind::Words;
+                ProjectionNewsResult::Invalid
+            }
+            4 => {
+                word.from = Party::Person(9);
+                ProjectionNewsResult::Invalid
+            }
+            5 => {
+                word.number = 0;
+                ProjectionNewsResult::Invalid
+            }
+            6 => {
+                word.words = Box::new([]);
+                ProjectionNewsResult::Invalid
+            }
+            7 => {
+                word.words = skein_lib::bytes::zeroed(usize::try_from(test.env.limits.message_bytes).unwrap() + 1);
+                ProjectionNewsResult::Invalid
+            }
+            8 => {
+                row.last_message = word.number;
+                ProjectionNewsResult::Invalid
+            }
+            _ => {
+                word.kind = MessageKind::News { subscription: 0, class: NewsClass::Wakes };
+                ProjectionNewsResult::Invalid
+            }
+        };
+        let before = row.clone();
+        let mut out = Queue::with_capacity(1);
+        assert_eq!(crate::archived_projection_news(&mut row, &test.env.limits, word, &mut out), expected);
+        assert_eq!(row, before);
+        assert!(out.is_empty());
+    }
+}

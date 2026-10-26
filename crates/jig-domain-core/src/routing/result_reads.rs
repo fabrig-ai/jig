@@ -19,6 +19,7 @@ pub(crate) struct ResultRead {
 #[derive(Debug)]
 pub(crate) enum ReadFor {
     DeploymentClose { request: Token, project: u32 },
+    ProjectionNews { goal: u64, connector: u16 },
     Preparation { task: u64, last_message: u64 },
     Amendment(Box<AmendmentRead>),
 }
@@ -29,7 +30,7 @@ pub(crate) fn clear(core: &mut Core, task: u64) {
         let mut request = None;
         for (&token, read) in &core.result_reads {
             let owner = match &read.why {
-                ReadFor::DeploymentClose { .. } => None,
+                ReadFor::DeploymentClose { .. } | ReadFor::ProjectionNews { .. } => None,
                 ReadFor::Preparation { task, .. } => Some(*task),
                 ReadFor::Amendment(read) => match &read.replay {
                     Replay::Agent { key, .. } => Some(key.task),
@@ -44,7 +45,7 @@ pub(crate) fn clear(core: &mut Core, task: u64) {
         let Some(request) = request else { break };
         if let Some(read) = core.result_reads.remove(&request) {
             match read.why {
-                ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } => {}
+                ReadFor::ProjectionNews { .. } | ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } => {}
                 ReadFor::Amendment(amendment) => match amendment.replay {
                     Replay::Agent { key, .. } => {
                         let _pending = core.pending_calls.remove(&key);
@@ -64,7 +65,10 @@ pub(super) fn begin(core: &mut Core, work: &mut Queue<Event>, task: u64, ids: Bo
                 out.push(Request::Decided);
                 return Requests::Out(out);
             }
-            ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } | ReadFor::Amendment(_) => {}
+            ReadFor::ProjectionNews { .. }
+            | ReadFor::DeploymentClose { .. }
+            | ReadFor::Preparation { .. }
+            | ReadFor::Amendment(_) => {}
         }
     }
     if core.result_reads.len() == core.result_reads.capacity() {
@@ -104,10 +108,13 @@ pub(super) fn loaded(
     row: Option<Box<tasks::TaskRecord>>,
     busy: bool,
 ) -> Requests {
-    let mut out = Queue::with_capacity(3);
+    let mut out = Queue::with_capacity(core.room_max.writes);
     out.push(Request::Decided);
     let Some(mut read) = core.result_reads.remove(&request) else { return Requests::Out(out) };
     match read.why {
+        ReadFor::ProjectionNews { goal, connector } => {
+            crate::projection_failures::archived(core, env, goal, connector, row, busy, &mut out);
+        }
         ReadFor::DeploymentClose { request, project } => {
             let outcome = closed_outcome(project, *read.ids.first().expect("one close subject"), row, busy);
             work.push(Event::People(jig_domain_people::Event::Decided { request, outcome }));
@@ -236,7 +243,7 @@ pub(super) fn clear_person(core: &mut Core, person: u64) {
                     }
                     Replay::Person { .. } | Replay::Agent { .. } => {}
                 },
-                ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } => {}
+                ReadFor::ProjectionNews { .. } | ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } => {}
             }
         }
         let Some(request) = found else { break };
@@ -292,5 +299,51 @@ fn closed_outcome(
             Some(_) | None => jig_domain_people::Refusal::Unknown,
         };
         jig_domain_people::Outcome::Refused(why)
+    }
+}
+
+/// News shares the preparation read budget, with at most one news load in flight.
+pub(crate) fn news_room(core: &Core) -> bool {
+    if core.result_reads.len() == core.result_reads.capacity() {
+        return false;
+    }
+    for (_, read) in &core.result_reads {
+        match read.why {
+            ReadFor::ProjectionNews { .. } => return false,
+            ReadFor::DeploymentClose { .. } | ReadFor::Preparation { .. } | ReadFor::Amendment(_) => {}
+        }
+    }
+    true
+}
+
+pub(crate) fn news(core: &mut Core, goal: u64, connector: u16, out: &mut Queue<Request>) {
+    let request = Token::new(core.next_result_request);
+    core.next_result_request = core.next_result_request.checked_add(1).expect("transient result request space");
+    let read = ResultRead {
+        why: ReadFor::ProjectionNews { goal, connector },
+        ids: Box::new([goal]),
+        at: 0,
+        results: List::with_capacity(0),
+    };
+    ask(out, request, &read);
+    assert!(core.result_reads.insert(request, read).is_ok(), "admitted news read");
+}
+
+pub(crate) fn forget_news(core: &mut Core, goal: u64) {
+    let mut found = None;
+    for (&request, read) in &core.result_reads {
+        match read.why {
+            ReadFor::ProjectionNews { goal: owner, .. } if owner == goal => {
+                found = Some(request);
+                break;
+            }
+            ReadFor::ProjectionNews { .. }
+            | ReadFor::DeploymentClose { .. }
+            | ReadFor::Preparation { .. }
+            | ReadFor::Amendment(_) => {}
+        }
+    }
+    if let Some(request) = found {
+        drop(core.result_reads.remove(&request));
     }
 }

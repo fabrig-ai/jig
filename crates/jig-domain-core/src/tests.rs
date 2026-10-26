@@ -3737,8 +3737,16 @@ fn projection_receipts_reserve_before_refusal_and_recover_only_reported_episodes
     let Requests::Out(mut armed) = projection_failures::recover(&mut core, 1, connector, Token::new(801));
     let mut writes = 0_u32;
     for _ in 0..armed.len() {
-        if let Request::Write(_) = armed.pop().expect("Armed output") {
-            writes += 1;
+        match armed.pop().expect("Armed output") {
+            Request::Write(_) => writes += 1,
+            Request::Ask { ask: Ask::CommitProjectionRecovery { .. }, .. } => {
+                panic!("Armed replay cannot reset the connector")
+            }
+            Request::ProjectMade { .. }
+            | Request::Ask { .. }
+            | Request::Held(_)
+            | Request::Now(_)
+            | Request::Decided => {}
         }
     }
     assert_eq!(writes, 0, "Armed retains its old fence without a reset");
@@ -4069,4 +4077,40 @@ fn projection_final_owner_validation_accepts_a_present_ended_task() {
         // eager-restore and completed-range owner check with the present row.
         assert!(projections::final_owner(Some(&owner)), "a present Ended owner is valid regardless of tracking");
     }
+}
+
+#[test]
+fn busy_archived_projection_news_stays_pending_until_a_later_commit() {
+    let (mut core, limits) = make_tree();
+    core.restart = restart::Restart::Open;
+    let connector = core.connectors[0];
+    let source = begin_projection(&mut core, &limits, 1, connector, 850).unwrap();
+    let mut out = Queue::with_capacity(core.room_max.writes);
+    projection_failures::failed(&mut core, 1, connector, source, Wall::from_nanos(17), &mut out);
+    let pending = *core.projection_failures.get(&(1, connector)).unwrap();
+    // An absent owner exercises the same archive scheduling as a retired task.
+    let mut receipt = pending;
+    receipt.goal = 999;
+    core.projection_failures.remove(&(1, connector));
+    core.projection_failures.insert((999, connector), receipt).unwrap();
+    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
+    let mut news = Queue::with_capacity(core.room_max.writes);
+    projection_failures::deliver(&mut core, &env, &mut news);
+    let Some(Request::Held(held)) = news.pop() else { panic!("archive load") };
+    let Held::Load(load) = *held else { panic!("held load") };
+    let Now::EndedTask { request, task: 999 } = *load else { panic!("ended owner") };
+    let Requests::Out(mut answer) = step(&mut core, &env, Event::EndedTaskLoaded { request, row: None, busy: true });
+    let Some(Request::Decided) = answer.pop() else { panic!("busy decides without writing") };
+    assert!(answer.is_empty());
+    assert_eq!(core.projection_failures.get(&(999, connector)), Some(&receipt));
+    assert!(core.result_reads.is_empty());
+    assert!(!projection_failures::owed(&core));
+    projection_failures::deliver(&mut core, &env, &mut news);
+    assert!(news.is_empty(), "busy cannot immediately read again");
+    core.counters.next_commit();
+    assert!(projection_failures::owed(&core));
+    projection_failures::deliver(&mut core, &env, &mut news);
+    assert_eq!(news.len(), 1);
+    assert_eq!(core.result_reads.len(), 1);
+    assert!(!projection_failures::owed(&core), "one archive read in flight");
 }

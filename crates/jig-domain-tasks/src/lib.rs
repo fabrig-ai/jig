@@ -160,4 +160,4 @@ pub use value::{
 
 pub use run::run_attempt;
 
-pub use subscriptions::{ProjectionNewsResult, projection_news};
+pub use subscriptions::{ProjectionNewsResult, archived_projection_news, projection_news};

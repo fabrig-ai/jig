@@ -91,8 +91,9 @@ pub(crate) fn forget(
     work: &mut Queue<crate::Event>,
     owner: &Owner,
 ) -> crate::Requests {
-    let mut out = Queue::with_capacity(8);
+    let mut out = Queue::with_capacity(core.room_max.writes);
     if core.people.ready() && owner.result_position <= core.counters.deployment().messages {
+        crate::projection_failures::forgotten(core, owner.task, &mut out);
         let party = owner.party;
         work.push(crate::Event::People(people::Event::Forget {
             project: owner.project,

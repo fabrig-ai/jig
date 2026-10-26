@@ -95,7 +95,10 @@ impl World {
                 self.busy_turns.push((run.raw(), attempt.raw(), turn));
             }
             root::Delivery::Core(
-                held @ (core::Held::Drained | core::Held::WatchEnded { .. } | core::Held::Acknowledge { .. }),
+                held @ (core::Held::Drained
+                | core::Held::WatchEnded { .. }
+                | core::Held::Acknowledge { .. }
+                | core::Held::ProjectionRecovery { .. }),
             ) => {
                 self.stop_deliveries.push(held);
             }
@@ -176,7 +179,16 @@ impl World {
                     ask: self.initial_ask.clone(),
                 })));
             }
-            root::Delivery::Core(core::Held::Load(load)) => self.store.ask(jig_test_store::StoreOut::Now(*load)),
+            root::Delivery::Core(core::Held::Load(load)) => {
+                if matches!(*load, core::Now::EndedTask { .. }) {
+                    self.ended_loads += 1;
+                    if self.hold_ended_loads {
+                        self.pending_ended_loads.push(*load);
+                        return;
+                    }
+                }
+                self.store.ask(jig_test_store::StoreOut::Now(*load));
+            }
             root::Delivery::Core(core::Held::NotesLoad { owner, range }) => {
                 self.store.ask(StoreOut::NotesLoad { owner, range });
             }
@@ -221,8 +233,7 @@ impl World {
                 | core::Held::SignOutSource { .. }
                 | core::Held::SourceSignedOut { .. }
                 | core::Held::Refuse { .. }
-                | core::Held::MakeEffect { .. }
-                | core::Held::ProjectionRecovery { .. },
+                | core::Held::MakeEffect { .. },
             ) => {}
             root::Delivery::Fleet(_) => panic!("root releases its fleet continuations internally"),
         }

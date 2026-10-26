@@ -123,8 +123,9 @@ pub(crate) fn missing(
 pub(super) fn waiting(core: &Core, key: CallKey) -> bool {
     for (_, read) in &core.result_reads {
         match &read.why {
-            super::result_reads::ReadFor::DeploymentClose { .. } | super::result_reads::ReadFor::Preparation { .. } => {
-            }
+            super::result_reads::ReadFor::ProjectionNews { .. }
+            | super::result_reads::ReadFor::DeploymentClose { .. }
+            | super::result_reads::ReadFor::Preparation { .. } => {}
             super::result_reads::ReadFor::Amendment(read) => match &read.replay {
                 Replay::Agent { key: pending, .. } => {
                     if *pending == key {

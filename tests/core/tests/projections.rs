@@ -600,8 +600,8 @@ fn projection_source(world: &mut World, goal: u64, connector: u16, owner: u64) -
     };
     header.connector_rows
 }
-fn projection_heard(world: &World, goal: u64) -> Vec<tasks::Word> {
-    world
+fn projection_heard(scene: &World, goal: u64) -> Vec<tasks::Word> {
+    scene
         .store
         .rows
         .values()
@@ -609,10 +609,18 @@ fn projection_heard(world: &World, goal: u64) -> Vec<tasks::Word> {
             root::Record::Core(core::Record::Tasks(tasks::Stored::Activity(line))) if line.task == goal => {
                 match &line.line {
                     tasks::Line::Heard(word) if word.words.starts_with(b"Projection ") => Some(word.clone()),
-                    _ => None,
+                    tasks::Line::Words { .. }
+                    | tasks::Line::Heard(_)
+                    | tasks::Line::Notified { .. }
+                    | tasks::Line::RunBegan { .. }
+                    | tasks::Line::RunEnded { .. }
+                    | tasks::Line::Turn { .. }
+                    | tasks::Line::Decided { .. }
+                    | tasks::Line::Milestone { .. }
+                    | tasks::Line::Kept { .. } => None,
                 }
             }
-            _ => None,
+            root::Record::Core(_) | root::Record::Connector { .. } => None,
         })
         .collect()
 }
@@ -679,7 +687,7 @@ fn reading_projection_news_then_restarting_does_not_rearm_the_episode() {
     world.send(root::Event::Core(core::Event::People(people::Event::Ask {
         models: Box::new([]),
         reply_to: ReplyTo::new(Token::new(9911)),
-        sign_in: world.sign_in.unwrap(),
+        sign_in: world.sign_in.expect("signed in party"),
         key: [41; 16],
         ask: people::Ask::Amend { project: 1, task: goal, revision, release: None, amendment },
     })));
@@ -699,4 +707,271 @@ fn reading_projection_news_then_restarting_does_not_rearm_the_episode() {
     world.restart(991, false);
     world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
     assert_eq!(projection_heard(&world, goal).len(), 1);
+}
+
+fn archived_goal(world: &mut World) -> u64 {
+    finish_chat(world, 0, b"initial chat done");
+    let goal = tracked_goal(world);
+    assert_eq!(world.assigned.as_ref().expect("goal assigned").task, goal);
+    world.hold_projection_settlements = true;
+    finish_chat(world, 0, b"goal done");
+    assert!(world.projections.iter().any(|(_, _, feed)| feed.goal.number == goal && feed.closing));
+    assert_eq!(ended_goal(world, goal).tracked, Some(1));
+    goal
+}
+
+fn ended_goal(world: &World, goal: u64) -> &tasks::TaskRecord {
+    let root::Record::Core(core::Record::Tasks(tasks::Stored::Ended(row))) =
+        &world.store.rows[&root::Key::Core(core::Key::Tasks(tasks::Key::Ended(goal)))]
+    else {
+        panic!("archived goal")
+    };
+    row
+}
+
+fn settle_goal(world: &mut World, goal: u64) {
+    let generation = world
+        .projections
+        .iter()
+        .rev()
+        .find(|(_, _, feed)| feed.goal.number == goal && feed.closing)
+        .expect("accepted final feed")
+        .2
+        .generation;
+    for connector in [1, 2] {
+        world.send(root::Event::Core(core::Event::ProjectionSettled { goal, connector, generation }));
+    }
+    assert_eq!(projection_rows(world, goal), 0, "the settled cohort releases its projection");
+    assert!(!world.store.rows.keys().any(|key| matches!(key,
+        root::Key::Core(core::Key::Core(core::CoreKey::Projection(core::ProjectionKey::Failure { goal: owner, .. }))) if *owner == goal)));
+}
+
+fn release_news_load(world: &mut World, goal: u64) {
+    assert_eq!(world.pending_ended_loads.len(), 1, "one news load in flight");
+    let load = world.pending_ended_loads.pop().expect("held ended load");
+    assert!(matches!(load, core::Now::EndedTask { task, .. } if task == goal));
+    world.store.ask(jig_test_store::StoreOut::Now(load));
+    world.drain();
+}
+
+#[test]
+fn news_for_a_goal_that_ended_first_reaches_its_archived_record_once() {
+    let (configuration, limits) = untracked_configuration(995);
+    let mut world = World::configured(995, false, configuration, limits);
+    let goal = archived_goal(&mut world);
+    let before = ended_goal(&world, goal).clone();
+    let indexes = world
+        .store
+        .rows
+        .iter()
+        .filter(|(key, _)| {
+            matches!(
+                key,
+                root::Key::Core(core::Key::Tasks(
+                    tasks::Key::Result { .. }
+                        | tasks::Key::Update { .. }
+                        | tasks::Key::EndedByParty { .. }
+                        | tasks::Key::EndedByProject { .. }
+                ))
+            )
+        })
+        .map(|(key, row)| (key.clone(), row.clone()))
+        .collect::<Vec<_>>();
+    world.hold_writes = true;
+    world.send(root::Event::ProjectionEffect { goal, number: 1, effect: World::effect() });
+    let entry = projection_outbox(&world, goal).expect("late member write");
+    world.send(root::Event::Connector {
+        number: 1,
+        event: connector::Event::System(connector::SystemEvent::Applied {
+            entry: entry.number,
+            attempt: entry.attempt.expect("sent projection attempt").number,
+            result: connector::ApplyResult::Conflict,
+        }),
+    });
+    let core::ProjectionFailureState::Reported(source) = failure_row(&world, goal, 1).state else { panic!("reported") };
+    let words = projection_heard(&world, goal);
+    assert_eq!(words.len(), 1);
+    assert_eq!(words[0].words.as_ref(), b"Projection 1 failed");
+    assert_eq!(words[0].at, source.at);
+    assert_eq!(world.ended_loads, 1);
+    let after = ended_goal(&world, goal);
+    assert_eq!(after.phase, before.phase);
+    assert_eq!(after.result_position, before.result_position);
+    assert_eq!(after.ended_at, before.ended_at);
+    assert_eq!(after.activity, before.activity + 1);
+    assert_eq!(after.last_message, words[0].number);
+    for (key, row) in indexes {
+        assert_eq!(world.store.rows.get(&key), Some(&row), "ending indexes stay unchanged");
+    }
+    settle_goal(&mut world, goal);
+    world.restart(995, false);
+    assert_eq!(projection_heard(&world, goal).len(), 1);
+    assert_eq!(world.ended_loads, 1, "Reported never loads again");
+}
+
+#[test]
+fn news_owed_to_a_full_live_goal_follows_it_into_its_archive() {
+    use jig_core_world::stories::reads::request;
+    let mut world = World::new(996, false);
+    finish_chat(&mut world, 0, b"initial chat done");
+    let goal = tracked_goal(&mut world);
+    world.hold_projection_settlements = true;
+    let source = projection_source(&mut world, goal, 1, 9960);
+    let mut amendment = jig_core_world::fixtures::person_unchanged(b"untrack");
+    amendment.tracked = Some(people::Tracking::Untracked);
+    request(&mut world, 42, people::Ask::Amend { project: 1, task: goal, revision: 0, release: None, amendment });
+    for key in 50..66 {
+        request(
+            &mut world,
+            key,
+            people::Ask::Say {
+                project: 1,
+                task: goal,
+                words: Box::from(b"12345678901234567890123456789012".as_slice()),
+            },
+        );
+    }
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Pending(_)));
+    assert!(projection_heard(&world, goal).is_empty());
+    finish_chat(&mut world, 0, b"goal done");
+    assert_eq!(projection_heard(&world, goal).len(), 1);
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)));
+    assert_eq!(ended_goal(&world, goal).last_message, projection_heard(&world, goal)[0].number);
+    settle_goal(&mut world, goal);
+}
+
+#[test]
+fn two_pending_receipts_of_an_ended_goal_are_read_one_at_a_time() {
+    let mut world = World::new(997, false);
+    let goal = archived_goal(&mut world);
+    world.hold_ended_loads = true;
+    let first = projection_source(&mut world, goal, 1, 9971);
+    let second = projection_source(&mut world, goal, 2, 9972);
+    for (connector, source) in [(1, first), (2, second)] {
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector, source }));
+    }
+    assert_eq!(world.ended_loads, 1);
+    assert_eq!(world.pending_ended_loads.len(), 1);
+    release_news_load(&mut world, goal);
+    assert_eq!(projection_heard(&world, goal).len(), 1);
+    assert_eq!(world.ended_loads, 2, "only the first answer admits the second read");
+    assert_eq!(world.pending_ended_loads.len(), 1);
+    world.stop();
+    world.pending_ended_loads.clear(); // the process loses this transient read
+    world.restart(997, false);
+    assert_eq!(world.ended_loads, 3, "restart reissues only the remaining debt");
+    release_news_load(&mut world, goal);
+    assert!(world.pending_ended_loads.is_empty());
+    let words = projection_heard(&world, goal);
+    assert_eq!(words.len(), 2);
+    for connector in [1, 2] {
+        assert!(matches!(failure_row(&world, goal, connector).state, core::ProjectionFailureState::Reported(_)));
+        assert_eq!(
+            words
+                .iter()
+                .filter(|word| word.words.as_ref() == format!("Projection {connector} failed").as_bytes())
+                .count(),
+            1
+        );
+    }
+    settle_goal(&mut world, goal);
+}
+
+#[test]
+fn archived_news_and_its_receipt_commit_together_across_both_crash_cuts() {
+    use jig_core_world::effects::Cut;
+    for durable in [false, true] {
+        let mut world = World::new(998, false);
+        let goal = archived_goal(&mut world);
+        let source = projection_source(&mut world, goal, 1, 9981);
+        world.hold_ended_loads = true;
+        world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+        assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Pending(_)));
+        let next = world.store.applied + 1;
+        let cut = if durable { Cut::Durable(next) } else { Cut::Submitted(next) };
+        world.cut = Some(cut);
+        release_news_load(&mut world, goal);
+        assert_eq!(world.reached_cut, Some(cut));
+        assert_eq!(projection_heard(&world, goal).len(), usize::from(durable));
+        assert_eq!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)), durable);
+        world.hold_ended_loads = false;
+        world.restart(998, false);
+        assert_eq!(projection_heard(&world, goal).len(), 1);
+        assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)));
+        world.restart(998, false);
+        assert_eq!(projection_heard(&world, goal).len(), 1);
+    }
+}
+
+#[test]
+fn a_forgotten_goal_settles_its_news_without_a_line() {
+    use jig_core_world::stories::reads::request;
+    let (mut configuration, limits) = fixture(999, false);
+    configuration.core.defaults.templates[1].flags.retention = tasks::Retention::ForgottenOnceRead;
+    let mut world = World::configured(999, false, configuration, limits);
+    finish_chat(&mut world, 0, b"initial chat done");
+    // The client expands the chosen template into Create, including retention.
+    let people::Ask::Create { mut batch, project } = jig_core_world::fixtures::goal(
+        &world,
+        1,
+        b"forgettable goal".as_slice().into(),
+        people::TaskExecutor::Agent { charter: 1 },
+        jig_core_world::fixtures::Goal { budget: 20, priority: 1, ..Default::default() },
+    ) else {
+        unreachable!()
+    };
+    batch[0].flags.retention = people::Retention::ForgottenOnceRead;
+    request(&mut world, 31, people::Ask::Create { project, batch });
+    let goal = world.assigned.as_ref().expect("goal assigned").task;
+    world.hold_projection_settlements = true;
+    finish_chat(&mut world, 0, b"goal done");
+    assert_eq!(ended_goal(&world, goal).flags.retention, tasks::Retention::ForgottenOnceRead);
+    let through = ended_goal(&world, goal).result_position;
+    let source = projection_source(&mut world, goal, 1, 9991);
+    world.hold_ended_loads = true;
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    assert_eq!(world.pending_ended_loads.len(), 1);
+    let stale = ended_goal(&world, goal).clone();
+    request(&mut world, 67, people::Ask::MarkSeen { seen: people::Seen::Results { through } });
+    assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::Tasks(tasks::Key::Ended(goal)))));
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)));
+    let before = world.store.rows.clone();
+    let commits = world.commits.len();
+    let core::Now::EndedTask { request, task } = world.pending_ended_loads.pop().expect("held ended load") else {
+        panic!("ended load")
+    };
+    assert_eq!(task, goal);
+    world.send(root::Event::Core(core::Event::EndedTaskLoaded { request, row: Some(Box::new(stale)), busy: false }));
+    assert_eq!(world.store.rows, before, "late answer cannot resurrect the forgotten owner");
+    assert_eq!(world.commits.len(), commits, "late answer writes nothing");
+    assert!(projection_heard(&world, goal).is_empty());
+    settle_goal(&mut world, goal);
+}
+
+#[test]
+fn a_recovery_answer_lost_to_a_restart_is_answered_again_without_a_write() {
+    use jig_core_world::effects::Cut;
+    let mut world = World::new(1000, false);
+    let goal = tracked_goal(&mut world);
+    let source = projection_source(&mut world, goal, 1, 10001);
+    world.send(root::Event::Core(core::Event::ProjectionFailed { goal, connector: 1, source }));
+    assert!(matches!(failure_row(&world, goal, 1).state, core::ProjectionFailureState::Reported(_)));
+    let owner = Token::new(10002);
+    let cut = Cut::Durable(world.store.applied + 1);
+    world.cut = Some(cut);
+    world.send(root::Event::Core(core::Event::ProjectionRecover { goal, connector: 1, owner }));
+    assert_eq!(world.reached_cut, Some(cut));
+    assert!(!world.stop_deliveries.iter().any(|held| matches!(held, core::Held::ProjectionRecovery { .. })));
+    let armed = failure_row(&world, goal, 1);
+    assert_eq!(armed.state, core::ProjectionFailureState::Armed);
+    world.restart(1000, false);
+    let before = world.store.rows.clone();
+    let commits = world.commits.len();
+    world.send(root::Event::Core(core::Event::ProjectionRecover { goal, connector: 1, owner }));
+    assert_eq!(world.store.rows, before);
+    assert_eq!(world.commits.len(), commits, "Armed replay writes nothing");
+    assert!(matches!(world.stop_deliveries.last(), Some(core::Held::ProjectionRecovery {
+        connector: 1, owner: got, result: core::ProjectionRecovery::Recovered { after }
+    }) if *got == owner && *after == armed.after));
 }

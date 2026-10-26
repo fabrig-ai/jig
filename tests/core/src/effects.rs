@@ -68,6 +68,10 @@ pub struct World {
     pub busy_calls: Vec<Box<[u8]>>,
     pub busy_events: Vec<root::Event>,
     pub stop_deliveries: Vec<core::Held>,
+    /// Hold archive point loads at the root boundary for intervening decisions.
+    pub hold_ended_loads: bool,
+    pub pending_ended_loads: Vec<core::Now>,
+    pub ended_loads: usize,
     pub commits: Vec<Vec<root::Write>>,
     pub projections: Vec<(usize, u16, core::ProjectionFeed)>,
     pub hold_projection_settlements: bool,

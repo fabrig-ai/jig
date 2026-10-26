@@ -244,7 +244,7 @@ impl Core {
     }
 }
 
-pub(super) fn touch_task(core: &mut Core, limits: &Limits, row: &tasks::TaskRecord) {
+pub(crate) fn touch_task(core: &mut Core, limits: &Limits, row: &tasks::TaskRecord) {
     if core.view_subjects.is_empty() {
         return;
     }
