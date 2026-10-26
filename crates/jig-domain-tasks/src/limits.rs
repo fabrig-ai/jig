@@ -275,6 +275,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     let proposal_payload = proposal_payload.max(
         u64::from(crate::SETTINGS_ITEMS)
             .checked_mul(u64::try_from(size_of::<crate::SettingHead>()).ok()?)?
+            .checked_add(u64::try_from(size_of::<crate::Proposal>()).ok()?)?
             .checked_add(u64::from(limits.message_bytes).checked_mul(2)?)?,
     );
     // The writer map owns both its opaque key and a durable slot row with a

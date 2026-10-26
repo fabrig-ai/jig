@@ -1,9 +1,10 @@
-//! Party settings proposals through the real store and commit barrier (engine.md, 17.6).
+//! Party and run settings proposals through the real store and commit barrier (engine.md, 17.6).
 use jig_core_world::{client_peer::ClientPeer, effects::World, fixtures, peers};
 use jig_domain_core::{self as core, documents, reads, settings};
 use jig_domain_people as people;
 use jig_domain_tasks as tasks;
 use jig_test_domain as root;
+use std::fmt::Write as _;
 #[path = "settings/support.rs"]
 mod support;
 use support::*;
@@ -465,4 +466,358 @@ fn full_version_configuration() -> (root::Config, root::Limits) {
     limits.core.settings.versions = 1;
     peers::journal(&mut limits);
     (config, limits)
+}
+
+fn run_configuration() -> (root::Config, root::Limits) {
+    let (mut config, mut limits) = configuration();
+    config.core.defaults.rules.ceiling.tools.0 |= 1024;
+    config.core.defaults.rules.maximum_run_spend = 20;
+    for seed in &mut config.core.seed_projects {
+        seed.policy.policy.ceiling.tools.0 |= 1024;
+        for role in &mut seed.policy.policy.roles {
+            role.authority.tools.0 |= 1024;
+        }
+    }
+    let policy = config.core.defaults.policies.get_mut(&1).expect("project policy");
+    policy.policy.ceiling.tools.0 |= 1024;
+    for role in &mut policy.policy.roles {
+        role.authority.tools.0 |= 1024;
+    }
+    limits.core.settings.proposals = 2;
+    peers::journal(&mut limits);
+    (config, limits)
+}
+fn proposing_run(settings_family: bool) -> (World, u64, u64) {
+    use skein_lib::{Duration, Token};
+    let (config, limits) = run_configuration();
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let signed = sign_in(&mut world);
+    world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
+    world.send(root::Event::Core(core::Event::Fleet(jig_domain_fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(7),
+        hello: jig_domain_fleet::Hello {
+            bounds: fixtures::bounds(),
+            stop_bound: Duration::from_millis(1),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([]),
+        },
+    })));
+    let mut goal = fixtures::chat(&world, 1, b"Review the settings".as_slice().into());
+    let people::Ask::Create { batch, .. } = &mut goal else { panic!("goal creation") };
+    batch[0].flags.conversation = false;
+    batch[0].flags.listed = true;
+    batch[0].budget = people::Budget::Named;
+    batch[0].authority.spend = 40;
+    batch[0].authority.tools = if settings_family { 2047 } else { 1023 };
+    let people::Reply::Outcome(people::Outcome::Created { first, .. }) = ask(&mut world, signed, 101, goal) else {
+        panic!("goal admitted")
+    };
+    assert_eq!(world.assigned.as_ref().expect("assigned proposing goal").task, first);
+    (world, signed, first)
+}
+fn run_charter(world: &World, instructions: &[u8]) -> settings::Item {
+    let mut charter = world.domain.settings().charter(1).expect("fixture charter").clone();
+    charter.policy.instructions = instructions.into();
+    settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    }
+}
+fn run_propose(world: &mut World, against: u32, items: Box<[settings::Item]>) -> core::CallPart {
+    let (config, limits) = run_configuration();
+    let models = settings::model_names(&config.core.settings.models);
+    let bytes = jig_protocol_store::codec::settings::encode(
+        &settings::Record::Proposal {
+            proposer: people::Proposer::Task(1),
+            proposal: 1,
+            value: settings::Proposal { against, items },
+        },
+        &jig_protocol_store::codec::settings::limits(&limits.core).expect("settings codec limits"),
+        &models,
+    )
+    .expect("encoded whole settings set");
+    let mut encoded = String::new();
+    for byte in &bytes {
+        write!(&mut encoded, "{byte:02x}").expect("hex string");
+    }
+    let input = format!("{{\"against\":{against},\"set\":\"{encoded}\",\"reason\":\"Please review these settings\"}}");
+    world.tool_call(b"propose_settings", input.as_bytes(), true);
+    world
+        .answers
+        .last()
+        .unwrap_or_else(|| {
+            panic!(
+                "typed tool answer; input bytes {}; host answers {:?}; host calls {:?}; busy {:?}",
+                input.len(),
+                world.host_answers,
+                world.host_calls,
+                world.busy_calls
+            )
+        })
+        .2
+        .clone()
+}
+fn run_proposed(part: &core::CallPart) -> u64 {
+    let core::CallPart::Proposed { proposal, holder } = part else { panic!("proposed: {part:?}") };
+    assert_eq!(
+        *holder,
+        tasks::ProposalHolder::Policy { project: people::DEPLOYMENT, kind: tasks::ProposalKind::Settings }
+    );
+    *proposal
+}
+fn run_decide(
+    world: &mut World,
+    signed: u64,
+    task: u64,
+    proposal: u64,
+    decision: people::ProposalDecision,
+    running: Option<people::Running>,
+) -> people::Reply {
+    ask(
+        world,
+        signed,
+        102,
+        people::Ask::DecideProposal {
+            project: people::DEPLOYMENT,
+            proposer: people::Proposer::Task(task),
+            proposal,
+            decision,
+            running,
+        },
+    )
+}
+fn task_set(task: u64, proposal: u64) -> root::Key {
+    key(settings::Key::Proposal {
+        proposer: people::Proposer::Task(task),
+        proposal: u32::try_from(proposal).expect("proposal key"),
+    })
+}
+fn run_outcome(world: &World, task: u64, proposal: u64) -> &tasks::Word {
+    fixtures::live_row(world, task).inbox.iter().find(|word| matches!(word.kind, tasks::MessageKind::SettingsDecision { proposal: number, .. } if number == proposal)).expect("settings outcome in the proposer's inbox")
+}
+fn accepted(reply: &people::Reply) {
+    assert!(
+        matches!(
+            reply,
+            people::Reply::Outcome(people::Outcome::ProposalDecided { choice: people::ProposalChoice::Accepted, .. })
+        ),
+        "{reply:?}"
+    );
+}
+#[test]
+fn a_run_proposes_settings_and_an_owner_accepts_moving_its_work() {
+    let (mut world, signed, task) = proposing_run(true);
+    let item = run_charter(&world, b"Reviewed instructions");
+    let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
+    assert!(world.store.rows.contains_key(&task_set(task, proposal)));
+    let before_replay = settings_rows(&world);
+    let key = world.answers.last().expect("typed answer").1;
+    world.send(root::Event::Core(core::Event::NamedAction {
+        to: skein_lib::ReplyTo::new(skein_lib::Token::new(39_001)),
+        key,
+        action: core::NamedAction::ProposeSettings {
+            against: 1,
+            items: Box::new([run_charter(&world, b"Replay cannot replace this set")]),
+            reason: b"again".as_slice().into(),
+        },
+    }));
+    assert_eq!(run_proposed(&world.answers.last().expect("typed answer").2), proposal);
+    assert_eq!(settings_rows(&world), before_replay);
+    let reads::Answer::Document(document) =
+        read(&mut world, signed, reads::Read::Proposal { proposer: people::Proposer::Task(task), proposal })
+    else {
+        panic!("proposal document")
+    };
+    let documents::Document::Proposal(document) = *document else { panic!("proposal review") };
+    let documents::ProposalAction::Settings { against, review: Some(review), .. } = document.action else {
+        panic!("settings review")
+    };
+    assert_eq!((against, review.newest), (1, 1));
+    let reviewed = review.items.get(0).expect("reviewed charter");
+    assert_eq!(reviewed.origin, Some((false, 1)));
+    let Some(settings::Value::Charter(now)) = &reviewed.now else { panic!("current value") };
+    let Some(settings::Value::Charter(after)) = &reviewed.would_be else { panic!("proposed value") };
+    assert_eq!(now.policy.instructions.as_ref(), b"Answer within the granted authority.");
+    assert_eq!(after.policy.instructions.as_ref(), b"Reviewed instructions");
+    let reads::Answer::Page(inbox) = read(
+        &mut world,
+        signed,
+        reads::Read::Inbox {
+            group: reads::Group::Proposals,
+            filter: reads::Filter { project: None, goal: None },
+            from: None,
+        },
+    ) else {
+        panic!("owner inbox")
+    };
+    assert!(inbox.rows.iter().any(|row| matches!(row, reads::PageRow::Inbox(entry) if entry.object == documents::InboxObject::Proposal { proposer: people::Proposer::Task(task), number: proposal })));
+    accepted(&run_decide(
+        &mut world,
+        signed,
+        task,
+        proposal,
+        people::ProposalDecision::Accept,
+        Some(people::Running::Moves),
+    ));
+    let head = &revision(&world, 2, false).head;
+    assert_eq!(head.proposal, Some((people::Proposer::Task(task), u32::try_from(proposal).expect("proposal key"))));
+    assert_eq!(head.by, settings::Decider::Party(OWNER));
+    assert!(head.moved);
+    assert_eq!(fixtures::live_row(&world, task).settings.task, 2);
+    assert_eq!(
+        run_outcome(&world, task, proposal).kind,
+        tasks::MessageKind::SettingsDecision { proposal, outcome: tasks::SettingsOutcome::Accepted { revision: 2 } }
+    );
+    assert!(!world.store.rows.contains_key(&task_set(task, proposal)));
+}
+#[test]
+fn a_runs_settings_proposal_rejected_reaches_its_inbox_with_the_reason() {
+    let (mut world, signed, task) = proposing_run(true);
+    let item = run_charter(&world, b"Later instructions");
+    let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
+    let reason = b"Keep the current instructions";
+    let reply = run_decide(
+        &mut world,
+        signed,
+        task,
+        proposal,
+        people::ProposalDecision::Reject { reason: reason.as_slice().into() },
+        None,
+    );
+    assert!(
+        matches!(
+            reply,
+            people::Reply::Outcome(people::Outcome::ProposalDecided { choice: people::ProposalChoice::Rejected, .. })
+        ),
+        "{reply:?}"
+    );
+    let outcome = run_outcome(&world, task, proposal);
+    assert_eq!(
+        outcome.kind,
+        tasks::MessageKind::SettingsDecision { proposal, outcome: tasks::SettingsOutcome::Rejected }
+    );
+    assert_eq!(outcome.words.as_ref(), reason);
+    assert!(!world.store.rows.contains_key(&task_set(task, proposal)));
+    assert_eq!(world.domain.settings().newest(), 1);
+}
+#[test]
+fn a_runs_stale_settings_proposal_is_withdrawn_and_it_hears_the_newest() {
+    let (mut world, signed, task) = proposing_run(true);
+    let item = run_charter(&world, b"Proposed instructions");
+    let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
+    let direct = run_charter(&world, b"Direct owner instructions");
+    changed(&change(&mut world, signed, 103, 1, Box::new([direct])), 2);
+    assert_eq!(
+        run_outcome(&world, task, proposal).kind,
+        tasks::MessageKind::SettingsDecision { proposal, outcome: tasks::SettingsOutcome::Stale { newest: 2 } }
+    );
+    assert!(!world.store.rows.contains_key(&task_set(task, proposal)));
+    assert!(fixtures::live_row(&world, task).proposal.is_none());
+    let item = run_charter(&world, b"Proposed again against newest");
+    let next = run_proposed(&run_propose(&mut world, 2, Box::new([item])));
+    assert_ne!(next, proposal);
+    assert!(world.store.rows.contains_key(&task_set(task, next)));
+}
+#[test]
+fn a_run_without_the_settings_family_is_denied_and_may_propose_nothing() {
+    let (mut world, _, task) = proposing_run(false);
+    let before = settings_rows(&world);
+    let item = run_charter(&world, b"Unauthorized proposal");
+    assert!(matches!(run_propose(&mut world, 1, Box::new([item])), core::CallPart::ToolDenied { .. }));
+    assert_eq!(settings_rows(&world), before);
+    assert!(fixtures::live_row(&world, task).proposal.is_none());
+}
+#[test]
+fn a_runs_settings_proposal_refused_at_the_entrance_keeps_nothing() {
+    let (mut world, signed, task) = proposing_run(true);
+    let before = settings_rows(&world);
+    let item = run_charter(&world, b"Stale basis");
+    assert_eq!(
+        run_propose(&mut world, 0, Box::new([item])),
+        core::CallPart::SettingsRefused(people::Refusal::Stale { newest: 1 })
+    );
+    assert_eq!(settings_rows(&world), before);
+    let mut item = run_charter(&world, b"Malformed proposal");
+    let settings::Edit::Set(settings::Value::Charter(charter)) = &mut item.edit else { panic!("charter") };
+    charter.number = 0;
+    assert!(matches!(
+        run_propose(&mut world, 1, Box::new([item])),
+        core::CallPart::SettingsRefused(people::Refusal::NotWellFormed { .. })
+    ));
+    assert_eq!(settings_rows(&world), before);
+    let first = run_charter(&world, b"First pending");
+    proposed(&propose(&mut world, signed, 104, 1, Box::new([first])));
+    let (_, member) = party(&mut world, b"another proposer", Some((1, people::Role::Member)));
+    let second = run_charter(&world, b"Second pending");
+    proposed(&propose(&mut world, member, 105, 1, Box::new([second])));
+    let before = settings_rows(&world);
+    let item = run_charter(&world, b"Past the limit");
+    assert_eq!(
+        run_propose(&mut world, 1, Box::new([item])),
+        core::CallPart::SettingsRefused(people::Refusal::Limit { which: people::LimitKind::SettingsProposals })
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert!(fixtures::live_row(&world, task).proposal.is_none());
+}
+#[test]
+fn a_runs_pending_settings_proposal_survives_a_restart_and_is_accepted() {
+    let (mut world, signed, task) = proposing_run(true);
+    let item = run_charter(&world, b"Durable proposed instructions");
+    let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
+    restart(&mut world, run_configuration().0);
+    assert!(world.store.rows.contains_key(&task_set(task, proposal)));
+    accepted(&run_decide(
+        &mut world,
+        signed,
+        task,
+        proposal,
+        people::ProposalDecision::Accept,
+        Some(people::Running::Stays),
+    ));
+    assert_eq!(
+        run_outcome(&world, task, proposal).kind,
+        tasks::MessageKind::SettingsDecision { proposal, outcome: tasks::SettingsOutcome::Accepted { revision: 2 } }
+    );
+    assert!(!world.store.rows.contains_key(&task_set(task, proposal)));
+    restart(&mut world, run_configuration().0);
+    assert_eq!(
+        revision(&world, 2, false).head.proposal,
+        Some((people::Proposer::Task(task), u32::try_from(proposal).expect("proposal key")))
+    );
+    assert_eq!(fixtures::live_row(&world, task).inbox.iter().filter(|word| matches!(word.kind, tasks::MessageKind::SettingsDecision { proposal: number, .. } if number == proposal)).count(), 1);
+}
+
+#[test]
+fn exhausted_stale_outcome_numbers_refuse_before_changing_settings() {
+    let (mut world, signed, task) = proposing_run(true);
+    let item = run_charter(&world, b"Pending instructions");
+    let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
+    let header_key = root::Key::Core(core::Key::Core(core::CoreKey::Deployment));
+    let mut header = world.store.rows[&header_key].clone();
+    let root::Record::Core(core::Record::Core(core::CoreRecord::Deployment(numbers))) = &mut header else {
+        panic!("deployment header")
+    };
+    numbers.messages = u64::MAX;
+    let env = skein_lib::Env { now: skein_lib::Time::ZERO, wall: world.wall_time(), limits: run_configuration().1 };
+    assert!(root::restore_record(&mut world.domain, &env, header));
+    let before = settings_rows(&world);
+    let direct = run_charter(&world, b"Direct change");
+    assert_eq!(
+        change(&mut world, signed, 106, 1, Box::new([direct])),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Limit {
+            which: people::LimitKind::Arithmetic
+        }))
+    );
+    assert_eq!(settings_rows(&world), before);
+    assert!(fixtures::live_row(&world, task).proposal.is_some());
+    assert!(world.store.rows.contains_key(&task_set(task, proposal)));
+    let (mut changed, _) = run_configuration();
+    changed.core.defaults.charters[0].policy.instructions = b"Release default".as_slice().into();
+    world.restart_with(changed);
+    assert!(!world.domain.ready(), "startup also refuses an unnumberable stale outcome");
+    assert!(world.stopped);
+    assert_eq!(settings_rows(&world), before);
 }

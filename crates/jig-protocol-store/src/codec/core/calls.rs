@@ -68,6 +68,7 @@ pub(super) fn decode_call_key(value: wire::CallKey, _limits: &Limits) -> domain:
 
 pub(super) fn encode_call_part(value: &domain::CallPart, limits: &Limits) -> Result<wire::CallPart, wire::Problem> {
     Ok(match value {
+        domain::CallPart::SettingsRefused(value) => encode_settings_refusal(value, limits)?,
         domain::CallPart::Effect { connector, entry, deadline, outcome } => {
             encode_part_effect(*connector, *entry, *deadline, *outcome, limits)?
         }
@@ -161,16 +162,14 @@ pub(super) fn encode_call_part(value: &domain::CallPart, limits: &Limits) -> Res
             )?)
         }
         domain::CallPart::NoteRecalled { entries, more } => encode_part_note_recalled(entries, *more, limits)?,
-        domain::CallPart::NoteRefused(value) => wire::CallPart::NoteRefused(wire::CallPartNoteRefused::new(
-            &limits.core,
-            wire::CallPartNoteRefusedParts { value: encode_note_refusal(*value, limits)? },
-        )?),
+        domain::CallPart::NoteRefused(value) => encode_part_note_refused(*value, limits)?,
         domain::CallPart::Unavailable => wire::CallPart::Unavailable,
     })
 }
 #[expect(clippy::too_many_lines, reason = "one exhaustive translation preserves the stored call vocabulary")]
 pub(super) fn decode_call_part(value: wire::CallPart, limits: &Limits) -> Result<domain::CallPart, wire::Problem> {
     Ok(match value {
+        wire::CallPart::SettingsRefused(value) => decode_settings_refusal(value)?,
         wire::CallPart::Effect(value) => decode_part_effect(value, limits),
         wire::CallPart::Connector(value) => {
             let wire::CallPartConnectorParts { connector } = value.into_parts();
@@ -646,4 +645,32 @@ fn decode_holder(value: wire::ProposalHolder, limits: &Limits) -> tasks::Proposa
             tasks::ProposalHolder::Policy { project, kind: super::decode_proposal_kind(kind, limits) }
         }
     }
+}
+
+fn people_problem(value: crate::people_v13::Problem) -> wire::Problem {
+    problem(value.reason)
+}
+
+fn encode_settings_refusal(
+    value: &jig_domain_people::Refusal,
+    limits: &Limits,
+) -> Result<wire::CallPart, wire::Problem> {
+    let value = match crate::codec::people::refusal_bytes(value) {
+        Ok(value) => value,
+        Err(problem) => return Err(people_problem(problem)),
+    };
+    Ok(wire::CallPart::SettingsRefused(wire::SettingsRefusal::new(&limits.core, wire::SettingsRefusalParts { value })?))
+}
+fn decode_settings_refusal(value: wire::SettingsRefusal) -> Result<domain::CallPart, wire::Problem> {
+    match crate::codec::people::read_refusal(&value.into_parts().value) {
+        Ok(value) => Ok(domain::CallPart::SettingsRefused(value)),
+        Err(problem) => Err(people_problem(problem)),
+    }
+}
+
+fn encode_part_note_refused(value: notes::Refusal, limits: &Limits) -> Result<wire::CallPart, wire::Problem> {
+    Ok(wire::CallPart::NoteRefused(wire::CallPartNoteRefused::new(
+        &limits.core,
+        wire::CallPartNoteRefusedParts { value: encode_note_refusal(value, limits)? },
+    )?))
 }

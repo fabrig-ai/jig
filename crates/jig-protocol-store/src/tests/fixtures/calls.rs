@@ -57,6 +57,10 @@ pub fn call_parts() -> Box<[core::CallPart]> {
         C::Proposed { proposal: 2, holder: jig_domain_tasks::ProposalHolder::Person(1) },
         C::ProposalDecided { proposal: 2, outcome: tasks::ProposalOutcome::Accepted },
         C::ProposalRefused(problem()),
+        C::SettingsRefused(jig_domain_people::Refusal::Stale { newest: 3 }),
+        C::SettingsRefused(jig_domain_people::Refusal::Limit {
+            which: jig_domain_people::LimitKind::SettingsProposals,
+        }),
         C::Controlled,
         C::ControlRefused(problem()),
         C::ControlDenied { answer: Answer::Propose },

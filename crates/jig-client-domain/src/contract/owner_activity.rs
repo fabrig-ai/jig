@@ -54,6 +54,10 @@ pub struct OwnerWord {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerMessageKind {
+    SettingsDecision {
+        proposal: u64,
+        outcome: SettingsOutcome,
+    },
     Escalation {
         task: u64,
         revision: u64,
@@ -142,4 +146,12 @@ pub enum OwnerWordResult {
     },
     Failed,
     Cancelled,
+}
+
+/// The facts supplied by a settings proposal's durable inbox outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SettingsOutcome {
+    Accepted { revision: u32 },
+    Rejected,
+    Stale { newest: u32 },
 }

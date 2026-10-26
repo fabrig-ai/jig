@@ -92,7 +92,38 @@ pub(crate) fn proposal(
                 | tasks::ProposalState::Rejected { .. }
                 | tasks::ProposalState::Withdrawn => return Err(people::Refusal::Unknown),
             };
+            if let tasks::ProposalAction::Settings { .. } = row.action {
+                if core.people.role(party, people::DEPLOYMENT) != Some(people::Role::Owner) {
+                    return Err(people::Refusal::NotWaiting);
+                }
+                return match act {
+                    Act::Accept | Act::Reject => Ok(()),
+                    Act::PassUp => Err(people::Refusal::NoFurther),
+                    Act::Withdraw
+                    | Act::Message
+                    | Act::Answer
+                    | Act::Take
+                    | Act::HandBack
+                    | Act::Release
+                    | Act::LeaveHeld
+                    | Act::Amend
+                    | Act::Stop
+                    | Act::Cancel
+                    | Act::Move
+                    | Act::Reorder
+                    | Act::Seen
+                    | Act::EditNote
+                    | Act::DeleteNote
+                    | Act::Adopt
+                    | Act::Rename
+                    | Act::ChangePolicy
+                    | Act::SetRoles
+                    | Act::MakeService
+                    | Act::SetPool => Err(people::Refusal::NotOffered),
+                };
+            }
             let (_, kind) = Core::proposal_kind(&row.action);
+            let kind = kind.expect("ordinary proposal authority kind");
             let waiting = match current {
                 tasks::ProposalHolder::Person(holder) => holder == party,
                 tasks::ProposalHolder::Policy { project, .. } => {

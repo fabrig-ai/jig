@@ -8,6 +8,15 @@ pub fn message_kind(value: &t::MessageKind, limits: &w::Limits) -> Result<w::Own
             limits,
             w::OwnerMessageKindMetParts { dependency: *dependency, removed: *removed },
         )?),
+        t::MessageKind::SettingsDecision { proposal, outcome } => {
+            w::OwnerMessageKind::SettingsDecision(w::OwnerMessageKindSettingsDecision::new(
+                limits,
+                w::OwnerMessageKindSettingsDecisionParts {
+                    proposal: *proposal,
+                    outcome: settings_outcome(*outcome, limits)?,
+                },
+            )?)
+        }
         t::MessageKind::Words => w::OwnerMessageKind::Words,
         t::MessageKind::Question => w::OwnerMessageKind::Question,
         t::MessageKind::Escalation { task, revision } => {
@@ -170,4 +179,16 @@ pub fn answer(value: &t::ActivityLine, limits: &w::Limits) -> Result<w::OwnerAct
         limits,
         w::OwnerActivityLineParts { task: value.task, position: value.position, at: value.at.as_nanos(), line },
     )
+}
+
+fn settings_outcome(value: t::SettingsOutcome, limits: &w::Limits) -> Result<w::SettingsOutcome, w::Problem> {
+    Ok(match value {
+        t::SettingsOutcome::Accepted { revision } => {
+            w::SettingsOutcome::Accepted(w::SettingsAccepted::new(limits, w::SettingsAcceptedParts { revision })?)
+        }
+        t::SettingsOutcome::Rejected => w::SettingsOutcome::Rejected,
+        t::SettingsOutcome::Stale { newest } => {
+            w::SettingsOutcome::Stale(w::SettingsStale::new(limits, w::SettingsStaleParts { newest })?)
+        }
+    })
 }
