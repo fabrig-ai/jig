@@ -1310,6 +1310,7 @@ dependencies = [
 name = "jig-store-codecs-world"
 version = "0.0.0"
 dependencies = [
+ "jig-client-protocol-wire",
  "jig-domain-core",
  "jig-domain-people",
  "jig-protocol-config",
@@ -1320,6 +1321,7 @@ dependencies = [
  "skein-heap",
  "skein-kv",
  "skein-lib",
+ "skein-oauth",
  "skein-scratch",
 ]
 

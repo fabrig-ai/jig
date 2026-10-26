@@ -64,9 +64,10 @@ impl World {
         event
     }
     pub fn carry(&mut self, value: &[u8]) -> u64 {
-        let store::Event::Carried { number, .. } =
-            self.secret(store::Secrets::Carry { value: Secret::new(value.into()) })
-        else {
+        let store::Event::Carried { number, .. } = self.secret(store::Secrets::Carry {
+            kind: jig_protocol_store::CarriedKind::Key,
+            value: Secret::new(value.into()),
+        }) else {
             panic!("carried LLM key")
         };
         number
@@ -75,7 +76,19 @@ impl World {
         let store::Event::Secret { value, .. } = self.secret(store::Secrets::Get { owner, number }) else {
             panic!("stored value")
         };
-        value
+        value.map(|value| match value {
+            store::SecretValue::Key(value) | store::SecretValue::Carried { kind: store::CarriedKind::Key, value } => {
+                value
+            }
+            other @ (store::SecretValue::Digest { .. }
+            | store::SecretValue::Record(_)
+            | store::SecretValue::Carried {
+                kind: store::CarriedKind::Value | store::CarriedKind::Moved,
+                ..
+            }
+            | store::SecretValue::Application(_)
+            | store::SecretValue::Held(_)) => panic!("LLM key kind: {other:?}"),
+        })
     }
     pub fn keep(&mut self, source: u32, carried: u64, replaces: bool) {
         let mut next = Some(self.keys.keep(source, carried, replaces));
@@ -97,7 +110,15 @@ impl World {
                     };
                     self.down(store::Request::Secrets { owner: exchange, request });
                     match self.above.pop().expect("secrets answer") {
-                        store::Event::Secret { value, .. } => self.keys.read(exchange, value),
+                        store::Event::Secret { value, .. } => self.keys.read(
+                            exchange,
+                            value.map(|value| {
+                                let store::SecretValue::Carried { kind: store::CarriedKind::Key, value } = value else {
+                                    panic!("carried LLM key kind")
+                                };
+                                value
+                            }),
+                        ),
                         store::Event::Kept { .. } => self.keys.kept(exchange, true, Time::ZERO),
                         store::Event::Stale { .. } => self.keys.kept(exchange, false, Time::ZERO),
                         other @ (store::Event::Opened { .. }

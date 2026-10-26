@@ -43,12 +43,15 @@ fn a_secret_kept_survives_a_crash() {
     let events = world.secret(Secrets::Keep {
         owner: SecretOwner::Application,
         number: 1,
-        value: Secret::new(Box::from(b"private credential".as_slice())),
+        value: jig_protocol_store::SecretValue::Application(Secret::new(Box::from(b"private credential".as_slice()))),
     });
     assert!(matches!(events.as_slice(), [Event::Kept { .. }]));
     world.crash(18);
     world.reopen();
     let events = world.secret(Secrets::Get { owner: SecretOwner::Application, number: 1 });
-    let [Event::Secret { value: Some(secret), .. }] = events.as_slice() else { panic!("secret terminal: {events:?}") };
+    let [Event::Secret { value: Some(jig_protocol_store::SecretValue::Application(secret)), .. }] = events.as_slice()
+    else {
+        panic!("secret terminal: {events:?}")
+    };
     assert_eq!(secret.expose(), b"private credential");
 }

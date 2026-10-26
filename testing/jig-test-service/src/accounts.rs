@@ -203,7 +203,44 @@ fn provider_templates(
     }
     Ok(providers)
 }
+/// The protocol child chooses the expected payload; a wrong restored kind is a failed read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SecretKind {
+    Record,
+    Key,
+    Carried(store::CarriedKind),
+    Held,
+}
+
 impl Accounts {
+    fn secret(
+        &mut self,
+        store: &mut crate::store::Store,
+        value: Option<store::SecretValue>,
+        expected: SecretKind,
+    ) -> Result<Option<Secret>, ()> {
+        let payload = match value {
+            None => return Ok(None),
+            Some(store::SecretValue::Record(value)) if expected == SecretKind::Record => value,
+            Some(store::SecretValue::Key(value)) if expected == SecretKind::Key => value,
+            Some(store::SecretValue::Carried { kind, value }) if expected == SecretKind::Carried(kind) => value,
+            Some(store::SecretValue::Held(value)) if expected == SecretKind::Held => value,
+            Some(
+                store::SecretValue::Digest { .. }
+                | store::SecretValue::Record(_)
+                | store::SecretValue::Key(_)
+                | store::SecretValue::Carried { .. }
+                | store::SecretValue::Application(_)
+                | store::SecretValue::Held(_),
+            ) => {
+                store.above.push(store::Event::Corrupt { owner: Token::new(0) });
+                self.abort();
+                return Err(());
+            }
+        };
+        Ok(Some(payload))
+    }
+
     pub fn take_moved(&mut self, source: u32) -> Option<Secret> {
         self.moves.take(source)
     }
@@ -324,26 +361,43 @@ impl Accounts {
             | domain::Request::Closed => (),
         }
     }
+    fn restore_source(
+        &mut self,
+        source: u32,
+        provider: u32,
+        kind: domain::Kind,
+        store: &mut crate::store::Store,
+        values: &mut Values,
+    ) {
+        self.inventory.name(source);
+        let value = match store.secrets(
+            Token::new(PREFIX | u64::from(source)),
+            store::Secrets::Get { owner: store::SecretOwner::Source, number: u64::from(source) },
+        ) {
+            Some(store::Event::Secret { value, .. }) => value,
+            None => return,
+            Some(other) => unreachable!("Source Get answers with its value: {other:?}"),
+        };
+        let expected = match kind {
+            domain::Kind::Key => SecretKind::Key,
+            domain::Kind::SignIn => SecretKind::Record,
+            domain::Kind::Program | domain::Kind::None => return,
+        };
+        let Ok(value) = self.secret(store, value, expected) else {
+            return;
+        };
+        match kind {
+            domain::Kind::Key => {
+                self.keys.restore(source, value, &mut values.accounts).expect("restored LLM key source fits table");
+            }
+            domain::Kind::SignIn => self.restore_signed_in(source, provider, value),
+            domain::Kind::Program | domain::Kind::None => (),
+        }
+    }
     fn signing(&mut self, signing: translate::Down, store: &mut crate::store::Store, values: &mut Values) {
         match signing {
             translate::Down::Restore { source, provider, kind } => {
-                self.inventory.name(source);
-                let value = match store.secrets(
-                    Token::new(PREFIX | u64::from(source)),
-                    store::Secrets::Get { owner: store::SecretOwner::Source, number: u64::from(source) },
-                ) {
-                    Some(store::Event::Secret { value, .. }) => value,
-                    None => return,
-                    Some(other) => unreachable!("Source Get answers with its value: {other:?}"),
-                };
-                match kind {
-                    domain::Kind::Key => self
-                        .keys
-                        .restore(source, value, &mut values.accounts)
-                        .expect("restored LLM key source fits table"),
-                    domain::Kind::SignIn => self.restore_signed_in(source, provider, value),
-                    domain::Kind::Program | domain::Kind::None => (),
-                }
+                self.restore_source(source, provider, kind, store, values);
             }
             translate::Down::Withdraw { source, display } => {
                 self.ready(source, false);
@@ -692,25 +746,28 @@ impl Accounts {
                                 holds,
                                 owner: store::SecretOwner::Source,
                                 number: u64::from(source),
-                                value,
+                                value: store::SecretValue::Record(value),
                                 replaces: None,
                             },
                         ),
                     };
                     if let Some(event) = store.secrets(Token::new(prefix | u64::from(source)), request) {
-                        self.move_answer(event, events);
+                        self.move_answer(event, events, store);
                     }
                 }
             }
         }
     }
-    fn move_answer(&mut self, event: store::Event, events: &mut Queue<root::Event>) {
+    fn move_answer(&mut self, event: store::Event, events: &mut Queue<root::Event>, store: &mut crate::store::Store) {
         if self.aborting {
             return;
         }
         match event {
             store::Event::Secret { owner, value } if owner.raw() & MOVE_OUT == MOVE_OUT => {
                 let source = move_source(owner);
+                let Ok(value) = self.secret(store, value, SecretKind::Record) else {
+                    return;
+                };
                 let provider = self.source_providers.get(&source).expect("withdrawn source provider");
                 let registration = self.providers.get(provider).expect("source provider");
                 let next = self.moves.read(source, value, registration, &self.env.limits.client.document);
@@ -719,9 +776,15 @@ impl Accounts {
             store::Event::Secret { owner, value } if owner.raw() & MOVE_BACK == MOVE_BACK => {
                 let source = move_source(owner);
                 let provider = *self.source_providers.get(&source).expect("returning source provider");
+                let Ok(value) = self.secret(store, value, SecretKind::Record) else {
+                    return;
+                };
                 self.restore_signed_in(source, provider, value);
             }
             store::Event::Secret { owner, value } => {
+                let Ok(value) = self.secret(store, value, SecretKind::Carried(store::CarriedKind::Moved)) else {
+                    return;
+                };
                 let next =
                     self.moves.opened(move_source(owner), value, &self.providers, &self.env.limits.client.document);
                 self.move_out.push(next);
@@ -815,10 +878,13 @@ impl Accounts {
                             replaces,
                         },
                     };
-                    if let Some(store::Event::Secret { value, .. }) = store.secrets(owner, request)
-                        && let Some(next) = self.keys.read(exchange, value)
-                    {
-                        self.key_out.push(next);
+                    if let Some(store::Event::Secret { value, .. }) = store.secrets(owner, request) {
+                        let Ok(value) = self.secret(store, value, SecretKind::Carried(store::CarriedKind::Key)) else {
+                            return;
+                        };
+                        if let Some(next) = self.keys.read(exchange, value) {
+                            self.key_out.push(next);
+                        }
                     }
                 }
                 keys::Next::Child(event) => {
@@ -862,9 +928,13 @@ impl Accounts {
                     if let Some(store::Event::Secret { value, .. }) = store.secrets(
                         Token::new(FINISH_EXCHANGE | exchange.raw()),
                         store::Secrets::Get { owner: store::SecretOwner::Application, number: carried },
-                    ) && let Some(next) = self.finishes.read(exchange, value)
-                    {
-                        self.finish_out.push(next);
+                    ) {
+                        let Ok(value) = self.secret(store, value, SecretKind::Held) else {
+                            return;
+                        };
+                        if let Some(next) = self.finishes.read(exchange, value) {
+                            self.finish_out.push(next);
+                        }
                     }
                 }
                 finishes::Next::Driver(request) => self.down(request),
@@ -936,17 +1006,20 @@ impl Accounts {
             }
             match store.sources.pop().expect("source answers") {
                 store::Event::Secret { owner, value } if owner.raw() & FINISH_EXCHANGE == FINISH_EXCHANGE => {
+                    let Ok(value) = self.secret(store, value, SecretKind::Held) else {
+                        return;
+                    };
                     if !self.aborting
                         && let Some(next) = self.finishes.read(Token::new(owner.raw() & !FINISH_EXCHANGE), value)
                     {
                         self.finish_out.push(next);
                     }
                 }
-                event @ store::Event::Secret { .. } => self.move_answer(event, events),
+                event @ store::Event::Secret { .. } => self.move_answer(event, events, store),
                 event @ (store::Event::Kept { owner } | store::Event::Stale { owner })
                     if owner.raw() & MOVE_ADOPT == MOVE_ADOPT =>
                 {
-                    self.move_answer(event, events);
+                    self.move_answer(event, events, store);
                 }
                 store::Event::SecretsLoaded { owner: SWEEP, rows, next } => self.sweep_loaded(rows, next),
                 store::Event::SecretsLoaded { .. } => unreachable!("only the source inventory loads pages"),
@@ -1051,7 +1124,12 @@ fn replace(store: &mut crate::store::Store, keep: records::Keep) {
     let records::Keep { account, value, replaces } = keep;
     let _later = store.secrets(
         Token::new(PREFIX | u64::from(account)),
-        store::Secrets::Replace { owner: store::SecretOwner::Source, number: u64::from(account), value, replaces },
+        store::Secrets::Replace {
+            owner: store::SecretOwner::Source,
+            number: u64::from(account),
+            value: store::SecretValue::Record(value),
+            replaces,
+        },
     );
 }
 fn move_source(owner: Token) -> u32 {

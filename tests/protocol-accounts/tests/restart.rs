@@ -64,7 +64,11 @@ fn a_restart_re_adds_a_party_signed_in_source() {
 fn the_restart_erases_only_unnamed_source_rows() {
     let mut world = World::new();
     for number in [1, 7, 8, 9, 10] {
-        world.secret(Secrets::Keep { owner: SecretOwner::Source, number, value: Secret::new(Box::new([7; 32])) });
+        world.secret(Secrets::Keep {
+            owner: SecretOwner::Source,
+            number,
+            value: jig_protocol_store::SecretValue::Key(Secret::new(Box::new([7; 32]))),
+        });
     }
     let carried = world.carry(&[9; 32]);
     let mut inventory = Inventory::new(2, 2);
@@ -104,7 +108,11 @@ fn the_restart_erases_only_unnamed_source_rows() {
         assert!(world.get(SecretOwner::Source, number).is_none());
     }
     assert!(world.get(SecretOwner::Application, carried).is_some(), "carried application rows survive");
-    world.secret(Secrets::Keep { owner: SecretOwner::Source, number: 11, value: Secret::new(Box::new([7; 32])) });
+    world.secret(Secrets::Keep {
+        owner: SecretOwner::Source,
+        number: 11,
+        value: jig_protocol_store::SecretValue::Key(Secret::new(Box::new([7; 32]))),
+    });
     inventory.restored();
     assert!(inventory.step().is_none(), "the restart sweeps only once");
     assert!(world.get(SecretOwner::Source, 11).is_some());
