@@ -514,6 +514,11 @@ fn memory_below_the_components_sum_is_refused() {
         // Settings reads: the inventory document and its scratch, revision and history loads
         // with their maps, the stored catalogue's effort names, and the settings holders' counts.
         + 5_810_584
+        // Run settings reads: Destination grows 16 -> 48 bytes for ReplyTo + CallKey,
+        // across small's four Pending load slots: 4 * 32 = 128. The inline
+        // SettingsAnswer carrier is 80 bytes, replacing Answer's 24 in the one
+        // constructed-answer envelope: another 56. No new table or limit.
+        + 4 * 32 + 56
         // Run proofs' outstanding read fences (tasks.md 9): (4 proofs per task + 2) at
         // 8 run-inbox ids, a routed payload's id list, and the wider inline RunProof.
         // M3's CurrentWindow uses bool's niche: Option<(u64, u32)> 24 ->

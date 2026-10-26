@@ -88,6 +88,24 @@ impl Stand {
         Some(root::Event::Core(event))
     }
 
+    pub fn settings_answer(
+        &mut self,
+        to: Token,
+        key: core::CallKey,
+        answer: &core::SettingsAnswer,
+    ) -> Option<root::Event> {
+        let (_, tool) = self.calls.remove(&key)?;
+        let rendered = tools::settings_answer(answer);
+        Some(root::Event::CallAnswered {
+            to: ReplyTo::new(to),
+            call: core::SettledCall {
+                serial: 0,
+                tool,
+                answer: core::SettledAnswer::Host { error: rendered.error, body: rendered.text },
+            },
+        })
+    }
+
     pub fn answer(
         &mut self,
         to: Token,
@@ -126,10 +144,15 @@ fn unreadable(to: ReplyTo, call: &fleet::Call, problem: &tools::Problem) -> root
 impl crate::effects::World {
     /// Relay a smith-named call through the fleet and the protocol stand-in.
     pub fn tool_call(&mut self, tool: &[u8], input: &[u8], writes: bool) -> Token {
-        let assignment = self.assigned.as_ref().expect("assigned chat");
         let completion = u32::try_from(self.host_answers.len() + 1)
             .expect("bounded story calls")
             .max(self.answers.iter().map(|(_, key, _)| key.completion + 1).max().unwrap_or(1));
+        self.tool_call_at(completion, tool, input, writes)
+    }
+
+    /// Ask again under a chosen name, as a host retry does.
+    pub fn tool_call_at(&mut self, completion: u32, tool: &[u8], input: &[u8], writes: bool) -> Token {
+        let assignment = self.assigned.as_ref().expect("assigned run");
         let name = smith_channel::v5::CallName::new(
             &smith_channel::v5::CEILINGS,
             smith_channel::v5::CallNameParts { activation: assignment.attempt, completion, position: 0 },

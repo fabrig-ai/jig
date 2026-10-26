@@ -777,6 +777,7 @@ impl Session {
             }
             other @ (core::Now::Relayed { .. }
             | core::Now::EffectAnswer { .. }
+            | core::Now::SettingsAnswer { .. }
             | core::Now::SettledCallRefused { .. }
             | core::Now::Call { .. }
             | core::Now::RelayBusy { .. }

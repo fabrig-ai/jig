@@ -15,6 +15,7 @@
 //! | retired | late duplicate terminal | retired | nothing |
 
 pub mod settings;
+pub use settings::{SettingsAnswer, SettingsRead};
 mod vocabulary;
 pub use vocabulary::{
     Answer, Cursor, EndedGroup, Filter, Group, Historical, Loaded, Page, PageRow, PageTurn, Past, Position, Range,
@@ -121,6 +122,7 @@ pub(crate) struct Pending {
 enum Destination {
     Read(ReplyTo),
     Watch(Token),
+    Settings { to: ReplyTo, key: crate::CallKey },
     Done,
 }
 
@@ -128,7 +130,9 @@ impl Pending {
     fn take_reply(&mut self) -> ReplyTo {
         match core::mem::replace(&mut self.destination, Destination::Done) {
             Destination::Read(reply) => reply,
-            Destination::Watch(_) | Destination::Done => unreachable!("a pending read owns its reply"),
+            Destination::Watch(_) | Destination::Settings { .. } | Destination::Done => {
+                unreachable!("a pending read owns its reply")
+            }
         }
     }
 }
@@ -528,6 +532,7 @@ pub(crate) fn loaded(core: &mut Core, env: &Env<Limits>, load: Token, result: Lo
     };
     match &pending.destination {
         Destination::Watch(watcher) => return watch_loaded(core, env, name, *watcher, result),
+        Destination::Settings { .. } => return settings::run_loaded(core, env, name, result),
         Destination::Read(_) => {}
         Destination::Done => return Requests::Out(Queue::with_capacity(0)),
     }
@@ -607,7 +612,8 @@ fn task_live(
 #[must_use]
 pub fn answer_worst_case(limits: &Limits) -> Option<u64> {
     let document = documents::document_with_context_worst_case(limits)?;
-    u64::try_from(size_of::<Answer>()).ok()?.checked_add(
+    // Run settings answers own the same documents, in an inline sum carrier.
+    u64::try_from(size_of::<Answer>().max(size_of::<SettingsAnswer>())).ok()?.checked_add(
         document
             .checked_mul(u64::from(limits.documents.rows).checked_add(3)?)?
             .checked_add(limits.load_bytes.checked_mul(2)?)?
@@ -650,21 +656,14 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(answer_worst_case(limits)?)
 }
 
-pub(super) fn load_settings(
-    core: &mut Core,
-    env: &Env<Limits>,
-    reply: ReplyTo,
-    sign_in: u64,
-    range: Range,
-) -> Requests {
+pub(super) fn load_settings(core: &mut Core, env: &Env<Limits>, pending: Pending) -> Requests {
     if core.reads.len() >= env.limits.load_slots {
-        return terminal(reply, Answer::None(Why::Busy));
+        return settings::answer(pending.destination, Answer::None(Why::Busy));
     }
-    let emitted = range.clone();
-    let pending = Pending { destination: Destination::Read(reply), sign_in, party: range.party, range, tasks: None };
+    let emitted = pending.range.clone();
     let load = match core.reads.insert(pending) {
         Ok(load) => load.token(),
-        Err(mut pending) => return terminal(pending.take_reply(), Answer::None(Why::Busy)),
+        Err(pending) => return settings::answer(pending.destination, Answer::None(Why::Busy)),
     };
     let mut out = Queue::with_capacity(2);
     out.push(Request::Held(Box::new(Held::ReadLoad { load, range: Box::new(emitted) })));
