@@ -357,6 +357,12 @@ pub(super) fn encode_policy_change(
                 },
             )?)
         }
+        domain::PolicyChange::RoleSpend { role, period_spend } => {
+            wire::PolicyChange::RoleSpend(wire::PolicyChangeRoleSpend::new(
+                limits,
+                wire::PolicyChangeRoleSpendParts { role: *role, period_spend: *period_spend },
+            )?)
+        }
         domain::PolicyChange::ProjectSpend { period_spend } => {
             wire::PolicyChange::ProjectSpend(wire::PolicyChangeProjectSpend::new(
                 limits,
@@ -415,6 +421,10 @@ pub(super) fn decode_policy_change(
     Ok(match value {
         wire::PolicyChange::Templates(value) => {
             domain::PolicyChange::Templates { overrides: decode_templates(value.into_parts().overrides) }
+        }
+        wire::PolicyChange::RoleSpend(value) => {
+            let wire::PolicyChangeRoleSpendParts { role, period_spend } = value.into_parts();
+            domain::PolicyChange::RoleSpend { role, period_spend }
         }
         wire::PolicyChange::ProjectSpend(value) => {
             let wire::PolicyChangeProjectSpendParts { period_spend } = value.into_parts();
