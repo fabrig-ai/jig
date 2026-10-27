@@ -308,8 +308,12 @@ impl World {
     }
 
     pub fn open_period(&mut self, period: u64, budget: u64) {
+        self.open_project_period(1, period, budget);
+    }
+
+    pub fn open_project_period(&mut self, project: u32, period: u64, budget: u64) {
         let reply_to = self.to();
-        self.send(Event::OpenPeriod { reply_to, project: 1, period, budget });
+        self.send(Event::OpenPeriod { reply_to, project, period, budget });
     }
 
     /// Install connector hold rules, replayed before live rows on restart.

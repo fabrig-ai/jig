@@ -692,8 +692,17 @@ fn holder_count(live: &[TaskRecord], name: &ResourceName) -> usize {
     count
 }
 
-fn in_scope(live: &[TaskRecord], number: u64, scope: jig_domain_tasks::Scope) -> bool {
-    let jig_domain_tasks::Scope::Subtree { task: root } = scope else { return false };
+fn in_scope(live: &[TaskRecord], number: u64, hold: &jig_domain_tasks::PlacedHold) -> bool {
+    let root = match hold.scope {
+        jig_domain_tasks::Scope::Subtree { task } => task,
+        jig_domain_tasks::Scope::Project => {
+            return live.iter().any(|row| {
+                row.number == number
+                    && row.project == hold.project
+                    && !(row.flags.conversation && matches!(row.requester, Party::Person(_)))
+            });
+        }
+    };
     let mut at = number;
     for _ in 0..live.len() {
         if at == root {
@@ -724,7 +733,7 @@ fn placed(
                 Some(hold)
                     if row.project == hold.project
                         && !hold.exempt.contains(&row.number)
-                        && (hold.lifted || in_scope(live, row.number, hold.scope)) => {}
+                        && (hold.lifted || in_scope(live, row.number, hold)) => {}
                 _ => judge.fail("task names missing or noncovering placed hold"),
             }
             if !matches!(row.phase, Phase::Held { .. } | Phase::Closing(_)) {
@@ -758,9 +767,7 @@ fn placed(
         if hold.lifted {
             continue;
         }
-        for row in
-            live.iter().filter(|row| in_scope(live, row.number, hold.scope) && !hold.exempt.contains(&row.number))
-        {
+        for row in live.iter().filter(|row| in_scope(live, row.number, hold) && !hold.exempt.contains(&row.number)) {
             if row.placed.is_none() && !matches!(row.phase, Phase::Closing(_)) {
                 judge.fail("standing hold missed a task");
             }

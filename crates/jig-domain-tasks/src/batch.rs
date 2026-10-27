@@ -540,7 +540,7 @@ fn check_placed(domain: &Domain, creator: Party) -> Result<(), Problem> {
         Executor::Agent { .. } => {}
         Executor::Procedure { .. } | Executor::Person(_) => return Ok(()),
     }
-    if let Some(hold) = crate::placed::delegation_hold(domain, number) {
+    if let Some(hold) = crate::placed::delegate_hold(domain, number) {
         return Err(problem(Some(number), Refusal::Placed { hold }));
     }
     Ok(())

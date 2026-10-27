@@ -1,9 +1,9 @@
-//! Placed holds, their owners, subtree stops and lifting (domain/tasks.md, 5.9).
+//! Placed holds, their owners, scopes and lifting (domain/tasks.md, 5.9).
 use crate::compound::Staged;
 use crate::domain::{fact, publish, record, task_mut};
 use crate::{
     Capacity, CapacityAction, CapacityCause, Domain, Fact, Hold, Key, Limits, Party, Phase, Problem, Refusal, Request,
-    Stored,
+    Stored, TaskRecord,
 };
 use alloc::boxed::Box;
 use skein_lib::{Env, List, Map, Queue, ReplyTo};
@@ -20,7 +20,7 @@ pub enum Mode {
     Stop,
     Drain,
 }
-/// A task's subtree, those made later included, or a whole project (4b).
+/// A task's subtree, those made later included, or a whole project.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Scope {
     Subtree { task: u64 },
@@ -158,7 +158,7 @@ fn subtree(scope: Scope) -> Option<u64> {
 }
 
 /// A cause may go away without releasing the independent placed hold.
-pub(crate) fn enforce(row: &mut crate::TaskRecord) {
+pub(crate) fn enforce(row: &mut TaskRecord) {
     let Some(hold) = row.placed else { return };
     let wrap = match &row.phase {
         Phase::Waiting | Phase::Active(_) => true,
@@ -186,7 +186,7 @@ pub(crate) fn shaped(hold: &PlacedHold, limits: &Limits) -> bool {
         }
         && match hold.scope {
             Scope::Subtree { task } => task != 0,
-            Scope::Project => false,
+            Scope::Project => party_owner(hold.owner),
         }
         && hold.mode == Mode::Stop
 }
@@ -194,11 +194,23 @@ pub(crate) fn shaped(hold: &PlacedHold, limits: &Limits) -> bool {
 pub(crate) fn covers(domain: &Domain, staged: &Staged, hold: &PlacedHold, number: u64) -> bool {
     match hold.scope {
         Scope::Subtree { task } => staged.descendant(domain, number, task, domain.names.capacity()),
-        Scope::Project => false,
+        Scope::Project => match staged.record(domain, number) {
+            Some(row) => row.project == hold.project && !direct_conversation(&row),
+            None => false,
+        },
     }
 }
 
-/// One preflighted whole-subtree placement; no task rows are copied.
+/// Only the conversation a person requested directly is outside project scope.
+pub(crate) fn direct_conversation(row: &TaskRecord) -> bool {
+    row.flags.conversation
+        && match row.requester {
+            Party::Person(_) => true,
+            Party::Task(_) | Party::Deployment { .. } => false,
+        }
+}
+
+/// One preflighted placement; no task rows are copied.
 pub(crate) struct Placement {
     pub hold: PlacedHold,
     pub tasks: List<u64>,
@@ -249,25 +261,26 @@ pub(crate) fn check_place(
     if staged.placed_hold(domain, hold.number).is_some() {
         return Err(Box::new(Problem::new(None, Refusal::Duplicate)));
     }
-    let task = subtree(hold.scope).expect("offered subtree");
-    let Some(root) = staged.record(domain, task) else {
-        return Err(Box::new(Problem::new(Some(task), Refusal::Unknown)));
-    };
-    if match root.phase {
-        Phase::Ended(_) => true,
-        Phase::Waiting | Phase::Active(_) | Phase::Held { .. } | Phase::Closing(_) => false,
-    } || crate::compound::has(&staged.closing, task)
-    {
-        return Err(Box::new(Problem::new(Some(task), Refusal::State)));
-    }
-    if root.project != hold.project {
-        return Err(Box::new(Problem::new(Some(task), Refusal::Project)));
+    if let Some(task) = subtree(hold.scope) {
+        let Some(root) = staged.record(domain, task) else {
+            return Err(Box::new(Problem::new(Some(task), Refusal::Unknown)));
+        };
+        if match root.phase {
+            Phase::Ended(_) => true,
+            Phase::Waiting | Phase::Active(_) | Phase::Held { .. } | Phase::Closing(_) => false,
+        } || crate::compound::has(&staged.closing, task)
+        {
+            return Err(Box::new(Problem::new(Some(task), Refusal::State)));
+        }
+        if root.project != hold.project {
+            return Err(Box::new(Problem::new(Some(task), Refusal::Project)));
+        }
     }
     let mut tasks = List::with_capacity(limits.tasks);
     for (number, _) in &domain.names {
         if covers(domain, staged, &hold, *number) && !crate::compound::has(&staged.closing, *number) {
             staged.placed_change_once(*number)?;
-            tasks.push(*number).expect("subtree bounded by live tasks");
+            tasks.push(*number).expect("scope bounded by live tasks");
         }
     }
     if let Some(cause) = room(domain, staged, limits, &hold) {
@@ -597,10 +610,14 @@ pub(crate) fn resumed(was: &crate::Was) -> Phase {
 pub(crate) fn check(domain: &Domain, limits: &Limits) -> bool {
     let staged = Staged::new(0);
     for (key, hold) in &domain.placed {
-        let Some(task) = subtree(hold.scope) else { return false };
-        let Some(root) = record(domain, task) else { return false };
-        if root.project != hold.project || !shaped(hold, limits) {
+        if !shaped(hold, limits) {
             return false;
+        }
+        if let Some(task) = subtree(hold.scope) {
+            let Some(root) = record(domain, task) else { return false };
+            if root.project != hold.project {
+                return false;
+            }
         }
         let mut project = 0_u32;
         let mut party = 0_u32;
@@ -672,11 +689,16 @@ pub(crate) fn check(domain: &Domain, limits: &Limits) -> bool {
 }
 
 /// A new delegate is not covered by its creator's personal exemption.
-pub(crate) fn delegation_hold(domain: &Domain, creator: u64) -> Option<u64> {
+pub(crate) fn delegate_hold(domain: &Domain, creator: u64) -> Option<u64> {
+    let row = record(domain, creator)?;
     let staged = Staged::new(0);
     let mut first: Option<u64> = None;
     for (number, hold) in &domain.placed {
-        if !hold.lifted && covers(domain, &staged, hold, creator) {
+        let covered = match hold.scope {
+            Scope::Subtree { task } => staged.descendant(domain, creator, task, domain.names.capacity()),
+            Scope::Project => row.project == hold.project,
+        };
+        if !hold.lifted && covered {
             first = Some(match first {
                 Some(old) => old.min(*number),
                 None => *number,
