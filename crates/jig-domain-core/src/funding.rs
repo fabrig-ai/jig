@@ -1,8 +1,10 @@
 //! Project periods from the root and person allotments from policy
 //! (protocol/configuration.md, 3; domain/authority.md, 7).
-use crate::Core;
+use crate::{Core, Limits};
+use jig_domain_authority as authority;
 use jig_domain_people as people;
 use jig_domain_tasks as tasks;
+use skein_lib::List;
 
 /// A changed spend keeps everything already spent or reserved (domain/authority.md, 7).
 pub(crate) fn resized(spend: u64, numbers: tasks::Numbers) -> Option<u64> {
@@ -10,7 +12,86 @@ pub(crate) fn resized(spend: u64, numbers: tasks::Numbers) -> Option<u64> {
     Some(spend.max(used))
 }
 
+/// What one policy edit resizes in its project's open period
+/// (domain/authority.md, 7): the period's new budget, if its spend changed,
+/// and each open pool of a party whose role's spend changed.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Resize {
+    pub(crate) period: Option<u64>,
+    pub(crate) pools: List<PoolResize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PoolResize {
+    pub(crate) person: u64,
+    pub(crate) from: u64,
+    pub(crate) to: u64,
+}
+
 impl Core {
+    /// Plan the open period and pools before committing any part of a policy edit.
+    pub(crate) fn resize(
+        &self,
+        project: u32,
+        before: &authority::Policy,
+        after: &authority::Policy,
+        limits: &Limits,
+    ) -> Result<Resize, people::Refusal> {
+        let arithmetic = people::Refusal::Limit { which: people::LimitKind::Arithmetic };
+        let mut plan = Resize { period: None, pools: List::with_capacity(limits.people.holdings) };
+        let period = self.period(project);
+        let Some(row) = self.tasks.funding(tasks::Funder::Period { project, period }) else {
+            return Ok(plan);
+        };
+        if before.period_spend != after.period_spend {
+            plan.period = Some(resized(after.period_spend, row.numbers).ok_or(arithmetic.clone())?);
+        }
+        let mut increase = 0_i128;
+        for role in &after.roles {
+            let mut changed = false;
+            for old in &before.roles {
+                if old.number == role.number {
+                    changed = old.period_spend != role.period_spend;
+                }
+            }
+            if !changed {
+                continue;
+            }
+            for holding in self.people.project_members(project).unwrap_or(&[]) {
+                if holding.role.number() != role.number {
+                    continue;
+                }
+                let person = holding.person;
+                let Some(pool) = self.tasks.funding(tasks::Funder::Pool { project, person, period }) else {
+                    continue;
+                };
+                let from = pool.numbers.budget;
+                let to = resized(role.period_spend, pool.numbers).ok_or(arithmetic.clone())?;
+                let delta = i128::from(to).checked_sub(i128::from(from)).ok_or(arithmetic.clone())?;
+                increase = increase.checked_add(delta).ok_or(arithmetic.clone())?;
+                plan.pools.push(PoolResize { person, from, to }).expect("at most the project's parties");
+            }
+        }
+        let reserved = i128::from(row.numbers.reserved).checked_add(increase).ok_or(arithmetic.clone())?;
+        if reserved < 0 {
+            return Err(arithmetic);
+        }
+        let spent =
+            i128::from(row.numbers.spent).checked_add(i128::from(row.numbers.spent_below)).ok_or(arithmetic.clone())?;
+        let used = spent.checked_add(reserved).ok_or(arithmetic.clone())?;
+        if used > i128::from(plan.period.unwrap_or(row.numbers.budget)) {
+            let Ok(needs) = u64::try_from(increase) else { return Err(arithmetic) };
+            let left = row
+                .numbers
+                .budget
+                .saturating_sub(row.numbers.spent)
+                .saturating_sub(row.numbers.spent_below)
+                .saturating_sub(row.numbers.reserved);
+            return Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Budget { needs, left } });
+        }
+        Ok(plan)
+    }
+
     /// The latest period the root has opened for this project, restored with its ledger.
     #[must_use]
     pub fn period(&self, project: u32) -> u64 {

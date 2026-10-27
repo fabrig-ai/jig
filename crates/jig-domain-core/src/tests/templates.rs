@@ -365,7 +365,7 @@ fn invalid_restored_template_overrides_leave_the_entire_policy_unchanged() {
 fn a_valid_template_override_changes_and_restores_the_policy() {
     let (mut core, limits) = template_core();
     let overrides: Box<[people::TemplateOverride]> = Box::new([executor_override(PROJECT)]);
-    let value = core
+    let (value, _) = core
         .change_policy(&limits, OWNER, PROJECT, people::PolicyChange::Templates { overrides: overrides.clone() })
         .expect("compatible override");
     clear_projects(&mut core, &limits);
