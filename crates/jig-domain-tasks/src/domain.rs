@@ -695,6 +695,9 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::ResizePool { reply_to, project, person, period, budget } => {
             crate::funders::resize_pool(domain, reply_to, project, person, period, budget, out);
         }
+        Event::ResizePeriod { reply_to, project, period, budget } => {
+            crate::funders::resize_period(domain, reply_to, project, period, budget, out);
+        }
         Event::Make { reply_to, creator, batch } => make(domain, env, reply_to, creator, batch, out),
         Event::MakeResultFollowups { reply_to, proposer, proposal, batch } => {
             make_result_followups(domain, env, reply_to, proposer, proposal, batch, out);

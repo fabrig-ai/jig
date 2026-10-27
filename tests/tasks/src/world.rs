@@ -510,6 +510,7 @@ impl World {
             | Event::StalledProposal { .. }
             | Event::CarvePool { .. }
             | Event::ResizePool { .. }
+            | Event::ResizePeriod { .. }
             | Event::Make { .. }
             | Event::MakeResultFollowups { .. }
             | Event::Prepare { .. }
@@ -589,6 +590,7 @@ impl World {
             | Event::StalledProposal { .. }
             | Event::CarvePool { .. }
             | Event::ResizePool { .. }
+            | Event::ResizePeriod { .. }
             | Event::Make { .. }
             | Event::MakeResultFollowups { .. }
             | Event::Prepare { .. }

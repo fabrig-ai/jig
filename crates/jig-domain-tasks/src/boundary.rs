@@ -1573,6 +1573,10 @@ pub enum Event {
     ChargeEffect { funder: Funder, maximum: u64 },
     /// Change an existing current-period person's pool while preserving reservations and spending.
     ResizePool { reply_to: ReplyTo, project: u32, person: u64, period: u64, budget: u64 },
+    /// Change the open period's budget after root authorization, its reservations and
+    /// spending kept (domain/authority.md, 7); emits the ledger's `Save` plus `Done`, or one
+    /// `Refused` with no mutation.
+    ResizePeriod { reply_to: ReplyTo, project: u32, period: u64, budget: u64 },
     /// Admit the next contiguous turn, offered inbox read and checked expense delta atomically;
     /// stale turns/attempts and arithmetic failures refuse without debit.
     Turn {
