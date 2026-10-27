@@ -742,7 +742,7 @@ impl World {
     /// caller restarts immediately afterward; no production decoder knows Note.
     pub fn seed_fixture_notes(&mut self, rows: &BTreeMap<Box<[u8]>, Box<[u8]>>) {
         let number = self.next;
-        let header = root::header(number);
+        let header = Write::Save(root::header(number));
         let codec = jig_protocol_store::codec::limits(&self.env.limits.core).expect("fixture limits");
         let Write::Save(record) = &header else { panic!("deployment header") };
         let mut ops = vec![skein_kv::Op::Put {
@@ -785,7 +785,10 @@ impl World {
     /// domain decoder knows the fixture schema.
     pub(crate) fn fixture_notes(&mut self) -> BTreeMap<Box<[u8]>, Box<[u8]>> {
         let generation = String::from_utf8(self.active()).expect("active");
-        let path = format!("generations/{}/store", generation.trim()).into_bytes().into_boxed_slice();
+        // A pending open serves the checked copy before active moves (10.2).
+        let generation = generation.trim().parse::<u64>().expect("active generation");
+        let generation = generation.checked_add(u64::from(self.pending)).expect("copy generation");
+        let path = format!("generations/{generation}/store").into_bytes().into_boxed_slice();
         let mut events = self.file_events(
             0,
             file::Request::OpenDirectory { owner: OWNER, root: self.root.fd, name: path, no_follow: true },
