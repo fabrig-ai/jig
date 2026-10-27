@@ -470,13 +470,16 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
         bytes = total;
         let requester = match word.kind {
             crate::MessageKind::Proposal { .. } | crate::MessageKind::Escalation { .. } => false,
-            crate::MessageKind::Words | crate::MessageKind::Question | crate::MessageKind::Answer { .. } => {
-                match word.from {
-                    Party::Person(person) => task.requester == Party::Person(person),
-                    Party::Task(_) => true,
-                    Party::Deployment { .. } => false,
-                }
-            }
+            crate::MessageKind::Words => match word.from {
+                Party::Person(person) => person != 0,
+                Party::Task(_) => true,
+                Party::Deployment { .. } => false,
+            },
+            crate::MessageKind::Question | crate::MessageKind::Answer { .. } => match word.from {
+                Party::Person(person) => task.requester == Party::Person(person),
+                Party::Task(_) => true,
+                Party::Deployment { .. } => false,
+            },
             crate::MessageKind::EffectNotMade { .. }
             | crate::MessageKind::Amendment { .. }
             | crate::MessageKind::Met { .. } => match word.from {
