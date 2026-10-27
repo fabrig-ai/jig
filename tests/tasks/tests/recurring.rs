@@ -24,6 +24,54 @@ fn batch(world: &mut World, task: u64, period: u64, child: u64) {
 }
 
 #[test]
+fn a_recurring_trees_lifetime_funding_reads_after_restart() {
+    const LIVE_TASKS: u32 = 8; // The small profile's live capacity.
+    const MASTER: u64 = 1;
+    const PERIOD: u64 = 1;
+    const LAST: u64 = 9; // Master plus eight sequential members exceeds eight live slots.
+    let mut world = World::new(915, tasks::Limits { tasks: LIVE_TASKS, ..LIMITS });
+    world.make(Party::Deployment { project: 1 }, vec![recurring(MASTER, RecurringOverlap::Skip)]);
+    world.open_period(PERIOD, 100_000);
+    world.send(Event::TickRecurring { task: MASTER, period: PERIOD });
+    world.send(Event::RecurringBatch { task: MASTER, period: PERIOD, numbers: Box::new([2]) });
+    for number in 2..=LAST {
+        if number != 2 {
+            let mut child = task(number, &[]);
+            child.numbers.budget = 1;
+            child.authority.budget.spend = 1;
+            child.funder = Funder::Recurring { project: 1, task: MASTER, period: PERIOD };
+            world.make(Party::Task(MASTER), vec![child]);
+        }
+        world.claim(number, number);
+        world.terminal(
+            number,
+            tasks::End::Finished {
+                result: tasks::TaskResult::Report { words: Box::new([1]) },
+                cancel_delegates: false,
+            },
+        );
+        world.settle(number);
+    }
+    let mut restored = jig_tasks_world::domain(&world.env.limits, 915);
+    let mut out = skein_lib::Queue::with_capacity(tasks::max_out(&world.env.limits));
+    for record in world.records.values().filter(|row| row.key().live()) {
+        tasks::step(&mut restored, &world.env, Event::Restore { record: record.clone() }, &mut out);
+        while let Some(request) = out.pop() {
+            if let tasks::Request::RestoreRefused { problem } = request {
+                panic!("committed {:?} refused: {problem:?}", record.key());
+            }
+        }
+    }
+    tasks::step(&mut restored, &world.env, Event::Check, &mut out);
+    tasks::step(&mut restored, &world.env, Event::Restored, &mut out);
+    let funder = Funder::Recurring { project: 1, task: MASTER, period: PERIOD };
+    let ledger = restored.funding(funder).expect("restored lifetime funding");
+    assert_eq!(ledger.made, 9);
+    assert_eq!(ledger.numbers.reserved, 0);
+    assert_eq!(restored.task(MASTER).expect("live recurring master").made, 9);
+}
+
+#[test]
 fn a_recurring_task_continues_across_a_period_reset() {
     let mut world = World::new(210, LIMITS);
     assert_eq!(
