@@ -191,6 +191,18 @@ pub(crate) fn apply(
         people::PolicyChange::Templates { overrides } => *templates = overrides,
         people::PolicyChange::Projections { grants } => policy.projections = grants_to_authority(grants)?,
         people::PolicyChange::ProjectSpend { period_spend } => policy.period_spend = period_spend,
+        people::PolicyChange::RoleSpend { role, period_spend } => {
+            let mut found = false;
+            for value in &mut policy.roles {
+                if value.number == role {
+                    value.period_spend = period_spend;
+                    found = true;
+                }
+            }
+            if !found {
+                return None;
+            }
+        }
         people::PolicyChange::Role(edit) => {
             if edit.number <= 3 && !role_exists(policy, edit.number) {
                 return None;
@@ -355,6 +367,7 @@ impl Core {
             }
             people::PolicyChange::Templates { .. }
             | people::PolicyChange::Projections { .. }
+            | people::PolicyChange::RoleSpend { .. }
             | people::PolicyChange::ProjectSpend { .. }
             | people::PolicyChange::Requirements { .. }
             | people::PolicyChange::Permissions { .. } => {}

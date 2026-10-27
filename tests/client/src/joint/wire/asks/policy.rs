@@ -9,6 +9,9 @@ pub(super) fn policy_edit(
         client::PolicyEdit::Templates { overrides } => {
             people::PolicyChange::Templates { overrides: overrides.iter().map(request_arguments::template).collect() }
         }
+        client::PolicyEdit::RoleSpend { role, period_spend } => {
+            people::PolicyChange::RoleSpend { role: *role, period_spend: *period_spend }
+        }
         client::PolicyEdit::ProjectSpend { period_spend } => {
             people::PolicyChange::ProjectSpend { period_spend: *period_spend }
         }

@@ -455,7 +455,8 @@ fn policy_rows(limits: &people::Limits) -> [PeopleRow; 4] {
             people::PolicyChange::Permissions(value) => {
                 ("PolicyChangePermissions.mappings", value.into_parts().mappings)
             }
-            people::PolicyChange::ProjectSpend(_)
+            people::PolicyChange::RoleSpend(_)
+            | people::PolicyChange::ProjectSpend(_)
             | people::PolicyChange::Role(_)
             | people::PolicyChange::Templates(_) => panic!("packed policy change fixture"),
         };
@@ -543,4 +544,42 @@ fn tasks_piece_words_read_their_fixtures_whole() {
     for row in rows {
         assert_eq!(row.expected.read(&row.bytes, &limits), row.expected, "{}", row.path);
     }
+}
+
+fn spend_answer(change: p::PolicyChange) -> p::Stored {
+    p::Stored::Answer {
+        key: p::RequestKey { person: 2, key: [7; 16] },
+        ask: Box::new(p::Ask::ChangePolicy { project: 1, change }),
+        models: Box::new([]),
+        outcome: p::Outcome::PolicyChanged { project: 1 },
+        at: skein_lib::Wall::from_nanos(19),
+    }
+}
+
+#[test]
+fn role_spend_round_trips_in_a_stored_answer() {
+    super::people_round_trip(spend_answer(p::PolicyChange::RoleSpend { role: 4, period_spend: u64::MAX }));
+}
+
+#[test]
+fn project_spend_answer_bytes_from_before_role_spend_still_decode() {
+    // people-v13: Row/Answer, key, ChangePolicy/ProjectSpend, no models,
+    // PolicyChanged and its project, then the answer's wall time.
+    let mut before = skein_lib::Writer::new(58);
+    for field in [
+        [0, 13, 6].as_slice(),
+        &2_u64.to_be_bytes(),
+        &[7; 16],
+        &[21, 0, 0, 0, 1, 0],
+        &u64::MAX.to_be_bytes(),
+        &[0, 0, 0, 0, 25, 0, 0, 0, 1],
+        &19_u64.to_be_bytes(),
+    ] {
+        before.put(field).unwrap();
+    }
+    let before = before.finish();
+    let expected = spend_answer(p::PolicyChange::ProjectSpend { period_spend: u64::MAX });
+    let limits = super::people_limits();
+    assert_eq!(codec::people::decode(&before, &limits, &[]), Ok(expected.clone()));
+    assert_eq!(codec::people::encode(&expected, &limits, &[]).unwrap().as_ref(), before.as_ref());
 }

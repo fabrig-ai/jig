@@ -38,12 +38,13 @@ enum TemplateDeadline { none, span: TemplateDeadlineSpan, given }
 record TemplateOverride { template: u32 executor: option TemplateExecutor budget: option TemplateBudget deadline: option TemplateDeadline priority: option u32 }
 record PolicyValue { ceiling: Authority escalation_role: option u32 period_spend: u64 projections: list 32 Grant roles: list 8 PolicyRole requirements: list 32 Requirement permissions: bytes 65536 pieces PermissionRole templates: list 16 TemplateOverride }
 record PolicyChangeProjectSpend { period_spend: u64 }
+record PolicyChangeRoleSpend { role: u32 period_spend: u64 }
 record PolicyChangeRole { value: PolicyRole }
 record PolicyChangeRequirements { requirements: bytes 65536 pieces Requirement }
 record PolicyChangeProjections { grants: bytes 65536 pieces Grant }
 record PolicyChangePermissions { mappings: bytes 65536 pieces PermissionRole }
 record PolicyChangeTemplates { overrides: list 16 TemplateOverride }
-enum PolicyChange { project_spend: PolicyChangeProjectSpend, role: PolicyChangeRole, requirements: PolicyChangeRequirements, projections: PolicyChangeProjections, permissions: PolicyChangePermissions, templates: PolicyChangeTemplates }
+enum PolicyChange { project_spend: PolicyChangeProjectSpend, role: PolicyChangeRole, requirements: PolicyChangeRequirements, projections: PolicyChangeProjections, permissions: PolicyChangePermissions, templates: PolicyChangeTemplates, role_spend: PolicyChangeRoleSpend }
 record SeenResults { through: u64 }
 record SeenConversation { task: u64 through: u64 }
 enum Seen { results: SeenResults, conversation: SeenConversation }

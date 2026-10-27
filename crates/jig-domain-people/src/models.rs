@@ -118,7 +118,8 @@ pub fn remap_models(ask: &mut Ask, moved: &[u64; 64]) {
         }
         Ask::ChangePolicy { change, .. } => match change {
             PolicyChange::Role(role) => authority(&mut role.authority, moved),
-            PolicyChange::ProjectSpend { .. }
+            PolicyChange::RoleSpend { .. }
+            | PolicyChange::ProjectSpend { .. }
             | PolicyChange::Requirements { .. }
             | PolicyChange::Projections { .. }
             | PolicyChange::Permissions { .. }
@@ -202,7 +203,8 @@ pub fn valid_model_context(ask: &Ask, names: &[Box<[u8]>]) -> bool {
         }
         Ask::ChangePolicy { change, .. } => match change {
             PolicyChange::Role(role) => authority_bits(&role.authority),
-            PolicyChange::ProjectSpend { .. }
+            PolicyChange::RoleSpend { .. }
+            | PolicyChange::ProjectSpend { .. }
             | PolicyChange::Requirements { .. }
             | PolicyChange::Projections { .. }
             | PolicyChange::Permissions { .. }
@@ -270,7 +272,8 @@ pub(crate) fn has_model_selector(ask: &Ask) -> bool {
         }
         Ask::ChangePolicy { change, .. } => match change {
             PolicyChange::Role(role) => role.authority.models.is_some(),
-            PolicyChange::ProjectSpend { .. }
+            PolicyChange::RoleSpend { .. }
+            | PolicyChange::ProjectSpend { .. }
             | PolicyChange::Requirements { .. }
             | PolicyChange::Projections { .. }
             | PolicyChange::Permissions { .. }
