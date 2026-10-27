@@ -817,17 +817,25 @@ impl World {
     }
 
     fn fixture_kv(&mut self, map: &mut skein_kv::Store, request: skein_kv::Request) -> Queue<skein_kv::Event> {
+        // The same turn cap as the normal world driver.
+        const KV_TURNS: usize = 10_000;
         let env = Env { now: self.env.now, wall: self.env.wall, limits: self.env.limits.store };
         let mut above = Queue::with_capacity(QUEUE);
         let mut below = Queue::with_capacity(QUEUE);
         skein_kv::down(map, &env, request, &mut above, &mut below);
-        while let Some(request) = below.pop() {
+        for _ in 0..KV_TURNS {
+            // The raw fixture map needs the same background turns as the
+            // component's normal driver, including a due snapshot before crash.
+            if below.is_empty() && skein_kv::is_ready(map, &env.limits) {
+                skein_kv::fire(map, &env, &mut above, &mut below);
+            }
+            let Some(request) = below.pop() else { return above };
             let mut events = self.file_events(0, request);
             while let Some(event) = events.pop() {
                 skein_kv::up(map, &env, event, &mut above, &mut below);
             }
         }
-        above
+        panic!("fixture map did not quiesce");
     }
 
     pub fn application(&mut self, load: bool) -> BTreeMap<Box<[u8]>, Box<[u8]>> {
