@@ -50,7 +50,7 @@ impl Core {
                     return false;
                 }
                 if let Some(value) = &changed.value
-                    && let Err(failure) = super::check::shape(setting, value, limits)
+                    && let Err(failure) = super::check::shape(setting, value, &self.connectors, limits)
                 {
                     self.restore_failure = Some(RestartRequest::Settings { failure, changed: true });
                     let _refused = self.restart_refuse();
@@ -78,7 +78,7 @@ impl Core {
                     || value.against == 0
                     || value.items.is_empty()
                     || value.items.len() > usize::try_from(tasks::SETTINGS_ITEMS).expect("item bound")
-                    || super::change_shape(&value.items, limits).is_err()
+                    || super::change_shape(&value.items, &self.connectors, limits).is_err()
                 {
                     return false;
                 }
@@ -106,7 +106,7 @@ impl Core {
                 }
             }
         }
-        if let Err(failure) = super::check::shape(setting, &default.value, limits) {
+        if let Err(failure) = super::check::shape(setting, &default.value, &self.connectors, limits) {
             let _refused = self.refuse_settings(failure);
             return false;
         }
@@ -179,7 +179,7 @@ impl Core {
                 return false;
             }
             let stored = super::Value::Charter(value.clone());
-            if let Err(failure) = super::check::shape(Setting::Charter(charter), &stored, limits) {
+            if let Err(failure) = super::check::shape(Setting::Charter(charter), &stored, &self.connectors, limits) {
                 let _refused = self.refuse_settings(failure);
                 return false;
             }

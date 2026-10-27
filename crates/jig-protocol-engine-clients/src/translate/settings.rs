@@ -127,6 +127,7 @@ fn charter(value: &core::Charter, limits: &w::Limits) -> Result<w::Charter, w::P
     for row in &policy.alternatives {
         alternatives.push(model(row, limits)?).expect("model count");
     }
+    let documents = charter_documents(&value.documents, limits)?;
     w::Charter::new(
         limits,
         w::CharterParts {
@@ -147,6 +148,7 @@ fn charter(value: &core::Charter, limits: &w::Limits) -> Result<w::Charter, w::P
                 jig_domain_fleet::Kinds::Both => w::SettingHosts::Both,
             },
             spend: value.spend,
+            documents,
         },
     )
 }
@@ -460,4 +462,26 @@ pub(crate) fn review(
             cut,
         },
     )
+}
+
+fn charter_documents(values: &[core::Document], limits: &w::Limits) -> Result<List<w::CharterDocument>, w::Problem> {
+    let mut result = List::with_capacity(super::count(values.len())?);
+    for value in values {
+        let mut name = List::with_capacity(super::count(value.name.len())?);
+        for segment in &value.name {
+            name.push(segment.clone()).expect("same name count");
+        }
+        result
+            .push(w::CharterDocument::new(
+                limits,
+                w::CharterDocumentParts {
+                    connector: value.connector,
+                    name,
+                    path: value.path.clone(),
+                    heading: value.heading.clone(),
+                },
+            )?)
+            .expect("same document count");
+    }
+    Ok(result)
 }

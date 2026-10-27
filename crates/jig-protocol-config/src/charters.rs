@@ -24,7 +24,7 @@ pub(crate) fn parse(
     let mut charters = List::<Charter>::with_capacity(limits.core.tasks.charters);
     for (index, at) in items.iter().enumerate() {
         let path = path.child(Segment::Index(u32::try_from(index).expect("bounded charter count")));
-        if let Some(charter) = charter(document, *at, &path, llm, directories, problems) {
+        if let Some(charter) = charter(document, *at, &path, llm, limits, directories, problems) {
             for previous in &charters {
                 if previous.number == charter.number {
                     problems.push(path.member(b"number"), What::Unique);
@@ -65,6 +65,7 @@ fn charter(
     at: u32,
     path: &Path,
     llm: &Llm,
+    limits: &Limits,
     directories: &Directories,
     problems: &mut Problems,
 ) -> Option<Charter> {
@@ -91,8 +92,10 @@ fn charter(
     let shell = check::boolean(&mut object, document, b"shell", path, problems);
     let agents = check::boolean(&mut object, document, b"agents", path, problems);
     let call_timeout = check::duration(&mut object, document, b"call_timeout_ms", path, problems);
+    let documents = documents(&mut object, document, path, limits, problems);
     object.finish(document, path, problems);
     let charter = Charter {
+        documents: documents?,
         number: number?,
         hosts: hosts?,
         spend: spend?,
@@ -178,4 +181,63 @@ fn validate(charter: &Charter, path: &Path, problems: &mut Problems) {
     if !enough {
         problems.push(path.clone(), What::Budget { charter: charter.number });
     }
+}
+
+fn documents(
+    object: &mut read::Object,
+    document: &Document,
+    path: &Path,
+    limits: &Limits,
+    problems: &mut Problems,
+) -> Option<Box<[jig_domain_core::Document]>> {
+    let Some(at) = object.member(document, b"documents") else {
+        return Some(Box::new([]));
+    };
+    let path = path.member(b"documents");
+    let items = crate::domain::items(document, at, limits.core.tasks.charter_documents, &path, problems)?;
+    let mut result = List::with_capacity(items.len());
+    for (index, at) in items.iter().enumerate() {
+        let path = check::index(&path, index);
+        if let Some(value) = one_document(document, *at, &path, limits, problems) {
+            result.push(value).expect("bounded documents");
+        }
+    }
+    Some(result.into_boxed())
+}
+fn bounded_text(document: &Document, at: u32, most: u32, path: &Path, problems: &mut Problems) -> Option<Box<[u8]>> {
+    match read::text(document, at, most) {
+        Ok(value) => Some(value),
+        Err(what) => {
+            problems.push(path.clone(), what);
+            None
+        }
+    }
+}
+fn one_document(
+    document: &Document,
+    at: u32,
+    path: &Path,
+    limits: &Limits,
+    problems: &mut Problems,
+) -> Option<jig_domain_core::Document> {
+    let mut object = check::object(document, at, path, problems)?;
+    let connector = check::short(&mut object, document, b"connector", path, problems);
+    let names = check::list(&mut object, document, b"name", limits.core.authority.segments, path, problems);
+    let mut name = List::with_capacity(limits.core.authority.segments);
+    if let Some(names) = names {
+        for (index, at) in names.iter().enumerate() {
+            let path = check::index(&path.member(b"name"), index);
+            if let Some(value) = bounded_text(document, *at, limits.core.authority.segment_bytes, &path, problems) {
+                name.push(value).expect("bounded name");
+            }
+        }
+    }
+    let at = object.required(document, b"path", path, problems)?;
+    let file = bounded_text(document, at, 256, &path.member(b"path"), problems);
+    let heading = match object.member(document, b"heading") {
+        Some(at) => Some(bounded_text(document, at, 80, &path.member(b"heading"), problems)?),
+        None => None,
+    };
+    object.finish(document, path, problems);
+    Some(jig_domain_core::Document { connector: connector?, name: name.into_boxed(), path: file?, heading })
 }

@@ -26,7 +26,8 @@ record Chips { rows: bytes 16777216 }
 record OwnerInbox { party: u64 needs: bytes 16777216 updates: bytes 16777216 next: option OwnerInboxCursor cached_needs: u32 cached_updates: Count results_seen: u64 updates_time_complete: bool selection: option bytes 16777216 }
 record SettingModel { dialect: u32 endpoint: u32 program: option text 32 name: text 4096 window: u32 output: u32 input_price: u64 cached_price: u64 cache_write_price: option u64 output_price: u64 price_unit: u32 efforts: list 16 text 32 effort: option text 32 }
 enum SettingHosts { workers, engine, both }
-record Charter { number: u32 instructions: text 1114240 waiting: duration resume: bool turns: u32 time: duration reserve_turns: u32 reserve_time: duration model: SettingModel alternatives: list 16 SettingModel inspect: bool modify: bool shell: bool agents: bool call_timeout: duration hosts: SettingHosts spend: u64 }
+record CharterDocument { connector: u16 name: list 8 bytes 4096 path: bytes 256 heading: option bytes 80 }
+record Charter { number: u32 instructions: text 1114240 waiting: duration resume: bool turns: u32 time: duration reserve_turns: u32 reserve_time: duration model: SettingModel alternatives: list 16 SettingModel inspect: bool modify: bool shell: bool agents: bool call_timeout: duration hosts: SettingHosts spend: u64 documents: list 32 CharterDocument }
 record SettingPolicy { escalation_role: option u32 ceiling: OwnerAuthority projections: list 32 OwnerGrant period_spend: u64 roles: list 32 PolicyEditRole requirements: list 32 PolicyRequirement permissions: list 32 PolicyPermission templates: list 16 TemplateOverride }
 record Rules { ceiling: OwnerAuthority period_spend: u64 minimum_run_spend: u64 maximum_run_spend: u64 implies: list 32 OwnerKindImplication requirements: list 32 PolicyRequirement }
 enum SettingValue { charter: boxed Charter, template: boxed Template, policy: boxed SettingPolicy, rules: boxed Rules }

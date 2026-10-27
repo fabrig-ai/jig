@@ -193,6 +193,11 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
     wire.setting_model_program_some = client.text.min(w::CEILINGS.setting_model_program_some);
     wire.setting_model_effort_some = client.text.min(w::CEILINGS.setting_model_effort_some);
     wire.setting_model_efforts_item = client.text.min(w::CEILINGS.setting_model_efforts_item);
+    wire.charter_documents = client.rows.min(w::CEILINGS.charter_documents);
+    wire.charter_document_name = client.segments.min(w::CEILINGS.charter_document_name);
+    wire.charter_document_name_item = client.text.min(w::CEILINGS.charter_document_name_item);
+    wire.charter_document_path = client.text.min(256);
+    wire.charter_document_heading_some = client.text.min(80);
     wire.charter_alternatives = client.rows.min(w::CEILINGS.charter_alternatives);
     wire.setting_model_efforts = client.rows.min(w::CEILINGS.setting_model_efforts);
     wire.setting_policy_projections = client.rows.min(w::CEILINGS.setting_policy_projections);

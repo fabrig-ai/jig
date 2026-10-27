@@ -174,6 +174,7 @@ fn gather_brief(
         env,
         decision,
         core_request(core::Request::Now(Box::new(core::Now::BriefCorePlanned {
+            documents: Box::new([]),
             task: fixtures::RUN.raw(),
             parent: None,
             sections,

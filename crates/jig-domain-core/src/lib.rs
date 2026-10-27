@@ -95,7 +95,7 @@ pub use conversation::{DeliveryOutcome, Settled, SettledAnswer, SettledCall, con
 pub mod charters;
 pub mod fleet_needs;
 pub mod settings;
-pub use charters::Charter;
+pub use charters::{Charter, Document};
 mod stored;
 mod translate;
 use run::HistoricalResult;

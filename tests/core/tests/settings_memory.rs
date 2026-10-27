@@ -8,6 +8,7 @@ fn settings_decisions_fit_the_supplied_profiles() {
         let limits = profile(selected).core;
         let bytes = jig_domain_core::worst_case(&limits).expect("bounded core");
         eprintln!("core share {name}: {bytes}");
+        eprintln!("brief share {name}: {}", jig_domain_brief::gather_worst_case(&limits.brief).expect("bounded brief"));
         eprintln!(
             "conversation {name}: {}; settled row inline: {}; key inline: {}",
             jig_domain_core::conversation_worst_case(&limits).expect("bounded conversation"),

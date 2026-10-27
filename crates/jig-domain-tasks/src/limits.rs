@@ -84,6 +84,8 @@ pub struct Limits {
     pub contract_choices: u32,
     /// Maximum retained configured agent-charter numbers.
     pub charters: u32,
+    /// Documents named by one charter (engine.md, 17.9).
+    pub charter_documents: u32,
     /// Charter versions held besides the newest view.
     pub versions: u32,
     /// Settings revisions held besides the newest.

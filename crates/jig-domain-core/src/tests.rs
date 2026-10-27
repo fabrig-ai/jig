@@ -1,6 +1,7 @@
 //! Unit fixtures use the core world's small configuration and child entry points.
 #![expect(clippy::too_many_lines, reason = "tests state complete bounded fixtures")]
 use crate::Settings;
+use crate::documents::Document;
 use crate::documents::*;
 use crate::*;
 use skein_lib::{Duration, Env, ReplyTo, Time, Token, Wall};
@@ -70,6 +71,7 @@ pub(crate) fn limits() -> Limits {
         saved_resources: 2,
         contract_choices: 1,
         charters: 1,
+        charter_documents: 2,
         revisions: 4,
         versions: 8,
         authority_grants: 1,
@@ -300,7 +302,7 @@ pub(crate) fn restoring_sized_policy(bytes: u64) -> (Core, Limits, ConfiguredPol
     (core, limits, configured)
 }
 
-fn restore_policy_word(count: u64) -> Box<[u8]> {
+pub(crate) fn restore_policy_word(count: u64) -> Box<[u8]> {
     let mut word = List::with_capacity(u32::try_from(count).expect("bounded word size"));
     for _ in 0..count {
         word.push(b'x').expect("word byte count");
@@ -433,6 +435,7 @@ pub(crate) fn config(seed: u64) -> Config {
         },
         defaults: settings::Defaults {
             charters: Box::new([Charter {
+                documents: Box::new([]),
                 number: 1,
                 hosts: fleet::Kinds::Workers,
                 spend: 100,

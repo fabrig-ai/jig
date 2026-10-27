@@ -511,6 +511,8 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(limits.policy_bytes)?
         .checked_add(u64::try_from(people::NAME_BYTES).ok()?)?
         .checked_add(run)?
+        .checked_add(crate::charters::documents_worst_case(limits)?)?
+        .checked_add(bytes(limits.tasks.charter_documents, sizeof(size_of::<skein_lib::Token>())?)?)?
         .checked_add(u64::from(task.message_bytes))?
         .checked_add(u64::from(limits.brief.brief_bytes))?
         .checked_add(u64::from(limits.resume_bytes))?

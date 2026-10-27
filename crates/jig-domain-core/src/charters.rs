@@ -7,13 +7,35 @@ use skein_lib::{List, Queue};
 
 use crate::{Core, Limits, RunPolicy, Settings};
 
-/// One numbered charter offered by the deployment (protocol/configuration.md, 3).
+/// A connector resource, path and optional heading a charter names (engine.md, 17.9).
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Document {
+    pub connector: u16,
+    pub name: Box<[Box<[u8]>]>,
+    /// At most 256 bytes.
+    pub path: Box<[u8]>,
+    /// At most 80 bytes.
+    pub heading: Option<Box<[u8]>>,
+}
+
+/// One numbered charter offered by the deployment (engine.md, 17.9).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Charter {
     pub number: u32,
     pub policy: RunPolicy,
     pub hosts: fleet::Kinds,
     pub spend: u64,
+    pub documents: Box<[Document]>,
+}
+
+/// Metadata owned by one charter at its shape bounds (engine.md, 17.9).
+#[must_use]
+pub fn documents_worst_case(limits: &Limits) -> Option<u64> {
+    let name = u64::from(limits.authority.segments).checked_mul(
+        u64::try_from(size_of::<Box<[u8]>>()).ok()?.checked_add(u64::from(limits.authority.segment_bytes))?,
+    )?;
+    u64::from(limits.tasks.charter_documents)
+        .checked_mul(u64::try_from(size_of::<Document>()).ok()?.checked_add(name)?.checked_add(256 + 80)?)
 }
 
 const _: () = assert!(fleet::CATALOGUE_MODELS == tasks::MODELS, "fleet evidence prices the model catalogue");

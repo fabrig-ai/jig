@@ -58,6 +58,7 @@ pub(super) const LIMITS: Limits = Limits {
     saved_resources: 2,
     contract_choices: 4,
     charters: 2,
+    charter_documents: 2,
     versions: 8,
     revisions: 4,
     authority_grants: 4,

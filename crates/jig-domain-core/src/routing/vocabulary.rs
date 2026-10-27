@@ -307,8 +307,15 @@ pub enum Now {
     PartyInputs { request: Token, person: u64, project: u32, tasks: Box<[u64]> },
     /// Assemble connector-held sections for a still-current brief.
     CompleteBrief { brief: Token, order: Box<[brief::GatherPlaced]> },
-    /// Core-owned sections are ready; the root may append its connector sections.
-    BriefCorePlanned { task: u64, parent: Option<u64>, sections: List<brief::Planned> },
+    /// Core sections and charter documents precede the root's resource sections (engine.md, 17.9).
+    /// Document tokens are local to this plan; a root translates them with their
+    /// sections into its connector's token space before appending resources.
+    BriefCorePlanned {
+        task: u64,
+        parent: Option<u64>,
+        sections: List<brief::Planned>,
+        documents: Box<[(Token, crate::Document)]>,
+    },
     /// The root assembles a numbered connector workspace for this core-selected attempt.
     WorkspaceRequest { task: u64, attempt: u64, context: Box<tasks::RunContext> },
     /// Core admission and claim preparation failed; discard root-owned assembly parts.

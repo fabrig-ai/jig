@@ -335,8 +335,11 @@ impl Record {
 /// carrier deliberately shares the pre-existing conservative construction bound.
 #[must_use]
 pub fn set_worst_case(limits: &crate::Limits) -> Option<u64> {
-    let charters = u64::from(limits.tasks.charters)
-        .checked_mul(u64::from(limits.run_bytes).checked_add(u64::try_from(size_of::<Charter>()).ok()?)?)?;
+    let charters = u64::from(limits.tasks.charters).checked_mul(
+        u64::from(limits.run_bytes)
+            .checked_add(u64::try_from(size_of::<Charter>()).ok()?)?
+            .checked_add(crate::charters::documents_worst_case(limits)?)?,
+    )?;
     let templates = u64::from(limits.templates).checked_mul(
         u64::try_from(size_of::<Template>())
             .ok()?

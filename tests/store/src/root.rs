@@ -56,6 +56,7 @@ pub const TASKS_LIMITS: jig_domain_tasks::Limits = jig_domain_tasks::Limits {
     saved_resources: 2,
     contract_choices: 2,
     charters: 2,
+    charter_documents: 2,
     revisions: 4,
     versions: 8,
     authority_grants: 2,

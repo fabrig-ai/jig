@@ -23,7 +23,7 @@ pub(super) fn start(
         .saturating_sub(1)
         .saturating_sub(people::max_out(&env.limits.people));
     core.settings_input = Some((
-        match s::change_shape(&change.items, &env.limits) {
+        match s::change_shape(&change.items, &core.connectors, &env.limits) {
             Ok(()) => Ok(change),
             Err(failure) => Err(failure),
         },
@@ -98,7 +98,7 @@ pub(super) fn decide(
     if !s::changes_current(&core.current, &change.items) {
         return Err(people::Refusal::NotWellFormed { at: 0, why: people::Malformed::SettingsUnchanged });
     }
-    if let Err(failure) = s::change_shape(&change.items, &env.limits) {
+    if let Err(failure) = s::change_shape(&change.items, &core.connectors, &env.limits) {
         return Err(malformed_refusal(failure));
     }
     if let Err(failure) = s::check_change(&core.current, &change.items, &core.settings, &core.connectors, &env.limits) {
@@ -213,7 +213,7 @@ pub(super) fn propose_start(
             fault: s::Fault::Count,
         })
     } else {
-        match s::change_shape(&items, &env.limits) {
+        match s::change_shape(&items, &core.connectors, &env.limits) {
             Ok(()) => Ok(Box::new(s::Proposal { against, items })),
             Err(failure) => Err(people::Malformed::Settings { setting: failure.setting, fault: failure.fault }),
         }

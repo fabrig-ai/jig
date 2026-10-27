@@ -71,3 +71,60 @@ fn table<const N: usize>(cases: [Case; N]) {
     }
     assert!(passed, "{failures:?}");
 }
+
+#[test]
+fn charter_documents_are_parsed_with_optional_headings() {
+    let bytes = fixtures::with(fixtures::ENGINE_SMALL, br#""alternatives": []"#,
+        br#""alternatives": [], "documents":[{"connector":1,"name":["resource"],"path":"rules.md","heading":"Rules"},{"connector":1,"name":["resource"],"path":"notes.md"}]"#);
+    let engine = fixtures::engine(&bytes).expect("documents parsed");
+    let documents = &engine.charters[0].documents;
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0].connector, 1);
+    assert_eq!(documents[0].name[0].as_ref(), b"resource");
+    assert_eq!(documents[0].path.as_ref(), b"rules.md");
+    assert_eq!(documents[0].heading.as_deref(), Some(b"Rules".as_slice()));
+    assert_eq!(documents[1].heading, None);
+}
+#[test]
+fn charter_documents_override_and_start_capacity_are_checked() {
+    for (documents, accepted, replacement) in [
+        (
+            2_u32,
+            true,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":8,"tasks.charter_documents":2}}"#.as_slice(),
+        ),
+        (
+            2,
+            false,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":7,"tasks.charter_documents":2}}"#.as_slice(),
+        ),
+        (
+            3,
+            true,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":9,"tasks.charter_documents":3}}"#.as_slice(),
+        ),
+        (
+            0,
+            false,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":8,"tasks.charter_documents":0}}"#.as_slice(),
+        ),
+    ] {
+        let bytes = fixtures::with(fixtures::ENGINE_SMALL, br#""limits": {"profile": "small"}"#, replacement);
+        let result = fixtures::engine(&bytes);
+        if accepted {
+            assert_eq!(result.unwrap().limits.core.tasks.charter_documents, documents);
+        } else {
+            let errors = result.unwrap_err();
+            let mut names_documents = false;
+            let mut names_sections = false;
+            for problem in &errors.problems {
+                names_documents |= problem.path == fixtures::path(&[b"limits", b"core.tasks.charter_documents"]);
+                names_sections |= problem.path == fixtures::path(&[b"limits", b"brief.sections"]);
+            }
+            assert!(names_documents);
+            if documents != 0 {
+                assert!(names_sections);
+            }
+        }
+    }
+}

@@ -328,8 +328,11 @@ pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
     Map::<u32, Head>::worst_case(limits.settings.revisions.checked_add(1)?)?
         .checked_add(Map::<VersionKey, CharterVersion>::worst_case(limits.settings.versions)?)?
         .checked_add(
-            u64::from(limits.settings.versions)
-                .checked_mul(u64::from(limits.run_bytes).checked_add(u64::try_from(size_of::<Charter>()).ok()?)?)?,
+            u64::from(limits.settings.versions).checked_mul(
+                u64::from(limits.run_bytes)
+                    .checked_add(u64::try_from(size_of::<Charter>()).ok()?)?
+                    .checked_add(crate::charters::documents_worst_case(limits)?)?,
+            )?,
         )?
         .checked_add(Map::<VersionKey, ()>::worst_case(scratch_capacity(limits)?)?.checked_mul(2)?)?
         .checked_add(Map::<u32, ()>::worst_case(limits.settings.revisions.checked_add(1)?)?)
