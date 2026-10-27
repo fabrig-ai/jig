@@ -8,8 +8,8 @@ use jig_store_world::{
 use skein_lib::{Env, Queue, Reader, Time, Token, Wall};
 
 const SEED: u64 = 960;
-// Initial commit, four public patch pages and the seal in Records::story.
-const PATCHED_LAST: u64 = 6;
+// Initial commit, note seed, four public patch pages and the seal in Records::story.
+const PATCHED_LAST: u64 = 7;
 const RESTORED_LAST: u64 = PATCHED_LAST + 1;
 const RESTORED_KEY: &[u8] = b"restored";
 const RESTORED_VALUE: &[u8] = b"copy alone";
