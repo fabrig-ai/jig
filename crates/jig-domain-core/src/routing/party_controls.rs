@@ -228,6 +228,7 @@ pub(super) fn cancel_request(
         | people::Ask::MakeProject { .. }
         | people::Ask::ChangeSettings { .. }
         | people::Ask::MoveToNewest { .. }
+        | people::Ask::Restore { .. }
         | people::Ask::ChangePolicy { .. }
         | people::Ask::SetPool { .. }
         | people::Ask::DecideEscalation { .. }
@@ -302,6 +303,7 @@ pub(super) fn release_request(
                 | people::Ask::MakeProject { .. }
                 | people::Ask::ChangeSettings { .. }
                 | people::Ask::MoveToNewest { .. }
+                | people::Ask::Restore { .. }
                 | people::Ask::ChangePolicy { .. }
                 | people::Ask::SetPool { .. }
                 | people::Ask::DecideEscalation { .. }

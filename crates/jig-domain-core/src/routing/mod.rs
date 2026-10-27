@@ -12,6 +12,7 @@ mod deployment_acts;
 pub(crate) mod key_routes;
 pub(crate) mod party_inputs;
 mod propose;
+pub(crate) mod restore;
 pub(crate) mod result_reads;
 pub(crate) mod settings;
 
@@ -360,10 +361,12 @@ pub fn room_max(limits: &Limits) -> Option<JournalRoom> {
 pub fn room(limits: &Limits, event: &Event) -> Option<JournalRoom> {
     let room = room_max(limits)?;
     match event {
-        Event::ChangeSettings { .. } | Event::ProposeSettings { .. } => settings::room(limits),
+        Event::ChangeSettings { .. } | Event::ProposeSettings { .. } | Event::ReadLoaded { .. } => {
+            settings::room(limits)
+        }
         Event::SettingsCommit { room } => Some(JournalRoom { writes: *room, held: 0 }),
         Event::Fill { .. } => Some(JournalRoom { writes: 0, held: 0 }),
-        Event::Read { .. } | Event::ReadLoaded { .. } => Some(JournalRoom { writes: 0, held: room.held }),
+        Event::Read { .. } => Some(JournalRoom { writes: 0, held: room.held }),
         Event::Stopping
         | Event::Marked { .. }
         | Event::Act { .. }
@@ -541,7 +544,7 @@ fn step_one(core: &mut Core, env: &Env<Limits>, event: Event, work: &mut Queue<E
         }
         Event::EffectDeadline => crate::effects::deadline(core, env),
         Event::SignIn { reply_to, identity, held } => sign_in(core, env, work, reply_to, identity, held),
-        Event::ReadLoaded { load, result } => crate::reads::loaded(core, env, load, result),
+        Event::ReadLoaded { load, result } => crate::reads::loaded(core, env, work, load, result),
         Event::Read { reply, sign_in, read } => crate::reads::start(core, env, reply, sign_in, read),
         Event::Watch { watcher, sign_in, subject, window } => open(core, env, watcher, sign_in, subject, window),
         Event::WatchRun { watcher, sign_in, task, turn, offset } => {

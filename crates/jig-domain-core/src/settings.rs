@@ -541,3 +541,27 @@ pub(crate) fn fleet_limits(limits: &crate::Limits) -> jig_domain_fleet::Limits {
     fleet.versions = limits.settings.versions;
     fleet
 }
+
+/// One history fold, then the ordinary proposal's admission (engine.md, 17.10).
+#[derive(Debug)]
+pub(crate) struct Restoring {
+    pub request: skein_lib::Token,
+    pub person: u64,
+    pub revision: u32,
+    pub newest: u32,
+    pub before: Option<u32>,
+    pub load: Option<skein_lib::Token>,
+    pub items: Map<Setting, Edit>,
+    pub reason: Box<[u8]>,
+}
+
+/// A retained restore fold owns at most one whole set of chosen values.
+pub(crate) fn restore_count(items: &Map<Setting, Edit>, limits: &crate::Limits) -> Result<(), Failure> {
+    let mut counts = [0_u32; 3];
+    for (&setting, edit) in items {
+        if let Edit::Set(_) = edit {
+            check::count(setting, &mut counts, limits)?;
+        }
+    }
+    Ok(())
+}

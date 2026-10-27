@@ -339,3 +339,26 @@ pub struct OutcomeMovedToNewest {
     pub moved: u32,
     pub stayed: u32,
 }
+
+/// A request to propose the settings as a kept revision left them (engine.md, 17.10).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Restore {
+    pub revision: u32,
+    pub reason: Text,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ApplicationSetting {
+    pub kind: u32,
+    pub scope: u32,
+    pub number: u32,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OutcomeRestored {
+    pub proposal: u64,
+    pub to: u32,
+    pub left_out: List<ApplicationSetting>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RefusalForgotten {
+    pub oldest: u32,
+}

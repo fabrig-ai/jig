@@ -558,6 +558,10 @@ pub(crate) fn wire_holding(value: &c::Holding, limits: &w::Limits) -> Result<w::
 #[expect(clippy::too_many_lines, reason = "one exhaustive field translation arm per client ask")]
 pub fn ask(value: &c::Ask, limits: &w::Limits) -> Result<w::Ask, w::Problem> {
     Ok(match value {
+        c::Ask::Restore(value) => w::Ask::Restore(w::Restore::new(
+            limits,
+            w::RestoreParts { revision: value.revision, reason: bytes::copy_of(value.reason.bytes()) },
+        )?),
         c::Ask::MoveToNewest(value) => {
             w::Ask::MoveToNewest(w::MoveToNewest::new(limits, w::MoveToNewestParts { revision: value.revision })?)
         }

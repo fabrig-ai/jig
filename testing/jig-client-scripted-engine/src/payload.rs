@@ -186,6 +186,7 @@ impl Payload for Ask {
                 | jig_client_domain::contract::AccountChange::MoveSource { .. }
                 | jig_client_domain::contract::AccountChange::SetUses { uses: None, .. } => Some(0),
             },
+            Self::Restore(value) => value.reason.heap(bounds),
             Self::MoveToNewest(_) | Self::Withdraw { .. } | Self::SignIn { .. } | Self::SignOut { .. } => Some(0),
             Self::Compound { operations, .. } => operations.heap(bounds),
             Self::Message { project, task, words } => {
@@ -243,6 +244,8 @@ impl Payload for Outcome {
             Self::Proposed { proposal } => sum(&[proposal.heap(bounds)]),
             Self::Decided { by, how, at } => sum(&[by.heap(bounds), how.heap(bounds), at.heap(bounds)]),
             Self::DecidedFirst { by, how, at } => sum(&[by.heap(bounds), how.heap(bounds), at.heap(bounds)]),
+            Self::Restored(value) => u64::from(value.left_out.capacity())
+                .checked_mul(u64::try_from(size_of::<jig_client_domain::contract::ApplicationSetting>()).ok()?),
             Self::MovedToNewest(_) | Self::SettingsChanged(_) | Self::Changed => Some(0),
         }
     }
@@ -1100,7 +1103,8 @@ impl Payload for Refusal {
             Self::Limit { which } => sum(&[which.heap(bounds)]),
             Self::Moved { now, what } => sum(&[now.heap(bounds), what.heap(bounds)]),
             Self::Ended { how } => sum(&[how.heap(bounds)]),
-            Self::Stale(_)
+            Self::Forgotten(_)
+            | Self::Stale(_)
             | Self::Malformed { .. }
             | Self::NotWaiting
             | Self::NoFurther

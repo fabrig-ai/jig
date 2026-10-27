@@ -63,7 +63,8 @@ fn fixed(refusal: &Refusal) -> bool {
             Ending::Withdrawn { .. } | Ending::Task(_) => false,
             Ending::Decided { party, how, .. } => party.is_none() && fixed_decision(how.as_ref()),
         },
-        Refusal::Stale(_)
+        Refusal::Forgotten(_)
+        | Refusal::Stale(_)
         | Refusal::Malformed { .. }
         | Refusal::Role { .. }
         | Refusal::Taken { .. }

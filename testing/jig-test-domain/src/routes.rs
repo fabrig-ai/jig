@@ -1016,6 +1016,7 @@ fn application_answer(outcome: people::Outcome) -> connector::ApplicationCoreAns
         | people::Outcome::ProjectMade { .. }
         | people::Outcome::SettingsChanged { .. }
         | people::Outcome::MovedToNewest { .. }
+        | people::Outcome::Restored { .. }
         | people::Outcome::PolicyChanged { .. }
         | people::Outcome::PoolSet { .. }
         | people::Outcome::EscalationDecided { .. }

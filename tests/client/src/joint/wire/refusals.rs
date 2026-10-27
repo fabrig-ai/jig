@@ -7,6 +7,7 @@ use jig_domain_people as people;
 /// Refuses unsupported sparse facts; LLM refusals need the catalogue at the answer boundary.
 pub fn refusal(value: people::Refusal) -> Result<client::Refusal, super::owner::Invalid> {
     Ok(match value {
+        people::Refusal::Forgotten { oldest } => client::Refusal::Forgotten(client::RefusalForgotten { oldest }),
         people::Refusal::Stale { newest } => client::Refusal::Stale(client::RefusalStale { newest }),
         people::Refusal::Full { revision, tasks, more } => {
             client::Refusal::Full(client::RefusalFull { revision, tasks: names(&tasks), more })

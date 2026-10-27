@@ -239,6 +239,15 @@ pub(crate) fn outcome(value: &w::Outcome, limits: &Limits) -> Result<c::Outcome,
             how: decision(row.how(), limits)?,
             at: Wall::from_nanos(row.at()),
         },
+        w::Outcome::Restored(value) => {
+            let mut left_out = List::with_capacity(value.left_out().len());
+            for item in value.left_out() {
+                left_out
+                    .push(c::ApplicationSetting { kind: item.kind(), scope: item.scope(), number: item.number() })
+                    .expect("same capacity");
+            }
+            c::Outcome::Restored(c::OutcomeRestored { proposal: value.proposal(), to: value.to(), left_out })
+        }
         w::Outcome::MovedToNewest(value) => c::Outcome::MovedToNewest(c::OutcomeMovedToNewest {
             newest: value.newest(),
             moved: value.moved(),
@@ -497,6 +506,7 @@ pub(crate) fn refusal(value: &w::Refusal, limits: &Limits) -> Result<c::Refusal,
                 w::OwnerTaskStatus::Cancelled => c::OwnerTaskStatus::Cancelled,
             },
         },
+        w::Refusal::Forgotten(value) => c::Refusal::Forgotten(c::RefusalForgotten { oldest: value.oldest() }),
         w::Refusal::Stale(value) => c::Refusal::Stale(super::settings::restore_refusal_stale(value, limits)?),
         w::Refusal::Full(value) => c::Refusal::Full(super::settings::restore_refusal_full(value, limits)?),
         w::Refusal::NotWaiting => c::Refusal::NotWaiting,

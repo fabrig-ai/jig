@@ -8,6 +8,7 @@ use skein_ui::phrases::{HoleKind, HoleShape, PhraseId, PhraseShape};
 pub enum JigPhrase {
     SettingsChanged,
     MovedToNewest,
+    SettingsRestored,
     SettingsStale,
     SettingsFull,
     SettingsFullTask,
@@ -1071,6 +1072,7 @@ impl JigPhrase {
         let number = match self {
             Self::SettingsChanged => 7900,
             Self::MovedToNewest => 7919,
+            Self::SettingsRestored => 7924,
             Self::SettingsStale => 7901,
             Self::SettingsFull => 7902,
             Self::SettingsFullTask => 7903,
@@ -2309,7 +2311,8 @@ impl JigPhrase {
             | Self::DependencyDone
             | Self::CircleWaitsFor
             | Self::ResultsThrough => Box::new([HoleShape { kind: HoleKind::Number, bytes: 0 }]),
-            Self::OpenProgramSource
+            Self::SettingsRestored
+            | Self::OpenProgramSource
             | Self::PolicyEffect
             | Self::RunRetryFailed
             | Self::SpecificationNumber
@@ -2415,9 +2418,10 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 644] = [
+pub const ALL: [JigPhrase; 645] = [
     JigPhrase::SettingsChanged,
     JigPhrase::MovedToNewest,
+    JigPhrase::SettingsRestored,
     JigPhrase::SettingsStale,
     JigPhrase::SettingsFull,
     JigPhrase::SettingsFullTask,

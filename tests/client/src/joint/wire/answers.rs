@@ -46,6 +46,7 @@ pub fn reply(
         }
         people::Reply::Outcome(value) => match outcomes::outcome(&value, limits)? {
             outcomes::Outcome::MovingOut { account, number, source } => Reply::MovingOut { account, number, source },
+            outcomes::Outcome::Restored(value) => Reply::Final(client::Answer::Done(client::Outcome::Restored(value))),
             outcomes::Outcome::MovedToNewest { newest, moved, stayed } => {
                 Reply::Final(client::Answer::Done(client::Outcome::MovedToNewest(client::OutcomeMovedToNewest {
                     newest,
@@ -79,7 +80,8 @@ fn refusal(
 ) -> Result<client::Refusal, super::owner::Invalid> {
     match value {
         people::Refusal::Llm { model, why } => super::llm::refusal(model, why, models, limits),
-        people::Refusal::Stale { .. }
+        people::Refusal::Forgotten { .. }
+        | people::Refusal::Stale { .. }
         | people::Refusal::Full { .. }
         | people::Refusal::Circle { .. }
         | people::Refusal::Dependency { .. }

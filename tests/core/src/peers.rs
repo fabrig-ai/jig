@@ -579,7 +579,8 @@ fn party_refusal(why: people::Refusal) -> parties::Refusal {
         people::Refusal::SignInRedirect { .. } | people::Refusal::AccountMove { .. } => {
             unreachable!("fake parties ask for no account moves")
         }
-        people::Refusal::Stale { .. }
+        people::Refusal::Forgotten { .. }
+        | people::Refusal::Stale { .. }
         | people::Refusal::Full { .. }
         | people::Refusal::NotWellFormed {
             why: people::Malformed::Settings { .. } | people::Malformed::SettingsUnchanged | people::Malformed::Running,

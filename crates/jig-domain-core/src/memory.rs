@@ -472,6 +472,12 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     total = total.checked_add(u64::from(limits.people.words))?;
     total = total.checked_add(List::<(people::Proposer, u32)>::worst_case(limits.settings.proposals)?)?;
     total = total.checked_add(u64::try_from(size_of::<crate::settings::Proposed>()).ok()?)?;
+    // One restore keeps at most one whole set of before-values while pages load.
+    total = total.checked_add(Map::<crate::settings::Setting, crate::settings::Edit>::worst_case(
+        crate::settings::capacity(limits)?.min(tasks::SETTINGS_ITEMS),
+    )?)?;
+    total = total.checked_add(crate::settings::set_worst_case(limits)?)?;
+    total = total.checked_add(u64::from(limits.people.words))?;
     // A decoded held revision is transient. At a release, the copied defaults
     // and the new record's items coexist until they pass into the journal.
     total = total.checked_add(crate::settings::revision_worst_case(limits)?.checked_mul(2)?)?;

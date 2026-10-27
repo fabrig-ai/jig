@@ -227,41 +227,109 @@ pub enum NoteChange {
 )]
 pub enum Ask {
     /// Deployment owner changes settings, whose value the core holds during admission.
-    ChangeSettings { against: u32, digest: [u8; 32] },
+    ChangeSettings {
+        against: u32,
+        digest: [u8; 32],
+    },
     /// Deployment owner moves live agent tasks to the newest (engine.md, 17.4; people.md, 5.1).
-    MoveToNewest { revision: u32 },
+    MoveToNewest {
+        revision: u32,
+    },
+    Restore {
+        revision: u32,
+        reason: Box<[u8]>,
+    },
     /// Several task operations committed together under one key.
-    Compound { project: u32, operations: List<crate::Operation> },
+    Compound {
+        project: u32,
+        operations: List<crate::Operation>,
+    },
     /// Make these roots together (domain/people.md, 5.1).
-    Create { project: u32, batch: Box<[crate::Member]> },
+    Create {
+        project: u32,
+        batch: Box<[crate::Member]>,
+    },
     /// Mark results or one conversation's replies seen under this party's key.
-    MarkSeen { seen: Seen },
+    MarkSeen {
+        seen: Seen,
+    },
     /// Application-owned request metadata; the root carries the value, and the protocol supplies its digest.
-    Application { scope: crate::ApplicationScope, connector: u16, digest: [u8; 32] },
+    Application {
+        scope: crate::ApplicationScope,
+        connector: u16,
+        digest: [u8; 32],
+    },
     /// Correct or delete a note whose scope the party's project role permits.
-    EditNote { project: u32, name: u64, scope: Box<NoteScope>, change: Box<NoteChange> },
+    EditNote {
+        project: u32,
+        name: u64,
+        scope: Box<NoteScope>,
+        change: Box<NoteChange>,
+    },
     /// Make a deployment service in a project with a role and display name.
-    MakeService { project: u32, name: Box<[u8]>, role: Role },
+    MakeService {
+        project: u32,
+        name: Box<[u8]>,
+        role: Role,
+    },
     /// Adopt a connector resource as a durable keyed owner request.
-    Adopt { project: u32, adoption: Adoption },
+    Adopt {
+        project: u32,
+        adoption: Adoption,
+    },
     /// Propose a batch to the role named by the project's policy.
-    Propose { project: u32, action: crate::Action, reason: Box<[u8]> },
+    Propose {
+        project: u32,
+        action: crate::Action,
+        reason: Box<[u8]>,
+    },
     /// Withdraw this party's own pending proposal.
-    Withdraw { project: u32, proposal: u64 },
+    Withdraw {
+        project: u32,
+        proposal: u64,
+    },
     /// Hold a live run for this person's decision, cancelling its current claim.
-    Stop { project: u32, task: u64 },
+    Stop {
+        project: u32,
+        task: u64,
+    },
     /// Cancel a task and its descendants with a bounded reason, at once or after a grace.
-    Cancel { project: u32, task: u64, reason: Box<[u8]>, grace: Option<Duration> },
+    Cancel {
+        project: u32,
+        task: u64,
+        reason: Box<[u8]>,
+        grace: Option<Duration>,
+    },
     /// Lift a held task's cause and rejudge it.
-    Release { project: u32, task: u64, revision: u64, again: Option<bool> },
+    Release {
+        project: u32,
+        task: u64,
+        revision: u64,
+        again: Option<bool>,
+    },
     /// Claim one role-addressed person task for this authenticated person.
-    TakePerson { project: u32, task: u64 },
+    TakePerson {
+        project: u32,
+        task: u64,
+    },
     /// Give this person's current role task claim back to its role.
-    HandBackPerson { project: u32, task: u64 },
+    HandBackPerson {
+        project: u32,
+        task: u64,
+    },
     /// Supply the bounded result required by an addressed person task.
-    AnswerPerson { project: u32, task: u64, revision: u64, result: PersonResult },
+    AnswerPerson {
+        project: u32,
+        task: u64,
+        revision: u64,
+        result: PersonResult,
+    },
     /// Adopt a live task as this authenticated person's own goal, retaining its old requester's reference.
-    Move { project: u32, task: u64, reason: Box<[u8]> },
+    Move {
+        project: u32,
+        task: u64,
+        reason: Box<[u8]>,
+    },
     /// Authenticated keyed decision for a proposal waiting at this person or a policy role.
     DecideProposal {
         project: u32,
@@ -271,12 +339,27 @@ pub enum Ask {
         running: Option<crate::Running>,
     },
     /// Authenticated requester's whole words to an existing chat.
-    Say { project: u32, task: u64, words: Box<[u8]> },
+    Say {
+        project: u32,
+        task: u64,
+        words: Box<[u8]>,
+    },
     /// Answer a numbered question waiting in a task requested by this person.
-    AnswerQuestion { project: u32, task: u64, question: u64, words: Box<[u8]> },
+    AnswerQuestion {
+        project: u32,
+        task: u64,
+        question: u64,
+        words: Box<[u8]>,
+    },
     /// Amend a live task this person may steer, after root policy and funding checks.
     /// A priority-only edit of a tracked task names spec revision zero.
-    Amend { project: u32, task: u64, revision: u64, amendment: crate::Amendment, release: Option<u64> },
+    Amend {
+        project: u32,
+        task: u64,
+        revision: u64,
+        amendment: crate::Amendment,
+        release: Option<u64>,
+    },
     /// Authenticated Owner's complete project roster replacement; root checks Policy permission and
     /// held-recipient preflight before applying it.
     SetRoles {
@@ -287,13 +370,26 @@ pub enum Ask {
         holdings: Box<[Holding]>,
     },
     /// Owner changes one mutable part of the project policy for future decisions.
-    ChangePolicy { project: u32, change: crate::PolicyChange },
+    ChangePolicy {
+        project: u32,
+        change: crate::PolicyChange,
+    },
     /// Owner replaces this project's name (people.md, 5.1).
-    Rename { project: u32, name: Box<str> },
+    Rename {
+        project: u32,
+        name: Box<str>,
+    },
     /// Deployment owner makes a project from a configured policy (people.md, 5.2).
-    MakeProject { name: Box<str>, policy: u32 },
+    MakeProject {
+        name: Box<str>,
+        policy: u32,
+    },
     /// Owner changes one person's current-period pool, preserving already spent and reserved funds.
-    SetPool { project: u32, person: u64, budget: u64 },
+    SetPool {
+        project: u32,
+        person: u64,
+        budget: u64,
+    },
     /// Decide one held chat's exact semantic revision. Root verifies current waiting recipient and
     /// authority; admission authenticates the session and reserves keyed-answer room.
     DecideEscalation {
@@ -308,11 +404,20 @@ pub enum Ask {
     },
     /// Sign an LLM provider's account in for this holder; admitted from the holder alone, never by
     /// a role (domain/authority.md, 8.4), and decided by the accounts child (domain/accounts.md, 3.3).
-    AccountSignIn { holder: AccountHolder, provider: u32 },
+    AccountSignIn {
+        holder: AccountHolder,
+        provider: u32,
+    },
     /// Sign this holder's account's source out; admitted like a sign-in.
-    AccountSignOut { holder: AccountHolder, source: u32 },
+    AccountSignOut {
+        holder: AccountHolder,
+        source: u32,
+    },
     /// Change this holder's LLM accounts; carried keys and moved records retain only their digest.
-    AccountChange { holder: AccountHolder, change: AccountChange },
+    AccountChange {
+        holder: AccountHolder,
+        change: AccountChange,
+    },
 }
 
 /// A person's answer to a report, choice or failure contract; root translates it for tasks.
@@ -393,57 +498,128 @@ pub enum EscalationChoice {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Outcome {
     /// The sign-in took the address; its end shows on the accounts watch.
-    AccountFinishing { source: u32 },
+    AccountFinishing {
+        source: u32,
+    },
     /// One whole settings change committed at this revision.
-    SettingsChanged { revision: u32 },
+    SettingsChanged {
+        revision: u32,
+    },
     /// Live agent tasks moved to the newest, and those that finish on their revision (engine.md, 17.4).
-    MovedToNewest { newest: u32, moved: u32, stayed: u32 },
+    MovedToNewest {
+        newest: u32,
+        moved: u32,
+        stayed: u32,
+    },
+    Restored {
+        proposal: u64,
+        to: u32,
+        left_out: Box<[crate::ApplicationSetting]>,
+    },
     /// All operations were made; their issued messages start here, or at zero for none.
-    Compound { project: u32, operations: u32, first_message: u64 },
+    Compound {
+        project: u32,
+        operations: u32,
+        first_message: u64,
+    },
     /// No operation was made; the first failure has this zero-based place.
-    CompoundRefused { at: u32, why: Refusal },
+    CompoundRefused {
+        at: u32,
+        why: Refusal,
+    },
     /// The batch was made in order.
-    Created { first: u64, last: u64, given: Option<crate::Given> },
+    Created {
+        first: u64,
+        last: u64,
+        given: Option<crate::Given>,
+    },
     /// The named read position was accepted; it never moves backwards.
-    MarkedSeen { seen: Seen },
+    MarkedSeen {
+        seen: Seen,
+    },
     /// Connector-owned durable outcome named by token; the root asks its owner for the value.
-    Applied { connector: u16, token: Token },
+    Applied {
+        connector: u16,
+        token: Token,
+    },
     /// Unsaved retry answer; the request may be sent again.
     Again(crate::Again),
     /// Unsaved expired-sign-in answer.
     SignedOut,
     /// A note correction or deletion was committed with its keyed answer.
-    NoteEdited { name: u64 },
+    NoteEdited {
+        name: u64,
+    },
     /// A service party and its project role were committed together.
-    ServiceMade { person: u64 },
+    ServiceMade {
+        person: u64,
+    },
     /// Resource adoption and its connector-known party seed committed together.
-    Adopted { project: u32 },
+    Adopted {
+        project: u32,
+    },
     /// An explicit proposal awaits the named policy role.
-    Proposed { proposal: u64, to: u32 },
+    Proposed {
+        proposal: u64,
+        to: u32,
+    },
     /// This party withdrew its pending proposal.
-    Withdrawn { proposal: u64 },
+    Withdrawn {
+        proposal: u64,
+    },
     /// A person stopped one live task for a later release or decision.
-    Stopped { task: u64 },
+    Stopped {
+        task: u64,
+    },
     /// A person cancelled one task and its descendants.
-    Cancelled { task: u64 },
+    Cancelled {
+        task: u64,
+    },
     /// A person released a held task.
-    Released { task: u64 },
+    Released {
+        task: u64,
+    },
     /// One role-addressed task was durably claimed.
-    PersonTaken { task: u64 },
+    PersonTaken {
+        task: u64,
+    },
     /// The claimant durably returned the task to its role.
-    PersonHandedBack { task: u64 },
+    PersonHandedBack {
+        task: u64,
+    },
     /// An addressed person's result was durably admitted.
-    PersonAnswered { task: u64 },
+    PersonAnswered {
+        task: u64,
+    },
     /// The task now belongs to the requesting person, with its remaining funding transferred.
-    Moved { task: u64 },
+    Moved {
+        task: u64,
+    },
     /// Keyed answer to one current or historical proposal decision.
-    ProposalDecided { proposer: Proposer, proposal: u64, by: u64, at: Wall, choice: ProposalChoice, repeated: bool },
+    ProposalDecided {
+        proposer: Proposer,
+        proposal: u64,
+        by: u64,
+        at: Wall,
+        choice: ProposalChoice,
+        repeated: bool,
+    },
     /// Words were durably admitted under the root-issued message number.
-    Said { task: u64, message: u64 },
+    Said {
+        task: u64,
+        message: u64,
+    },
     /// A named question was answered with a durable message.
-    QuestionAnswered { task: u64, question: u64, message: u64 },
+    QuestionAnswered {
+        task: u64,
+        question: u64,
+        message: u64,
+    },
     /// The named task accepted this person's amendment.
-    Amended { task: u64, released: bool },
+    Amended {
+        task: u64,
+        released: bool,
+    },
     /// Root accepted one roster and all affected `Waiting` recipients atomically; saved keyed
     /// replay does not apply the roster again.
     RolesSet {
@@ -451,13 +627,22 @@ pub enum Outcome {
         project: u32,
     },
     /// The full committed policy now applies to later checks; existing grants remain.
-    PolicyChanged { project: u32 },
+    PolicyChanged {
+        project: u32,
+    },
     /// The project now carries its new name.
-    Renamed { project: u32 },
+    Renamed {
+        project: u32,
+    },
     /// A configured policy became a new project owned by its maker.
-    ProjectMade { project: u32 },
+    ProjectMade {
+        project: u32,
+    },
     /// One person's finite pool was opened or resized in its original period.
-    PoolSet { project: u32, person: u64 },
+    PoolSet {
+        project: u32,
+        person: u64,
+    },
     /// Root's committed current or historical decision for one task revision; first commit decides
     /// a race.
     EscalationDecided {
@@ -470,21 +655,42 @@ pub enum Outcome {
         choice: EscalationChoice,
     },
     /// An account's sign-in is under way for this source; its end is the accounts child's fact.
-    AccountSignInStarted { source: u32, address: Box<[u8]> },
+    AccountSignInStarted {
+        source: u32,
+        address: Box<[u8]>,
+    },
     /// The source was signed out, and whether its provider confirmed the revocation.
-    AccountSignedOut { confirmed: bool, failed_hosts: Box<[AccountHostFailure]> },
+    AccountSignedOut {
+        confirmed: bool,
+        failed_hosts: Box<[AccountHostFailure]>,
+    },
     /// The LLM key was kept at this source.
-    AccountKeyKept { source: u32 },
+    AccountKeyKept {
+        source: u32,
+    },
     /// The holder declared this program source under its durable name.
-    AccountProgramDeclared { source: u32, name: Box<[u8]> },
+    AccountProgramDeclared {
+        source: u32,
+        name: Box<[u8]>,
+    },
     /// The holder's account change finished.
     AccountChanged,
     /// The move is under way; its record is taken from the source once, outside the answer.
-    AccountMovingOut { account: u32, number: u32, source: u32 },
+    AccountMovingOut {
+        account: u32,
+        number: u32,
+        source: u32,
+    },
     /// A moved record was adopted, making or renewing this account.
-    AccountMovedIn { account: u32, renewed: bool },
+    AccountMovedIn {
+        account: u32,
+        renewed: bool,
+    },
     /// Every signed-in source answered its sign-out.
-    AccountRemoved { confirmed: bool, failed_hosts: Box<[AccountHostFailure]> },
+    AccountRemoved {
+        confirmed: bool,
+        failed_hosts: Box<[AccountHostFailure]>,
+    },
     /// Final refusal, retained under the request key.
     Refused(/** Final refusal facts, retained under the request key. */ Refusal),
 }

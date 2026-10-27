@@ -603,6 +603,7 @@ impl World {
                         | Ask::MakeProject { .. }
                         | Ask::ChangeSettings { .. }
                         | Ask::MoveToNewest { .. }
+                        | Ask::Restore { .. }
                         | Ask::ChangePolicy { .. }
                         | Ask::SetPool { .. }
                         | Ask::DecideEscalation { .. } => {
@@ -984,6 +985,7 @@ impl World {
                                         | Ask::MakeProject { .. }
                                         | Ask::ChangeSettings { .. }
                                         | Ask::MoveToNewest { .. }
+                                        | Ask::Restore { .. }
                                         | Ask::ChangePolicy { .. }
                                         | Ask::SetPool { .. }
                                         | Ask::DecideEscalation { .. }
@@ -1011,6 +1013,7 @@ impl World {
                             | Ask::MakeProject { .. }
                             | Ask::ChangeSettings { .. }
                             | Ask::MoveToNewest { .. }
+                            | Ask::Restore { .. }
                             | Ask::ChangePolicy { .. }
                             | Ask::SetPool { .. }
                             | Ask::DecideEscalation { .. } => unreachable!("scripted route kind was checked"),

@@ -168,6 +168,7 @@ pub enum Refusal {
         why: SignInRedirectWhy,
     },
     Stale(super::RefusalStale),
+    Forgotten(super::RefusalForgotten),
     Full(super::RefusalFull),
     /// An account move refused (client/domain/contract.md, 4).
     AccountMove {

@@ -129,6 +129,7 @@ pub fn remap_models(ask: &mut Ask, moved: &[u64; 64]) {
         | Ask::MakeProject { .. }
         | Ask::ChangeSettings { .. }
         | Ask::MoveToNewest { .. }
+        | Ask::Restore { .. }
         | Ask::MarkSeen { .. }
         | Ask::Application { .. }
         | Ask::EditNote { .. }
@@ -214,6 +215,7 @@ pub fn valid_model_context(ask: &Ask, names: &[Box<[u8]>]) -> bool {
         | Ask::MakeProject { .. }
         | Ask::ChangeSettings { .. }
         | Ask::MoveToNewest { .. }
+        | Ask::Restore { .. }
         | Ask::MarkSeen { .. }
         | Ask::Application { .. }
         | Ask::EditNote { .. }
@@ -283,6 +285,7 @@ pub(crate) fn has_model_selector(ask: &Ask) -> bool {
         | Ask::MakeProject { .. }
         | Ask::ChangeSettings { .. }
         | Ask::MoveToNewest { .. }
+        | Ask::Restore { .. }
         | Ask::MarkSeen { .. }
         | Ask::Application { .. }
         | Ask::EditNote { .. }

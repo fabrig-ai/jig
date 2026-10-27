@@ -125,6 +125,7 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
                 | w::Ask::Rename(_)
                 | w::Ask::ChangeSettings(_)
                 | w::Ask::MoveToNewest(_)
+                | w::Ask::Restore(_)
                 | w::Ask::MakeProject(_)
                 | w::Ask::SetPool(_) => None,
             };

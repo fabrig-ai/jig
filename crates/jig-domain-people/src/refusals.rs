@@ -23,6 +23,9 @@ pub enum Refusal {
     SignInRedirect {
         why: crate::SignInRedirectWhy,
     },
+    Forgotten {
+        oldest: u32,
+    },
     Stale {
         newest: u32,
     },

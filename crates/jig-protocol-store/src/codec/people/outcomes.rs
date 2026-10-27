@@ -9,6 +9,21 @@ use facts::{
 #[expect(clippy::too_many_lines, reason = "one exhaustive permanent outcome translation table")]
 pub(super) fn encode_outcome(value: &domain::Outcome, limits: &wire::Limits) -> Result<wire::Outcome, wire::Problem> {
     Ok(match value {
+        domain::Outcome::Restored { proposal, to, left_out } => {
+            let mut omitted = skein_lib::List::with_capacity(u32::try_from(left_out.len()).expect("bounded settings"));
+            for item in left_out {
+                omitted
+                    .push(wire::ApplicationSetting::new(
+                        limits,
+                        wire::ApplicationSettingParts { kind: item.kind, scope: item.scope, number: item.number },
+                    )?)
+                    .expect("same capacity");
+            }
+            wire::Outcome::Restored(wire::OutcomeRestored::new(
+                limits,
+                wire::OutcomeRestoredParts { proposal: *proposal, to: *to, left_out: omitted },
+            )?)
+        }
         domain::Outcome::MovedToNewest { newest, moved, stayed } => {
             wire::Outcome::MovedToNewest(wire::OutcomeMovedToNewest::new(
                 limits,
@@ -176,6 +191,15 @@ fn account_sign_in_started(source: u32, address: &[u8], limits: &wire::Limits) -
 #[expect(clippy::too_many_lines, reason = "one exhaustive permanent outcome translation table")]
 pub(super) fn decode_outcome(value: wire::Outcome) -> domain::Outcome {
     match value {
+        wire::Outcome::Restored(value) => {
+            let mut left_out = skein_lib::List::with_capacity(value.left_out().len());
+            for item in value.left_out() {
+                left_out
+                    .push(domain::ApplicationSetting { kind: item.kind(), scope: item.scope(), number: item.number() })
+                    .expect("same capacity");
+            }
+            domain::Outcome::Restored { proposal: value.proposal(), to: value.to(), left_out: left_out.into_boxed() }
+        }
         wire::Outcome::MovedToNewest(value) => {
             domain::Outcome::MovedToNewest { newest: value.newest(), moved: value.moved(), stayed: value.stayed() }
         }

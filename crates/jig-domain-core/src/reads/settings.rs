@@ -469,53 +469,10 @@ pub(super) fn from_store(
     if whole && first < oldest && !core.held(first) {
         return Answer::Revision(Box::new(RevisionAnswer::Forgotten { oldest }));
     }
-    let mut found = Map::with_capacity(range.rows);
-    for row in raw {
-        if row.owner.is_some()
-            || !row.ancestors.is_empty()
-            || row.related.is_some()
-            || !row.linked.is_empty()
-            || row.inbox.is_some()
-            || row.unjoined.is_some()
-            || row.ended_read.is_some()
-        {
-            return Answer::None(Why::Unknown);
-        }
-        if !super::admits(range.party, &range.scope, &row.value.key()) {
-            return Answer::None(Why::Unknown);
-        }
-        let revision = match row.value {
-            Record::Core(CoreRecord::Settings(settings::Record::Revision { revision, .. })) => revision,
-            Record::Core(
-                CoreRecord::Settings(
-                    settings::Record::Default { .. }
-                    | settings::Record::Changed { .. }
-                    | settings::Record::Charter { .. }
-                    | settings::Record::Proposal { .. }
-                    | settings::Record::Extent { .. },
-                )
-                | CoreRecord::Deployment(_)
-                | CoreRecord::RunProof(_)
-                | CoreRecord::Call(_)
-                | CoreRecord::Terminal(_)
-                | CoreRecord::Turn(_)
-                | CoreRecord::Projection(_)
-                | CoreRecord::EscalationDecision(_)
-                | CoreRecord::ProposalDecision(_),
-            )
-            | Record::People(_)
-            | Record::Tasks(_)
-            | Record::Notes(_)
-            | Record::Accounts(_) => return Answer::None(Why::Unknown),
-        };
-        if !valid_revision(&revision, limits) {
-            return Answer::None(Why::Busy);
-        }
-        let previous = found.insert(revision.head.number, revision).expect("bounded loaded revisions");
-        if previous.is_some() {
-            return Answer::None(Why::Unknown);
-        }
-    }
+    let mut found = match whole_records(limits, range, raw, next) {
+        Ok(found) => found,
+        Err(why) => return Answer::None(why),
+    };
     if whole {
         return Answer::Revision(Box::new(match found.remove(&first) {
             Some(mut revision) => {
@@ -548,6 +505,66 @@ pub(super) fn from_store(
     }
     let next = if first > page_oldest(core, oldest) { Some(first) } else { None };
     Answer::Revisions(Box::new(RevisionsPage { rows, next, forgotten: next.is_none() && oldest > 1 }))
+}
+
+/// Whole records for both a preview read and the keyed restore fold.
+pub(crate) fn whole_records(
+    limits: &Limits,
+    range: &Range,
+    raw: Box<[Row]>,
+    next: Option<super::Position>,
+) -> Result<Map<u32, settings::Revision>, Why> {
+    if next.is_some() || raw.len() > usize::try_from(range.rows).expect("row cap") {
+        return Err(Why::Busy);
+    }
+    let mut found = Map::with_capacity(range.rows);
+    for row in raw {
+        if row.owner.is_some()
+            || !row.ancestors.is_empty()
+            || row.related.is_some()
+            || !row.linked.is_empty()
+            || row.inbox.is_some()
+            || row.unjoined.is_some()
+            || row.ended_read.is_some()
+        {
+            return Err(Why::Unknown);
+        }
+        if !super::admits(range.party, &range.scope, &row.value.key()) {
+            return Err(Why::Unknown);
+        }
+        let revision = match row.value {
+            Record::Core(CoreRecord::Settings(settings::Record::Revision { revision, .. })) => revision,
+            Record::Core(
+                CoreRecord::Settings(
+                    settings::Record::Default { .. }
+                    | settings::Record::Changed { .. }
+                    | settings::Record::Charter { .. }
+                    | settings::Record::Proposal { .. }
+                    | settings::Record::Extent { .. },
+                )
+                | CoreRecord::Deployment(_)
+                | CoreRecord::RunProof(_)
+                | CoreRecord::Call(_)
+                | CoreRecord::Terminal(_)
+                | CoreRecord::Turn(_)
+                | CoreRecord::Projection(_)
+                | CoreRecord::EscalationDecision(_)
+                | CoreRecord::ProposalDecision(_),
+            )
+            | Record::People(_)
+            | Record::Tasks(_)
+            | Record::Notes(_)
+            | Record::Accounts(_) => return Err(Why::Unknown),
+        };
+        if !valid_revision(&revision, limits) {
+            return Err(Why::Busy);
+        }
+        let previous = found.insert(revision.head.number, revision).expect("bounded loaded revisions");
+        if previous.is_some() {
+            return Err(Why::Unknown);
+        }
+    }
+    Ok(found)
 }
 
 #[cfg(test)]

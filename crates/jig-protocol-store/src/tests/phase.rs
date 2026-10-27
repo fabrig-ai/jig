@@ -1931,11 +1931,14 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // Rebased store.md 5.3 adds secrets/skein_oauth/smith_transcript hashes (96 bytes);
     // the removed settled_call_name bound and alignment save 8: Store 4,008 -> 4,096.
     // engine.md 17.2/17.7/17.8 adds revision/version bounds to settings, tasks and fleet (24 bytes).
+    // Restore adds ask_restore_reason and outcome_restored_left_out, two u32
+    // limits held inline in Store (engine.md, 17.10).
+    let restore_limits = (2 * size_of::<u32>()).next_multiple_of(align_of::<Store>());
     // Placed-hold bounds add 24 bytes to the retained codec limits.
     // engine.md 17.6 adds core_v6::Limits.settings_refusal_value, one u32.
     // The codec limits live inline in Store, whose alignment rounds that addition up.
     let settings_refusal_limit = size_of::<u32>().next_multiple_of(align_of::<Store>());
-    assert_eq!(size_of::<Store>(), 4_144 + settings_refusal_limit);
+    assert_eq!(size_of::<Store>(), 4_144 + settings_refusal_limit + restore_limits);
     assert_eq!(size_of::<crate::codec::component::Layouts>(), 320);
     // store.md 9: typed SecretValue makes each SecretRow 64 rather than 32 bytes.
     assert_eq!(size_of::<crate::SecretRow>(), 64);
@@ -1962,7 +1965,9 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     let limits = fixtures::store_limits();
     let (before, after) = revision_payload_prices(&limits).expect("bounded payload prices");
     let copies = 2 * (u64::from(limits.store.page.bytes) + u64::from(limits.joins));
-    let expected = 581_545_605_062_293 + settings_refusal_limit - before * copies + after * copies;
+    let expected = 581_545_605_062_293 + settings_refusal_limit - before * copies
+        + after * copies
+        + u64::try_from(restore_limits).expect("restore limits fit");
     assert_eq!(crate::worst_case(&limits), Some(expected));
 }
 

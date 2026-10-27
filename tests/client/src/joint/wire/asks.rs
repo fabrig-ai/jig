@@ -67,6 +67,9 @@ fn translate(
     names: &mut List<Box<[u8]>>,
 ) -> Result<people::Ask, Invalid> {
     Ok(match value {
+        client::Ask::Restore(value) => {
+            people::Ask::Restore { revision: value.revision, reason: value.reason.clone().into_bytes() }
+        }
         client::Ask::MoveToNewest(value) => people::Ask::MoveToNewest { revision: value.revision },
         client::Ask::ChangeSettings(_) => return Err(Invalid::Settings),
         client::Ask::Propose { project, action, reason } => create::propose(*project, action, reason, models, names)?,

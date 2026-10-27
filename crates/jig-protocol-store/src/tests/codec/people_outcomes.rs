@@ -241,3 +241,10 @@ fn move_to_newest_asks_and_outcomes_round_trip_under_people_13() {
     super::ask_round_trip(domain::Ask::MoveToNewest { revision: 7 });
     people_round_trip(values::answered(domain::Outcome::MovedToNewest { newest: 9, moved: 3, stayed: 1 }));
 }
+
+#[test]
+fn restore_asks_and_outcomes_round_trip_under_people_13() {
+    super::ask_round_trip(domain::Ask::Restore { revision: 7, reason: b"earlier choices".as_slice().into() });
+    people_round_trip(values::answered(domain::Outcome::Restored { proposal: 11, to: 7, left_out: Box::new([]) }));
+    people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Forgotten { oldest: 3 })));
+}

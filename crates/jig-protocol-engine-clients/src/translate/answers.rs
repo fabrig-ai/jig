@@ -10,6 +10,26 @@ pub(crate) fn answer(
     limits: &w::Limits,
 ) -> Result<w::KeyedAnswer, w::Problem> {
     let final_answer = match reply {
+        p::Reply::Outcome(p::Outcome::Restored { proposal, to, left_out }) => {
+            let mut omitted = skein_lib::List::with_capacity(u32::try_from(left_out.len()).expect("bounded settings"));
+            for item in left_out {
+                omitted
+                    .push(w::ApplicationSetting::new(
+                        limits,
+                        w::ApplicationSettingParts { kind: item.kind, scope: item.scope, number: item.number },
+                    )?)
+                    .expect("same capacity");
+            }
+            w::Final::Done(w::Done::new(
+                limits,
+                w::DoneParts {
+                    outcome: w::Outcome::Restored(w::OutcomeRestored::new(
+                        limits,
+                        w::OutcomeRestoredParts { proposal: *proposal, to: *to, left_out: omitted },
+                    )?),
+                },
+            )?)
+        }
         p::Reply::Outcome(p::Outcome::MovedToNewest { newest, moved, stayed }) => w::Final::Done(w::Done::new(
             limits,
             w::DoneParts {
@@ -301,6 +321,7 @@ fn owner(value: &p::Outcome, limits: &w::Limits) -> Result<w::OwnerOutcome, w::P
         }
         p::Outcome::SettingsChanged { .. }
         | p::Outcome::MovedToNewest { .. }
+        | p::Outcome::Restored { .. }
         | p::Outcome::AccountMovingOut { .. }
         | p::Outcome::CompoundRefused { .. }
         | p::Outcome::Applied { .. }

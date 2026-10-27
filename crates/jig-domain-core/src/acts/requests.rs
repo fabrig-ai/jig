@@ -21,6 +21,7 @@ pub(crate) fn request(
         people::Ask::Propose { action: people::Action::Settings { .. }, .. }
         | people::Ask::ChangeSettings { .. }
         | people::Ask::MoveToNewest { .. }
+        | people::Ask::Restore { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::Application { .. }
         | people::Ask::Compound { .. }
@@ -162,6 +163,7 @@ pub(crate) fn request(
         | people::Ask::MakeProject { .. }
         | people::Ask::ChangeSettings { .. }
         | people::Ask::MoveToNewest { .. }
+        | people::Ask::Restore { .. }
         | people::Ask::ChangePolicy { .. }
         | people::Ask::SetRoles { .. }
         | people::Ask::MakeService { .. }

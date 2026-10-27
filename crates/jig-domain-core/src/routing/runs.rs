@@ -568,7 +568,8 @@ pub(super) fn named_action(
                                 capacity: None,
                             })
                         }
-                        jig_domain_people::Refusal::Stale { .. }
+                        jig_domain_people::Refusal::Forgotten { .. }
+                        | jig_domain_people::Refusal::Stale { .. }
                         | jig_domain_people::Refusal::Full { .. }
                         | jig_domain_people::Refusal::Circle { .. }
                         | jig_domain_people::Refusal::Dependency { .. }
