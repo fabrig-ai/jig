@@ -333,7 +333,16 @@ impl Core {
             unreachable!("proposal admission route")
         };
         assert!(named == proposal, "proposal identity");
-        (people::Event::Decided { request, outcome: people::Outcome::Proposed { proposal, to } }, stubs)
+        let outcome = if match &self.restoring {
+            Some(flight) => flight.request == request,
+            None => false,
+        } {
+            let flight = self.restoring.take().expect("restore offering");
+            people::Outcome::Restored { proposal, to: flight.revision, left_out: Box::new([]) }
+        } else {
+            people::Outcome::Proposed { proposal, to }
+        };
+        (people::Event::Decided { request, outcome }, stubs)
     }
 
     /// Translate the task child's person-origin proposal decision into the

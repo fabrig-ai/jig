@@ -214,6 +214,7 @@ pub(super) fn tag_people(
                     | people::Outcome::ProjectMade { .. }
                     | people::Outcome::SettingsChanged { .. }
                     | people::Outcome::MovedToNewest { .. }
+                    | people::Outcome::Restored { .. }
                     | people::Outcome::PoolSet { .. }
                     | people::Outcome::EscalationDecided { .. }
                     | people::Outcome::AccountSignInStarted { .. }
@@ -314,6 +315,15 @@ pub(super) fn tag_people(
                     }
                     people::Ask::Rename { name, .. } => {
                         super::projects::rename_request(core, env, work, &mut out, request, person, project, name);
+                    }
+                    people::Ask::Restore { revision, reason } => {
+                        super::restore::start(
+                            core,
+                            env,
+                            work,
+                            &mut out,
+                            super::restore::Input { request, person, revision, reason },
+                        );
                     }
                     people::Ask::MoveToNewest { revision } => {
                         let outcome = match super::settings::move_to_newest(core, env, &mut out, revision) {

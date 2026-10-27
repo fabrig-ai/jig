@@ -1157,9 +1157,7 @@ impl Observer {
             | people::Reply::SignedOut
             | people::Reply::Refused(_) => {
                 let to = destination(to);
-                if self.requests.get(&to).is_some_and(|(_, _, seen)| seen.is_some()) {
-                    self.requests.remove(&to);
-                }
+                self.requests.remove(&to);
             }
             people::Reply::Outcome(_) => {
                 let to = destination(to);

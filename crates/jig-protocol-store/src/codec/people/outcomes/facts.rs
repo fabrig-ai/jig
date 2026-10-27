@@ -442,6 +442,10 @@ pub(super) fn decode_limit_kind(value: wire::LimitKind) -> domain::LimitKind {
 #[expect(clippy::too_many_lines, reason = "one exhaustive translation preserves every stored refusal variant")]
 pub(super) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> Result<wire::Refusal, wire::Problem> {
     Ok(match value {
+        domain::Refusal::Forgotten { oldest } => wire::Refusal::Forgotten(wire::RefusalForgotten::new(
+            limits,
+            wire::RefusalForgottenParts { oldest: *oldest },
+        )?),
         domain::Refusal::Stale { newest } => {
             wire::Refusal::Stale(wire::RefusalStale::new(limits, wire::RefusalStaleParts { newest: *newest })?)
         }
@@ -580,6 +584,7 @@ pub(super) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> 
 #[expect(clippy::too_many_lines, reason = "one exhaustive translation preserves every stored refusal variant")]
 pub(super) fn decode_refusal(value: wire::Refusal) -> domain::Refusal {
     match value {
+        wire::Refusal::Forgotten(value) => domain::Refusal::Forgotten { oldest: value.oldest() },
         wire::Refusal::Stale(value) => domain::Refusal::Stale { newest: value.newest() },
         wire::Refusal::Full(value) => {
             let v = value.into_parts();

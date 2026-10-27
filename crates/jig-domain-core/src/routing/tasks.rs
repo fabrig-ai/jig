@@ -1200,6 +1200,12 @@ pub(super) fn tag_tasks(
                     None => false,
                 } {
                     drop(core.settings_offering.take());
+                    if match &core.restoring {
+                        Some(flight) => flight.request == token,
+                        None => false,
+                    } {
+                        drop(core.restoring.take());
+                    }
                 }
                 if core.goal_routes.remove(&token).is_some() {
                     let outcome = person_problem_refusal(core, problem);

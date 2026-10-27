@@ -302,3 +302,32 @@ fn move_to_newest_translates_the_revision_and_both_counts() {
     let w::Outcome::MovedToNewest(value) = answer.outcome() else { panic!("counts") };
     assert_eq!((value.newest(), value.moved(), value.stayed()), (9, 3, 1));
 }
+
+#[test]
+fn restore_translates_its_request_result_and_forgotten_refusal() {
+    let limits = w::CEILINGS;
+    let ask = w::Ask::Restore(
+        w::Restore::new(&limits, w::RestoreParts { revision: 7, reason: b"earlier choices".as_slice().into() })
+            .expect("restore"),
+    );
+    assert_eq!(
+        translate::asks::ask(ask, &[], &limits),
+        Ok(p::Ask::Restore { revision: 7, reason: b"earlier choices".as_slice().into() })
+    );
+    let answer = translate::answers::answer(
+        &p::Reply::Outcome(p::Outcome::Restored { proposal: 11, to: 7, left_out: Box::new([]) }),
+        &[],
+        &limits,
+    )
+    .expect("answer");
+    let w::KeyedAnswer::FinalAnswer(answer) = answer else { panic!("final") };
+    let w::Final::Done(done) = w::Final::decode(&limits, &mut skein_lib::Reader::new(answer.record())).expect("done")
+    else {
+        panic!("done")
+    };
+    let w::Outcome::Restored(value) = done.outcome() else { panic!("restored") };
+    assert_eq!((value.proposal(), value.to(), value.left_out().len()), (11, 7, 0));
+    let refusal = translate::refusals::refusal(p::Refusal::Forgotten { oldest: 3 }, &limits).expect("forgotten");
+    let w::Refusal::Forgotten(value) = refusal else { panic!("forgotten") };
+    assert_eq!(value.oldest(), 3);
+}

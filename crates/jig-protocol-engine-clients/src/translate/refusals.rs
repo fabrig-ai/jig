@@ -34,6 +34,9 @@ pub(crate) fn refusal(value: p::Refusal, limits: &w::Limits) -> Result<w::Refusa
             w::Refusal::Ended(w::RefusalEnded::new(limits, w::RefusalEndedParts { how: ending(how, limits)? })?)
         }
         p::Refusal::Taken { by } => w::Refusal::Taken(w::RefusalTaken::new(limits, w::RefusalTakenParts { by })?),
+        p::Refusal::Forgotten { oldest } => {
+            w::Refusal::Forgotten(w::RefusalForgotten::new(limits, w::RefusalForgottenParts { oldest })?)
+        }
         p::Refusal::Stale { newest } => {
             w::Refusal::Stale(w::RefusalStale::new(limits, w::RefusalStaleParts { newest })?)
         }

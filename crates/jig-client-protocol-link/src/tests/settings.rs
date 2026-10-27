@@ -603,3 +603,45 @@ fn move_to_newest_retains_its_revision_and_hears_both_counts() {
         Ok(c::Answer::Done(c::Outcome::MovedToNewest(c::OutcomeMovedToNewest { newest: 9, moved: 3, stayed: 1 })))
     );
 }
+
+#[test]
+fn restore_retains_the_reason_and_hears_proposal_revision_and_omissions() {
+    let limits = Limits::new(fixtures::limits().client, 4).expect("limits");
+    let ask = c::Ask::Restore(c::Restore {
+        revision: 7,
+        reason: c::Text::new(b"earlier choices".as_slice().into(), 64).expect("text"),
+    });
+    let wire = translate::asks::ask(&ask, &limits.wire).expect("ask");
+    assert_eq!(translate::store::restore_ask(wire, &limits), Ok(ask));
+    let mut left_out = List::with_capacity(1);
+    left_out
+        .push(
+            w::ApplicationSetting::new(&limits.wire, w::ApplicationSettingParts { kind: 8, scope: 9, number: 10 })
+                .expect("identity"),
+        )
+        .expect("one omission");
+    let outcome = w::Outcome::Restored(
+        w::OutcomeRestored::new(&limits.wire, w::OutcomeRestoredParts { proposal: 11, to: 7, left_out })
+            .expect("restored"),
+    );
+    let answer = w::Final::Done(w::Done::new(&limits.wire, w::DoneParts { outcome }).expect("done"));
+    let mut bytes = Writer::new(usize::try_from(answer.measure()).expect("measure"));
+    answer.encode(&mut bytes).expect("measured answer");
+    let answer = w::KeyedAnswer::FinalAnswer(
+        w::Owned::new(&limits.wire, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() })
+            .expect("answer"),
+    );
+    let mut left_out = List::with_capacity(1);
+    left_out.push(c::ApplicationSetting { kind: 8, scope: 9, number: 10 }).expect("one omission");
+    assert_eq!(
+        translate::answers::answer(answer, &limits),
+        Ok(c::Answer::Done(c::Outcome::Restored(c::OutcomeRestored { proposal: 11, to: 7, left_out })))
+    );
+    let refusal = w::Refusal::Forgotten(
+        w::RefusalForgotten::new(&limits.wire, w::RefusalForgottenParts { oldest: 3 }).expect("forgotten"),
+    );
+    assert_eq!(
+        translate::answers::refusal(&refusal, &limits),
+        Ok(c::Refusal::Forgotten(c::RefusalForgotten { oldest: 3 }))
+    );
+}

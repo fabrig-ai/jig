@@ -466,3 +466,227 @@ fn full_version_configuration() -> (root::Config, root::Limits) {
     peers::journal(&mut limits);
     (config, limits)
 }
+
+fn restore_ask(revision: u32) -> people::Ask {
+    people::Ask::Restore { revision, reason: b"Use the earlier choices".as_slice().into() }
+}
+fn restored(reply: people::Reply, revision: u32) -> u64 {
+    let people::Reply::Outcome(people::Outcome::Restored { proposal, to, left_out }) = reply else {
+        panic!("restored: {reply:?}")
+    };
+    assert_eq!(to, revision);
+    assert!(left_out.is_empty());
+    proposal
+}
+fn charter_edit(world: &World, instructions: &[u8]) -> settings::Item {
+    let mut charter = world.domain.settings().charter(1).expect("charter").clone();
+    charter.policy.instructions = instructions.into();
+    settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(charter))),
+    }
+}
+#[test]
+fn restoring_a_revision_proposes_what_later_revisions_replaced() {
+    let mut world = start(64);
+    let owner = sign_in(&mut world);
+    let mut policy = configuration().0.core.defaults.policies.get(&1).expect("policy").clone();
+    policy.policy.period_spend = 90;
+    for role in &mut policy.policy.roles {
+        role.period_spend = role.period_spend.min(90);
+    }
+    let chosen_policy = settings::Value::Policy(Box::new(policy));
+    let items = Box::new([
+        charter_edit(&world, b"Chosen at revision two"),
+        settings::Item { setting: settings::Setting::Template(2), edit: settings::Edit::Removed },
+        settings::Item { setting: settings::Setting::Policy(1), edit: settings::Edit::Set(chosen_policy.clone()) },
+    ]);
+    changed(&change(&mut world, owner, 1, 1, items), 2);
+    let items = Box::new([
+        charter_edit(&world, b"Changed again"),
+        template_edit(&world, 7),
+        settings::Item { setting: settings::Setting::Template(2), edit: settings::Edit::Reset },
+    ]);
+    changed(&change(&mut world, owner, 2, 2, items), 3);
+    let item = charter_edit(&world, b"Changed twice after R");
+    changed(&change(&mut world, owner, 3, 3, Box::new([item])), 4);
+    changed(
+        &change(
+            &mut world,
+            owner,
+            4,
+            4,
+            Box::new([settings::Item { setting: settings::Setting::Policy(1), edit: settings::Edit::Reset }]),
+        ),
+        5,
+    );
+    let mut added = world.domain.settings().template(1).expect("template").clone();
+    added.number = 3;
+    changed(
+        &change(
+            &mut world,
+            owner,
+            5,
+            5,
+            Box::new([settings::Item {
+                setting: settings::Setting::Template(3),
+                edit: settings::Edit::Set(settings::Value::Template(Box::new(added))),
+            }]),
+        ),
+        6,
+    );
+    let mut config = configuration().0;
+    config.core.defaults.templates[0].grace = Some(skein_lib::Duration::from_secs(13));
+    restart(&mut world, config);
+    let owner = sign_in(&mut world);
+    let (member, signed) = party(&mut world, b"restore member", Some((1, people::Role::Member)));
+    let proposal = restored(ask(&mut world, signed, 6, restore_ask(2)), 2);
+    assert_eq!(restored(ask(&mut world, signed, 6, restore_ask(2)), 2), proposal, "keyed replay");
+    let document = proposal_document(&mut world, owner, member, proposal);
+    let documents::ProposalAction::Settings { against, review: Some(review), .. } = document.action else {
+        panic!("settings review")
+    };
+    assert_eq!(against, 6);
+    assert_eq!(document.reason.bytes.as_ref(), b"restores revision 2: Use the earlier choices");
+    assert_eq!(review.items.len(), 5);
+    let by_setting: std::collections::BTreeMap<_, _> = review.items.iter().map(|item| (item.setting, item)).collect();
+    let charter = by_setting[&settings::Setting::Charter(1)];
+    let Some(settings::Value::Charter(value)) = &charter.would_be else { panic!("chosen charter") };
+    assert_eq!(value.policy.instructions.as_ref(), b"Chosen at revision two");
+    let reset = by_setting[&settings::Setting::Template(1)];
+    assert_eq!(reset.edit, reads::RevisionEdit::Reset);
+    let Some(settings::Value::Template(value)) = &reset.would_be else { panic!("today's default") };
+    assert_eq!(value.grace, Some(skein_lib::Duration::from_secs(13)));
+    assert_eq!(by_setting[&settings::Setting::Template(2)].edit, reads::RevisionEdit::Removed);
+    assert_eq!(by_setting[&settings::Setting::Template(3)].edit, reads::RevisionEdit::Reset);
+    assert_eq!(by_setting[&settings::Setting::Policy(1)].would_be, Some(chosen_policy.clone()));
+    assert!(matches!(
+        decide(&mut world, owner, 7, member, proposal, people::ProposalDecision::Accept, Some(people::Running::Stays)),
+        people::Reply::Outcome(people::Outcome::ProposalDecided { choice: people::ProposalChoice::Accepted, .. })
+    ));
+    assert_eq!(
+        world.domain.settings().charter(1).expect("restored charter").policy.instructions.as_ref(),
+        b"Chosen at revision two"
+    );
+    assert_eq!(world.domain.settings().value(settings::Setting::Policy(1)), Some(&chosen_policy));
+    assert_eq!(
+        world.domain.settings().template(1).expect("default template").grace,
+        Some(skein_lib::Duration::from_secs(13))
+    );
+    assert!(world.domain.settings().template(2).is_none());
+    assert!(world.domain.settings().template(3).is_none());
+}
+#[test]
+fn a_restore_reads_every_page_of_the_history_after_r() {
+    let (config, mut limits) = configuration();
+    limits.core.documents.rows = 2;
+    limits.core.load_slots = 1;
+    peers::journal(&mut limits);
+    let mut world = World::first_start_with_accounts(config, &limits);
+    world.client_peer = Some(ClientPeer::default());
+    let owner = sign_in(&mut world);
+    for against in 1..=5 {
+        let item = charter_edit(&world, &[b'A' + u8::try_from(against).expect("small")]);
+        changed(
+            &change(&mut world, owner, u8::try_from(against).expect("small"), against, Box::new([item])),
+            against + 1,
+        );
+    }
+    let proposal = restored(ask(&mut world, owner, 6, restore_ask(1)), 1);
+    let document = proposal_document(&mut world, owner, OWNER, proposal);
+    let documents::ProposalAction::Settings { review: Some(review), .. } = document.action else { panic!("review") };
+    let Some(settings::Value::Charter(value)) = &review.items.get(0).expect("one item").would_be else {
+        panic!("default charter")
+    };
+    assert_eq!(value.policy.instructions.as_ref(), b"Answer within the granted authority.");
+}
+#[test]
+fn a_restore_of_a_forgotten_revision_names_the_oldest_kept() {
+    let mut world = start(1);
+    let owner = sign_in(&mut world);
+    for against in 1..=3 {
+        let item = template_edit(&world, u64::from(against) + 6);
+        changed(
+            &change(&mut world, owner, u8::try_from(against).expect("small"), against, Box::new([item])),
+            against + 1,
+        );
+    }
+    assert_eq!(
+        ask(&mut world, owner, 4, restore_ask(1)),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Forgotten { oldest: 3 }))
+    );
+}
+#[test]
+fn a_restore_of_the_newest_is_empty() {
+    let mut world = start(64);
+    let owner = sign_in(&mut world);
+    assert_eq!(
+        ask(&mut world, owner, 1, restore_ask(1)),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::NotWellFormed {
+            at: 0,
+            why: people::Malformed::SettingsUnchanged
+        }))
+    );
+}
+#[test]
+fn a_revision_made_while_a_restore_loads_refuses_it_stale() {
+    let mut world = start(64);
+    let owner = sign_in(&mut world);
+    let item = template_edit(&world, 7);
+    changed(&change(&mut world, owner, 1, 1, Box::new([item])), 2);
+    let mut read_peer = jig_core_world::reads::Parties::new(world.store.applied);
+    read_peer.hold_loads = true;
+    world.reads = Some(read_peer);
+    world.send(root::Event::Core(core::Event::People(people::Event::Ask {
+        models: Box::new([]),
+        reply_to: skein_lib::ReplyTo::new(skein_lib::Token::new(SEED + 1)),
+        sign_in: owner,
+        key: [2; 16],
+        ask: restore_ask(1),
+    })));
+    assert!(world.reads.as_ref().expect("reads").paused());
+    assert_eq!(ask(&mut world, owner, 3, restore_ask(1)), people::Reply::Again(people::Again::Busy));
+    let item = template_edit(&world, 8);
+    changed(&change(&mut world, owner, 4, 2, Box::new([item])), 3);
+    jig_core_world::reads::complete(&mut world);
+    let (_, root::Delivery::Core(core::Held::PeopleReply { reply, .. })) =
+        world.client_peer.as_mut().expect("client").delivered.pop().expect("restore reply")
+    else {
+        panic!("reply")
+    };
+    assert_eq!(reply, people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Stale { newest: 3 })));
+    world.reads = None;
+    assert!(inventory(&mut world, owner).pending.is_empty());
+}
+#[test]
+fn a_restore_past_the_whole_set_is_refused_too_large() {
+    let mut world = start(64);
+    let owner = sign_in(&mut world);
+    let capacity = settings::capacity(&configuration().1.core).expect("whole set");
+    for at in 0..=capacity {
+        let against = at + 1;
+        let number = 10 + at;
+        let mut template = world.domain.settings().template(1).expect("template").clone();
+        template.number = number;
+        let mut items = vec![settings::Item {
+            setting: settings::Setting::Template(number),
+            edit: settings::Edit::Set(settings::Value::Template(Box::new(template))),
+        }];
+        if at > 0 {
+            items
+                .push(settings::Item { setting: settings::Setting::Template(number - 1), edit: settings::Edit::Reset });
+        }
+        changed(
+            &change(&mut world, owner, u8::try_from(at + 1).expect("small"), against, items.into_boxed_slice()),
+            against + 1,
+        );
+    }
+    assert!(matches!(
+        ask(&mut world, owner, 100, restore_ask(1)),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::NotWellFormed {
+            why: people::Malformed::Settings { fault: settings::Fault::Count, .. },
+            ..
+        }))
+    ));
+    assert!(inventory(&mut world, owner).pending.is_empty());
+}

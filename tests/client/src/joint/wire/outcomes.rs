@@ -10,6 +10,7 @@ use skein_lib::{List, Token};
 pub enum Outcome {
     SettingsChanged { revision: u32 },
     MovedToNewest { newest: u32, moved: u32, stayed: u32 },
+    Restored(client::OutcomeRestored),
     Owner(client::OwnerOutcome),
     MovingOut { account: u32, number: u32, source: u32 },
     Applied { connector: u16, token: Token },
@@ -24,6 +25,15 @@ pub enum Outcome {
 #[expect(clippy::too_many_lines, reason = "one exhaustive translation retains every owner outcome")]
 pub fn outcome(value: &people::Outcome, limits: &Limits) -> Result<Outcome, owner::Invalid> {
     let owner = match value {
+        people::Outcome::Restored { proposal, to, left_out } => {
+            let mut omitted = List::with_capacity(u32::try_from(left_out.len()).expect("bounded omissions"));
+            for item in left_out {
+                omitted
+                    .push(client::ApplicationSetting { kind: item.kind, scope: item.scope, number: item.number })
+                    .expect("same capacity");
+            }
+            return Ok(Outcome::Restored(client::OutcomeRestored { proposal: *proposal, to: *to, left_out: omitted }));
+        }
         people::Outcome::MovedToNewest { newest, moved, stayed } => {
             return Ok(Outcome::MovedToNewest { newest: *newest, moved: *moved, stayed: *stayed });
         }

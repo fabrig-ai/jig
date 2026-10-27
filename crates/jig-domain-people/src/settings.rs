@@ -23,3 +23,11 @@ pub enum Running {
     Stays,
     Moves,
 }
+
+/// A setting owned by an application (engine.md, 17.5 and 17.10).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct ApplicationSetting {
+    pub kind: u32,
+    pub scope: u32,
+    pub number: u32,
+}

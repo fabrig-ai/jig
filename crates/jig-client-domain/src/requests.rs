@@ -250,6 +250,7 @@ fn kept(request: &Ask) -> bool {
             contract::Ask::Seen { .. } => false,
             contract::Ask::ChangeSettings(_)
             | contract::Ask::MoveToNewest(_)
+            | contract::Ask::Restore(_)
             | contract::Ask::Create { .. }
             | contract::Ask::Propose { .. }
             | contract::Ask::Withdraw { .. }
