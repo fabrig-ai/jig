@@ -855,8 +855,14 @@ fn disjoint_maps_and_adjacent_ranges_are_admitted() {
             ..BASE.sets[0]
         }],
     };
-    const SECRETS: PatchSets =
-        PatchSets { sets: &[crate::patching::sets::JIG, PatchSet { families: &[TOKEN], ..BASE.sets[0] }] };
+    const SECRETS: PatchSets = PatchSets {
+        sets: &[
+            super::baseline::SETS.sets[0],
+            super::baseline::SETS.sets[1],
+            crate::JIG,
+            PatchSet { families: &[TOKEN], ..BASE.sets[0] },
+        ],
+    };
     for sets in [BASE, SETS, ADJACENT, BEFORE, SECRETS] {
         assert_eq!(plan::bounds(&sets), Ok(()));
     }

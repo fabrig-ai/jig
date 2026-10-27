@@ -65,6 +65,14 @@ fn frame_capacities_cover_real_turns_with_small_serving_cost() {
         crate::worst_case_with_patches(&world, &sets).expect("priced"),
         patches::worst_case(&world, &sets).expect("machines")
     );
+    for (label, configuration) in [("world", &world), ("small", &limits)] {
+        let sets = super::baseline::SETS;
+        let before = crate::worst_case(configuration).expect("before baseline");
+        let priced = crate::worst_case_with_patches(configuration, &sets).expect("real sets priced");
+        let frames = patches::worst_case(configuration, &sets).expect("real frame machines");
+        assert!(frames > 0, "both real frame families have kept text");
+        eprintln!("real {label} serving before {before}, computed {priced}, frame machines {frames}");
+    }
     let baseline = crate::worst_case(&limits).expect("baseline");
     let priced = crate::worst_case_with_patches(&limits, &sets).expect("priced");
     let machines = patches::worst_case(&limits, &sets).expect("machines");
