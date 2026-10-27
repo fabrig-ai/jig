@@ -7,6 +7,8 @@ use skein_fake_machine::Item;
 use skein_lib::Secret;
 
 const SEED: u64 = 401;
+// Initial rows and wires, then one fixture-note seed commit, even without notes.
+const SOURCE_LAST: u64 = 2;
 // fixture-token's schema bounds its payload at 64 bytes.
 const TOKEN_BOUND: usize = 64;
 // Manifest's family and name bounds (store.md 10.3).
@@ -54,7 +56,7 @@ fn refuses_check(world: &mut World, expected: &Check) {
         world.crash(SEED);
     }
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open_switched(), Some(1), "the build before opens its source");
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST), "the build before opens its source");
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
     patches::kept(&before, &patches::source(world), &"build before");
 }
@@ -137,14 +139,14 @@ fn sparse_counts_exclude_unkept_opaque_application_rows() {
     records.labels.push((b"l/0".to_vec(), b"kept".to_vec()));
     records.tokens.push((9, b"credential".to_vec()));
     let mut world = records.committed(SEED, patches::BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST));
     let key: Box<[u8]> = Box::from(b"z/opaque".as_slice());
     let value: Box<[u8]> = Box::from(b"not a versioned record".as_slice());
     let writes = Box::new([
-        jig_protocol_store::Write::Save(root::header(2)),
+        jig_protocol_store::Write::Save(root::header(SOURCE_LAST + 1)),
         jig_protocol_store::Write::Put { key: key.clone(), value: value.clone() },
     ]);
-    assert_eq!(world.commit(writes), Some(2));
+    assert_eq!(world.commit(writes), Some(SOURCE_LAST + 1));
     world.crash(SEED);
     world.patch_sets(patches::SETS);
     world.open_switched().expect("unkept rows are copied as bytes");
@@ -193,7 +195,7 @@ fn first_manifest_without_sets_has_no_counts() {
 fn carried_counter_and_unwalked_values_survive_switch() {
     let records = empty();
     let mut world = records.committed(SEED, patches::BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST));
     world.mark_if_needed();
     let carried = world.secret(Secrets::Carry {
         kind: jig_protocol_store::CarriedKind::Value,
@@ -220,7 +222,7 @@ fn carried_counter_and_unwalked_values_survive_switch() {
 #[test]
 fn erased_carried_number_is_never_drawn_after_switch() {
     let mut world = empty().committed(SEED, patches::BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST));
     world.mark_if_needed();
     let carried = world.secret(Secrets::Carry {
         kind: jig_protocol_store::CarriedKind::Value,
@@ -276,7 +278,7 @@ fn token_past_schema_bound_refuses_without_switch() {
         world.crash(SEED);
     }
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST));
 }
 
 #[test]
@@ -449,7 +451,7 @@ fn live_sets_past_arena_limits_switch_before_restart() {
     world.crash(SEED);
     world.rewrite(b"active", b"1\n");
     world.patch_sets(patches::BASE);
-    assert_eq!(world.open_switched(), Some(1));
+    assert_eq!(world.open_switched(), Some(SOURCE_LAST));
     assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
 }
 
@@ -593,8 +595,6 @@ fn manifest_bounds_refuse_sets_behind_without_removing_strays() {
 
 #[test]
 fn cuts_across_check_and_switch_recover_whole_maps() {
-    // Initial rows and wires, then the fixture-note seed commit.
-    const SOURCE_LAST: u64 = 2;
     let records = patches::Records::story();
     let mut complete = records.committed(SEED, patches::BASE);
     complete.patch_sets(patches::SETS);
