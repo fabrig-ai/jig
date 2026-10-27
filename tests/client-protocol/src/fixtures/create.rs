@@ -32,6 +32,7 @@ pub fn create_tasks() -> List<c::NewTask> {
                 },
                 budget: if allowed { c::NewBudget::AsAllowed { cap: Some(20) } } else { c::NewBudget::Named },
                 wake: Some(c::OwnerWakePolicy {
+                    markers: 0,
                     words: c::WakeRule::Immediate,
                     notices: c::WakeRule::Never,
                     news: c::WakeRule::Never,

@@ -28,6 +28,7 @@ pub(super) fn details() -> OwnerChipDetails {
         attempt: Some(u64::MAX),
         retry: Some(RetryNotice::Refused { count: u32::MAX }),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Immediate,
             news: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(30) },

@@ -784,6 +784,13 @@ pub(super) fn route_connector(
 /// Translate the core's choice without choosing a judge or admitting a write.
 fn route_effect_ask(domain: &mut Domain, number: u16, ask: core::connector::Ask, work: &mut Queue<Work>) {
     let event = match ask {
+        core::connector::Ask::Subscribe { task, topic, markers } => connector::Event::Subscribe {
+            task,
+            topic: u16::try_from(topic).expect("connector topic number"),
+            markers,
+            wake_at: 2,
+            keep_at: 1,
+        },
         core::connector::Ask::ResolveUncertain { entry, again } => connector::Event::Resolve { entry, repeat: again },
         core::connector::Ask::Describe { owner } => connector::Event::Describe {
             token: owner,
@@ -852,7 +859,6 @@ fn route_effect_ask(domain: &mut Domain, number: u16, ask: core::connector::Ask,
         | core::connector::Ask::ProcedureClose { .. }
         | core::connector::Ask::Project { .. }
         | core::connector::Ask::Release { .. }
-        | core::connector::Ask::Subscribe { .. }
         | core::connector::Ask::Unsubscribe { .. }
         | core::connector::Ask::Read { .. }
         | core::connector::Ask::Gather { .. }

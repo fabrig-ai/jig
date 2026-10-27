@@ -304,6 +304,7 @@ fn wake_rule(value: w::WakeRule) -> p::WakeRule {
 pub(super) fn wake(value: w::OwnerWakePolicy) -> p::WakePolicy {
     let v = value.into_parts();
     p::WakePolicy {
+        markers: v.markers,
         words: wake_rule(v.words),
         notices: wake_rule(v.notices),
         news: wake_rule(v.news),

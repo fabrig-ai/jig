@@ -51,6 +51,7 @@ fn full_authority() -> Authority {
 }
 fn full_wake() -> OwnerWakePolicy {
     OwnerWakePolicy {
+        markers: 0,
         words: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(u64::MAX) },
         notices: WakeRule::Immediate,
         news: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(u64::MAX) },

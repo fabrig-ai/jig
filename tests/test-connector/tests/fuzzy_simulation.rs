@@ -52,13 +52,14 @@ fn run(seed: u8) -> (Vec<Request>, Vec<Observed>, BTreeMap<RecordKey, Record>, u
     }
     world.event(Event::Adopt { project: 1, resource: path(seed, 2), role: ResourceRole::Owned });
     world.event(Event::Names { task: 2, project: 1, resources: Box::from([path(seed, 2)]) });
-    world.event(Event::Subscribe { task: 2, topic: kind(seed, 1), wake_at: 5, keep_at: 2 });
+    world.event(Event::Subscribe { markers: 0, task: 2, topic: kind(seed, 1), wake_at: 5, keep_at: 2 });
     world.event(Event::System(SystemEvent::Pool {
         path: path(seed, 2),
         slots: u32::from(seed % 3),
         lost: Box::from([2]),
     }));
     world.event(Event::System(SystemEvent::News {
+        markers: 0,
         topic: kind(seed, 1),
         importance: u16::from(seed % 7),
         origin: jig_test_connector::Origin::Other,

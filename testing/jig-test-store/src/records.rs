@@ -320,10 +320,16 @@ fn encode_record(value: &d::Record) -> w::Value {
             )
             .expect("admitted fields fit schema"),
         ),
-        d::Record::Subscription { topic, task, wake_at, keep_at } => w::Value::Subscription(
+        d::Record::Subscription { topic, task, wake_at, keep_at, markers } => w::Value::Subscription(
             w::RecordSubscription::new(
                 &w::CEILINGS,
-                w::RecordSubscriptionParts { topic: *topic, task: *task, wake_at: *wake_at, keep_at: *keep_at },
+                w::RecordSubscriptionParts {
+                    topic: *topic,
+                    task: *task,
+                    wake_at: *wake_at,
+                    keep_at: *keep_at,
+                    markers: *markers,
+                },
             )
             .expect("admitted fields fit schema"),
         ),
@@ -392,8 +398,8 @@ fn decode_record(value: w::Value, limits: &d::Limits) -> Result<d::Record, Undec
             d::Record::Adoption { project, path: decode_path(path, limits)?, role: decode_resource_role(role) }
         }
         w::Value::Subscription(value) => {
-            let w::RecordSubscriptionParts { topic, task, wake_at, keep_at } = value.into_parts();
-            d::Record::Subscription { topic, task, wake_at, keep_at }
+            let w::RecordSubscriptionParts { topic, task, wake_at, keep_at, markers } = value.into_parts();
+            d::Record::Subscription { topic, task, wake_at, keep_at, markers }
         }
         w::Value::Pool(value) => {
             let w::RecordPoolParts { path, slots } = value.into_parts();

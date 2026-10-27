@@ -111,6 +111,7 @@ fn template(number: u64) -> ProposedTask {
         dependencies: list(4, [u64::MAX, 0]),
         resources: list(4, [part()]),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

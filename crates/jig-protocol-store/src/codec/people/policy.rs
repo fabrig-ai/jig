@@ -604,10 +604,11 @@ pub(super) fn encode_wake_policy(
     value: &domain::WakePolicy,
     limits: &wire::Limits,
 ) -> Result<wire::WakePolicy, wire::Problem> {
-    let domain::WakePolicy { words, notices, news, results, questions, answers, timers } = value;
+    let domain::WakePolicy { markers, words, notices, news, results, questions, answers, timers } = value;
     wire::WakePolicy::new(
         limits,
         wire::WakePolicyParts {
+            markers: *markers,
             words: encode_wake_rule(words, limits)?,
             notices: encode_wake_rule(notices, limits)?,
             news: encode_wake_rule(news, limits)?,
@@ -619,8 +620,10 @@ pub(super) fn encode_wake_policy(
     )
 }
 pub(super) fn decode_wake_policy(value: wire::WakePolicy) -> domain::WakePolicy {
-    let wire::WakePolicyParts { words, notices, news, results, questions, answers, timers } = value.into_parts();
+    let wire::WakePolicyParts { markers, words, notices, news, results, questions, answers, timers } =
+        value.into_parts();
     domain::WakePolicy {
+        markers,
         words: decode_wake_rule(words),
         notices: decode_wake_rule(notices),
         news: decode_wake_rule(news),

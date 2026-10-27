@@ -334,6 +334,7 @@ pub fn owner_wake_policy(limits: &Limits) -> OwnerWakePolicy {
     OwnerWakePolicy::new(
         limits,
         OwnerWakePolicyParts {
+            markers: u32::MAX,
             words: WakeRule::Batch(wake_rule_batch(limits)),
             notices: WakeRule::Immediate,
             news: WakeRule::Never,
@@ -675,3 +676,9 @@ pub use compound::{COMPOUND_PROJECT, compound_operations};
 
 // The previous 111-byte minimum plus an empty name: four length bytes and its cut flag.
 pub const OWNER_PROJECT_MIN_BYTES: u32 = 116;
+
+// Each smallest document gained one four-byte owner wake marker set.
+pub const HISTORICAL_MIN_BYTES: u32 = 288 + 4;
+pub const TASK_MIN_BYTES: u32 = 261 + 4;
+pub const ESCALATION_MIN_BYTES: u32 = 214 + 4;
+pub const OWNER_ESCALATION_MIN_BYTES: u32 = 265 + 4;

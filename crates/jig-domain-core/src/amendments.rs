@@ -195,6 +195,7 @@ fn wake_rule(value: people::WakeRule) -> tasks::WakeRule {
 
 pub(crate) fn wake(value: people::WakePolicy) -> tasks::WakePolicy {
     tasks::WakePolicy {
+        markers: value.markers,
         words: wake_rule(value.words),
         notices: wake_rule(value.notices),
         news: wake_rule(value.news),

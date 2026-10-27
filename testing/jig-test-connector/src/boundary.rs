@@ -511,7 +511,7 @@ pub enum SystemEvent {
     /// A pool changed size; named allocations no longer present drift.
     Pool { path: Path, slots: u32, lost: Box<[u64]> },
     /// A hint on a topic, with importance on a configured scale.
-    News { topic: u16, importance: u16, origin: Origin },
+    News { topic: u16, importance: u16, origin: Origin, markers: u32 },
     /// The result of a previously released write attempt.
     Applied { entry: u64, attempt: u32, result: ApplyResult },
     /// A lookup for an uncertain effect completed.
@@ -657,6 +657,7 @@ pub enum Event {
     },
     /// A task starts receiving a topic, with its own classification thresholds.
     Subscribe {
+        markers: u32,
         task: u64,
         topic: u16,
         wake_at: u16,
@@ -793,7 +794,7 @@ pub enum Record {
     /// A project's resource role.
     Adoption { project: u32, path: Path, role: ResourceRole },
     /// A task's topic thresholds.
-    Subscription { topic: u16, task: u64, wake_at: u16, keep_at: u16 },
+    Subscription { topic: u16, task: u64, wake_at: u16, keep_at: u16, markers: u32 },
     /// A pool's last observed slots.
     Pool { path: Path, slots: u32 },
     /// An unsettled effect and its last durable attempt.

@@ -335,6 +335,7 @@ fn grants_list(value: &Value) -> Result<Box<[tasks::Grant]>, Problem> {
 
 fn wake_policy(value: &Value) -> Result<tasks::WakePolicy, Problem> {
     Ok(tasks::WakePolicy {
+        markers: 0,
         words: wake_rule(value.required(b"words")?)?,
         notices: wake_rule(value.required(b"notices")?)?,
         news: wake_rule(value.required(b"news")?)?,

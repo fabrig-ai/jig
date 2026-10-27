@@ -456,6 +456,7 @@ fn task() -> Task {
         taken_by: None,
         instructions: Some(DocumentText::complete(text(b"instructions"))),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Never,
             news: WakeRule::Never,

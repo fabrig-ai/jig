@@ -290,6 +290,7 @@ pub enum Ask {
     Subscribe {
         task: u64,
         topic: u64,
+        markers: u32,
     },
     Unsubscribe {
         task: u64,

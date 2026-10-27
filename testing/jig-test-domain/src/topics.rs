@@ -74,35 +74,13 @@ pub(super) fn described(
 }
 
 pub(super) fn subscribed(
-    domain: &mut Domain,
+    _domain: &mut Domain,
     number: u16,
     request: Token,
     key: core::CallKey,
     subscription: u64,
     work: &mut Queue<Work>,
 ) {
-    if let Some(row) = domain.core.tasks.task(key.task) {
-        for interest in &row.subscriptions {
-            if interest.number == subscription {
-                match interest.kind {
-                    tasks::SubscriptionKind::Topic { connector, topic } if connector == number => {
-                        work.push(Work::Connector {
-                            number,
-                            event: connector::Event::Subscribe {
-                                task: key.task,
-                                topic: u16::try_from(topic).expect("connector topic number"),
-                                wake_at: 2,
-                                keep_at: 1,
-                            },
-                        });
-                    }
-                    tasks::SubscriptionKind::Topic { .. }
-                    | tasks::SubscriptionKind::Task { .. }
-                    | tasks::SubscriptionKind::Timer { .. } => {}
-                }
-            }
-        }
-    }
     if number == 1 {
         work.push(Work::Core(core::Event::NamedAnswer {
             to: ReplyTo::new(request),

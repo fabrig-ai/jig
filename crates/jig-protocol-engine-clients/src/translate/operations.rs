@@ -294,6 +294,7 @@ fn member(
         wake: match v.wake {
             Some(wake) => asks::wake(wake),
             None => p::WakePolicy {
+                markers: 0,
                 words: p::WakeRule::Immediate,
                 notices: p::WakeRule::Immediate,
                 news: p::WakeRule::Immediate,

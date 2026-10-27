@@ -12,6 +12,7 @@ pub(super) fn details() -> OwnerChipDetails {
         attempt: None,
         retry: None,
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Never,
             news: WakeRule::Never,

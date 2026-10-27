@@ -672,6 +672,7 @@ mod tests {
                 .expect("whole authority")
                 .authority;
         let wake = client::OwnerWakePolicy {
+            markers: 0,
             words: client::WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::ZERO },
             notices: client::WakeRule::Immediate,
             news: client::WakeRule::Never,
@@ -720,6 +721,7 @@ mod tests {
         assert_eq!(
             amendment.wake,
             Some(people::WakePolicy {
+                markers: 0,
                 words: people::WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::ZERO },
                 notices: people::WakeRule::Immediate,
                 news: people::WakeRule::Never,

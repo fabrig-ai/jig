@@ -82,7 +82,7 @@ enum Holding { write: WriteHolding, slot: SlotHolding }
 record WakeBatch { count: u32 age: duration }
 enum WakeRule { never, immediate, batch: WakeBatch }
 enum ResultsWake { never, each, last_or_failure }
-record WakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool }
+record WakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool markers: u32 }
 enum RecurringOverlap { skip, wait }
 enum Retention { kept, forgotten_once_read }
 enum EndedBy { result, requester }
