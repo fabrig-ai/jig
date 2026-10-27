@@ -581,6 +581,8 @@ fn manifest_bounds_refuse_sets_behind_without_removing_strays() {
 
 #[test]
 fn cuts_across_check_and_switch_recover_whole_maps() {
+    // Initial rows and wires, then the fixture-note seed commit.
+    const SOURCE_LAST: u64 = 2;
     let records = patches::Records::story();
     let mut complete = records.committed(SEED, patches::BASE);
     complete.patch_sets(patches::SETS);
@@ -604,15 +606,24 @@ fn cuts_across_check_and_switch_recover_whole_maps() {
         world.patch_sets(patches::BASE);
         if world.active() == b"1\n" {
             source_opened = true;
-            assert_eq!(world.open_switched(), Some(1), "cut {cut}");
+            assert_eq!(world.open_switched(), Some(SOURCE_LAST), "cut {cut}");
+            // A cut after the copy opened may have advanced the model to its
+            // patched prefix; recovery chose the source instead (store.md 10.4).
+            world.accept_recovery(SOURCE_LAST);
+            // store.md 10.1 step 4 permits only recovery before the start mark.
+            patches::kept(&before, &patches::source(&mut world), &cut);
+            // engine.md 6 requires a wires commit at every start, even without
+            // a pending switch. It writes commit 3 into the new recovery segment;
+            // it is no longer an empty-segment-only observation after this point.
+            assert_eq!(world.mark(), Some(SOURCE_LAST + 1), "source start mark, cut {cut}");
             records.check(&mut world, 1, &cut);
             assert!(!world.paths().iter().any(|path| path.starts_with(b"generations/2")));
         } else {
             switched = true;
             assert_eq!(world.open_switched(), None, "cut {cut}");
             assert!(matches!(world.refusal(), Some(OpenRefusal::Ahead { .. })), "cut {cut}: {:?}", world.refusal());
+            patches::kept(&before, &patches::source(&mut world), &cut);
         }
-        patches::kept(&before, &patches::source(&mut world), &cut);
         world.crash(SEED);
         world.patch_sets(patches::SETS);
         world.open_switched().expect("retry after cut");
