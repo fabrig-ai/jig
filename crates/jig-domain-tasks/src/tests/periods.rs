@@ -116,3 +116,85 @@ fn the_newest_period_stays_live_after_its_pools_close() {
     assert!(!newest.closed);
     assert_eq!(newest.numbers.reserved, 0);
 }
+
+#[test]
+fn a_period_raise_keeps_its_spending_reservations_times_and_made() {
+    let mut test = Harness::new();
+    let source = Funder::Period { project: 1, period: 0 };
+    let row = test.domain.funding.get_mut(&source).unwrap();
+    row.numbers = crate::Numbers { budget: 100, spent: 10, spent_below: 20, reserved: 30 };
+    row.made = 4;
+    row.period = Some(PeriodTimes { began: Wall::from_nanos(100), next: Some(Wall::from_nanos(200)) });
+    let mut expected = *row;
+    expected.numbers.budget = 200;
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 0, budget: 200 });
+    assert_eq!(test.domain.funding(source), Some(&expected));
+    assert_eq!(
+        out.as_slice(),
+        &[Request::Save { record: Stored::Ledger(expected) }, Request::Done { reply_to: to() },]
+    );
+}
+
+#[test]
+fn a_period_resize_admits_exactly_what_is_used() {
+    let mut test = Harness::new();
+    let source = Funder::Period { project: 1, period: 0 };
+    test.domain.funding.get_mut(&source).unwrap().numbers =
+        crate::Numbers { budget: 100, spent: 10, spent_below: 20, reserved: 30 };
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 0, budget: 60 });
+    assert_eq!(test.domain.funding(source).unwrap().numbers.budget, 60);
+    assert_eq!(
+        out.as_slice(),
+        &[
+            Request::Save { record: Stored::Ledger(*test.domain.funding(source).unwrap()) },
+            Request::Done { reply_to: to() },
+        ]
+    );
+    let before = *test.domain.funding(source).unwrap();
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 0, budget: 59 });
+    assert_eq!(
+        out.as_slice(),
+        &[Request::Refused { reply_to: to(), problem: crate::Problem::new(None, crate::Refusal::Funding) }]
+    );
+    assert_eq!(test.domain.funding(source), Some(&before));
+}
+
+#[test]
+fn an_older_period_cannot_be_resized() {
+    let mut test = Harness::new();
+    test.make([super::revisions::task(1, &[])].into());
+    test.send(Event::OpenPeriod { reply_to: to(), project: 1, period: 1, budget: 100 });
+    let source = Funder::Period { project: 1, period: 0 };
+    let before = *test.domain.funding(source).unwrap();
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 0, budget: 20_000 });
+    assert_eq!(
+        out.as_slice(),
+        &[Request::Refused { reply_to: to(), problem: crate::Problem::new(None, crate::Refusal::Funding) }]
+    );
+    assert_eq!(test.domain.funding(source), Some(&before));
+}
+
+#[test]
+fn an_unopened_period_cannot_be_resized() {
+    let mut test = Harness::new();
+    let before = *test.domain.funding(Funder::Period { project: 1, period: 0 }).unwrap();
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 9, budget: 100 });
+    assert_eq!(
+        out.as_slice(),
+        &[Request::Refused { reply_to: to(), problem: crate::Problem::new(None, crate::Refusal::Unknown) }]
+    );
+    assert!(test.domain.funding(Funder::Period { project: 1, period: 9 }).is_none());
+    assert_eq!(test.domain.funding(before.funder), Some(&before));
+}
+
+#[test]
+fn a_period_resize_before_ready_is_refused() {
+    let mut test = Harness::new();
+    test.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
+    let out = test.send(Event::ResizePeriod { reply_to: to(), project: 1, period: 0, budget: 100 });
+    assert_eq!(
+        out.as_slice(),
+        &[Request::Refused { reply_to: to(), problem: crate::Problem::new(None, crate::Refusal::NotReady) }]
+    );
+    assert!(test.domain.funding(Funder::Period { project: 1, period: 0 }).is_none());
+}
