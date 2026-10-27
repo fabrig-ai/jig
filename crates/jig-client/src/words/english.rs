@@ -28,7 +28,7 @@ pub(super) fn language() -> Language {
                 }
                 if let Word::Hold(HoldWord::Exceeded(bound)) = word {
                     let suffix: &[u8] = match bound {
-                        Bound::Reasoning | Bound::Metadata | Bound::Answer => b" bytes",
+                        Bound::Reasoning | Bound::Metadata | Bound::Answer | Bound::HostPart => b" bytes",
                         Bound::Items => b" items",
                         Bound::Tools => b" tools",
                         Bound::HistoryItems => b" messages and blocks",
@@ -173,6 +173,7 @@ const fn exceeded(bound: Bound) -> (u16, &'static [u8], &'static [HoleKind]) {
         }
         Bound::Window => (104, b"Held: the run no longer fits the model's window of ", &[HoleKind::Number]),
         Bound::Output => (105, b"Held: the request went past the model's output ceiling of ", &[HoleKind::Number]),
+        Bound::HostPart => (121, b"Held: the host refused its host part, past its bound of ", &[HoleKind::Number]),
     }
 }
 

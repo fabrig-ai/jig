@@ -87,6 +87,7 @@ fn configuration(limits: &core::Limits) -> core::Config {
                 hosts: jig_domain_fleet::Kinds::Workers,
                 spend: 100,
                 policy: core::RunPolicy {
+                    tools: jig_domain_authority::Tools(2047),
                     instructions: Box::new([]),
                     waiting: Duration::from_secs(1),
                     resume: true,

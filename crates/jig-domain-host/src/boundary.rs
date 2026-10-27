@@ -806,6 +806,10 @@ mod tests {
 /// Why the agent refused a start, independent of its diagnostic bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StartCause {
+    /// Rendered host charter and tools exceeded the receiving host's byte bound.
+    HostPart {
+        bound: u64,
+    },
     Other,
     Grants,
 }
@@ -841,4 +845,6 @@ pub enum Bound {
     Window,
     /// The model's declared output ceiling: tokens.
     Output,
+    /// Rendered host charter and tool schemas: bytes.
+    HostPart,
 }

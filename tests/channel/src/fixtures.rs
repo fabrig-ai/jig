@@ -73,7 +73,7 @@ const ENGINE: &[u8] = br#"{
 "number": 1, "instructions": "charters/chat.txt", "model": "fake", "alternatives": [],
 "hosts": "workers", "waiting_ms": 10000, "resume": true,
 "turns": 4, "time_ms": 30000, "reserve_turns": 1, "reserve_time_ms": 5000, "spend": 20,
-"inspect": false, "modify": false, "shell": false, "agents": false, "call_timeout_ms": 10000
+"inspect": false, "modify": false, "shell": false, "agents": false, "tools": 2047, "call_timeout_ms": 10000
 }],
 "templates": [
 {"number": 1, "name": "chat", "executor": {"charter": 1}, "contract": {"report": {"words": 32}}, "shallower": 1, "budget": {"as_allowed": null}, "deadline": "none", "tracked": null, "conversation": true, "listed": false, "retention": "kept", "label": 1, "grace_ms": 5000, "llm": null},

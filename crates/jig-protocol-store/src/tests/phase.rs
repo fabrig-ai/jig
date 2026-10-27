@@ -1956,5 +1956,8 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // + placed-hold codec limits and task/value/commit carriers 536,904,728
     // + the aligned settings-refusal limit above.
     let settings_refusal_limit = u64::try_from(settings_refusal_limit).expect("resident limit fits u64");
-    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_545_605_062_293 + settings_refusal_limit));
+    assert_eq!(
+        crate::worst_case(&fixtures::store_limits()), // Charter policies now include their eight-byte host-family masks.
+        Some(581_552_584_823_445 + settings_refusal_limit)
+    );
 }

@@ -4,7 +4,7 @@ family jig-store-settings 1
 record Text { bytes: bytes 32 }
 record ModelName { name: bytes 4096 efforts: list 16 bytes 32 }
 record Model { dialect: u32 endpoint: u32 program: option bytes 32 name: bytes 4096 window: u32 output: u32 input_price: u64 cached_price: u64 cache_write_price: option u64 output_price: u64 price_unit: u32 efforts: list 16 Text effort: option bytes 32 }
-record RunPolicy { instructions: bytes 65536 waiting: duration resume: bool turns: u32 time: duration reserve_turns: u32 reserve_time: duration model: Model alternatives: list 64 Model inspect: bool modify: bool shell: bool agents: bool call_timeout: duration }
+record RunPolicy { tools: u64 instructions: bytes 65536 waiting: duration resume: bool turns: u32 time: duration reserve_turns: u32 reserve_time: duration model: Model alternatives: list 64 Model inspect: bool modify: bool shell: bool agents: bool call_timeout: duration }
 enum Kinds { workers, engine, both }
 record Charter { number: u32 policy: RunPolicy hosts: Kinds spend: u64 }
 record CharterNumber { number: u32 }

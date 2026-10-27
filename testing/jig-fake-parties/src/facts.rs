@@ -346,4 +346,6 @@ pub enum Bound {
     Window,
     /// The model's declared output ceiling: tokens.
     Output,
+    /// Rendered host charter and tool schemas: bytes.
+    HostPart,
 }

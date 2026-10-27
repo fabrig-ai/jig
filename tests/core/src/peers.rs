@@ -700,6 +700,7 @@ fn party_hold(value: people::HoldReason) -> parties::HoldReason {
                 people::Bound::History => parties::Bound::History,
                 people::Bound::Window => parties::Bound::Window,
                 people::Bound::Output => parties::Bound::Output,
+                people::Bound::HostPart => parties::Bound::HostPart,
             },
             value: exceeded.value,
         }),

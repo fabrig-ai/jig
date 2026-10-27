@@ -173,6 +173,7 @@ pub fn run() -> Box<core::RunCharter> {
             note_resources: Box::new([]),
         },
         policy: core::RunPolicy {
+            tools: jig_domain_authority::Tools(2047),
             instructions: b"Answer the person".as_slice().into(),
             waiting: Duration::from_secs(30),
             resume: true,
