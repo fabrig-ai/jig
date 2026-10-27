@@ -3,7 +3,7 @@ use super::{Changed, Current, Edit, Failure, Fault, Item, Key, Record, Setting};
 use crate::{CoreKey, CoreRecord, Limits, Write};
 use skein_lib::List;
 
-pub(crate) fn change_shape(items: &[Item], limits: &Limits) -> Result<(), Failure> {
+pub(crate) fn change_shape(items: &[Item], connectors: &[u16], limits: &Limits) -> Result<(), Failure> {
     if items.len()
         > usize::try_from(super::capacity(limits).expect("settings capacity").checked_mul(2).expect("item union"))
             .expect("item count")
@@ -25,7 +25,7 @@ pub(crate) fn change_shape(items: &[Item], limits: &Limits) -> Result<(), Failur
         }
         match &item.edit {
             Edit::Set(value) => {
-                super::check::shape(item.setting, value, limits)?;
+                super::check::shape(item.setting, value, connectors, limits)?;
                 super::check::count(item.setting, &mut counts, limits)?;
             }
             Edit::Removed if item.setting == Setting::Rules => {

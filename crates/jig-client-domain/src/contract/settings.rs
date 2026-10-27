@@ -39,6 +39,13 @@ pub enum SettingHosts {
     Both,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CharterDocument {
+    pub connector: u16,
+    pub name: List<Box<[u8]>>,
+    pub path: Box<[u8]>,
+    pub heading: Option<Box<[u8]>>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[expect(clippy::struct_excessive_bools, reason = "the whole charter carries independent tool grants and resume")]
 pub struct Charter {
     pub number: u32,
@@ -58,6 +65,7 @@ pub struct Charter {
     pub call_timeout: Duration,
     pub hosts: SettingHosts,
     pub spend: u64,
+    pub documents: List<CharterDocument>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SettingPolicy {

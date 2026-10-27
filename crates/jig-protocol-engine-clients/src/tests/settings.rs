@@ -150,6 +150,7 @@ fn charter() -> jig_domain_core::Charter {
     use jig_domain_core as core;
     use skein_lib::Duration;
     core::Charter {
+        documents: Box::new([]),
         number: 1,
         hosts: jig_domain_fleet::Kinds::Both,
         spend: 100,

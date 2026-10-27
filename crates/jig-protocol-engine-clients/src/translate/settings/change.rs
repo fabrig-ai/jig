@@ -104,7 +104,20 @@ fn charter(value: w::Charter) -> c::Charter {
     for value in v.alternatives.into_boxed() {
         alternatives.push(model(value)).expect("same count");
     }
+    let mut documents = List::with_capacity(v.documents.len());
+    for value in v.documents.into_boxed() {
+        let value = value.into_parts();
+        documents
+            .push(c::Document {
+                connector: value.connector,
+                name: value.name.into_boxed(),
+                path: value.path,
+                heading: value.heading,
+            })
+            .expect("same document count");
+    }
     c::Charter {
+        documents: documents.into_boxed(),
         number: v.number,
         hosts: match v.hosts {
             w::SettingHosts::Workers => jig_domain_fleet::Kinds::Workers,

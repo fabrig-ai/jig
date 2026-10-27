@@ -1,13 +1,13 @@
 //! Independent whole settings fixtures (client/domain/contract.md, 3–7).
 use jig_client::contract::{
-    AuthorityModels, ChangeSettings, Charter, DocumentText, EndedBy, HeldRevision, LlmChoice, ModelEffort,
-    OwnerAuthority, OwnerDelegation, OwnerGrant, OwnerKindImplication, OwnerPattern, OwnerPatternEnd, PolicyEditRole,
-    PolicyGuard, PolicyJudge, PolicyPermission, PolicyRequirement, ProposalKey, Proposer, Retention, RevisionDecider,
-    RevisionDocument, RevisionEdit, RevisionHead, RevisionItem, RevisionItemEdit, RevisionItemHead, RevisionParty,
-    RevisionRow, RevisionsPage, Rules, Running, Setting, SettingEdit, SettingFollows, SettingHosts, SettingItem,
-    SettingLine, SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument, Size,
-    TaskContractDocument, TaskFlags, Template, TemplateBudget, TemplateDeadline, TemplateExecutor, TemplateOverride,
-    Text,
+    AuthorityModels, ChangeSettings, Charter, CharterDocument, DocumentText, EndedBy, HeldRevision, LlmChoice,
+    ModelEffort, OwnerAuthority, OwnerDelegation, OwnerGrant, OwnerKindImplication, OwnerPattern, OwnerPatternEnd,
+    PolicyEditRole, PolicyGuard, PolicyJudge, PolicyPermission, PolicyRequirement, ProposalKey, Proposer, Retention,
+    RevisionDecider, RevisionDocument, RevisionEdit, RevisionHead, RevisionItem, RevisionItemEdit, RevisionItemHead,
+    RevisionParty, RevisionRow, RevisionsPage, Rules, Running, Setting, SettingEdit, SettingFollows, SettingHosts,
+    SettingItem, SettingLine, SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument,
+    Size, TaskContractDocument, TaskFlags, Template, TemplateBudget, TemplateDeadline, TemplateExecutor,
+    TemplateOverride, Text,
 };
 use skein_lib::{Duration, List, Wall};
 fn text(value: &[u8]) -> Text {
@@ -69,6 +69,7 @@ pub fn settings_values() -> List<SettingValue> {
     alternatives.push(other).expect("one alternative");
     values
         .push(SettingValue::Charter(Box::new(Charter {
+            documents: documents(),
             number: 2,
             instructions: text("instructions λ".as_bytes()),
             waiting: Duration::from_secs(11),
@@ -231,4 +232,16 @@ pub fn settings_page() -> RevisionsPage {
     let mut rows = List::with_capacity(1);
     rows.push(RevisionRow { head: settings_head(), items, more: 4 }).expect("row");
     RevisionsPage { rows, next: Some(4), forgotten: true }
+}
+
+fn documents() -> List<CharterDocument> {
+    let mut documents = List::with_capacity(2);
+    for heading in [Some(Box::from(b"Rules".as_slice())), None] {
+        let mut name = List::with_capacity(1);
+        name.push(Box::from(b"resource".as_slice())).expect("one name");
+        documents
+            .push(CharterDocument { connector: 1, name, path: Box::from(b"rules.md".as_slice()), heading })
+            .expect("two documents");
+    }
+    documents
 }

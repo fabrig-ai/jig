@@ -602,18 +602,67 @@ fn encode_charter(value: &core::Charter, limits: &wire::Limits) -> Result<wire::
     let field_policy = encode_run_policy(&value.policy, limits)?;
     let field_hosts = encode_kinds(&value.hosts, limits);
     let field_spend = value.spend;
+    let mut documents = List::with_capacity(limits.charter_documents);
+    for document in &value.documents {
+        let mut name = List::with_capacity(limits.document_name);
+        for segment in &document.name {
+            if name.push(encode_segment(segment, limits)?).is_err() {
+                return Err(bound());
+            }
+        }
+        let document = wire::Document::new(
+            limits,
+            wire::DocumentParts {
+                connector: document.connector,
+                name,
+                path: document.path.clone(),
+                heading: document.heading.clone(),
+            },
+        )?;
+        if documents.push(document).is_err() {
+            return Err(bound());
+        }
+    }
     wire::Charter::new(
         limits,
-        wire::CharterParts { number: field_number, policy: field_policy, hosts: field_hosts, spend: field_spend },
+        wire::CharterParts {
+            number: field_number,
+            policy: field_policy,
+            hosts: field_hosts,
+            spend: field_spend,
+            documents,
+        },
     )
 }
 fn decode_charter(value: wire::Charter, limits: &wire::Limits) -> core::Charter {
-    let wire::CharterParts { number, policy, hosts, spend } = value.into_parts();
+    let wire::CharterParts { number, policy, hosts, spend, documents } = value.into_parts();
     let field_number = number;
     let field_policy = decode_run_policy(policy, limits);
     let field_hosts = decode_kinds(hosts, limits);
     let field_spend = spend;
-    core::Charter { number: field_number, policy: field_policy, hosts: field_hosts, spend: field_spend }
+    let mut result = List::with_capacity(documents.len());
+    for document in documents.into_boxed() {
+        let document = document.into_parts();
+        let mut name = List::with_capacity(document.name.len());
+        for segment in document.name.into_boxed() {
+            name.push(decode_segment(segment, limits)).expect("decoded name bound");
+        }
+        result
+            .push(core::Document {
+                connector: document.connector,
+                name: name.into_boxed(),
+                path: document.path,
+                heading: document.heading,
+            })
+            .expect("decoded documents bound");
+    }
+    core::Charter {
+        documents: result.into_boxed(),
+        number: field_number,
+        policy: field_policy,
+        hosts: field_hosts,
+        spend: field_spend,
+    }
 }
 fn encode_segment(value: &[u8], limits: &wire::Limits) -> Result<wire::Segment, wire::Problem> {
     let field_bytes = Box::from(value);
@@ -1585,6 +1634,10 @@ pub fn limits(domain: &core::Limits) -> Option<wire::Limits> {
     limits.model_name_efforts = core::EFFORTS;
     limits.model_name_efforts_item = core::EFFORT_BYTES;
     limits.run_policy_instructions = domain.run_bytes;
+    limits.charter_documents = domain.tasks.charter_documents;
+    limits.document_name = domain.authority.segments;
+    limits.document_path = 256;
+    limits.document_heading_some = 80;
     limits.segment_bytes = domain.authority.segment_bytes.max(domain.tasks.hold_bytes);
     limits.last_exact_bytes = domain.authority.segment_bytes;
     limits.last_open_bytes = domain.authority.segment_bytes;

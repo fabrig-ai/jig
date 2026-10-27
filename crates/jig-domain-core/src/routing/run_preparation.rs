@@ -421,9 +421,35 @@ pub(super) fn plan_brief(
             .expect("attempt brief room");
     }
     let parent = brief_parent(context.requester);
-    out.push(Request::Now(Box::new(Now::BriefCorePlanned { task, parent, sections: wanted })));
+    out.push(Request::Now(Box::new(document_plan(core, &env.limits, task, parent, wanted))));
     out.push(Request::Decided);
     Requests::Out(out)
+}
+
+fn document_plan(
+    core: &Core,
+    limits: &Limits,
+    task: u64,
+    parent: Option<u64>,
+    mut sections: List<brief::Planned>,
+) -> Now {
+    let mut documents = List::with_capacity(limits.tasks.charter_documents);
+    for (index, document) in core.charter_of(task).documents.iter().enumerate() {
+        let token = Token::new(u64::try_from(index).expect("document index").checked_add(1).expect("document token"));
+        sections
+            .push(brief::Planned::Connector {
+                connector: document.connector,
+                kind: 0,
+                token,
+                size: 0,
+                limit: limits.brief.read_bytes,
+                priority: 5,
+                required: false,
+            })
+            .expect("startup proves room for core and documents");
+        documents.push((token, document.clone())).expect("charter document bound");
+    }
+    Now::BriefCorePlanned { task, parent, sections, documents: documents.into_boxed() }
 }
 
 fn tail_wanted(core: &Core, task: u64, transient: bool) -> bool {

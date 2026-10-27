@@ -191,7 +191,7 @@ pub fn valid_revision(revision: &settings::Revision, limits: &Limits) -> bool {
         }
         match &item.edit {
             settings::Edit::Set(value) => {
-                if settings::check::shape(item.setting, value, limits).is_err() {
+                if settings::check::shape_bounds(item.setting, value, limits).is_err() {
                     return false;
                 }
                 match value {
@@ -335,6 +335,13 @@ pub(super) fn from_store(
             | Record::Notes(_)
             | Record::Accounts(_) => return Answer::None(Why::Unknown),
         };
+        for item in &revision.items {
+            if let settings::Edit::Set(value) = &item.edit
+                && settings::check::shape(item.setting, value, &core.connectors, limits).is_err()
+            {
+                return Answer::None(Why::Busy);
+            }
+        }
         if !valid_revision(&revision, limits) {
             return Answer::None(Why::Busy);
         }

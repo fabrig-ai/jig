@@ -194,6 +194,13 @@ pub(crate) fn whole(engine: &crate::Engine, problems: &mut Problems) {
         problems.push(Path::root().member(b"limits").member(b"driver.url_bytes"), What::Bound);
     }
     let limits = &engine.limits.core;
+    if limits.tasks.charter_documents == 0 {
+        problems.push(Path::root().member(b"limits").member(b"core.tasks.charter_documents"), What::Bound);
+    }
+    if u64::from(limits.brief.sections) < 6 + u64::from(limits.tasks.charter_documents) {
+        problems.push(Path::root().member(b"limits").member(b"brief.sections"), What::Bound);
+        problems.push(Path::root().member(b"limits").member(b"core.tasks.charter_documents"), What::Bound);
+    }
     let settings_path = Path::root().member(b"limits").member(b"core").member(b"settings.history");
     if limits.settings.proposals == 0 {
         problems.push(Path::root().member(b"limits").member(b"core").member(b"settings.proposals"), What::Bound);

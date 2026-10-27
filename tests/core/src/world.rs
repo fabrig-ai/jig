@@ -57,6 +57,7 @@ fn profile() -> root::Limits {
         saved_resources: 2,
         contract_choices: 1,
         charters: 1,
+        charter_documents: 2,
         revisions: 4,
         versions: 8,
         authority_grants: 1,
@@ -374,6 +375,7 @@ pub fn config(seed: u64) -> root::Config {
             },
             defaults: core::settings::Defaults {
                 charters: Box::new([core::Charter {
+                    documents: Box::new([]),
                     number: 1,
                     hosts: fleet::Kinds::Workers,
                     spend: 100,

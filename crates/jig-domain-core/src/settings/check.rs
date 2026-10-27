@@ -74,7 +74,7 @@ pub fn check_change(
     connectors: &[u16],
     limits: &Limits,
 ) -> Result<(), Failure> {
-    super::change_shape(items, limits)?;
+    super::change_shape(items, connectors, limits)?;
     check_set(current, false, items, settings, connectors, limits)
 }
 fn check_set(
@@ -142,11 +142,11 @@ fn check_set(
     }
     // Hidden defaults still obey their own byte bounds; removals do not remove that cost.
     for (&setting, default) in &current.defaults {
-        shape(setting, &default.value, limits)?;
+        shape(setting, &default.value, connectors, limits)?;
     }
     for (&setting, change) in &current.changes {
         if let Some(value) = &change.value {
-            shape(setting, value, limits)?;
+            shape(setting, value, connectors, limits)?;
         }
     }
     for &setting in &names {
@@ -173,11 +173,23 @@ fn check_set(
     }
     Ok(())
 }
-pub(crate) fn shape(setting: Setting, value: &Value, limits: &Limits) -> Result<(), Failure> {
+pub(crate) fn shape(setting: Setting, value: &Value, connectors: &[u16], limits: &Limits) -> Result<(), Failure> {
+    shape_bounds(setting, value, limits)?;
+    if let Value::Charter(charter) = value {
+        for document in &charter.documents {
+            if !connectors.contains(&document.connector) {
+                return Err(Failure { setting, fault: Fault::Shape });
+            }
+        }
+    }
+    Ok(())
+}
+pub(crate) fn shape_bounds(setting: Setting, value: &Value, limits: &Limits) -> Result<(), Failure> {
     let valid = match value {
         Value::Charter(value) => {
             setting == Setting::Charter(value.number)
                 && value.number != 0
+                && documents_valid(&value.documents, limits)
                 && match crate::memory::policy_owned_bytes(&value.policy) {
                     Some(bytes) => bytes <= u64::from(limits.run_bytes),
                     None => false,
@@ -557,4 +569,28 @@ pub(crate) fn changed_charters(
         result.push(crate::charters::one_models(charter, current.newest(), settings)).expect("checked charter count");
     }
     result.into_boxed()
+}
+
+fn documents_valid(documents: &[crate::Document], limits: &Limits) -> bool {
+    if documents.len() > usize::try_from(limits.tasks.charter_documents).expect("document count") {
+        return false;
+    }
+    for document in documents {
+        if document.name.len() > usize::try_from(limits.authority.segments).expect("name segments")
+            || document.path.len() > 256
+        {
+            return false;
+        }
+        if let Some(heading) = &document.heading
+            && heading.len() > 80
+        {
+            return false;
+        }
+        for segment in &document.name {
+            if segment.len() > usize::try_from(limits.authority.segment_bytes).expect("segment bound") {
+                return false;
+            }
+        }
+    }
+    true
 }

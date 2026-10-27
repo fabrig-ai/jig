@@ -109,6 +109,7 @@ pub fn wire_charter(value: &c::Charter, limits: &w::Limits) -> Result<w::Charter
     for item in &value.alternatives {
         alternatives.push(wire_setting_model(item, limits)?).expect("same capacity");
     }
+    let documents = wire_charter_documents(&value.documents, limits)?;
     w::Charter::new(
         limits,
         w::CharterParts {
@@ -125,6 +126,7 @@ pub fn wire_charter(value: &c::Charter, limits: &w::Limits) -> Result<w::Charter
             call_timeout: value.call_timeout,
             hosts: wire_setting_hosts(&value.hosts, limits)?,
             spend: value.spend,
+            documents,
         },
     )
 }
@@ -134,6 +136,7 @@ pub fn restore_charter(value: &w::Charter, limits: &Limits) -> Result<c::Charter
         alternatives.push(restore_setting_model(item, limits)?).expect("same capacity");
     }
     Ok(c::Charter {
+        documents: restore_charter_documents(value.documents()),
         number: value.number(),
         instructions: text(value.instructions(), 1_114_240)?,
         waiting: value.waiting(),
@@ -1103,4 +1106,39 @@ fn text(value: &[u8], bound: u32) -> Result<c::Text, w::Problem> {
         Ok(value) => Ok(value),
         Err(_) => Err(super::too_large()),
     }
+}
+
+fn wire_charter_documents(
+    values: &List<c::CharterDocument>,
+    limits: &w::Limits,
+) -> Result<List<w::CharterDocument>, w::Problem> {
+    let mut result = List::with_capacity(values.len());
+    for value in values {
+        result
+            .push(w::CharterDocument::new(
+                limits,
+                w::CharterDocumentParts {
+                    connector: value.connector,
+                    name: value.name.clone(),
+                    path: value.path.clone(),
+                    heading: value.heading.clone(),
+                },
+            )?)
+            .expect("same document count");
+    }
+    Ok(result)
+}
+fn restore_charter_documents(values: &List<w::CharterDocument>) -> List<c::CharterDocument> {
+    let mut result = List::with_capacity(values.len());
+    for value in values {
+        result
+            .push(c::CharterDocument {
+                connector: value.connector(),
+                name: value.name().clone(),
+                path: bytes::copy_of(value.path()),
+                heading: value.heading().clone(),
+            })
+            .expect("same document count");
+    }
+    result
 }

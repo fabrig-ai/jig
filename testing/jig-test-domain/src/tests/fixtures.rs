@@ -137,6 +137,7 @@ pub fn domain() -> Domain {
                 },
                 defaults: core::settings::Defaults {
                     charters: Box::new([core::Charter {
+                        documents: Box::new([]),
                         number: 1,
                         hosts: fleet::Kinds::Workers,
                         spend: 37,

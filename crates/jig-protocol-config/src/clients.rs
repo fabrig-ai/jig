@@ -111,6 +111,9 @@ pub(crate) fn check_settings(limits: &crate::Limits, problems: &mut Problems) {
         problems.push(path.member(b"authority.projects"), crate::What::Bound);
     }
     for (name, value, maximum) in [
+        (b"tasks.charter_documents".as_slice(), core.tasks.charter_documents, wire.charter_documents),
+        (b"authority.segments".as_slice(), core.authority.segments, wire.charter_document_name),
+        (b"authority.segment_bytes".as_slice(), core.authority.segment_bytes, wire.charter_document_name_item),
         (b"authority.roles".as_slice(), core.authority.roles, wire.setting_policy_roles),
         (
             b"authority.requirements".as_slice(),

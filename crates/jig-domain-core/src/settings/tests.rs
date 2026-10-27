@@ -239,7 +239,7 @@ fn decision_edits_apply_each_kind_over_defaults_and_additions() {
         assert!(!current.changed(setting));
         if setting == Setting::Rules {
             assert_eq!(
-                change_shape(&[Item { setting, edit: Edit::Removed }], &limits),
+                change_shape(&[Item { setting, edit: Edit::Removed }], &[0, 1], &limits),
                 Err(Failure { setting, fault: Fault::Shape })
             );
         } else {
@@ -281,12 +281,15 @@ fn zero_numbered_edits_and_repeated_settings_are_malformed() {
     let limits = limits();
     for setting in [Setting::Charter(0), Setting::Template(0), Setting::Policy(0)] {
         for edit in [Edit::Removed, Edit::Reset] {
-            assert_eq!(change_shape(&[Item { setting, edit }], &limits), Err(Failure { setting, fault: Fault::Shape }));
+            assert_eq!(
+                change_shape(&[Item { setting, edit }], &[0, 1], &limits),
+                Err(Failure { setting, fault: Fault::Shape })
+            );
         }
     }
     let setting = Setting::Template(1);
     assert_eq!(
-        change_shape(&[Item { setting, edit: Edit::Removed }, Item { setting, edit: Edit::Reset }], &limits),
+        change_shape(&[Item { setting, edit: Edit::Removed }, Item { setting, edit: Edit::Reset }], &[0, 1], &limits),
         Err(Failure { setting, fault: Fault::Shape })
     );
 }
@@ -733,4 +736,76 @@ fn a_settings_commit_before_the_first_start_seed_keeps_the_supplied_defaults() {
     assert!(restart::first_start(&mut core, &env, &mut writes));
     assert!(!writes.is_empty());
     assert_eq!(core.current.newest(), 1);
+}
+
+fn charter_document() -> crate::Document {
+    crate::Document {
+        connector: 1,
+        name: Box::new([Box::from(b"resource".as_slice())]),
+        path: Box::from(b"rules.md".as_slice()),
+        heading: None,
+    }
+}
+#[test]
+fn charter_document_shape_checks_both_sides_of_every_bound() {
+    let limits = limits();
+    let source = config(1).defaults.charters[0].clone();
+    let setting = Setting::Charter(source.number);
+    let mut maximum = source;
+    maximum.documents = Box::new([charter_document(), charter_document()]);
+    maximum.documents[0].path = crate::tests::restore_policy_word(256);
+    maximum.documents[0].heading = Some(crate::tests::restore_policy_word(80));
+    maximum.documents[0].name = document_name(limits.authority.segments, limits.authority.segment_bytes);
+    assert_eq!(check::shape(setting, &Value::Charter(Box::new(maximum.clone())), &[1], &limits), Ok(()));
+    for fault in 0_u8..6 {
+        let mut value = maximum.clone();
+        match fault {
+            0 => value.documents = Box::new([charter_document(), charter_document(), charter_document()]),
+            1 => value.documents[0].path = crate::tests::restore_policy_word(257),
+            2 => value.documents[0].heading = Some(crate::tests::restore_policy_word(81)),
+            3 => value.documents[0].connector = 99,
+            4 => value.documents[0].name = document_name(limits.authority.segments.checked_add(1).unwrap(), 1),
+            5 => {
+                value.documents[0].name[0] = crate::tests::restore_policy_word(u64::from(
+                    limits.authority.segment_bytes.checked_add(1).unwrap(),
+                ));
+            }
+            _ => unreachable!(),
+        }
+        let value = Value::Charter(Box::new(value));
+        assert_eq!(
+            check::shape(setting, &value, &[1], &limits),
+            Err(Failure { setting, fault: Fault::Shape }),
+            "case {fault}"
+        );
+        assert_eq!(
+            change_shape(&[Item { setting, edit: Edit::Set(value) }], &[1], &limits),
+            Err(Failure { setting, fault: Fault::Shape })
+        );
+    }
+}
+#[test]
+fn a_hidden_charter_defaults_documents_are_shape_checked() {
+    let config = config(1);
+    let limits = limits();
+    let settings = config.settings;
+    let mut current = Current::new(config.defaults, &limits);
+    let offered = current.charter(1).unwrap().clone();
+    current
+        .changes
+        .insert(Setting::Charter(1), Changed { revision: 2, value: Some(Value::Charter(Box::new(offered))) })
+        .unwrap();
+    charter(&mut current).documents = Box::new([crate::Document { connector: 99, ..charter_document() }]);
+    assert_eq!(
+        check(&current, &settings, &[1], &limits),
+        Err(Failure { setting: Setting::Charter(1), fault: Fault::Shape })
+    );
+}
+
+fn document_name(segments: u32, bytes: u32) -> Box<[Box<[u8]>]> {
+    let mut name = List::with_capacity(segments);
+    for _ in 0..segments {
+        name.push(crate::tests::restore_policy_word(u64::from(bytes))).unwrap();
+    }
+    name.into_boxed()
 }

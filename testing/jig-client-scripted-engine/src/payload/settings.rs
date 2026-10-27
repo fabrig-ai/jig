@@ -2,10 +2,11 @@
 use super::Payload;
 use crate::Bounds;
 use jig_client_domain::contract::{
-    ChangeSettings, Charter, HeldRevision, RevisionAnswer, RevisionDecider, RevisionDocument, RevisionEdit,
-    RevisionHead, RevisionItem, RevisionItemEdit, RevisionItemHead, RevisionParty, RevisionRow, RevisionsPage, Rules,
-    Running, Setting, SettingDocument, SettingEdit, SettingFollows, SettingHosts, SettingItem, SettingLine,
-    SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument, SettingsProposal,
+    ChangeSettings, Charter, CharterDocument, HeldRevision, RevisionAnswer, RevisionDecider, RevisionDocument,
+    RevisionEdit, RevisionHead, RevisionItem, RevisionItemEdit, RevisionItemHead, RevisionParty, RevisionRow,
+    RevisionsPage, Rules, Running, Setting, SettingDocument, SettingEdit, SettingFollows, SettingHosts, SettingItem,
+    SettingLine, SettingModel, SettingNumber, SettingPolicy, SettingSet, SettingValue, SettingsDocument,
+    SettingsProposal,
 };
 plain!(SettingNumber, Setting, SettingHosts, Running, SettingFollows, RevisionParty, RevisionDecider, RevisionItemEdit);
 fields!(SettingModel {
@@ -23,7 +24,9 @@ fields!(SettingModel {
     efforts,
     effort
 });
+fields!(CharterDocument { connector, name, path, heading });
 fields!(Charter {
+    documents,
     number,
     instructions,
     waiting,

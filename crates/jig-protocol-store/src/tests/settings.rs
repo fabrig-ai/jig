@@ -27,6 +27,20 @@ fn model() -> core::Model {
 }
 fn charter() -> core::Charter {
     core::Charter {
+        documents: Box::new([
+            core::Document {
+                connector: 1,
+                name: Box::new([Box::from(b"resource".as_slice())]),
+                path: Box::from(b"rules.md".as_slice()),
+                heading: Some(Box::from(b"Rules".as_slice())),
+            },
+            core::Document {
+                connector: 1,
+                name: Box::new([Box::from(b"resource".as_slice())]),
+                path: Box::from(b"notes.md".as_slice()),
+                heading: None,
+            },
+        ]),
         number: 1,
         hosts: fleet::Kinds::Both,
         spend: 100,
