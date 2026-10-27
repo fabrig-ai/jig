@@ -2,6 +2,8 @@
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 extern crate alloc;
+#[path = "../patches/mod.rs"]
+pub mod patches;
 #[rustfmt::skip]
 #[path = "generated/v1.rs"]
 pub mod v1;

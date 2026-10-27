@@ -1,0 +1,80 @@
+family jig-store-settings 1
+
+# Settings hold each value whole; instructions are their text bytes, never a path.
+record Text { bytes: bytes 32 }
+record ModelName { name: bytes 4096 efforts: list 16 bytes 32 }
+record Model { dialect: u32 endpoint: u32 program: option bytes 32 name: bytes 4096 window: u32 output: u32 input_price: u64 cached_price: u64 cache_write_price: option u64 output_price: u64 price_unit: u32 efforts: list 16 Text effort: option bytes 32 }
+record RunPolicy { instructions: bytes 65536 waiting: duration resume: bool turns: u32 time: duration reserve_turns: u32 reserve_time: duration model: Model alternatives: list 64 Model inspect: bool modify: bool shell: bool agents: bool call_timeout: duration }
+enum Kinds { workers, engine, both }
+record Charter { number: u32 policy: RunPolicy hosts: Kinds spend: u64 }
+record CharterNumber { number: u32 }
+record TemplateNumber { number: u32 }
+record PolicyNumber { number: u32 }
+enum Setting { charter: CharterNumber, template: TemplateNumber, policy: PolicyNumber, rules }
+record Segment { bytes: bytes 4096 }
+record LastExact { bytes: bytes 4096 }
+record LastOpen { bytes: bytes 4096 }
+enum Last { exact: LastExact, open: LastOpen }
+record Pattern { segments: list 8 Segment last: Last }
+record Grant { connector: u16 kind: u16 pattern: Pattern }
+record ResourceScope { connector: u16 pattern: Pattern }
+record ExecutorCharter { number: u32 }
+record ExecutorProcedure { number: u32 }
+record ExecutorRole { number: u32 }
+enum Executor { charter: ExecutorCharter, procedure: ExecutorProcedure, role: ExecutorRole }
+record Delegation { kinds: list 32 Executor tasks: u32 depth: u32 }
+record Models { bits: u64 all: bool }
+record Budget { spend: u64 deadline: option u64 }
+record Authority { tools: u64 models: Models grants: list 32 Grant delegation: Delegation budget: Budget notes: u8 note_resources: list 32 ResourceScope }
+record Judge { connector: u16 requirement: u16 parameters: u32 }
+record Observed { freshness: duration }
+enum Guard { guarded, observed: Observed }
+record Requirement { connector: u16 kind: u16 pattern: Pattern judge: Judge guard: Guard must_be_guarded: bool }
+record Implication { connector: u16 kind: u16 implies: u16 }
+record Rules { ceiling: Authority period_spend: u64 minimum_run_spend: u64 maximum_run_spend: u64 implies: list 32 Implication requirements: list 32 Requirement }
+record Role { number: u32 authority: Authority period_spend: u64 requests: u16 decides: u8 }
+record Policy { escalation_role: option u32 ceiling: Authority projections: list 32 Grant period_spend: u64 roles: list 8 Role requirements: list 32 Requirement }
+record PermissionRole { connector: u16 permission: u16 role: u32 }
+record TemplateCharter { number: u32 }
+enum TemplateExecutor { charter: TemplateCharter, chosen }
+record Amount { amount: u64 }
+record AsAllowed { cap: option u64 }
+enum TemplateBudget { amount: Amount, as_allowed: AsAllowed, given }
+record Span { span: duration }
+enum TemplateDeadline { none, span: Span, given }
+record TemplateOverride { template: u32 executor: option TemplateExecutor budget: option TemplateBudget deadline: option TemplateDeadline priority: option u32 }
+record ConfiguredPolicy { policy: Policy permissions: list 65536 PermissionRole templates: list 32 TemplateOverride }
+record FieldRule { name: bytes 4096 max: u32 }
+record Verdict { code: u32 words: u32 followups: u32 fields: list 512 FieldRule }
+enum PartKind { resource, pool, result, procedure, effect, outbox, hold }
+record PartPath { segments: list 8 Segment }
+record PartNumber { number: u64 }
+enum PartKey { path: PartPath, number: PartNumber }
+record Part { connector: u16 kind: PartKind key: PartKey }
+record Approval { state: bytes 65536 part: Part }
+record Report { words: u32 }
+record VerdictChoices { choices: list 8 Verdict }
+record Change { connector: u16 kind: u16 words: u32 }
+enum Contract { approval: Approval, report: Report, verdict: VerdictChoices, change: Change }
+enum Retention { kept, forgotten_once_read }
+enum EndedBy { result, requester }
+record Flags { conversation: bool listed: bool retention: Retention ended_by: EndedBy }
+record ModelEffort { model: u8 effort: option u8 }
+record LlmChoice { account: option u32 main: ModelEffort subagents: list 64 ModelEffort }
+record Template { number: u32 name: bytes 65536 executor: TemplateExecutor contract: Contract shallower: u32 budget: TemplateBudget deadline: TemplateDeadline tracked: option u32 flags: Flags label: u32 grace: option duration llm: option LlmChoice }
+enum Value { charter: boxed Charter, template: boxed Template, policy: boxed ConfiguredPolicy, rules: boxed Rules }
+record Party { number: u64 }
+enum Decider { first_start, release, party: Party }
+enum Proposer { task: Party, party: Party }
+record ProposalId { proposer: Proposer number: u32 }
+record Head { number: u32 against: u32 at: u64 by: Decider proposal: option ProposalId moved: bool }
+record Set { value: Value }
+enum Edit { set: Set, removed, reset }
+record Item { setting: Setting edit: Edit }
+
+versioned record Default { models: list 64 ModelName value: Value revision: u32 }
+versioned record Changed { models: list 64 ModelName value: option Value revision: u32 }
+versioned record Revision { models: list 64 ModelName head: Head items: list 128 Item }
+versioned record Extent { oldest: u32 }
+versioned record CharterVersion { charter: option Charter }
+versioned record Proposal { models: list 64 ModelName against: u32 items: list 128 Item }

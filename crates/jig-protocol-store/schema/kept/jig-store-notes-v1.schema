@@ -1,0 +1,27 @@
+family jig-store-notes 1
+
+# Pattern members and their count share the domain's aggregate pattern bound.
+record Segment { bytes: bytes 4096 }
+enum Last { exact: Segment, open: Segment }
+record Pattern { segments: list 4096 Segment last: Last }
+record Project { project: u32 }
+record Goal { project: u32 goal: u64 }
+record Resources { project: u32 connector: u16 pattern: Pattern }
+enum Scope { deployment, project: Project, goal: Goal, resources: Resources }
+record Party { party: u64 }
+record Task { task: u64 attempt: u64 }
+enum Author { party: Party, task: Task }
+record Reference { task: u64 }
+versioned record Entry {
+    name: u64
+    scope: Scope
+    description: bytes 65536
+    body: bytes 1048576
+    references: list 4096 Reference
+    author: Author
+    revision: u32
+    changed: u64
+}
+record Line { scope: Scope name: u64 description: bytes 65536 revision: u32 }
+enum Value { entry: Entry, line: Line }
+versioned record Row { value: Value }

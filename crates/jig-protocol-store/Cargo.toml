@@ -8,6 +8,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+jig-protocol-accounts.workspace = true
 skein-lib.workspace = true
 skein-codec.workspace = true
 skein-kv.workspace = true
@@ -22,6 +23,8 @@ jig-domain-authority.workspace = true
 jig-domain-fleet.workspace = true
 
 [dev-dependencies]
+skein-codegen.workspace = true
+skein-scratch.workspace = true
 skein-oauth.workspace = true
 jig-store-world = { path = "../../tests/store" }
 jig-test-patches-smith.workspace = true

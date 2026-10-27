@@ -14,6 +14,8 @@ pub mod intervals;
 mod loads;
 mod open;
 mod pages;
+#[path = "../patches/mod.rs"]
+pub mod patches;
 mod patching;
 pub use patching::Counts;
 pub use patching::sets::{JIG, KeptFamily, KeptMap, Keys, Owner, PatchSet, PatchSets};

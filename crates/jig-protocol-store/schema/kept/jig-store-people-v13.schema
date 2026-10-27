@@ -1,0 +1,302 @@
+family jig-store-people 13
+
+record Segment { bytes: bytes 8192 }
+record Number64 { value: u64 }
+record RolePolicy { role: u32 }
+enum Role { owner, maintainer, member, observer, policy: RolePolicy }
+record Holding { person: u64 role: Role }
+record IdentityKey { provider: u16 subject: bytes 8192 }
+record Identity { key: IdentityKey login: bytes 8192 name: bytes 8192 }
+record RequestKey { person: u64 key: fixed 16 }
+record LastExact { value: bytes 8192 }
+record LastOpen { value: bytes 8192 }
+enum Last { exact: LastExact, open: LastOpen }
+record Pattern { segments: bytes 65536 pieces Segment last: Last }
+record Grant { connector: u16 kind: u16 pattern: Pattern }
+record ResourceScope { connector: u16 pattern: Pattern }
+record ExecutorCharter { value: u32 }
+record ExecutorProcedure { value: u32 }
+record ExecutorRole { value: u32 }
+enum Executor { charter: ExecutorCharter, procedure: ExecutorProcedure, role: ExecutorRole }
+record Delegation { kinds: bytes 65536 pieces Executor tasks: u32 depth: u32 }
+record ModelSetNamed { bits: u64 }
+enum ModelSet { all, named: ModelSetNamed }
+record Authority { tools: u64 models: option ModelSet grants: bytes 65536 pieces Grant delegation: Delegation spend: u64 deadline: option u64 notes: u8 note_resources: bytes 65536 pieces ResourceScope }
+record Judge { connector: u16 requirement: u16 parameters: u32 }
+record GuardObserved { freshness: u64 }
+enum Guard { guarded, observed: GuardObserved }
+record Requirement { connector: u16 kind: u16 pattern: Pattern judge: Judge guard: Guard must_be_guarded: bool }
+record PermissionRole { connector: u16 permission: u16 role: u32 }
+record PolicyRole { number: u32 authority: Authority period_spend: u64 requests: u16 decides: u8 }
+record TemplateExecutorCharter { value: u32 }
+enum TemplateExecutor { charter: TemplateExecutorCharter, chosen }
+record TemplateBudgetAmount { value: u64 }
+record TemplateBudgetAsAllowed { cap: option u64 }
+enum TemplateBudget { amount: TemplateBudgetAmount, as_allowed: TemplateBudgetAsAllowed, given }
+record TemplateDeadlineSpan { value: u64 }
+enum TemplateDeadline { none, span: TemplateDeadlineSpan, given }
+record TemplateOverride { template: u32 executor: option TemplateExecutor budget: option TemplateBudget deadline: option TemplateDeadline priority: option u32 }
+record PolicyValue { ceiling: Authority escalation_role: option u32 period_spend: u64 projections: list 32 Grant roles: list 8 PolicyRole requirements: list 32 Requirement permissions: bytes 65536 pieces PermissionRole templates: list 16 TemplateOverride }
+record PolicyChangeProjectSpend { period_spend: u64 }
+record PolicyChangeRole { value: PolicyRole }
+record PolicyChangeRequirements { requirements: bytes 65536 pieces Requirement }
+record PolicyChangeProjections { grants: bytes 65536 pieces Grant }
+record PolicyChangePermissions { mappings: bytes 65536 pieces PermissionRole }
+record PolicyChangeTemplates { overrides: list 16 TemplateOverride }
+enum PolicyChange { project_spend: PolicyChangeProjectSpend, role: PolicyChangeRole, requirements: PolicyChangeRequirements, projections: PolicyChangeProjections, permissions: PolicyChangePermissions, templates: PolicyChangeTemplates }
+record SeenResults { through: u64 }
+record SeenConversation { task: u64 through: u64 }
+enum Seen { results: SeenResults, conversation: SeenConversation }
+record NoteScopeTask { task: u64 }
+record NoteScopeResources { connector: u16 pattern: Pattern }
+enum NoteScope { deployment, project, task: NoteScopeTask, resources: NoteScopeResources }
+record NoteChangeCorrect { description: bytes 8192 body: bytes 8192 references: bytes 65536 pieces Number64 recalled: u32 }
+record NoteChangeDelete { recalled: u32 }
+enum NoteChange { correct: NoteChangeCorrect, delete: NoteChangeDelete }
+enum ResourceRole { owned, fork, context }
+record ResourceName { connector: u16 path: bytes 65536 pieces Segment }
+record Adoption { resource: ResourceName role: ResourceRole options: bytes 65536 pieces Segment }
+record PersonResultApproved { state: bytes 8192 words: option bytes 8192 }
+record PersonResultReport { words: bytes 8192 }
+record PersonResultVerdict { code: u32 words: bytes 8192 }
+record PersonResultFailure { reason: bytes 8192 }
+enum PersonResult { approved: PersonResultApproved, report: PersonResultReport, verdict: PersonResultVerdict, failure: PersonResultFailure }
+record ProposerTask { value: u64 }
+record ProposerParty { value: u64 }
+enum Proposer { task: ProposerTask, party: ProposerParty }
+record ProposalDecisionReject { reason: bytes 8192 }
+enum ProposalDecision { accept, reject: ProposalDecisionReject, pass }
+record EscalationDecisionReject { reason: bytes 8192 }
+enum EscalationDecision { release, reject: EscalationDecisionReject, pass }
+record PersonAddressPerson { value: u64 }
+record PersonAddressRole { value: u32 }
+enum PersonAddress { person: PersonAddressPerson, role: PersonAddressRole }
+record AddressChange { revision: u64 address: PersonAddress }
+record ParameterNumber { name: u32 value: u64 }
+record ParameterBytes { name: u32 value: bytes 8192 }
+record ParameterResource { name: u32 connector: u16 resource: u64 }
+enum Parameter { number: ParameterNumber, bytes: ParameterBytes, resource: ParameterResource }
+record Spec { words: bytes 8192 parameters: bytes 65536 pieces Parameter inputs: bytes 65536 pieces Number64 }
+record WakeRuleBatch { count: u32 age: u64 }
+enum WakeRule { never, immediate, batch: WakeRuleBatch }
+enum ResultsWake { never, each, last_or_failure }
+record WakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool }
+record TrackingTracked { priority: u32 }
+enum Tracking { tracked: TrackingTracked, untracked }
+record ModelEffort { model: u8 effort: option u8 }
+record LlmChoice { account: option u32 main: ModelEffort subagents: list 64 ModelEffort }
+record Amendment { tracked: option Tracking addressed: option AddressChange instructions: option bytes 8192 spec: option Spec wake: option WakePolicy dependencies: option bytes 65536 pieces Number64 authority: option Authority llm: option LlmChoice reason: bytes 8192 }
+record TaskExecutorAgent { charter: u32 }
+record TaskExecutorProcedure { connector: u16 code: u32 }
+record TaskExecutorPerson { address: PersonAddress }
+enum TaskExecutor { agent: TaskExecutorAgent, procedure: TaskExecutorProcedure, person: TaskExecutorPerson }
+record BudgetAsAllowed { cap: option u64 }
+enum Budget { named, as_allowed: BudgetAsAllowed }
+record DependencyBatch { at: u32 }
+record DependencyExisting { task: u64 }
+enum Dependency { batch: DependencyBatch, existing: DependencyExisting }
+record FieldRule { name: bytes 8192 max: u32 }
+record Verdict { code: u32 words: u32 followups: u32 fields: bytes 65536 pieces FieldRule }
+record ContractReport { words: u32 }
+record ContractVerdict { choices: bytes 65536 pieces Verdict }
+record ContractChange { connector: u16 kind: u16 words: u32 }
+enum Contract { report: ContractReport, verdict: ContractVerdict, change: ContractChange }
+enum Retention { kept, forgotten_once_read }
+enum EndedBy { result, requester }
+record Flags { conversation: bool listed: bool retention: Retention ended_by: EndedBy }
+record DeadlineSpan { value: duration }
+enum Deadline { named, span: DeadlineSpan }
+record Member { deadline: Deadline executor: TaskExecutor words: bytes 8192 parameters: bytes 65536 pieces Parameter inputs: bytes 65536 pieces Number64 contract: Contract authority: Authority budget: Budget wake: WakePolicy dependencies: bytes 65536 pieces Dependency named: bytes 65536 pieces Grant tracked: option u32 label: u32 flags: Flags llm: option LlmChoice }
+record OperationCancel { task: u64 reason: bytes 8192 grace: option u64 }
+record OperationMove { task: u64 reason: bytes 8192 }
+record OperationAmend { task: u64 revision: u64 amendment: Amendment release: option u64 }
+record OperationRelease { task: u64 revision: u64 again: option bool }
+record OperationMessage { task: u64 words: bytes 8192 }
+record OperationStop { task: u64 }
+enum Operation { cancel: OperationCancel, move_task: OperationMove, amend: boxed OperationAmend, release: OperationRelease, message: OperationMessage, stop: OperationStop }
+record AskCompound { project: u32 operations: list 1024 Operation }
+record AskCreate { project: u32 batch: list 8 Member }
+record AskMarkSeen { seen: Seen }
+record ScopeProject { project: u32 }
+enum ApplicationScope { project: ScopeProject, deployment, own }
+record AskApplication { scope: ApplicationScope connector: u16 digest: fixed 32 }
+record AskEditNote { project: u32 name: u64 scope: NoteScope change: NoteChange }
+record AskMakeService { project: u32 name: bytes 8192 role: Role }
+record AskAdopt { project: u32 adoption: Adoption }
+record ActionBatch { members: list 8 Member }
+record ActionAmend { task: u64 revision: u64 amendment: Amendment }
+record ActionSettings { against: u32 digest: fixed 32 }
+enum Action { batch: ActionBatch, amend: boxed ActionAmend, settings: ActionSettings }
+record AskPropose { project: u32 action: Action reason: bytes 8192 }
+record AskWithdraw { project: u32 proposal: u64 }
+record AskStop { project: u32 task: u64 }
+record AskCancel { project: u32 task: u64 reason: bytes 8192 grace: option u64 }
+record AskRelease { project: u32 task: u64 revision: u64 again: option bool }
+record AskTakePerson { project: u32 task: u64 }
+record AskHandBackPerson { project: u32 task: u64 }
+record AskAnswerPerson { project: u32 task: u64 revision: u64 result: PersonResult }
+record AskMove { project: u32 task: u64 reason: bytes 8192 }
+enum Running { stays, moves }
+record AskDecideProposal { project: u32 proposer: Proposer proposal: u64 decision: ProposalDecision running: option Running }
+record AskSay { project: u32 task: u64 words: bytes 8192 }
+record AskAnswerQuestion { project: u32 task: u64 question: u64 words: bytes 8192 }
+record AskAmend { project: u32 task: u64 revision: u64 amendment: Amendment release: option u64 }
+record AskSetRoles { project: u32 holdings: list 1024 Holding }
+record AskRename { project: u32 name: text 64 }
+record AskChangeSettings { against: u32 digest: fixed 32 }
+record SettingNumber { number: u32 }
+enum Setting { charter: SettingNumber, template: SettingNumber, policy: SettingNumber, rules }
+enum SettingFault { shape, count, reference, rules, budget, grace, owner }
+record MalformedSettings { setting: Setting fault: SettingFault }
+record RefusalStale { newest: u32 }
+record RefusalFull { revision: u32 tasks: list 32 u64 more: u32 }
+record OutcomeSettingsChanged { revision: u32 }
+record AskMakeProject { name: text 64 policy: u32 }
+record AskChangePolicy { project: u32 change: PolicyChange }
+record AskSetPool { project: u32 person: u64 budget: u64 }
+record AskDecideEscalation { project: u32 task: u64 revision: u64 decision: EscalationDecision }
+enum AccountHolder { own, deployment }
+record AskAccountSignIn { holder: AccountHolder provider: u32 }
+record AskAccountSignOut { holder: AccountHolder source: u32 }
+record AccountUseParty { number: u64 }
+record AccountUseProject { number: u32 }
+enum AccountUse { party: AccountUseParty, project: AccountUseProject }
+record AccountChangeDeclareProgram { provider: u32 join: option u32 name: bytes 32 }
+record AccountChangeCheckProgram { source: u32 }
+record AccountChangeAddKey { provider: u32 join: option u32 digest: bytes 32 }
+record AccountChangeReplaceKey { source: u32 digest: bytes 32 }
+record AccountChangeRemoveKey { source: u32 }
+record AccountChangeResume { source: u32 }
+record AccountChangeRemove { account: u32 }
+record AccountChangeMoveAccount { account: u32 place: u32 }
+record AccountChangeMoveSource { account: u32 source: u32 place: u32 }
+record AccountChangeSetUses { account: u32 uses: option list 16 AccountUse }
+record AccountChangeMoveOut { account: u32 }
+record AccountChangeWritten { number: u32 }
+record AccountChangeMoveIn { digest: bytes 32 }
+record AccountChangeFinishSignIn { source: u32 digest: bytes 32 }
+enum AccountChange { add_key: AccountChangeAddKey, replace_key: AccountChangeReplaceKey, remove_key: AccountChangeRemoveKey, resume: AccountChangeResume, remove: AccountChangeRemove, move_account: AccountChangeMoveAccount, move_source: AccountChangeMoveSource, set_uses: AccountChangeSetUses, declare_program: AccountChangeDeclareProgram, check_program: AccountChangeCheckProgram, move_out: AccountChangeMoveOut, written: AccountChangeWritten, move_in: AccountChangeMoveIn, finish_sign_in: AccountChangeFinishSignIn }
+record AskAccountChange { holder: AccountHolder change: AccountChange }
+record AskMoveToNewest { revision: u32 }
+enum Ask { rename: AskRename, make_project: AskMakeProject, compound: AskCompound, create: AskCreate, mark_seen: AskMarkSeen, application: AskApplication, edit_note: AskEditNote, make_service: AskMakeService, adopt: AskAdopt, stop: AskStop, cancel: AskCancel, release: AskRelease, take_person: AskTakePerson, hand_back_person: AskHandBackPerson, answer_person: AskAnswerPerson, move_task: AskMove, decide_proposal: AskDecideProposal, say: AskSay, answer_question: AskAnswerQuestion, amend: boxed AskAmend, set_roles: AskSetRoles, change_policy: AskChangePolicy, set_pool: AskSetPool, decide_escalation: AskDecideEscalation, propose: AskPropose, withdraw: AskWithdraw, account_sign_in: AskAccountSignIn, account_sign_out: AskAccountSignOut, account_change: AskAccountChange, change_settings: AskChangeSettings, move_to_newest: AskMoveToNewest }
+record StoredPerson { number: u64 identity: Identity }
+record StoredReadResults { party: u64 through: u64 }
+record StoredReadConversation { party: u64 task: u64 through: u64 }
+record EndedRead { task: u64 party: u64 through: u64 }
+record StoredSignIn { number: u64 person: u64 expires: u64 }
+record StoredRoles { project: u32 holdings: list 1024 Holding }
+record ModelName { name: bytes 4096 }
+record StoredPolicy { project: u32 name: text 64 value: PolicyValue models: list 64 ModelName }
+enum Again { busy, not_ready }
+enum FailureClass { transient, permanent, run, agent, lost, invalid }
+record HoldReasonFailures { class: FailureClass }
+record HoldReasonDependency { task: u64 }
+record HoldReasonStoppedBy { party: u64 }
+record HoldReasonUncertain { entry: u64 }
+record HoldReasonPoolLost { pool: u64 }
+enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
+record Exceeded { bound: Bound value: u64 }
+enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, stopped_by: HoldReasonStoppedBy, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
+record MovedHold { revision: u64 reason: HoldReason }
+record MovedSpec { revision: u64 }
+record MovedPerson { revision: u64 }
+record MovedNote { revision: u32 }
+enum Moved { hold: MovedHold, spec: MovedSpec, person: MovedPerson, note: MovedNote }
+record PartyPerson { value: u64 }
+record PartyTask { value: u64 }
+record PartyDeployment { project: u32 }
+enum Party { person: PartyPerson, task: PartyTask, deployment: PartyDeployment }
+record EndingCancelled { by: Party at: u64 }
+record EndingDecided { by: u64 at: u64 }
+enum Ending { done, failed, cancelled: EndingCancelled, decided: EndingDecided, deleted }
+record LackBudget { needs: u64 left: u64 }
+record LackGrant { kind: u16 }
+record LackDepth { most: u32 }
+record LackTasks { left: u32 }
+record LackAgain { required: bool }
+record LackRequired { connector: u16 kind: u16 }
+record LackFailed { connector: u16 kind: u16 }
+record LackUnguarded { connector: u16 kind: u16 }
+record LackTaskKind { executor: option TaskExecutor }
+enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: LackTaskKind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackAgain, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models }
+enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals }
+record RefusalRole { held: option Role }
+record AccepterRole { role: u32 }
+enum Accepter { nobody, role: AccepterRole }
+record RefusalAuthority { lacking: Lack proposable: option Accepter }
+record RefusalLimit { which: LimitKind }
+record RefusalMoved { now: Moved }
+record RefusalEnded { how: Ending }
+record RefusalTaken { by: u64 }
+enum NameRule { empty, long, control, space, digits }
+record MalformedName { rule: NameRule }
+enum Malformed { name: MalformedName, cycle, as_allowed_twice, conversation, proposed_as_allowed, ended_by, settings: MalformedSettings, settings_unchanged, running }
+record RefusalNotWellFormed { at: u32 why: Malformed }
+enum LlmWhy { unconfigured, effort, charter, authority, procedure, repeated }
+record RefusalLlm { model: u8 why: LlmWhy }
+enum AccountWhy { unknown, provider, uses, limited }
+record RefusalAccount { account: u32 why: AccountWhy }
+enum DependencyStatus { done, failed, cancelled }
+record RefusalCircle { tasks: list 32 u64 cut: bool }
+record RefusalDependency { dependency: u64 how: DependencyStatus }
+record RefusalKept { pending: list 64 u64 }
+enum SignInRedirectWhy { not_waiting, address, state, too_many }
+record RefusalSignInRedirect { why: SignInRedirectWhy }
+enum AccountMoveWhy { not_signed_in, not_ours, held, cancelled, moving }
+record RefusalAccountMove { why: AccountMoveWhy }
+enum Refusal { name_taken, not_well_formed: RefusalNotWellFormed, role: RefusalRole, authority: RefusalAuthority, limit: RefusalLimit, moved: RefusalMoved, ended: RefusalEnded, taken: RefusalTaken, not_waiting, no_further, unknown, not_offered, key_conflict, no_escalation_holder, llm: RefusalLlm, provider, account: RefusalAccount, circle: RefusalCircle, dependency: RefusalDependency, kept: RefusalKept, account_move: RefusalAccountMove, stale: RefusalStale, full: RefusalFull, sign_in_redirect: RefusalSignInRedirect }
+enum ProposalChoice { accepted, rejected, passed, withdrawn, stale }
+enum EscalationChoice { released, rejected, passed }
+record OutcomeCompound { project: u32 operations: u32 first_message: u64 }
+record OutcomeCompoundRefused { at: u32 why: Refusal }
+record OutcomeMarkedSeen { seen: Seen }
+record OutcomeApplied { connector: u16 token: u64 }
+record OutcomeAgain { value: Again }
+record OutcomeNoteEdited { name: u64 }
+record OutcomeServiceMade { person: u64 }
+record OutcomeAdopted { project: u32 }
+record OutcomeProposed { proposal: u64 to: u32 }
+record OutcomeWithdrawn { proposal: u64 }
+record OutcomeStopped { task: u64 }
+record OutcomeCancelled { task: u64 }
+record OutcomeReleased { task: u64 }
+record OutcomePersonTaken { task: u64 }
+record OutcomePersonHandedBack { task: u64 }
+record OutcomePersonAnswered { task: u64 }
+record OutcomeMoved { task: u64 }
+record OutcomeProposalDecided { proposer: Proposer proposal: u64 by: u64 at: u64 choice: ProposalChoice }
+record OutcomeSaid { task: u64 message: u64 }
+record OutcomeQuestionAnswered { task: u64 question: u64 message: u64 }
+record OutcomeAmended { task: u64 released: bool }
+record OutcomeRolesSet { project: u32 }
+record OutcomeRenamed { project: u32 }
+record OutcomeProjectMade { project: u32 }
+record OutcomePolicyChanged { project: u32 }
+record OutcomePoolSet { project: u32 person: u64 }
+record OutcomeEscalationDecided { task: u64 revision: u64 by: u64 at: u64 choice: EscalationChoice }
+record OutcomeRefused { value: Refusal }
+record OutcomeAccountSignInStarted { source: u32 address: bytes 2048 }
+enum AccountHostWhy { not_in_contact, lost, failed }
+record AccountHostFailure { name: bytes 4096 why: AccountHostWhy }
+record OutcomeAccountProgramDeclared { source: u32 name: bytes 32 }
+record OutcomeAccountSignedOut { confirmed: bool failed_hosts: list 128 AccountHostFailure }
+record OutcomeAccountKeyKept { source: u32 }
+record OutcomeAccountRemoved { confirmed: bool failed_hosts: list 128 AccountHostFailure }
+record Given { task: u64 amount: u64 }
+record OutcomeCreated { first: u64 last: u64 given: option Given }
+record OutcomeAccountMovingOut { account: u32 number: u32 source: u32 }
+record OutcomeAccountMovedIn { account: u32 renewed: bool }
+record OutcomeAccountFinishing { source: u32 }
+record OutcomeMovedToNewest { newest: u32 moved: u32 stayed: u32 }
+enum Outcome { renamed: OutcomeRenamed, project_made: OutcomeProjectMade, compound: OutcomeCompound, compound_refused: OutcomeCompoundRefused, created: OutcomeCreated, marked_seen: OutcomeMarkedSeen, applied: OutcomeApplied, again: OutcomeAgain, signed_out, note_edited: OutcomeNoteEdited, service_made: OutcomeServiceMade, adopted: OutcomeAdopted, proposed: OutcomeProposed, stopped: OutcomeStopped, cancelled: OutcomeCancelled, released: OutcomeReleased, person_taken: OutcomePersonTaken, person_handed_back: OutcomePersonHandedBack, person_answered: OutcomePersonAnswered, moved: OutcomeMoved, proposal_decided: OutcomeProposalDecided, said: OutcomeSaid, question_answered: OutcomeQuestionAnswered, amended: OutcomeAmended, roles_set: OutcomeRolesSet, policy_changed: OutcomePolicyChanged, pool_set: OutcomePoolSet, escalation_decided: OutcomeEscalationDecided, refused: OutcomeRefused, withdrawn: OutcomeWithdrawn, account_sign_in_started: OutcomeAccountSignInStarted, account_signed_out: OutcomeAccountSignedOut, account_key_kept: OutcomeAccountKeyKept, account_changed, account_removed: OutcomeAccountRemoved, account_program_declared: OutcomeAccountProgramDeclared, account_moving_out: OutcomeAccountMovingOut, account_moved_in: OutcomeAccountMovedIn, settings_changed: OutcomeSettingsChanged, account_finishing: OutcomeAccountFinishing, moved_to_newest: OutcomeMovedToNewest }
+record ActKey { connector: u16 key: fixed 16 }
+record ActClose { project: u32 task: u64 grace: option u64 reason: bytes 8192 }
+record ActAddKey { provider: u32 join: option u32 digest: fixed 32 }
+record ActRemoveAccount { account: u32 }
+record ActAdopt { project: u32 adoption: Adoption }
+record ActMakeProject { maker: u64 name: text 64 policy: u32 }
+enum Act { make_project: ActMakeProject, close: ActClose, add_key: ActAddKey, remove_account: ActRemoveAccount, adopt: ActAdopt }
+record StoredActed { key: ActKey act: Act outcome: Outcome at: u64 }
+record StoredAnswer { key: RequestKey ask: Ask models: list 64 ModelName outcome: Outcome at: u64 }
+enum Value { person: StoredPerson, read_results: StoredReadResults, read_conversation: StoredReadConversation, sign_in: StoredSignIn, roles: StoredRoles, policy: StoredPolicy, answer: StoredAnswer, ended_read: EndedRead, acted: StoredActed }
+versioned record Row { value: Value }

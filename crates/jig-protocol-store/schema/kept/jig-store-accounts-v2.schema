@@ -1,0 +1,20 @@
+family jig-store-accounts 2
+
+# The installation's identifier (store.md 4.4), kept at the first start.
+versioned record Installation { id: fixed 16 }
+
+# The accounts' counter, accounts and sources (store.md 4.4 item 9). The
+# bounds are the accounts child's: a subject, a display name, a source's name.
+record Next { number: u32 }
+record Party { party: u64 }
+enum Holder { deployment, party: Party }
+record Project { project: u32 }
+enum Use { party: Party, project: Project }
+record Account { number: u32 provider: u32 holder: Holder place: u32 uses: option list 16 Use subject: bytes 255 display: bytes 64 }
+enum Kind { sign_in, key, program, none }
+record Limited { reset: option u64 }
+enum Held { limited: Limited, refused, moving }
+record Source { account: u32 number: u32 place: u32 kind: Kind name: bytes 32 held: option Held }
+record Issued { number: u32 holder: Holder name: bytes 32 signed_out: bool }
+enum Value { next: Next, account: Account, source: Source, issued: Issued }
+versioned record Row { value: Value }

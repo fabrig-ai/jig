@@ -1,0 +1,120 @@
+family jig-store-core 6
+
+record ProposerTask { value: u64 }
+record ProposerParty { value: u64 }
+enum Proposer { task: ProposerTask, party: ProposerParty }
+enum ProposalChoice { accepted, rejected, passed, withdrawn, stale }
+record EscalationDecisionReject { reason: bytes 8192 }
+enum EscalationDecision { release, reject: EscalationDecisionReject, pass }
+enum ProposalKind { batch, effect, amend, widen, release, settings }
+record EscalationOutcomePassed { revision: u64 }
+enum EscalationOutcome { released, rejected, passed: EscalationOutcomePassed, stale, no_further, limit }
+enum ProposalOutcome { accepted, rejected, passed, withdrawn, stale }
+enum Source { task, role, project, deployment }
+record Lacks { tools: bool grants: bool executors: bool tasks: bool depth: bool spend: bool deadline: bool notes: bool models: bool }
+record Judge { connector: u16 requirement: u16 parameters: u32 }
+enum Answer { allow, wait, propose, refuse }
+record FindingAuthority { source: Source lacks: Lacks }
+record FindingExecutor { source: Source }
+record FindingTasks { source: Source }
+record FindingSpend { source: Source }
+record FindingGrant { source: Source }
+record FindingPrice { source: Source }
+record FindingScope { source: Source }
+record FindingRequired { judge: Judge }
+record FindingFailed { judge: Judge }
+record FindingUnguarded { judge: Judge }
+enum Finding { oversized, unknown_project, unknown_role, authority: FindingAuthority, executor: FindingExecutor, tasks: FindingTasks, spend: FindingSpend, arithmetic, run_budget, run_cap, deadline, account, writer, tool, grant: FindingGrant, price: FindingPrice, resource_access, resource_unavailable, reference, scope: FindingScope, required: FindingRequired, failed: FindingFailed, unguarded: FindingUnguarded, unpermitted, undecidable, period_spend }
+enum HostKind { worker, engine }
+record OutboxOutcomeHeld { entry: u64 }
+enum OutboxOutcome { made, failed, withdrawn, not_made, uncertain, held: OutboxOutcomeHeld }
+enum DeliveryOutcome { delivered, nothing, stale, refused, invalid, failed }
+record SettledAnswerHost { error: bool body: bytes 1048576 }
+record SettledAnswerDelivery { outcome: DeliveryOutcome evidence: bytes 1048576 }
+enum SettledAnswer { host: SettledAnswerHost, delivery: SettledAnswerDelivery }
+record SettledCall { serial: u64 tool: bytes 1048576 answer: SettledAnswer }
+record CallKey { task: u64 attempt: u64 completion: u32 position: u32 }
+record CallPartEffect { connector: u16 entry: u64 deadline: u64 outcome: option OutboxOutcome }
+record CallPartConnector { connector: u16 }
+record CallPartEffectDenied { answer: Answer findings: list 1024 Finding }
+record CallPartToolDenied { answer: Answer findings: list 1024 Finding }
+record CallPartEscalationDecided { task: u64 revision: u64 outcome: EscalationOutcome }
+record Number { value: u64 }
+record PolicyHolder { project: u32 kind: ProposalKind }
+enum ProposalHolder { task: Number, person: Number, policy: PolicyHolder }
+record CallPartProposed { proposal: u64 holder: ProposalHolder }
+record CallPartProposalDecided { proposal: u64 outcome: ProposalOutcome }
+record CallPartControlDenied { answer: Answer }
+record CallPartSent { message: u64 }
+record CallPartSubscribed { subscription: u64 }
+record CallPartDelegationDenied { answer: Answer findings: list 1024 Finding }
+record CallPartNoteWritten { name: u64 revision: u32 }
+record TaskBytes { value: bytes 8192 holds jig-store-tasks TaskProblem }
+record CallPartEscalationRefused { value: TaskBytes }
+record CallPartProposalRefused { value: TaskBytes }
+record CallPartControlRefused { value: TaskBytes }
+record CallPartMessageRefused { value: TaskBytes }
+record CallPartSubscriptionRefused { value: TaskBytes }
+record CallPartDelegationRefused { value: TaskBytes }
+record Made { task: u64 revision: u64 given: option u64 }
+record CallPartDelegated { value: list 1024 Made }
+record NoteBytes { value: bytes 2097152 holds jig-store-notes Row }
+record CallPartNoteRecalled { entries: list 16 NoteBytes more: bool }
+record NoteRefusalMoved { revision: u32 }
+enum NoteRefusal { busy, oversized, full, exists, missing, moved: NoteRefusalMoved, revision_exhausted }
+record CallPartNoteRefused { value: NoteRefusal }
+record CallPartRevised { task: u64 revision: u64 }
+
+enum FailureClass { transient, permanent, run, agent, lost, invalid }
+record HoldReasonFailures { class: FailureClass }
+record HoldReasonDependency { task: u64 }
+record HoldReasonStoppedBy { party: u64 }
+record HoldReasonUncertain { entry: u64 }
+record HoldReasonPoolLost { pool: u64 }
+enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
+record Exceeded { bound: Bound value: u64 }
+enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, stopped_by: HoldReasonStoppedBy, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
+record MovedHold { revision: u64 reason: HoldReason }
+record MovedSpec { revision: u64 }
+record MovedPerson { revision: u64 }
+record MovedNote { revision: u32 }
+enum Moved { hold: MovedHold, spec: MovedSpec, person: MovedPerson, note: MovedNote }
+
+record CallPartMoved { task: u64 now: Moved }
+record CallPartAgain { task: u64 required: bool }
+record CallPartPassedUp { task: u64 }
+record CallPartEffectRefused { value: TaskBytes }
+enum CallPart { again: CallPartAgain, passed_up: CallPartPassedUp, revised: CallPartRevised, moved: CallPartMoved, effect: CallPartEffect, connector: CallPartConnector, effect_denied: CallPartEffectDenied, tool_denied: CallPartToolDenied, escalation_decided: CallPartEscalationDecided, escalation_refused: CallPartEscalationRefused, proposed: CallPartProposed, proposal_decided: CallPartProposalDecided, proposal_refused: CallPartProposalRefused, controlled, control_refused: CallPartControlRefused, control_denied: CallPartControlDenied, sent: CallPartSent, introduced, message_refused: CallPartMessageRefused, subscribed: CallPartSubscribed, unsubscribed, subscription_refused: CallPartSubscriptionRefused, delegated: CallPartDelegated, delegation_denied: CallPartDelegationDenied, delegation_refused: CallPartDelegationRefused, note_written: CallPartNoteWritten, note_recalled: CallPartNoteRecalled, note_refused: CallPartNoteRefused, unavailable, effect_refused: CallPartEffectRefused }
+record CallRecord { key: CallKey part: CallPart settled: option SettledCall }
+record Deployment { id: fixed 16 tasks: u64 people: u64 sign_ins: u64 messages: u64 runs: u64 calls: u64 connector_rows: u64 applications: u64 commits: u64 projects: u64 }
+record PhaseBytes { value: bytes 134217728 holds jig-store-tasks PhaseRecord }
+record ChangeBytes { value: bytes 268435456 holds jig-store-tasks ChangeRecord }
+record EndBytes { value: bytes 1073741824 holds jig-store-tasks EndRecord }
+record PartyTask { value: u64 }
+record PartyPerson { value: u64 }
+record PartyDeployment { project: u32 }
+enum Party { task: PartyTask, person: PartyPerson, deployment: PartyDeployment }
+record ProjectionGoal { number: u64 project: u32 priority: u32 words: bytes 65536 phase: PhaseBytes }
+record ProjectionTask { number: u64 requester: Party words: bytes 65536 phase: PhaseBytes }
+record MilestoneLifecycle { task: u64 position: u64 }
+record MilestoneRevision { task: u64 revision: u64 }
+enum MilestoneId { lifecycle: MilestoneLifecycle, revision: MilestoneRevision }
+record ProjectionMilestone { identity: MilestoneId phase: option PhaseBytes change: option ChangeBytes words: bytes 65536 }
+record Connector { value: u16 }
+record ProjectionGoalRow { goal: ProjectionGoal pending: list 1024 Connector changed: bool fed_at: option u64 }
+record ProjectionTaskRow { goal: u64 task: ProjectionTask }
+record ProjectionMilestoneRow { goal: u64 milestone: ProjectionMilestone }
+enum ProjectionRecord { goal: ProjectionGoalRow, task: ProjectionTaskRow, milestone: ProjectionMilestoneRow }
+record TerminalRecord { task: u64 attempt: u64 cumulative: u64 end: EndBytes }
+record TurnProof { turn: u32 cumulative: u64 read: option u64 }
+record Window { attempt: u64 turn: u32 closed: bool }
+record Credential { value: u32 }
+record AccountBinding { provider: u32 account: u32 source: u32 }
+record RunProof { task: u64 attempt: u64 conversation: u64 accounts: list 64 AccountBinding placement: option u64 account_failure: option u32 account_terminal: bool credentials: list 1024 Credential window: option Window crossed: bool host: HostKind offered: option u64 outstanding: list 64 Number turn: option TurnProof terminal: option TerminalRecord }
+versioned record TurnRecord { opens_window: bool task: u64 attempt: u64 turn: u32 spent: u64 read: option u64 at: u64 transcript: bytes 8388608 holds smith-transcript Turn }
+record Created { first: u64 last: u64 }
+record ProposalDecisionRecord { project: u32 proposer: Proposer proposal: u64 kind: ProposalKind by: u64 at: u64 choice: ProposalChoice created: option Created }
+record EscalationDecisionRecord { project: u32 requester: u64 task: u64 revision: u64 by: u64 at: u64 decision: EscalationDecision }
+record ProjectionValue { value: ProjectionRecord }
+enum Value { call: CallRecord, deployment: Deployment, projection: ProjectionValue, run_proof: RunProof, turn: TurnRecord, terminal: TerminalRecord, proposal_decision: ProposalDecisionRecord, escalation_decision: EscalationDecisionRecord }
+versioned record Row { value: Value }
