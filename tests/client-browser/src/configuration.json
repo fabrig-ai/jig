@@ -33,7 +33,7 @@
         "fleet.calls": 1,
         "fleet.turns": 8,
         "brief.briefs": 1,
-        "brief.sections": 1,
+        "brief.sections": 8,
         "notes.entries_per_scope": 1,
         "views.runs": 1,
         "views.watchers": 2,

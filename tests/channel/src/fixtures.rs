@@ -37,7 +37,7 @@ const ENGINE: &[u8] = br#"{
 "people.people":1,"people.projects":2,"people.sign_ins":2,"people.holdings":1,
 "people.inbox_tasks":4,"people.pending":1,"people.waiters":1,
 "fleet.attempts":1,"fleet.calls":1,"fleet.turns":8,
-"brief.briefs":1,"brief.sections":1,
+"brief.briefs":1,"brief.sections":8,
 "notes.entries_per_scope":1,"views.runs":1,"views.watchers":4,"views.watchers_per_party":4,
 "core.load_slots":1,"core.load_bytes":8192,"core.resume_bytes":4096,"core.run_bytes":4096,"views.text_bytes":1024
 ,"core.templates":2,"documents.rows":1,"documents.lines":1,"documents.chips":1,"documents.text_bytes":128
