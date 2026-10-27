@@ -28,6 +28,43 @@ fn answer(world: &World) -> &core::SettledAnswer {
 }
 
 #[test]
+fn an_unknown_introduction_target_diagnostic_reads_after_restart() {
+    const SEED: u64 = 913;
+    const UNKNOWN: u64 = 999_999;
+    const COMPLETION: u32 = 2; // The fixture's delegation is completion one.
+    let mut world = World::new(SEED, false);
+    world.hold_procedures = true;
+    world.delegate();
+    let child = world.procedure.expect("referenced delegate");
+    // Introduction authorizes the known left peer; the tasks writer diagnoses
+    // the unknown right peer with the same retained MessageRefused variant.
+    let input = format!(r#"{{"left":{child},"right":{UNKNOWN}}}"#);
+    world.tool_call_at(COMPLETION, b"introduce", input.as_bytes(), true);
+    let hosted = world.assigned.as_ref().expect("running agent");
+    let hosting = fleet::Hosted {
+        run: Token::new(hosted.task),
+        attempt: Token::new(hosted.attempt),
+        phase: fleet::Phase::Active,
+    };
+    world.restart(SEED, false);
+    assert!(world.domain.ready(), "a committed Unknown diagnostic must restore");
+    world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(7),
+        hello: fleet::Hello {
+            bounds: jig_core_world::fixtures::bounds(),
+            stop_bound: Duration::from_millis(100),
+            slots: 1,
+            workstreams: Box::new([]),
+            hosting: Box::new([hosting]),
+        },
+    })));
+    world.host_answers.clear();
+    world.tool_call_at(COMPLETION, b"introduce", input.as_bytes(), true);
+    assert_eq!(answer(&world), &core::SettledAnswer::Host { error: true, body: b"Refused: unknown".as_slice().into() });
+}
+
+#[test]
 fn a_message_call_is_decoded_decided_and_answered_in_words() {
     let mut world = World::new(170, false);
     world.hold_procedures = true;
