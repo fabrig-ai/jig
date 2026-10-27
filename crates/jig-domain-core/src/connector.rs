@@ -399,6 +399,50 @@ impl Core {
         })
     }
 
+    /// Allocate a deployment-started procedure task that runs no agent
+    /// (domain/authority.md, 6): the project's ceiling authority, a budget of zero,
+    /// so a period reserved whole never stops it. None only when the project
+    /// has no policy or no task number is left.
+    pub fn procedure_seed(&mut self, project: u32) -> Option<RepairSeed> {
+        let mut authority = self.authority.policy(project)?.ceiling.clone();
+        authority.budget.spend = 0;
+        let number = fresh(&mut self.counters, Family::Task)?;
+        let period = self.period(project);
+        Some(RepairSeed {
+            number,
+            project,
+            period,
+            period_budget: self.period_budget(project),
+            open_period: self.tasks.funding(tasks::Funder::Period { project, period }).is_none(),
+            budget: 0,
+            authority: translate::task_authority(&authority),
+        })
+    }
+
+    /// Deployment procedures with no task budget spend only at the effect,
+    /// from the current period (domain/authority.md, 6–7). These durable facts
+    /// distinguish them from procedures funded by a task or a person's pool.
+    pub(crate) fn procedure_effect_funder(&self, task: u64) -> Option<tasks::Funder> {
+        let row = self.tasks.task(task)?;
+        let procedure = match row.executor {
+            tasks::Executor::Procedure { .. } => true,
+            tasks::Executor::Agent { .. } | tasks::Executor::Person(_) => false,
+        };
+        let funded = match row.funder {
+            tasks::Funder::Period { project, .. } => project == row.project,
+            tasks::Funder::Task(_) | tasks::Funder::Pool { .. } | tasks::Funder::Recurring { .. } => false,
+        };
+        if row.requester != (tasks::Party::Deployment { project: row.project })
+            || !procedure
+            || row.numbers.budget != 0
+            || row.authority.budget.spend != 0
+            || !funded
+        {
+            return None;
+        }
+        Some(tasks::Funder::Period { project: row.project, period: self.period(row.project) })
+    }
+
     /// Whether a live task may address a resource adopted into this project.
     #[must_use]
     pub fn connector_project(&self, task: u64, project: u32) -> bool {
@@ -633,18 +677,40 @@ impl Core {
             return authority::Answer::Refuse;
         }
         let Some(context) = self.tasks.delegation(task) else { return authority::Answer::Refuse };
-        authority::check_effect(
+        let period = self.procedure_effect_funder(task);
+        let mut given = translate::authority_value(&context.authority);
+        let mut numbers = translate::authority_numbers(context.numbers);
+        if period.is_some() {
+            // Check every permission and both ceilings at the described price;
+            // this task has no allotment to widen. Actual funds are checked below.
+            let maximum = description.effect.price.unwrap_or(0);
+            given.budget.spend = maximum;
+            numbers = authority::Numbers { budget: maximum, spent: 0, spent_below: 0, reserved: 0 };
+        }
+        let answer = authority::check_effect(
             &self.authority,
             &authority::EffectAsk {
                 project: context.project,
-                authority: translate::authority_value(&context.authority),
-                numbers: translate::authority_numbers(context.numbers),
+                authority: given,
+                numbers,
                 effect: crate::resources::effect(self, context.project, description.effect.clone()),
                 now,
             },
             verdicts,
             findings,
-        )
+        );
+        if answer == authority::Answer::Allow
+            && let Some(funder) = period
+        {
+            let available = match self.tasks.funding(funder) {
+                Some(row) => authority::left(translate::authority_numbers(row.numbers)),
+                None => 0,
+            };
+            if description.effect.price.unwrap_or(0) > available {
+                return authority::Answer::Wait;
+            }
+        }
+        answer
     }
 
     /// Decide authority for a connector read described in jig's terms.
