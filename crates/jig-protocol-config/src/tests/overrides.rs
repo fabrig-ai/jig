@@ -20,12 +20,15 @@ fn an_override_replaces_one_limit_of_the_profile() {
     expected.core.tasks.inbox_messages = 9;
     assert_eq!(parse(br#"{"profile":"small","overrides":{"tasks.inbox_messages":9}}"#), Ok(expected));
 }
+#[test]
 fn an_override_of_an_unknown_name_is_refused() {
     assert_eq!(overrides::apply(&mut small(), b"tasks.absent", 1), Err(What::Override));
 }
+#[test]
 fn an_override_past_its_type_is_refused() {
     assert_eq!(overrides::apply(&mut small(), b"hub.slots", 4_294_967_296), Err(What::Override));
 }
+#[test]
 fn an_override_that_breaks_a_worst_case_is_refused_naming_it() {
     problem(
         br#"{"profile":"small","overrides":{"tasks.tasks":0}}"#,
@@ -63,6 +66,7 @@ fn duration_overrides_read_as_milliseconds() {
     expected.link.ping = skein_lib::Duration::from_millis(6_000);
     assert_eq!(parse(br#"{"profile":"small","overrides":{"link.ping_ms":6000}}"#), Ok(expected));
 }
+#[test]
 fn a_duration_override_past_its_type_is_refused() {
     assert_eq!(overrides::apply(&mut small(), b"link.ping_ms", u64::MAX), Err(What::Override));
 }
@@ -72,6 +76,7 @@ fn a_limit_with_a_u64_type_keeps_its_width() {
     assert_eq!(overrides::apply(&mut limits, b"core.fill_mark", u64::MAX), Ok(()));
     assert_eq!(limits.core.fill_mark, u64::MAX);
 }
+#[test]
 fn an_unknown_profile_is_refused_naming_it() {
     problem(br#"{"profile":"other"}"#, &[b"limits", b"profile"], What::Override);
 }
@@ -79,12 +84,15 @@ fn an_unknown_profile_is_refused_naming_it() {
 fn the_standard_profile_can_be_selected() {
     assert_eq!(parse(br#"{"profile":"standard"}"#), Ok(profile(Profile::Standard)));
 }
+#[test]
 fn a_missing_profile_is_refused_naming_it() {
     problem(b"{}", &[b"limits", b"profile"], What::Missing);
 }
+#[test]
 fn an_unknown_limits_member_is_refused_naming_it() {
     problem(br#"{"profile":"small","absent":1}"#, &[b"limits", b"absent"], What::Unknown);
 }
+#[test]
 fn an_override_named_twice_is_refused_naming_it() {
     problem(
         br#"{"profile":"small","overrides":{"hub.slots":2,"hub.slots":3}}"#,
@@ -103,6 +111,7 @@ fn overrides_are_checked_together() {
         Ok(expected)
     );
 }
+#[test]
 fn a_non_integer_override_is_refused_naming_it() {
     problem(
         br#"{"profile":"small","overrides":{"hub.slots":{}}}"#,
@@ -111,6 +120,7 @@ fn a_non_integer_override_is_refused_naming_it() {
     );
 }
 
+#[test]
 fn a_whole_compound_limit_is_refused() {
     assert_eq!(overrides::apply(&mut small(), b"tasks.retries", 1), Err(What::Override));
 }
@@ -120,6 +130,7 @@ fn a_compound_member_override_replaces_only_that_member() {
     expected.core.tasks.retries.transient.retries = 4;
     assert_eq!(parse(br#"{"profile":"small","overrides":{"tasks.retries.transient.retries":4}}"#), Ok(expected));
 }
+#[test]
 fn an_invalid_compound_member_is_refused_naming_it() {
     problem(
         br#"{"profile":"small","overrides":{"documents.versions.minimum":2}}"#,
@@ -324,6 +335,7 @@ const SMALL: &[(&[u8], u64)] = &[
     (b"documents.versions.maximum", 1),
 ];
 
+#[test]
 fn overrides_past_their_types_are_refused() {
     table([
         ("an_override_past_its_type_is_refused", an_override_past_its_type_is_refused),
@@ -369,18 +381,23 @@ fn sign_ins_at_once_and_the_sign_in_deadline_reach_the_driver() {
     assert_eq!((limits.core.accounts.sign_ins, limits.driver.listeners), (3, 6));
     assert_eq!(limits.driver.client.sign_in_time, skein_lib::Duration::from_secs(120));
 }
+#[test]
 fn no_sign_ins_at_once_is_refused() {
     refused(br#"{"profile":"small","overrides":{"accounts.sign_ins":0}}"#, b"accounts.sign_ins");
 }
+#[test]
 fn sign_ins_past_the_drivers_sockets_are_refused() {
     refused(br#"{"profile":"small","overrides":{"accounts.sign_ins":7}}"#, b"accounts.sign_ins");
 }
+#[test]
 fn a_holders_accounts_past_the_deployments_are_refused() {
     refused(br#"{"profile":"small","overrides":{"accounts.holder_accounts":5}}"#, b"accounts.holder_accounts");
 }
+#[test]
 fn no_sources_per_account_is_refused() {
     refused(br#"{"profile":"small","overrides":{"accounts.sources":0}}"#, b"accounts.sources");
 }
+#[test]
 fn a_sign_in_deadline_of_zero_is_refused() {
     refused(br#"{"profile":"small","overrides":{"accounts.sign_in_deadline_ms":0}}"#, b"accounts.sign_in_deadline_ms");
 }
