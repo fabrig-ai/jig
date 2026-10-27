@@ -47,6 +47,65 @@ fn answer(ask: Ask, outcome: Outcome) -> Stored {
 }
 
 #[test]
+fn a_refused_malformed_create_replays_its_answer_after_restart() {
+    let (mut domain, env, mut out) = restoring();
+    let identities = [
+        Stored::Person { number: PERSON, identity: identity(PERSON) },
+        Stored::SignIn {
+            number: SIGN_IN,
+            person: PERSON,
+            expires: Wall::from_nanos(Duration::from_secs(3600).as_nanos()),
+        },
+        Stored::Roles {
+            project: PROJECT,
+            holdings: Box::new([people::Holding { person: PERSON, role: people::Role::Member }]),
+        },
+    ];
+    for record in identities.clone() {
+        step(&mut domain, &env, Event::Restore { record }, &mut out);
+    }
+    step(&mut domain, &env, Event::Restored, &mut out);
+    let mut member = people_member(WORDS, 1);
+    member.flags.ended_by = people::EndedBy::Requester;
+    member.flags.conversation = false;
+    let ask = Ask::Create { project: PROJECT, batch: Box::new([member]) };
+    step(
+        &mut domain,
+        &env,
+        Event::Ask {
+            reply_to: ReplyTo::new(Token::new(1)),
+            sign_in: SIGN_IN,
+            key: KEY.key,
+            ask: ask.clone(),
+            models: Box::new([]),
+        },
+        &mut out,
+    );
+    let Some(Request::Route { request, .. }) = out.pop() else {
+        panic!("creation must route to the parent");
+    };
+    let outcome = Outcome::Refused(Refusal::NotWellFormed { at: 0, why: people::Malformed::EndedBy });
+    step(&mut domain, &env, Event::Decided { request, outcome: outcome.clone() }, &mut out);
+    let Some(Request::Save { record: saved }) = out.pop() else {
+        panic!("the real writer must save the refusal");
+    };
+    let (mut domain, env, mut out) = restoring();
+    for record in identities.into_iter().chain([saved]) {
+        step(&mut domain, &env, Event::Restore { record }, &mut out);
+    }
+    step(&mut domain, &env, Event::Restored, &mut out);
+    assert!(domain.ready(), "a retained refusal need not have valid creation flags: {out:?}");
+    step(
+        &mut domain,
+        &env,
+        Event::Ask { reply_to: ReplyTo::new(Token::new(2)), sign_in: SIGN_IN, key: KEY.key, ask, models: Box::new([]) },
+        &mut out,
+    );
+    assert_eq!(out.pop(), Some(Request::Reply { to: ReplyTo::new(Token::new(2)), reply: Reply::Outcome(outcome) }));
+    assert!(out.is_empty(), "replay does not route or save again");
+}
+
+#[test]
 fn restoring_an_answer_refuses_malformed_open_members() {
     let rows = [
         ("person", TaskExecutor::Person(people::PersonAddress::Person(PERSON)), true),
