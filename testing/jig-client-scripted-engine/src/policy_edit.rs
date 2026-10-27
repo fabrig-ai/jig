@@ -23,7 +23,7 @@ impl Payload for PolicyEdit {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
             Self::Templates { overrides } => overrides.heap(bounds),
-            Self::ProjectSpend { .. } => Some(0),
+            Self::ProjectSpend { .. } | Self::RoleSpend { .. } => Some(0),
             Self::Role(value) => value.heap(bounds),
             Self::Requirements { requirements } => requirements.heap(bounds),
             Self::Projections { grants } => crate::payload::authority(grants, bounds),
