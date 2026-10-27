@@ -885,3 +885,113 @@ fn restart_refuses_a_project_hold_with_an_unheld_task_in_scope_or_a_task_owner()
         assert!(check_rows(rows, &w.env).iter().any(|reply| matches!(reply, tasks::Request::RestoreRefused { .. })));
     }
 }
+
+fn adopt(w: &mut World, task: u64, by: u64, compound: bool) -> Reply {
+    let reply_to = w.to();
+    let call = reply_to.into_token();
+    let reply_to = skein_lib::ReplyTo::new(call);
+    if compound {
+        let mut operations = skein_lib::List::with_capacity(1);
+        operations.push(tasks::Operation::Move { task, reason: Box::new([]) }).expect("one adoption");
+        w.send(Event::Compound {
+            reply_to,
+            by: Party::Person(by),
+            project: 1,
+            operations,
+            period: 0,
+            pool_budget: 1000,
+            period_budget: 10_000,
+        });
+    } else {
+        w.send(Event::Move {
+            reply_to,
+            task,
+            person: by,
+            period: 0,
+            pool_budget: 1000,
+            period_budget: 10_000,
+            reason: Box::new([]),
+        });
+    }
+    w.replies[&call.raw()].clone()
+}
+
+#[test]
+fn a_task_a_project_stop_holds_is_moved_by_no_one() {
+    // Person 1's task 1 -> conversation 2; both are held by project stop 100.
+    for compound in [false, true] {
+        let mut w = World::new(941, LIMITS);
+        assert_eq!(w.make(Party::Person(1), vec![task(1, &[])]), Reply::Made(vec![1]));
+        let mut conversation = task(2, &[]);
+        conversation.flags.conversation = true;
+        assert_eq!(w.make(Party::Task(1), vec![conversation]), Reply::Made(vec![2]));
+        assert_eq!(project_stop(&mut w, 1, 1, 100), Reply::Done);
+        for number in [1, 2] {
+            placed(&w, number, 100);
+        }
+        for by in [1, 9] {
+            let before = w.records.clone();
+            assert!(matches!(adopt(&mut w, 2, by, compound), Reply::Refused(problem)
+                if problem.why == Refusal::Placed { hold: 100 }));
+            assert_eq!(w.records, before);
+        }
+        assert_eq!(release_from(&mut w, Party::Person(1), 2), Reply::Done);
+        due(&w, 2);
+        assert_eq!(adopt(&mut w, 2, 9, compound), Reply::Done);
+        assert_eq!(w.record(2).requester, Party::Person(9));
+        due(&w, 2);
+        placed(&w, 1, 100);
+        assert_eq!(w.placed_hold(100).expect("standing project hold").exempt.as_ref(), &[2]);
+        w.restart();
+        assert_eq!(w.record(2).requester, Party::Person(9));
+        due(&w, 2);
+    }
+}
+
+#[test]
+fn a_task_held_by_a_lifted_project_stop_can_be_moved() {
+    // Person 1's task 1 stays held after lifting stop 100, then person 9 adopts it.
+    let mut w = World::new(942, LIMITS);
+    assert_eq!(w.make(Party::Person(1), vec![task(1, &[])]), Reply::Made(vec![1]));
+    assert_eq!(project_stop(&mut w, 1, 1, 100), Reply::Done);
+    assert_eq!(lift(&mut w, 100, 1, false), Reply::Lifted { released: 0 });
+    assert_eq!(adopt(&mut w, 1, 9, false), Reply::Done);
+    assert_eq!(w.record(1).requester, Party::Person(9));
+    placed(&w, 1, 100);
+    w.restart();
+    placed(&w, 1, 100);
+}
+
+#[test]
+fn a_moved_conversation_uses_its_projected_requester_when_released_from_another_hold() {
+    // Task 1 -> conversation 2; subtree stop 100 holds 2 before project stop 101.
+    let mut w = World::new(943, LIMITS);
+    assert_eq!(w.make(Party::Person(1), vec![task(1, &[])]), Reply::Made(vec![1]));
+    let mut conversation = task(2, &[]);
+    conversation.flags.conversation = true;
+    assert_eq!(w.make(Party::Task(1), vec![conversation]), Reply::Made(vec![2]));
+    assert_eq!(stop(&mut w, 2, 1, 100), Reply::Done);
+    assert_eq!(project_stop(&mut w, 1, 1, 101), Reply::Done);
+    let mut operations = skein_lib::List::with_capacity(2);
+    operations.push(tasks::Operation::Move { task: 2, reason: Box::new([]) }).expect("adoption");
+    operations.push(tasks::Operation::Release { task: 2, again: None, message: None }).expect("release");
+    let reply_to = w.to();
+    let call = reply_to.into_token();
+    w.send(Event::Compound {
+        reply_to: skein_lib::ReplyTo::new(call),
+        by: Party::Person(1),
+        project: 1,
+        operations,
+        period: 0,
+        pool_budget: 1000,
+        period_budget: 10_000,
+    });
+    assert_eq!(w.replies[&call.raw()], Reply::Done);
+    assert_eq!(w.record(2).requester, Party::Person(1));
+    due(&w, 2);
+    placed(&w, 1, 101);
+    assert!(w.placed_hold(100).is_none());
+    assert!(!w.placed_hold(101).expect("standing project stop").lifted);
+    w.restart();
+    due(&w, 2);
+}

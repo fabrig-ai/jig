@@ -1,5 +1,5 @@
 //! Placed holds, their owners, scopes and lifting (domain/tasks.md, 5.9).
-use crate::compound::Staged;
+use crate::compound::{CompoundTask, Staged};
 use crate::domain::{fact, publish, record, task_mut};
 use crate::{
     Capacity, CapacityAction, CapacityCause, Domain, Fact, Hold, Key, Limits, Party, Phase, Problem, Refusal, Request,
@@ -202,7 +202,7 @@ pub(crate) fn covers(domain: &Domain, staged: &Staged, hold: &PlacedHold, number
 }
 
 /// Only the conversation a person requested directly is outside project scope.
-pub(crate) fn direct_conversation(row: &TaskRecord) -> bool {
+pub(crate) fn direct_conversation(row: &CompoundTask<'_>) -> bool {
     row.flags.conversation
         && match row.requester {
             Party::Person(_) => true,
@@ -808,15 +808,16 @@ pub(crate) fn compound_bytes(limits: &Limits) -> Option<u64> {
     u64::from(limits.tasks).checked_mul(selection.max(release))
 }
 
-/// Moving a whole scope preserves its hold; detaching a held delegate must first release it.
+/// Only a subtree scope can move whole; a standing project hold must first release the task.
 pub(crate) fn check_detach(domain: &Domain, staged: &Staged, ancestor: u64, number: u64) -> Result<(), Refusal> {
     let row = staged.record(domain, number).expect("moving live task");
     if let Some(identity) = row.placed {
         let hold = staged.placed_hold(domain, identity).expect("task names its placed hold");
-        if !hold.lifted
-            && let Some(root) = subtree(hold.scope)
-            && !staged.descendant(domain, root, ancestor, domain.names.capacity())
-        {
+        let outside = match hold.scope {
+            Scope::Subtree { task } => !staged.descendant(domain, task, ancestor, domain.names.capacity()),
+            Scope::Project => true,
+        };
+        if !hold.lifted && outside {
             return Err(Refusal::Placed { hold: identity });
         }
     }
