@@ -281,3 +281,35 @@ fn close_chat_reads_the_edited_template_grace() {
         &[Operation::Cancel { project: PROJECT, task: CHAT_TASK, reason: words(), grace: Some(grace) }]
     );
 }
+
+// A named conversation exercises an application's third template without a new wire act.
+const NAMED_CHAT: u32 = 3;
+fn named_chat_me() -> Me {
+    let mut me = me();
+    let project = shape_project(&mut me);
+    let template = project.templates.get_mut(0).unwrap();
+    template.number = NAMED_CHAT;
+    template.executor = TemplateExecutor::Charter(NAMED_CHAT);
+    project.creating.as_mut().unwrap().within.charters = List::with_capacity(1);
+    project.creating.as_mut().unwrap().within.charters.push(NAMED_CHAT).unwrap();
+    me
+}
+#[test]
+fn chat_from_fills_the_named_conversation_template() {
+    let task = shape_task(chat_from(&named_chat_me(), PROJECT, NAMED_CHAT, words()).unwrap());
+    assert_eq!(task.executor, OwnerExecutor::Agent { charter: NAMED_CHAT });
+    assert!(task.flags.conversation);
+    assert_eq!(task.spec.words, words());
+}
+#[test]
+fn chat_from_refuses_a_template_not_offered_in_the_project() {
+    let me = me();
+    assert_eq!(chat_from(&me, PROJECT, NAMED_CHAT, words()), Err(NotOffered::Template));
+    assert_eq!(chat(&me, PROJECT, words()), chat_from(&me, PROJECT, CHAT, words()));
+}
+#[test]
+fn chat_from_refuses_a_template_without_the_conversation_flag() {
+    let mut me = named_chat_me();
+    shape_project(&mut me).templates.get_mut(0).unwrap().flags.conversation = false;
+    assert_eq!(chat_from(&me, PROJECT, NAMED_CHAT, words()), Err(NotOffered::Template));
+}
