@@ -19,11 +19,12 @@ pub use v9::{
     AccountRefused, AccountRefusedParts, AgentFailure, AgentFailureValue, AgentFailureValueParts, Answer, AnswerParts,
     Bound, Call, CallParts, CancelReason, CancelReasonValue, CancelReasonValueParts, Count, CountKind, CountParts,
     Ended, EndedParts, Ending, Exceeded, ExceededParts, Fact, FactParts, FactValue, Failed, FailedParts, Failure,
-    Invalid, InvalidStart, InvalidStartParts, InvalidValue, InvalidValueParts, Limited, LimitedAccount,
-    LimitedAccountParts, LimitedParts, Long, LongParts, MessageRefusal, Operation, Parked, ParkedParts, PhaseValue,
-    PhaseValueParts, Preparation, PreparationValue, PreparationValueParts, Refusal, RefusalValue, RefusalValueParts,
-    Refused, RefusedAccount, RefusedAccountParts, RefusedParts, Resource, ResourceParts, RunFailure, RunFailureValue,
-    RunFailureValueParts, StartCause, Turn, TurnParts, Unauthorized, UnauthorizedParts, Work, WorkParts,
+    HostPart, HostPartParts, Invalid, InvalidStart, InvalidStartParts, InvalidValue, InvalidValueParts, Limited,
+    LimitedAccount, LimitedAccountParts, LimitedParts, Long, LongParts, MessageRefusal, Operation, Parked, ParkedParts,
+    PhaseValue, PhaseValueParts, Preparation, PreparationValue, PreparationValueParts, Refusal, RefusalValue,
+    RefusalValueParts, Refused, RefusedAccount, RefusedAccountParts, RefusedParts, Resource, ResourceParts, RunFailure,
+    RunFailureValue, RunFailureValueParts, StartCause, Turn, TurnParts, Unauthorized, UnauthorizedParts, Work,
+    WorkParts,
 };
 pub use v9::{
     Acknowledge, AcknowledgeParts, AnsweredCall, AnsweredCallParts, ApplicationValue, ApplicationValueParts,

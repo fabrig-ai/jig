@@ -379,6 +379,8 @@ pub use jig_domain_people::{MODEL_DESCRIPTION_BYTES, MODEL_NAME_BYTES};
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 #[expect(clippy::struct_excessive_bools, reason = "independent charter grants and run behavior")]
 pub struct RunPolicy {
+    /// Host families named by this charter (domain/engine.md, 7.1).
+    pub tools: authority::Tools,
     pub instructions: Box<[u8]>,
     pub waiting: skein_lib::Duration,
     pub resume: bool,

@@ -92,8 +92,8 @@ pub const fn unstarted(end: smith::End) -> Option<&'static [u8]> {
 pub const fn start_cause(why: smith::RunInvalid) -> host::StartCause {
     match why {
         smith::RunInvalid::Grants => host::StartCause::Grants,
-        smith::RunInvalid::HostPart { .. }
-        | smith::RunInvalid::Room { .. }
+        smith::RunInvalid::HostPart { bound } => host::StartCause::HostPart { bound },
+        smith::RunInvalid::Room { .. }
         | smith::RunInvalid::Messages
         | smith::RunInvalid::CharterVersion
         | smith::RunInvalid::MalformedCharter

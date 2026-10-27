@@ -54,7 +54,7 @@ record HoldCategoryDependency { task: u64 }
 record HoldCategoryPlaced { hold: u64 }
 record HoldCategoryUncertain { entry: u64 }
 record HoldCategoryPoolLost { pool: u64 }
-enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
+enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output, host_part }
 record Exceeded { bound: Bound value: u64 }
 enum HoldCategory { failures: HoldCategoryFailures, stalled, dependency: HoldCategoryDependency, stopped, placed: HoldCategoryPlaced, drift, effects, effect_failed, uncertain: HoldCategoryUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldCategoryPoolLost, procedure, circle, exceeded: Exceeded }
 record OwnerChipPhaseWaiting { dependencies: list 32 u64 more: bool holds: bool }

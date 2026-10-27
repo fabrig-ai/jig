@@ -41,6 +41,7 @@ pub enum SettingHosts {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[expect(clippy::struct_excessive_bools, reason = "the whole charter carries independent tool grants and resume")]
 pub struct Charter {
+    pub tools: u64,
     pub number: u32,
     pub instructions: Text,
     pub waiting: Duration,

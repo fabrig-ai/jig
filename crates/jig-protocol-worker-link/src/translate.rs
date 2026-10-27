@@ -303,6 +303,9 @@ fn invalid_value(value: host::Invalid, limits: &wire::v9::Limits) -> Option<wire
                     cause: match cause {
                         host::StartCause::Other => wire::StartCause::Other,
                         host::StartCause::Grants => wire::StartCause::Grants,
+                        host::StartCause::HostPart { bound } => {
+                            wire::StartCause::HostPart(wire::HostPart::new(limits, wire::HostPartParts { bound }).ok()?)
+                        }
                     },
                 },
             )
@@ -330,6 +333,7 @@ fn run_failure(value: host::RunFailure, limits: &wire::v9::Limits) -> Option<wir
                         host::Bound::History => wire::Bound::History,
                         host::Bound::Window => wire::Bound::Window,
                         host::Bound::Output => wire::Bound::Output,
+                        host::Bound::HostPart => wire::Bound::HostPart,
                     },
                     value: value.value,
                 },

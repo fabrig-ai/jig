@@ -535,6 +535,7 @@ fn encode_run_policy(value: &core::RunPolicy, limits: &wire::Limits) -> Result<w
     wire::RunPolicy::new(
         limits,
         wire::RunPolicyParts {
+            tools: value.tools.0,
             instructions: field_instructions,
             waiting: field_waiting,
             turns: field_turns,
@@ -550,6 +551,7 @@ fn encode_run_policy(value: &core::RunPolicy, limits: &wire::Limits) -> Result<w
 }
 fn decode_run_policy(value: wire::RunPolicy, limits: &wire::Limits) -> core::RunPolicy {
     let wire::RunPolicyParts {
+        tools,
         instructions,
         waiting,
         turns,
@@ -581,6 +583,7 @@ fn decode_run_policy(value: wire::RunPolicy, limits: &wire::Limits) -> core::Run
     let field_agents = agents;
     let field_call_timeout = call_timeout;
     core::RunPolicy {
+        tools: authority::Tools(tools),
         instructions: field_instructions,
         waiting: field_waiting,
         resume: field_resume,

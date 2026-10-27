@@ -186,7 +186,7 @@ pub(super) fn charter(
         charter::Charter {
             mode: mode(value.run.ended_by),
             instructions: policy.instructions,
-            tools: declarations(policy.call_timeout, value.run.authority.tools.0)?,
+            tools: declarations(policy.call_timeout, policy.tools.0 & value.run.authority.tools.0)?,
             wait: true,
             agents: policy.agents,
             workspace: charter::WorkspaceTools { inspect: false, modify: false, shell: false },
