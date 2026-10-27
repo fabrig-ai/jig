@@ -6,6 +6,39 @@ use jig_domain_notes as notes;
 use skein_kv::{KeyWriter, Range};
 use skein_lib::List;
 
+/// Concatenate a restart request's intervals in the order walked (store.md, 7.2).
+#[must_use]
+pub fn intervals(ranges: &[RestoreRange]) -> Option<Box<[Range]>> {
+    let mut count = 0_u32;
+    for range in ranges {
+        count = count.checked_add(u32::try_from(restore(range).len()).ok()?)?;
+    }
+    let mut all = List::with_capacity(count);
+    for range in ranges {
+        for interval in restore(range) {
+            all.push(interval).expect("counted restart intervals");
+        }
+    }
+    Some(all.into_boxed())
+}
+
+/// A key's place in the restart walk, from the walk's own intervals (store.md, 7.2).
+/// A key outside the requested intervals has no cursor.
+#[must_use]
+pub fn cursor(ranges: &[RestoreRange], key: &[u8]) -> Option<crate::Cursor> {
+    for (index, interval) in intervals(ranges)?.iter().enumerate() {
+        if key >= interval.start.as_ref()
+            && match &interval.end {
+                Some(end) => key < end.as_ref(),
+                None => true,
+            }
+        {
+            return Some(crate::Cursor { interval: u32::try_from(index).ok()?, after: Box::from(key) });
+        }
+    }
+    None
+}
+
 /// The restart hands each live family up in the core's declared order.
 #[must_use]
 pub fn restore(range: &RestoreRange) -> Box<[Range]> {

@@ -12,20 +12,104 @@ fn key_bytes(key: &Key) -> Box<[u8]> {
     keys::encode(key, fixtures::KEY_LIMIT).expect("within the key limit")
 }
 
+// The existing generated sample count plus two explicit late-interval keys.
+const SAMPLES: u32 = 500;
+const BOUNDARY_KEYS: u32 = 2;
+// A census and the combined core/tasks request, beside LIVE's single ranges.
+const EXTRA_REQUESTS: u32 = 2;
 fn samples() -> core::ops::Range<u32> {
-    0..500
+    0..SAMPLES
+}
+
+fn cursor_requests() -> Box<[Box<[RestoreRange]>]> {
+    // Six live ranges, a census, and a combined core/tasks request.
+    let count = u32::try_from(RestoreRange::LIVE.len())
+        .expect("fixed live count")
+        .checked_add(EXTRA_REQUESTS)
+        .expect("bounded requests");
+    let mut requests = skein_lib::List::with_capacity(count);
+    for range in RestoreRange::LIVE {
+        requests.push(Box::from([range])).expect("counted requests");
+    }
+    requests.push(Box::from([RestoreRange::Census(census())])).expect("counted requests");
+    requests.push(Box::from([RestoreRange::Core, RestoreRange::Tasks])).expect("counted requests");
+    requests.into_boxed()
+}
+
+fn cursor_keys() -> Box<[Key]> {
+    let mut rng = Rng::new(0x5701_e004);
+    let mut keys = skein_lib::List::with_capacity(SAMPLES + BOUNDARY_KEYS);
+    for _ in samples() {
+        keys.push(fixtures::key(&mut rng)).expect("counted samples");
+    }
+    for key in [
+        Key::People(jig_domain_people::Key::Acted(jig_domain_people::ActKey { connector: 1, key: [0; 16] })),
+        Key::Tasks(jig_domain_tasks::Key::PlacedHold(TASK)),
+    ] {
+        keys.push(key).expect("counted boundary keys");
+    }
+    keys.into_boxed()
 }
 
 #[test]
+#[expect(clippy::manual_map, reason = "the strict subset translates optional cursors without closures")]
 fn each_restart_range_holds_the_keys_it_admits_and_no_others() {
-    let mut rng = Rng::new(0x5701_e004);
-    for _ in samples() {
-        let key = fixtures::key(&mut rng);
+    for key in cursor_keys() {
         let bytes = key_bytes(&key);
         for range in RestoreRange::LIVE {
             let inside = fixtures::within(&intervals::restore(&range), &bytes);
             assert_eq!(range.admits(&key), inside, "{range:?} and {key:?}");
         }
+        for ranges in cursor_requests() {
+            let walk = intervals::intervals(&ranges).expect("bounded restart ranges");
+            let mut expected = None;
+            for (index, interval) in walk.iter().enumerate() {
+                if fixtures::within(core::slice::from_ref(interval), &bytes) {
+                    expected = Some(crate::Cursor {
+                        interval: u32::try_from(index).expect("bounded interval count"),
+                        after: bytes.clone(),
+                    });
+                    break;
+                }
+            }
+            assert_eq!(intervals::cursor(&ranges, &bytes), expected, "{ranges:?} and {key:?}");
+            let typed = match jig_domain_core::restore_cursor(&ranges, &key) {
+                Some((interval, _)) => Some(interval),
+                None => None,
+            };
+            let encoded = match expected {
+                Some(cursor) => Some(cursor.interval),
+                None => None,
+            };
+            assert_eq!(typed, encoded, "typed and byte places agree: {ranges:?}, {key:?}");
+        }
+    }
+}
+
+#[test]
+fn typed_and_encoded_cursors_order_the_same_restart_walk() {
+    let keys = cursor_keys();
+    let count = u32::try_from(keys.len()).expect("bounded keys");
+    for ranges in cursor_requests() {
+        let mut typed = skein_lib::List::with_capacity(count);
+        let mut encoded = skein_lib::List::with_capacity(count);
+        for key in &keys {
+            if let Some(cursor) = jig_domain_core::restore_cursor(&ranges, key) {
+                typed.push(cursor).expect("one cursor per key");
+            }
+            if let Some(cursor) = intervals::cursor(&ranges, &key_bytes(key)) {
+                encoded.push((cursor.interval, cursor.after)).expect("one cursor per key");
+            }
+        }
+        let mut typed = typed.into_boxed();
+        let mut encoded = encoded.into_boxed();
+        typed.sort();
+        encoded.sort();
+        let mut converted = skein_lib::List::with_capacity(count);
+        for (interval, key) in typed {
+            converted.push((interval, key_bytes(&key))).expect("one cursor per key");
+        }
+        assert_eq!(converted.into_boxed(), encoded, "walk order for {ranges:?}");
     }
 }
 #[test]
