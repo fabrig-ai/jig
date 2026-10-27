@@ -873,13 +873,17 @@ fn restart_refuses_a_project_hold_with_an_unheld_task_in_scope_or_a_task_owner()
     for task_owner in [false, true] {
         let mut rows = w.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
         for row in &mut rows {
-            match row {
-                Stored::PlacedHold(hold) if task_owner => hold.owner = Owner::Task { task: 1 },
-                Stored::Live(task) if !task_owner && task.number == 4 => {
-                    task.placed = None;
-                    task.phase = Phase::Active(Active::Due);
-                }
-                _ => {}
+            if let Stored::PlacedHold(hold) = row
+                && task_owner
+            {
+                hold.owner = Owner::Task { task: 1 };
+            }
+            if let Stored::Live(task) = row
+                && !task_owner
+                && task.number == 4
+            {
+                task.placed = None;
+                task.phase = Phase::Active(Active::Due);
             }
         }
         assert!(check_rows(rows, &w.env).iter().any(|reply| matches!(reply, tasks::Request::RestoreRefused { .. })));
