@@ -67,6 +67,9 @@ pub(crate) fn owner_outcome(value: &w::OwnerOutcome, limits: &Limits) -> Result<
         w::OwnerOutcome::Adopted(row) => c::OwnerOutcome::Adopted { project: row.project() },
         w::OwnerOutcome::Stopped(row) => c::OwnerOutcome::Stopped { task: row.task() },
         w::OwnerOutcome::Cancelled(row) => c::OwnerOutcome::Cancelled { task: row.task() },
+        w::OwnerOutcome::Placed(row) => {
+            c::OwnerOutcome::Placed { hold: row.hold(), revision: revision(row.revision(), limits) }
+        }
         w::OwnerOutcome::Lifted(row) => c::OwnerOutcome::Lifted { hold: row.hold(), released: row.released() },
         w::OwnerOutcome::Released(row) => c::OwnerOutcome::Released { task: row.task() },
         w::OwnerOutcome::PersonTaken(row) => c::OwnerOutcome::PersonTaken { task: row.task() },

@@ -17,7 +17,7 @@ pub(crate) use objects::mutable_phase;
 pub(crate) use objects::{escalation, person, proposal, question, write, write_in};
 pub(crate) use requests::request;
 use skein_lib::{List, Wall};
-pub(crate) use standing::role;
+pub(crate) use standing::{hold_project, role};
 
 /// An act in the client's closed order, translated between vocabularies by the wire.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

@@ -78,6 +78,21 @@ fn decode(
             let v = value.into_parts();
             super::operations::decide(v.project, v.on)?
         }
+        w::Ask::Hold(value) => {
+            let v = value.into_parts();
+            p::Ask::Hold {
+                project: v.project,
+                mode: match v.mode {
+                    w::HoldMode::Stop => p::HoldMode::Stop,
+                    w::HoldMode::Drain => p::HoldMode::Drain,
+                },
+                scope: match v.scope {
+                    w::HoldScope::Subtree(row) => p::HoldScope::Subtree { task: row.task() },
+                    w::HoldScope::Project => p::HoldScope::Project,
+                },
+                reason: v.reason,
+            }
+        }
         w::Ask::Lift(value) => {
             let v = value.into_parts();
             p::Ask::Lift { hold: v.hold, revision: v.revision, with_tasks: v.with_tasks }

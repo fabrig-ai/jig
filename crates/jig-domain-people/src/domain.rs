@@ -682,6 +682,7 @@ fn outcome_reply(outcome: Outcome) -> Reply {
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Placed { .. }
         | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::PersonTaken { .. }
@@ -764,6 +765,7 @@ fn apply_roles(
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Create { .. }
@@ -817,6 +819,7 @@ fn apply_roles(
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Create { .. }
@@ -917,6 +920,7 @@ fn make_service(domain: &mut Domain, env: &Env<Limits>, request: Token, person: 
         | Ask::Withdraw { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::TakePerson { .. }
@@ -1153,7 +1157,8 @@ fn project(ask: &Ask) -> u32 {
         | Ask::AccountSignOut { .. }
         | Ask::AccountChange { .. } => 0,
         Ask::MakeProject { .. } | Ask::ChangeSettings { .. } | Ask::MoveToNewest { .. } => crate::DEPLOYMENT,
-        Ask::Rename { project, .. }
+        Ask::Hold { project, .. }
+        | Ask::Rename { project, .. }
         | Ask::Compound { project, .. }
         | Ask::EditNote { project, .. }
         | Ask::MakeService { project, .. }
@@ -1305,6 +1310,14 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
         Ask::Move { task, reason, .. } | Ask::Cancel { task, reason, .. } => {
             *task != 0 && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
         }
+        Ask::Hold { scope, reason, .. } => {
+            !reason.is_empty()
+                && reason.len() <= usize::try_from(limits.words).expect("words bound fits usize")
+                && match scope {
+                    crate::HoldScope::Subtree { task } => *task != 0,
+                    crate::HoldScope::Project => true,
+                }
+        }
         Ask::Lift { hold, .. } => *hold != 0,
         Ask::TakePerson { task, .. }
         | Ask::HandBackPerson { task, .. }
@@ -1369,6 +1382,12 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
 // Admission identifies the bounded payload before any keyed flight is made.
 pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
     let which = match ask {
+        Ask::Hold { scope, reason, .. } => {
+            if matches!(scope, crate::HoldScope::Subtree { task: 0 }) {
+                return Refusal::Unknown;
+            }
+            if reason.is_empty() { LimitKind::Empty } else { LimitKind::Words }
+        }
         Ask::Compound { operations, .. } => {
             return crate::compound::refusal(limits, operations).expect("invalid compound");
         }
@@ -1466,6 +1485,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Stop(u64),
         Cancel(u64),
         Release(u64),
+        Hold,
         Lift(u64),
         Take(u64),
         HandBack(u64),
@@ -1508,6 +1528,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Ask::Stop { task, .. } => Expected::Stop(*task),
         Ask::Cancel { task, .. } => Expected::Cancel(*task),
         Ask::Release { task, .. } => Expected::Release(*task),
+        Ask::Hold { .. } => Expected::Hold,
         Ask::Lift { hold, .. } => Expected::Lift(*hold),
         Ask::TakePerson { task, .. } => Expected::Take(*task),
         Ask::HandBackPerson { task, .. } => Expected::HandBack(*task),
@@ -1579,6 +1600,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Outcome::Stopped { task } => expected == Expected::Stop(task),
         Outcome::Cancelled { task } => expected == Expected::Cancel(task),
         Outcome::Released { task } => expected == Expected::Release(task),
+        Outcome::Placed { hold, revision } => expected == Expected::Hold && hold != 0 && revision == 1,
         Outcome::Lifted { hold, .. } => expected == Expected::Lift(hold),
         Outcome::PersonTaken { task } => expected == Expected::Take(task),
         Outcome::PersonHandedBack { task } => expected == Expected::HandBack(task),
@@ -1874,6 +1896,7 @@ fn reserves_answer(ask: &Ask) -> bool {
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. } => true,
     }
@@ -1939,6 +1962,7 @@ pub(super) fn answer_decided(
         | Outcome::Moved { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Placed { .. }
         | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::Created { .. }
@@ -2138,6 +2162,7 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
                 | Ask::AnswerPerson { .. }
                 | Ask::Stop { .. }
                 | Ask::Cancel { .. }
+                | Ask::Hold { .. }
                 | Ask::Lift { .. }
                 | Ask::Release { .. }
                 | Ask::Create { .. }
@@ -2170,6 +2195,7 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
             | Outcome::PersonAnswered { .. }
             | Outcome::Stopped { .. }
             | Outcome::Cancelled { .. }
+            | Outcome::Placed { .. }
             | Outcome::Lifted { .. }
             | Outcome::Released { .. }
             | Outcome::Created { .. }
@@ -2256,6 +2282,7 @@ pub fn application_part(domain: &mut Domain, env: &Env<Limits>, request: Token, 
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::EditNote { .. }
@@ -2297,6 +2324,7 @@ pub fn application_part(domain: &mut Domain, env: &Env<Limits>, request: Token, 
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::EditNote { .. } => {}
@@ -2381,6 +2409,7 @@ fn admission(domain: &Domain, person: u64, _project: u32, role: Option<Role>, as
         | Ask::AnswerPerson { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. } => None,
     }
@@ -2441,6 +2470,7 @@ fn valid_program_outcome(limits: &Limits, outcome: &Outcome) -> bool {
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Placed { .. }
         | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::PersonTaken { .. }

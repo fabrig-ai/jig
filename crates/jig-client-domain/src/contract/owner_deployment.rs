@@ -262,6 +262,7 @@ pub enum OwnerHelloRefusal {
 /// The supplied closed personcapacityaction vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerPersonCapacityAction {
+    Hold,
     Lift {
         hold: u64,
     },

@@ -212,6 +212,7 @@ pub(crate) fn restore_shaped(ask: &crate::Ask) -> bool {
         | crate::Ask::Withdraw { .. }
         | crate::Ask::Stop { .. }
         | crate::Ask::Cancel { .. }
+        | crate::Ask::Hold { .. }
         | crate::Ask::Lift { .. }
         | crate::Ask::Release { .. }
         | crate::Ask::TakePerson { .. }

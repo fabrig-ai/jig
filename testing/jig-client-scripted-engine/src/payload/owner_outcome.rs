@@ -28,6 +28,7 @@ impl Payload for OwnerOutcome {
             | Self::AccountKeyKept { .. }
             | Self::AccountFinishing { .. }
             | Self::AccountMovedIn { .. }
+            | Self::Placed { .. }
             | Self::Lifted { .. }
             | Self::AccountChanged => Some(0),
             Self::AccountProgramDeclared { name, .. } => {

@@ -253,6 +253,7 @@ fn person_action(value: people::CapacityAction) -> client::OwnerPersonCapacityAc
         people::CapacityAction::AnswerPerson { task } => client::OwnerPersonCapacityAction::AnswerPerson { task },
         people::CapacityAction::Stop { task } => client::OwnerPersonCapacityAction::Stop { task },
         people::CapacityAction::Cancel { task } => client::OwnerPersonCapacityAction::Cancel { task },
+        people::CapacityAction::Hold => client::OwnerPersonCapacityAction::Hold,
         people::CapacityAction::Lift { hold } => client::OwnerPersonCapacityAction::Lift { hold },
         people::CapacityAction::Release { task } => client::OwnerPersonCapacityAction::Release { task },
         people::CapacityAction::MarkSeen { seen } => client::OwnerPersonCapacityAction::MarkSeen {

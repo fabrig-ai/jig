@@ -30,6 +30,7 @@ pub enum CapacityAction {
     Stop { task: u64 },
     Cancel { task: u64 },
     Release { task: u64 },
+    Hold,
     Lift { hold: u64 },
     MarkSeen { seen: crate::Seen },
     AccountSignIn,
@@ -89,6 +90,7 @@ pub(crate) fn action(ask: &Ask, person: u64) -> CapacityAction {
         Ask::AnswerPerson { task, .. } => CapacityAction::AnswerPerson { task: *task },
         Ask::Stop { task, .. } => CapacityAction::Stop { task: *task },
         Ask::Cancel { task, .. } => CapacityAction::Cancel { task: *task },
+        Ask::Hold { .. } => CapacityAction::Hold,
         Ask::Lift { hold, .. } => CapacityAction::Lift { hold: *hold },
         Ask::Release { task, .. } => CapacityAction::Release { task: *task },
         Ask::MarkSeen { seen } => CapacityAction::MarkSeen { seen: *seen },
@@ -100,7 +102,8 @@ pub(crate) fn action(ask: &Ask, person: u64) -> CapacityAction {
 
 pub(crate) fn project(ask: &Ask) -> Option<u32> {
     match ask {
-        Ask::Compound { project, .. }
+        Ask::Hold { project, .. }
+        | Ask::Compound { project, .. }
         | Ask::EditNote { project, .. }
         | Ask::MakeService { project, .. }
         | Ask::Adopt { project, .. }
@@ -152,6 +155,7 @@ pub(crate) fn permanent(outcome: &Outcome) -> Option<CapacityCause> {
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Placed { .. }
         | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::PersonTaken { .. }

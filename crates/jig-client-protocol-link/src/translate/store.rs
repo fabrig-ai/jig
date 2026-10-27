@@ -111,6 +111,18 @@ pub(crate) fn restore_ask(value: w::Ask, limits: &Limits) -> Result<c::Ask, w::P
                 },
             },
         },
+        w::Ask::Hold(value) => c::Ask::Hold {
+            project: value.project(),
+            mode: match value.mode() {
+                w::HoldMode::Stop => c::HoldMode::Stop,
+                w::HoldMode::Drain => c::HoldMode::Drain,
+            },
+            scope: match value.scope() {
+                w::HoldScope::Subtree(row) => c::HoldScope::Subtree { task: row.task() },
+                w::HoldScope::Project => c::HoldScope::Project,
+            },
+            reason: text(value.reason(), limits)?,
+        },
         w::Ask::Lift(value) => c::Ask::Lift {
             hold: value.hold(),
             revision: c::Revision { value: value.revision() },

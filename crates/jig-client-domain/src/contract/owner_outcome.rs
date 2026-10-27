@@ -34,6 +34,11 @@ pub enum OwnerEscalationChoice {
 /// Facts returned by a committed jig request, including a historical winner.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerOutcome {
+    /// The committed placed hold and its independent revision.
+    Placed {
+        hold: u64,
+        revision: Revision,
+    },
     Lifted {
         hold: u64,
         released: u32,

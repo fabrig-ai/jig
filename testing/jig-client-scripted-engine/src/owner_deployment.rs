@@ -166,6 +166,7 @@ impl Payload for OwnerPersonCapacityAction {
             | Self::AnswerPerson { .. }
             | Self::Stop { .. }
             | Self::Cancel { .. }
+            | Self::Hold
             | Self::Lift { .. }
             | Self::Release { .. }
             | Self::MarkSeen { .. } => Some(0),

@@ -223,6 +223,7 @@ fn permanent(outcome: &Outcome) -> bool {
         | Outcome::Moved { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Placed { .. }
         | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::Created { .. }
@@ -276,6 +277,7 @@ pub(super) fn valid_outcome(limits: &Limits, act: &Act, outcome: &Outcome) -> bo
             | Outcome::Moved { .. }
             | Outcome::Stopped { .. }
             | Outcome::Cancelled { .. }
+            | Outcome::Placed { .. }
             | Outcome::Lifted { .. }
             | Outcome::Released { .. }
             | Outcome::Created { .. }

@@ -236,6 +236,7 @@ impl Core {
                 | people::Outcome::Withdrawn { .. }
                 | people::Outcome::Stopped { .. }
                 | people::Outcome::Cancelled { .. }
+                | people::Outcome::Placed { .. }
                 | people::Outcome::Lifted { .. }
                 | people::Outcome::Released { .. }
                 | people::Outcome::PersonTaken { .. }

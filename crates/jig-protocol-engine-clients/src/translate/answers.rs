@@ -172,6 +172,13 @@ fn owner(value: &p::Outcome, limits: &w::Limits) -> Result<w::OwnerOutcome, w::P
             limits,
             w::OwnerOutcomeCancelledParts { task: *task },
         )?),
+        p::Outcome::Placed { hold, revision } => w::OwnerOutcome::Placed(w::OwnerOutcomePlaced::new(
+            limits,
+            w::OwnerOutcomePlacedParts {
+                hold: *hold,
+                revision: w::Revision::new(limits, w::RevisionParts { value: *revision })?,
+            },
+        )?),
         p::Outcome::Lifted { hold, released } => w::OwnerOutcome::Lifted(w::OwnerOutcomeLifted::new(
             limits,
             w::OwnerOutcomeLiftedParts { hold: *hold, released: *released },

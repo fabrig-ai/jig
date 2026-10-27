@@ -190,7 +190,8 @@ pub(super) fn cancel_request(
     let admitted = core.control_admit(&ask, person, project, role, &env.limits.tasks);
     let (reason, grace) = match ask {
         people::Ask::Cancel { reason, grace, .. } => (reason, grace),
-        people::Ask::Lift { .. }
+        people::Ask::Hold { .. }
+        | people::Ask::Lift { .. }
         | people::Ask::Compound { .. }
         | people::Ask::MarkSeen { .. }
         | people::Ask::Application { .. }
@@ -262,7 +263,8 @@ pub(super) fn release_request(
         Ok(task) => {
             let (revision, again) = match ask {
                 people::Ask::Release { revision, again, .. } => (revision, again),
-                people::Ask::Lift { .. }
+                people::Ask::Hold { .. }
+                | people::Ask::Lift { .. }
                 | people::Ask::Compound { .. }
                 | people::Ask::MarkSeen { .. }
                 | people::Ask::Application { .. }
@@ -446,4 +448,59 @@ fn amend_release_admit(core: &Core, person: u64, task: u64, release: Option<u64>
         core.party_hold_admit(person, hold)?;
     }
     Ok(())
+}
+
+#[expect(clippy::too_many_arguments, reason = "the route retains the admitted party and hold fields")]
+pub(super) fn hold_request(
+    core: &mut Core,
+    env: &Env<Limits>,
+    work: &mut Queue<Event>,
+    request: Token,
+    person: u64,
+    project: u32,
+    role: Option<people::Role>,
+    mode: people::HoldMode,
+    scope: people::HoldScope,
+    reason: Box<[u8]>,
+) {
+    if mode == people::HoldMode::Drain {
+        pool_refused(work, request, people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape });
+        return;
+    }
+    let admission = match scope {
+        people::HoldScope::Subtree { task } => {
+            match core.control_admit(&people::Ask::Stop { project, task }, person, project, role, &env.limits.tasks) {
+                Ok(_) => Ok(()),
+                Err(why) => Err(why),
+            }
+        }
+        people::HoldScope::Project => crate::acts::hold_project(core, project, role),
+    };
+    if let Err(why) = admission {
+        pool_refused(work, request, why);
+        return;
+    }
+    let Some(number) = crate::fresh(&mut core.counters, crate::Family::Message) else {
+        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        return;
+    };
+    assert!(core.person_tasks.insert(request, PersonTaskRoute::Hold(number)) == Ok(None), "one hold continuation");
+    work.push(Event::Tasks(tasks::Event::Place {
+        reply_to: ReplyTo::new(request),
+        hold: tasks::PlacedHold {
+            number,
+            project,
+            owner: tasks::Owner::Party { person },
+            mode: tasks::Mode::Stop,
+            scope: match scope {
+                people::HoldScope::Subtree { task } => tasks::Scope::Subtree { task },
+                people::HoldScope::Project => tasks::Scope::Project,
+            },
+            reason,
+            placed_at: env.wall.as_nanos() / 1_000_000,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    }));
 }

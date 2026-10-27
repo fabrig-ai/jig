@@ -171,6 +171,13 @@ pub enum Ask {
         revision: Revision,
         again: Option<bool>,
     },
+    /// Place this party's hold over a subtree or project.
+    Hold {
+        project: u32,
+        mode: super::HoldMode,
+        scope: super::HoldScope,
+        reason: Text,
+    },
     /// Lift a placed hold, optionally releasing its tasks.
     Lift {
         hold: u64,

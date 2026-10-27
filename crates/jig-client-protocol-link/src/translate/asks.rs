@@ -586,6 +586,24 @@ pub fn ask(value: &c::Ask, limits: &w::Limits) -> Result<w::Ask, w::Problem> {
             limits,
             w::DecideParts { project: *project, on: super::operations::decide(on, limits)? },
         )?),
+        c::Ask::Hold { project, mode, scope, reason } => w::Ask::Hold(w::AskHold::new(
+            limits,
+            w::AskHoldParts {
+                project: *project,
+                mode: match mode {
+                    c::HoldMode::Stop => w::HoldMode::Stop,
+                    c::HoldMode::Drain => w::HoldMode::Drain,
+                },
+                scope: match scope {
+                    c::HoldScope::Subtree { task } => w::HoldScope::Subtree(w::HoldScopeSubtree::new(
+                        limits,
+                        w::HoldScopeSubtreeParts { task: *task },
+                    )?),
+                    c::HoldScope::Project => w::HoldScope::Project,
+                },
+                reason: reason.bytes().into(),
+            },
+        )?),
         c::Ask::Lift { hold, revision, with_tasks } => w::Ask::Lift(w::Lift::new(
             limits,
             w::LiftParts { hold: *hold, revision: revision.value, with_tasks: *with_tasks },

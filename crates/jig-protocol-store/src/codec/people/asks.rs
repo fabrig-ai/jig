@@ -387,6 +387,24 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
                 },
             },
         )?),
+        domain::Ask::Hold { project, mode, scope, reason } => wire::Ask::Hold(wire::AskHold::new(
+            limits,
+            wire::AskHoldParts {
+                project: *project,
+                mode: match mode {
+                    domain::HoldMode::Stop => wire::HoldMode::Stop,
+                    domain::HoldMode::Drain => wire::HoldMode::Drain,
+                },
+                scope: match scope {
+                    domain::HoldScope::Subtree { task } => wire::HoldScope::Subtree(wire::HoldScopeSubtree::new(
+                        limits,
+                        wire::HoldScopeSubtreeParts { task: *task },
+                    )?),
+                    domain::HoldScope::Project => wire::HoldScope::Project,
+                },
+                reason: reason.clone(),
+            },
+        )?),
         domain::Ask::Lift { hold, revision, with_tasks } => wire::Ask::Lift(wire::AskLift::new(
             limits,
             wire::AskLiftParts { hold: *hold, revision: *revision, with_tasks: *with_tasks },
@@ -584,6 +602,21 @@ pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask
                     Some(span) => Some(skein_lib::Duration::from_nanos(span)),
                     None => None,
                 },
+            }
+        }
+        wire::Ask::Hold(value) => {
+            let wire::AskHoldParts { project, mode, scope, reason } = value.into_parts();
+            domain::Ask::Hold {
+                project,
+                mode: match mode {
+                    wire::HoldMode::Stop => domain::HoldMode::Stop,
+                    wire::HoldMode::Drain => domain::HoldMode::Drain,
+                },
+                scope: match scope {
+                    wire::HoldScope::Subtree(value) => domain::HoldScope::Subtree { task: value.task() },
+                    wire::HoldScope::Project => domain::HoldScope::Project,
+                },
+                reason,
             }
         }
         wire::Ask::Lift(value) => {

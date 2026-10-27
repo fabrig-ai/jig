@@ -98,8 +98,8 @@ pub use amendment::{
 };
 pub use boundary::{
     ADDRESS, AccountChange, AccountHolder, AccountHostFailure, AccountHostWhy, Act, ActGrant, ActKey, ActKind,
-    Adoption, Ask, Counts, Entry, EntryKind, EscalationChoice, EscalationDecision, Event, Holding, Identity,
-    IdentityKey, InitialOwner, Key, Kind, Needs, NoteChange, NoteScope, Outcome, PersonResult, ProjectRole,
+    Adoption, Ask, Counts, Entry, EntryKind, EscalationChoice, EscalationDecision, Event, HoldMode, HoldScope, Holding,
+    Identity, IdentityKey, InitialOwner, Key, Kind, Needs, NoteChange, NoteScope, Outcome, PersonResult, ProjectRole,
     ProposalChoice, ProposalDecision, Proposer, Reply, Request, RequestKey, ResourceName, ResourceRole, Role, Seed,
     Signer, Stored, USES, Use, Whom,
 };

@@ -256,6 +256,8 @@ pub enum Ask {
     Release { project: u32, task: u64, revision: u64, again: Option<bool> },
     /// End a placed hold, optionally releasing its tasks (domain/tasks.md, 5.9).
     Lift { hold: u64, revision: u64, with_tasks: bool },
+    /// Place this party's hold over a subtree or project.
+    Hold { project: u32, mode: HoldMode, scope: HoldScope, reason: Box<[u8]> },
     /// Claim one role-addressed person task for this authenticated person.
     TakePerson { project: u32, task: u64 },
     /// Give this person's current role task claim back to its role.
@@ -470,6 +472,11 @@ pub enum Outcome {
     /// A person released a held task.
     Released {
         task: u64,
+    },
+    /// The committed placed hold and its independent revision.
+    Placed {
+        hold: u64,
+        revision: u64,
     },
     Lifted {
         hold: u64,
@@ -1080,4 +1087,18 @@ pub enum AccountHostWhy {
 pub struct Signer {
     pub identity: Identity,
     pub kind: Kind,
+}
+
+/// How a party's placed hold stops work (domain/tasks.md, section 5.9).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum HoldMode {
+    Stop,
+    Drain,
+}
+
+/// The work a party's placed hold covers (domain/tasks.md, section 5.9).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum HoldScope {
+    Subtree { task: u64 },
+    Project,
 }

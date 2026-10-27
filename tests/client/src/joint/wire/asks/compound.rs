@@ -69,6 +69,7 @@ pub(super) fn ask(
             | people::Ask::AccountSignOut { .. }
             | people::Ask::SetPool { .. }
             | people::Ask::AccountChange { .. }
+            | people::Ask::Hold { .. }
             | people::Ask::Lift { .. }
             | people::Ask::DecideEscalation { .. } => return Err(Invalid::CompoundProject),
         };

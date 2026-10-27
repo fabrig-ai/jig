@@ -321,7 +321,8 @@ impl<A: crate::Application> Engine<A> {
             Ask::EditNote { note, .. } | Ask::DeleteNote { note, .. } => {
                 self.truth.notes.get(note).map(|note| &note.acts)
             }
-            Ask::Lift { .. }
+            Ask::Hold { .. }
+            | Ask::Lift { .. }
             | Ask::Propose { .. }
             | Ask::Withdraw { .. }
             | Ask::Create { .. }
@@ -388,6 +389,7 @@ impl<A: crate::Application> Engine<A> {
                 | Ask::Take { .. }
                 | Ask::HandBack { .. }
                 | Ask::Decide { .. }
+                | Ask::Hold { .. }
                 | Ask::Lift { .. }
                 | Ask::Release { .. }
                 | Ask::Stop { .. }
@@ -476,7 +478,8 @@ impl<A: crate::Application> Engine<A> {
             Ask::Decide { on: DecideOn::Proposal { decision, .. }, .. }
             | Ask::Decide { on: DecideOn::Escalation { decision, .. }, .. } => Some(decision.clone()),
             Ask::Release { again, .. } => Some(Decision::Released { again: *again }),
-            Ask::Lift { .. }
+            Ask::Hold { .. }
+            | Ask::Lift { .. }
             | Ask::Propose { .. }
             | Ask::Withdraw { .. }
             | Ask::Create { .. }
@@ -698,7 +701,8 @@ fn decision_kind(decision: &Decision) -> ActKind {
 type Target = (Option<u32>, Option<ObjectKey>, ActKind, Option<(Revision, Moved)>);
 fn target(ask: &Ask) -> Option<Target> {
     Some(match ask {
-        Ask::Lift { .. }
+        Ask::Hold { .. }
+        | Ask::Lift { .. }
         | Ask::ChangeSettings(_)
         | Ask::MoveToNewest(_)
         | Ask::MakeProject { .. }

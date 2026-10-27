@@ -117,6 +117,7 @@ fn person_action(
         people::CapacityAction::AccountSignIn => w::OwnerPersonCapacityAction::AccountSignIn,
         people::CapacityAction::AccountSignOut => w::OwnerPersonCapacityAction::AccountSignOut,
         people::CapacityAction::AccountChange => w::OwnerPersonCapacityAction::AccountChange,
+        people::CapacityAction::Hold => w::OwnerPersonCapacityAction::Hold,
         people::CapacityAction::Create => w::OwnerPersonCapacityAction::Create,
         people::CapacityAction::Compound => w::OwnerPersonCapacityAction::Compound,
         people::CapacityAction::Service => w::OwnerPersonCapacityAction::Service,

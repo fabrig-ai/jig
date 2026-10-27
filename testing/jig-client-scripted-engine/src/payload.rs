@@ -186,6 +186,7 @@ impl Payload for Ask {
                 | jig_client_domain::contract::AccountChange::MoveSource { .. }
                 | jig_client_domain::contract::AccountChange::SetUses { uses: None, .. } => Some(0),
             },
+            Self::Hold { reason, .. } => reason.heap(bounds),
             Self::Lift { .. }
             | Self::MoveToNewest(_)
             | Self::Withdraw { .. }

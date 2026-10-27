@@ -173,6 +173,7 @@ pub(crate) fn owner_person_capacity_action_fields(
         }
         w::OwnerPersonCapacityAction::Stop(row) => c::OwnerPersonCapacityAction::Stop { task: row.task() },
         w::OwnerPersonCapacityAction::Cancel(row) => c::OwnerPersonCapacityAction::Cancel { task: row.task() },
+        w::OwnerPersonCapacityAction::Hold => c::OwnerPersonCapacityAction::Hold,
         w::OwnerPersonCapacityAction::Lift(row) => c::OwnerPersonCapacityAction::Lift { hold: row.hold() },
         w::OwnerPersonCapacityAction::Release(row) => c::OwnerPersonCapacityAction::Release { task: row.task() },
         w::OwnerPersonCapacityAction::MarkSeen(row) => {

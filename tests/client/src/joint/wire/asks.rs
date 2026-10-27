@@ -117,6 +117,18 @@ fn translate(
                 decision: escalation_decision(decision)?,
             }
         }
+        client::Ask::Hold { project, mode, scope, reason } => people::Ask::Hold {
+            project: *project,
+            mode: match mode {
+                client::HoldMode::Stop => people::HoldMode::Stop,
+                client::HoldMode::Drain => people::HoldMode::Drain,
+            },
+            scope: match scope {
+                client::HoldScope::Subtree { task } => people::HoldScope::Subtree { task: *task },
+                client::HoldScope::Project => people::HoldScope::Project,
+            },
+            reason: reason.bytes().into(),
+        },
         client::Ask::Lift { hold, revision, with_tasks } => {
             people::Ask::Lift { hold: *hold, revision: revision.value, with_tasks: *with_tasks }
         }

@@ -592,6 +592,7 @@ pub(super) fn tag_tasks(
                         PersonTaskRoute::PoolSet { project, person } => people::Outcome::PoolSet { project, person },
                         PersonTaskRoute::HandBack(task) => people::Outcome::PersonHandedBack { task },
                         PersonTaskRoute::Answer(task) => people::Outcome::PersonAnswered { task },
+                        PersonTaskRoute::Hold(hold) => people::Outcome::Placed { hold, revision: 1 },
                         PersonTaskRoute::Stop(task) => people::Outcome::Stopped { task },
                         PersonTaskRoute::Cancel(task) => people::Outcome::Cancelled { task },
                         PersonTaskRoute::Lift(_) => unreachable!("lift has a counted reply"),
