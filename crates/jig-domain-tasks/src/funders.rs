@@ -504,6 +504,31 @@ pub(crate) fn carve(
     out.push(Request::Done { reply_to: to });
 }
 
+pub(crate) fn resize_period(
+    domain: &mut Domain,
+    to: ReplyTo,
+    project: u32,
+    period: u64,
+    budget: u64,
+    out: &mut Queue<Request>,
+) {
+    if !domain.ready() {
+        return refused(to, None, Refusal::NotReady, out);
+    }
+    let funder = Funder::Period { project, period };
+    let Some(row) = domain.funding.get(&funder) else {
+        return refused(to, None, Refusal::Unknown, out);
+    };
+    let mut numbers = row.numbers;
+    numbers.budget = budget;
+    if newer_period(domain, project, period) || available(numbers).is_none() {
+        return refused(to, None, Refusal::Funding, out);
+    }
+    domain.funding.get_mut(&funder).expect("period preflighted").numbers = numbers;
+    save_funding(domain, funder, out);
+    out.push(Request::Done { reply_to: to });
+}
+
 pub(crate) fn resize_pool(
     domain: &mut Domain,
     to: ReplyTo,
