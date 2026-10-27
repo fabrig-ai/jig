@@ -125,7 +125,7 @@ fn role_spend_changes_only_the_named_roles_period_spend() {
         expected.roles[0].period_spend = period_spend;
         let change = people::PolicyChange::RoleSpend { role, period_spend };
         assert_eq!(people::policy_change_bytes(&change), Some(0));
-        let answer = core.change_policy(&limits, 1, 1, change).unwrap();
+        let (answer, _) = core.change_policy(&limits, 1, 1, change).unwrap();
         assert_eq!(core.authority.policy(1), Some(&expected));
         assert_eq!(
             answer,
