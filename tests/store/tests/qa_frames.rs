@@ -592,6 +592,10 @@ fn foreign_frames_refuse_when_every_owner_level_compares() {
 fn missing_jig_slot_refuses_levels_before_frame_checks() {
     let mut sets = frame_reads::SETS.sets.to_vec();
     sets[0].owner = Owner::Application;
+    // store.md 10.3 admits the sets before comparing levels. This family
+    // has no map ranges; outside Jig it must not claim to be a body frame.
+    // The missing Jig slot still refuses before serving frame machines.
+    sets[0].families = Box::leak(Box::new([KeptFamily { frames: None, ..BODY }]));
     let sets = PatchSets { sets: Box::leak(sets.into_boxed_slice()) };
     for start in [BASE, frame_reads::SETS] {
         let mut world = baseline(start);
