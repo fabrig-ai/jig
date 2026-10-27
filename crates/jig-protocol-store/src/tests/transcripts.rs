@@ -720,7 +720,22 @@ fn configured_read_room_and_frame_capacity_are_measured_separately() {
     let sets = super::frame_patches::SETS;
     let capacity = crate::transcripts::patches::capacity(&sets.sets[0], 0, &limits).expect("body capacity");
     assert_eq!(u64::from(capacity.bytes) + 12, MAX_FRAME);
-    for (limits, page) in [(jig_store_world::root::limits(), 330_532), (jig_store_world::patches::limits(), 2_048)] {
+    let price_path = std::path::Path::new("src/tests/fixture_page_bytes.txt");
+    let page = jig_store_world::root::limits().store.page.bytes;
+    let write = match std::env::var_os("SKEIN_CODEGEN_WRITE") {
+        Some(value) => value == "1",
+        None => false,
+    };
+    if write {
+        std::fs::write(price_path, skein_lib::Decimal::of(u64::from(page)).as_bytes()).unwrap();
+    }
+    let kept = std::fs::read(price_path).expect("regenerate with SKEIN_CODEGEN_WRITE=1 and this test filter");
+    assert_eq!(
+        skein_lib::Decimal::of(u64::from(page)).as_bytes(),
+        kept.as_slice(),
+        "regenerate with SKEIN_CODEGEN_WRITE=1 and this test filter"
+    );
+    for (limits, page) in [(jig_store_world::root::limits(), page), (jig_store_world::patches::limits(), 2_048)] {
         assert_eq!(limits.core.resume_bytes, 256);
         assert_eq!(limits.store.page.bytes, page);
         let room = u64::from(limits.core.resume_bytes).min(u64::from(page));

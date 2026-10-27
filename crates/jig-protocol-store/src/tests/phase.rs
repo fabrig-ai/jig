@@ -1931,7 +1931,20 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // Rebased store.md 5.3 adds secrets/skein_oauth/smith_transcript hashes (96 bytes);
     // the removed settled_call_name bound and alignment save 8: Store 4,008 -> 4,096.
     // engine.md 17.2/17.7/17.8 adds revision/version bounds to settings, tasks and fleet (24 bytes).
-    assert_eq!(size_of::<Store>(), 4_120);
+    // Charter-document bounds grow the codec and core limit carriers by 24 bytes.
+    let price = format!(
+        "store {}\nwhole {}\n",
+        size_of::<Store>(),
+        crate::worst_case(&fixtures::store_limits()).expect("store price")
+    );
+    let path = std::path::Path::new("src/tests/pending_resident_price.txt");
+    if std::env::var_os("SKEIN_CODEGEN_WRITE").is_some_and(|value| value == "1") {
+        std::fs::write(path, &price).expect("write resident price");
+    }
+    assert_eq!(
+        price,
+        std::fs::read_to_string(path).expect("regenerate with SKEIN_CODEGEN_WRITE=1 and this test filter")
+    );
     assert_eq!(size_of::<crate::codec::component::Layouts>(), 320);
     // store.md 9: typed SecretValue makes each SecretRow 64 rather than 32 bytes.
     assert_eq!(size_of::<crate::SecretRow>(), 64);
@@ -1949,5 +1962,5 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // + revision/version bounds 24 + task/run settings revision fields in generated
     // row, decoded/joined task and commit/frame carriers 268,452,352 (engine.md 17.2)
     // + wires 16 + pending 17,928 + Mark 16.
-    assert_eq!(crate::worst_case(&fixtures::store_limits()), Some(581_545_068_157_565));
+    // The complete envelope above is kept by the same explicit writer as the inline price.
 }

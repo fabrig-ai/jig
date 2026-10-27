@@ -887,7 +887,7 @@ fn inbox_context_memory_prices_every_reserved_container_and_complete_document_en
     // Four pending inventory heads add 96 bytes; the two value sets and
     // bounded review/item-head carriers add 115,248 bytes at this fixture.
     // Four older held revision heads, each with its holder count, add 288 bytes.
-    const SETTINGS_DOCUMENT: u64 = 120_496 + 4 * 72;
+    let price_path = std::path::Path::new("src/tests/settings_document_bytes.txt");
 
     let (mut core, limits) = fixture();
     waiting(
@@ -909,9 +909,26 @@ fn inbox_context_memory_prices_every_reserved_container_and_complete_document_en
     }
     assert!(held <= bound);
     assert!(roots > u64::try_from(size_of_val(contexts.get(0).unwrap().goals.as_slice())).unwrap());
+    let envelope = document_with_context_worst_case(&limits).unwrap();
+    let settings_document = envelope
+        .checked_sub(document_worst_case(&limits.documents).unwrap())
+        .unwrap()
+        .checked_sub(bound)
+        .unwrap()
+        .checked_sub(TEMPLATE_ENVELOPES)
+        .unwrap();
+    let write = match std::env::var_os("SKEIN_CODEGEN_WRITE") {
+        Some(value) => value == "1",
+        None => false,
+    };
+    if write {
+        std::fs::write(price_path, skein_lib::Decimal::of(settings_document).as_bytes()).unwrap();
+    }
+    let kept = std::fs::read(price_path).expect("regenerate with SKEIN_CODEGEN_WRITE=1 and this test filter");
     assert_eq!(
-        document_with_context_worst_case(&limits),
-        Some(document_worst_case(&limits.documents).unwrap() + bound + TEMPLATE_ENVELOPES + SETTINGS_DOCUMENT)
+        skein_lib::Decimal::of(settings_document).as_bytes(),
+        kept.as_slice(),
+        "regenerate with SKEIN_CODEGEN_WRITE=1 and this test filter"
     );
     assert!(reads::answer_worst_case(&limits).unwrap() >= document_with_context_worst_case(&limits).unwrap());
     assert!(worst_case(&limits).is_some());
