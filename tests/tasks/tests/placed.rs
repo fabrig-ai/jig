@@ -464,7 +464,7 @@ fn unoffered_and_malformed_placements_change_nothing() {
 }
 
 #[test]
-fn a_compound_stop_and_root_release_see_each_others_subtree_changes() {
+fn a_compound_cannot_stop_and_release_the_same_subtree_in_one_decision() {
     let mut w = World::new(919, LIMITS);
     goal_tree(&mut w);
     let mut operations = skein_lib::List::with_capacity(3);
@@ -482,13 +482,13 @@ fn a_compound_stop_and_root_release_see_each_others_subtree_changes() {
         pool_budget: 10_000,
         period_budget: 100_000,
     });
-    assert_eq!(w.replies[&token.raw()], Reply::Done);
+    assert!(
+        matches!(&w.replies[&token.raw()], Reply::Refused(problem) if problem.why == Refusal::Placed { hold: 100 })
+    );
     assert!(w.placed_hold(100).is_none());
-    for task in [2, 4] {
-        placed(&w, task, 101);
+    for task in 1..=4 {
+        assert_eq!(w.record(task).placed, None);
     }
-    assert_eq!(w.record(1).placed, None);
-    assert_eq!(w.record(3).placed, None);
 }
 
 fn check_rows(rows: Vec<Stored>, env: &skein_lib::Env<tasks::Limits>) -> Vec<tasks::Request> {

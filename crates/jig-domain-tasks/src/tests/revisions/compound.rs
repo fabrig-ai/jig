@@ -253,3 +253,27 @@ fn moving_a_stopped_scope_root_preserves_its_hold() {
     assert_eq!(test.domain.task(FIRST).unwrap().placed, Some(91));
     assert_eq!(test.domain.task(FIRST).unwrap().requester, Party::Person(REQUESTER));
 }
+
+#[test]
+fn a_compound_that_changes_a_tasks_placed_hold_twice_is_refused_naming_the_second() {
+    let mut test = chat::cohort();
+    let before = test.stored.clone();
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: ROOT, hold: 100 }, Operation::Release { task: ROOT, again: None, message: None }],
+        1_000,
+    );
+    refused(out, 1, ROOT, Refusal::Placed { hold: 100 });
+    assert_eq!(test.stored, before);
+
+    test.make(vec![task(7, &[])]);
+    test.send(place(7, REQUESTER, 101));
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: ROOT, hold: 100 }, Operation::Release { task: 7, again: None, message: None }],
+        1_000,
+    );
+    assert!(out.iter().any(|request| matches!(request, Request::Done { .. })));
+    assert_eq!(test.domain.task(ROOT).unwrap().placed, Some(100));
+    assert_eq!(test.domain.task(7).unwrap().placed, None);
+}

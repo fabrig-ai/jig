@@ -103,6 +103,44 @@ impl CompoundTask<'_> {
 }
 
 impl Staged {
+    /// A request changes each task's placed hold at most once. Scan retained
+    /// plans rather than allocating another live-task table.
+    pub(crate) fn check_placed_change(&self, plan: &Plan) -> Result<(), Box<crate::Problem>> {
+        if let Some(placement) = plan.placement() {
+            for number in &placement.tasks {
+                self.placed_change_once(*number)?;
+            }
+        }
+        if let Some(change) = plan.placed_change() {
+            for (number, _) in &change.tasks {
+                self.placed_change_once(*number)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn placed_change_once(&self, number: u64) -> Result<(), Box<crate::Problem>> {
+        for earlier in &self.plans {
+            let hold = if let Some(placement) = earlier.placement()
+                && super::has(&placement.tasks, number)
+            {
+                Some(placement.hold.number)
+            } else if let Some(change) = earlier.placed_change() {
+                let mut changed = false;
+                for (task, _) in &change.tasks {
+                    changed |= *task == number;
+                }
+                if changed { Some(change.hold.number) } else { None }
+            } else {
+                None
+            };
+            if let Some(hold) = hold {
+                return Err(Box::new(crate::Problem::new(Some(number), crate::Refusal::Placed { hold })));
+            }
+        }
+        Ok(())
+    }
+
     /// Answers admitted earlier in this compound close their question positions.
     pub(crate) fn answered_question(&self, task: u64, question: u64) -> bool {
         for plan in &self.plans {

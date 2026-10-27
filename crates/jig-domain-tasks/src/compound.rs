@@ -283,6 +283,7 @@ impl<'a> CompoundAdmission<'a> {
             return Err(Box::new(Problem::new(Some(number), why)));
         }
         let plan = check(self.domain, &self.staged, env, context, operation)?;
+        self.staged.check_placed_change(&plan)?;
         self.staged.after(self.domain, &env.limits, &plan);
         assert!(self.staged.plans.push(plan).is_ok(), "operation bound");
         Ok(())

@@ -529,8 +529,14 @@ pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
     limits
         .tasks
         .checked_mul(28)?
-        // A compound may stop and release a whole subtree at every operation.
-        .checked_add(limits.tasks.checked_mul(limits.tasks)?.checked_mul(16)?)?
+        // Compound admission lets each live task's placed hold change only once.
+        // Per task, sixteen extra slots cover a run stop; live/milestone/activity
+        // publication; release history and activation/closing; and withdrawal of
+        // its one proposal (history, activity and publication). Facts use their
+        // own diagnostic queue. Subscription notices are priced separately below.
+        // The existing 28 slots cover cancellation/publication cascades; these
+        // sixteen cover placed changes alongside them, never tasks squared.
+        .checked_add(limits.tasks.checked_mul(16)?)?
         .checked_add(limits.placed_holds.checked_mul(2)?)?
         .checked_add(limits.batch.checked_mul(30)?)?
         .checked_add(limits.funders.checked_mul(3)?)?
