@@ -550,12 +550,31 @@ fn saturated_approval_states_parts_and_results_fit_the_owner_bound() {
 
 #[test]
 fn saturated_verdict_machine_field_arrays_fit_their_declared_owner_bound() {
-    let l = LIMITS;
-    let mut measured = Measured::new(&l);
+    check_verdict_arrays(&LIMITS);
+}
+
+#[test]
+fn verdict_field_arrays_fit_with_result_bytes_above_the_schema_ceiling() {
+    // tasks.md, 11: a larger byte allowance still admits at most 512 fields.
+    const LARGE_RESULT_BYTES: u32 = 2048;
+    check_verdict_arrays(&Limits {
+        tasks: 1,
+        project_tasks: 1,
+        tree_tasks: 1,
+        batch: 1,
+        contract_choices: 1,
+        result_bytes: LARGE_RESULT_BYTES,
+        ..LIMITS
+    });
+}
+
+fn check_verdict_arrays(l: &Limits) {
+    let mut measured = Measured::new(l);
     measured.bootstrap();
-    let rules: Box<[tasks::FieldRule]> = (0..l.result_bytes)
-        .map(|name| tasks::FieldRule { name: Box::new([u8::try_from(name).expect("small field count")]), max: 0 })
-        .collect();
+    let count = tasks::VERDICT_FIELDS.min(l.result_bytes);
+    let name_bytes = if count <= 256 { 1 } else { 2 };
+    let rules: Box<[tasks::FieldRule]> =
+        (0..count).map(|name| tasks::FieldRule { name: name.to_be_bytes()[4 - name_bytes..].into(), max: 0 }).collect();
     let fields: Box<[tasks::ResultField]> =
         rules.iter().map(|rule| tasks::ResultField { name: rule.name.clone(), value: Box::new([]) }).collect();
     let choices: Box<[tasks::Verdict]> = (0..l.contract_choices)
@@ -563,7 +582,7 @@ fn saturated_verdict_machine_field_arrays_fit_their_declared_owner_bound() {
         .collect();
     let batch: Box<[tasks::New]> = (1..=u64::from(l.batch))
         .map(|number| {
-            let mut new = filled(&l, number);
+            let mut new = filled(l, number);
             new.executor = tasks::Executor::Person(tasks::PersonAddress::Person(9));
             new.funder = Funder::Pool { project: 1, person: 9, period: 7 };
             new.contract = Contract::Verdict { choices: choices.clone() };

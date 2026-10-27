@@ -1602,7 +1602,7 @@ pub fn limits(domain: &core::Limits) -> Option<wire::Limits> {
             .ok()?;
     limits.configured_policy_templates = domain.templates;
     limits.field_rule_name = domain.tasks.result_bytes;
-    limits.verdict_fields = domain.tasks.result_bytes;
+    limits.verdict_fields = tasks::VERDICT_FIELDS.min(domain.tasks.result_bytes);
     limits.part_path_segments = domain.tasks.hold_segments;
     limits.approval_state = domain.tasks.result_bytes;
     limits.verdict_choices_choices = domain.tasks.contract_choices;

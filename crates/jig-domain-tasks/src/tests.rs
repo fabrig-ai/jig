@@ -53,3 +53,14 @@ mod waits;
 mod settings_proposals;
 
 mod startup;
+
+#[test]
+fn verdict_field_bytes_refuse_more_than_the_schema_count() {
+    let mut fields = skein_lib::List::with_capacity(crate::VERDICT_FIELDS + 1);
+    for name in 0..=crate::VERDICT_FIELDS {
+        fields
+            .push(crate::ResultField { name: name.to_be_bytes().into(), value: Box::new([]) })
+            .expect("one field per name");
+    }
+    assert_eq!(crate::verdict::fields_bytes(&fields.into_boxed()), None);
+}
