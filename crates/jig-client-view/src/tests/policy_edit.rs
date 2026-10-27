@@ -117,6 +117,10 @@ fn policy_role_projection_permission_and_empty_replacement_reviews_keep_every_su
         assert!(contains(&tree, text));
     }
     assert!(contains(&shown(&PolicyEdit::ProjectSpend { period_spend: u64::MAX }), b"Period spend:"));
+    let tree = shown(&PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX });
+    for text in [b"Role 4".as_slice(), b"Period spend:", b"18446744073709551615"] {
+        assert!(contains(&tree, text));
+    }
     for edit in [
         PolicyEdit::Requirements { requirements: List::with_capacity(0) },
         PolicyEdit::Projections { grants: List::with_capacity(0) },

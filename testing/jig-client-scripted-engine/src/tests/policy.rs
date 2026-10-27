@@ -27,6 +27,7 @@ fn policy_project() -> Project {
 fn each_closed_policy_edit_is_one_durable_keyed_request_and_replays_without_splitting() {
     let edits = [
         PolicyEdit::ProjectSpend { period_spend: u64::MAX },
+        PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX },
         PolicyEdit::Role(PolicyEditRole {
             number: u32::MAX,
             authority: OwnerAuthority {

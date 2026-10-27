@@ -48,6 +48,7 @@ fn policy_edits_price_whole_lists_reserved_capacity_and_every_literal_boundary()
             decides: u8::MAX,
         }),
         PolicyEdit::ProjectSpend { period_spend: u64::MAX },
+        PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX },
     ];
     for value in values {
         let cap = Bounds { rows: 4, text: 4, ..Bounds::default() };
