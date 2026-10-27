@@ -3,6 +3,9 @@
 use crate::{FieldRule, ResultField, Verdict};
 
 pub(crate) fn fields_bytes(fields: &[ResultField]) -> Option<usize> {
+    if fields.len() > usize::try_from(crate::VERDICT_FIELDS).expect("field ceiling fits usize") {
+        return None;
+    }
     let mut bytes = 0_usize;
     for field in fields {
         if field.name.is_empty() {
@@ -15,7 +18,7 @@ pub(crate) fn fields_bytes(fields: &[ResultField]) -> Option<usize> {
 
 pub(crate) fn rules_valid(choice: &Verdict, limit: u32) -> bool {
     let bound = usize::try_from(limit).expect("u32 fits usize");
-    if choice.fields.len() > bound {
+    if choice.fields.len() > usize::try_from(crate::VERDICT_FIELDS.min(limit)).expect("field bound fits usize") {
         return false;
     }
     let mut bytes = usize::try_from(choice.words).expect("u32 fits usize");

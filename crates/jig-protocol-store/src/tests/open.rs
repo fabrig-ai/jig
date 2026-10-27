@@ -98,6 +98,34 @@ fn corrupt_header() -> skein_kv::Op {
     }
 }
 
+// A result's byte allowance can exceed the settings schema's field-count ceiling.
+const LARGE_RESULT_BYTES: u32 = 2048;
+
+#[test]
+fn a_store_opens_with_result_bytes_above_the_verdict_field_ceiling() {
+    let mut limits = fixtures::store_limits();
+    limits.core.tasks.result_bytes = LARGE_RESULT_BYTES;
+    let mut store = Store::over(&limits, fixtures::APPLICATION, &[], fixtures::stores());
+    assert_opened(&open(&mut store), 0);
+}
+
+#[test]
+fn settings_size_verdict_fields_apart_from_result_byte_bounds() {
+    for (result_bytes, fields) in [(32, 32), (LARGE_RESULT_BYTES, 512)] {
+        let mut domain = fixtures::CORE_LIMITS;
+        domain.tasks.result_bytes = result_bytes;
+        let limits = codec::limits(&domain).expect("result bytes fit every store family");
+        assert_eq!(limits.settings.verdict_fields, fields);
+        assert_eq!(limits.settings.field_rule_name, result_bytes);
+        assert_eq!(limits.settings.approval_state, result_bytes);
+    }
+}
+
+#[test]
+fn the_verdict_field_limit_equals_the_settings_schema_ceiling() {
+    assert_eq!(jig_domain_tasks::VERDICT_FIELDS, crate::settings_v1::CEILINGS.verdict_fields);
+}
+
 #[test]
 fn an_empty_store_opens_with_its_format_row_due() {
     let store = fixtures::opened();

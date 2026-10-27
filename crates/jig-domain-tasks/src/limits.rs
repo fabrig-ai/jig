@@ -6,6 +6,9 @@ use crate::{AuthorityExecutor, Class, Fact, Grant, Parameter, Retries, Verdict};
 use alloc::boxed::Box;
 use skein_lib::{Deadlines, Id, List, Map, Queue, Slab};
 
+/// Maximum fields in one verdict, equal to the settings-v1 schema's `list 512` ceiling.
+pub const VERDICT_FIELDS: u32 = 512;
+
 /// Immutable root-configured limits for live task state, finite sources, owned semantic payloads
 /// and retry policies; validate through `worst_case` before construction. (domain/tasks.md, section 10).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -155,12 +158,15 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_mul(u64::from(limits.authority_segments))?
         .checked_mul(u64::try_from(size_of::<Box<[u8]>>()).ok()?)?;
     // Every admitted field has a nonempty name, so its array length is at
-    // most its semantic byte cap. Arrays are priced separately from bytes.
+    // most its semantic byte cap and the schema ceiling. Arrays are priced
+    // separately from bytes; contract names keep the whole semantic byte cap.
     let field_size = u64::try_from(size_of::<crate::ResultField>()).ok()?;
-    let result_fields = u64::from(limits.result_bytes).checked_mul(field_size)?;
+    let fields = u64::from(VERDICT_FIELDS.min(limits.result_bytes));
+    let result_fields = fields.checked_mul(field_size)?;
     let contract_fields = u64::from(limits.contract_choices).checked_mul(
-        u64::from(limits.result_bytes)
-            .checked_mul(u64::try_from(size_of::<crate::FieldRule>()).ok()?.checked_add(1)?)?,
+        fields
+            .checked_mul(u64::try_from(size_of::<crate::FieldRule>()).ok()?)?
+            .checked_add(u64::from(limits.result_bytes))?,
     )?;
     let approval_contract = u64::from(limits.result_bytes)
         .checked_add(u64::from(limits.hold_bytes))?
