@@ -115,6 +115,7 @@ fn hold(value: owner::HoldReason) -> client::HoldCategory {
                 owner::Bound::History => client::Bound::History,
                 owner::Bound::Window => client::Bound::Window,
                 owner::Bound::Output => client::Bound::Output,
+                owner::Bound::HostPart => client::Bound::HostPart,
             },
             value: value.value,
         }),

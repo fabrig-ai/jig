@@ -108,7 +108,7 @@ record Done { result: TaskResult }
 record Cancelled { by: Party at: u64 reason: bytes 65536 result: option TaskResult }
 enum Ending { done: Done, failed: FailureResult, cancelled: Cancelled }
 record FailedClass { class: Class }
-enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
+enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output, host_part }
 record Exceeded { bound: Bound value: u64 }
 enum Hold { failures: FailedClass, stalled, dependency: Number, stopped, placed: Number, drift, effects, effect_failed, uncertain: Effect, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: Number, procedure, circle, exceeded: Exceeded }
 enum Active { idle, due, preparing, claimed: Number, running: Number, backing_off: Number }
