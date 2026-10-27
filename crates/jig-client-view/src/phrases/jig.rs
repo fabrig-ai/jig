@@ -1008,6 +1008,7 @@ pub enum JigPhrase {
     EngineLimitSources,
     EngineLimitSignIns,
     EngineLimitSettingsProposals,
+    EngineLimitApplicationAnswers,
     FailedBare,
     CancelledBare,
     DecidedBare,
@@ -1665,6 +1666,7 @@ impl JigPhrase {
             Self::EngineLimitSources => 567,
             Self::EngineLimitSignIns => 568,
             Self::EngineLimitSettingsProposals => 7918,
+            Self::EngineLimitApplicationAnswers => 7920,
             Self::FailedBare => 448,
             Self::CancelledBare => 449,
             Self::DecidedBare => 450,
@@ -2294,6 +2296,7 @@ impl JigPhrase {
             | Self::DependencyPending
             | Self::DependencyDone
             | Self::CircleWaitsFor
+            | Self::EngineLimitApplicationAnswers
             | Self::ResultsThrough => Box::new([HoleShape { kind: HoleKind::Number, bytes: 0 }]),
             Self::OpenProgramSource
             | Self::PolicyEffect
@@ -2401,7 +2404,7 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 639] = [
+pub const ALL: [JigPhrase; 640] = [
     JigPhrase::SettingsChanged,
     JigPhrase::MovedToNewest,
     JigPhrase::SettingsStale,
@@ -2993,6 +2996,7 @@ pub const ALL: [JigPhrase; 639] = [
     JigPhrase::EngineLimitSources,
     JigPhrase::EngineLimitSignIns,
     JigPhrase::EngineLimitSettingsProposals,
+    JigPhrase::EngineLimitApplicationAnswers,
     JigPhrase::FailedBare,
     JigPhrase::CancelledBare,
     JigPhrase::DecidedBare,

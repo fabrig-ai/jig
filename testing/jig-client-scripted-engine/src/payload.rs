@@ -1232,7 +1232,8 @@ fn sum(values: &[Option<u64>]) -> Option<u64> {
 impl Payload for AdmissionLimit {
     fn heap(&self, _bounds: &Bounds) -> Option<u64> {
         match self {
-            Self::Goals
+            Self::ApplicationAnswers { .. }
+            | Self::Goals
             | Self::Operations
             | Self::Grace
             | Self::Words

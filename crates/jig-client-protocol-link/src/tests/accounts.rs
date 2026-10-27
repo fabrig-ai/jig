@@ -341,3 +341,17 @@ fn sign_in_redirect_refusals_keep_each_reason() {
         assert_eq!(translate::answers::refusal(&wire, &limits), Ok(c::Refusal::SignInRedirect { why }));
     }
 }
+
+#[test]
+fn the_application_answer_limit_reaches_the_client_with_its_bound() {
+    for limit in [0, 4, u32::MAX] {
+        let source = w::AdmissionLimit::ApplicationAnswers(
+            w::AdmissionLimitApplicationAnswers::new(&w::CEILINGS, w::AdmissionLimitApplicationAnswersParts { limit })
+                .unwrap(),
+        );
+        assert_eq!(
+            translate::answers::admission_limit(&source, &fixtures::limits()),
+            c::AdmissionLimit::ApplicationAnswers { limit }
+        );
+    }
+}

@@ -183,6 +183,8 @@ pub enum LimitKind {
     Grace,
     /// The project has no room for another goal.
     Goals,
+    /// A connector's table of kept application answers is full.
+    ApplicationAnswers { limit: u32 },
 }
 
 /// A party in an ending fact, independent of the tasks child's vocabulary.

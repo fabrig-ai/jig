@@ -534,6 +534,10 @@ pub fn language() -> Language {
                 Box::new([Segment::Text(copy_of(b"Engine admission limit: holder accounts"))])
             }
             JigPhrase::EngineLimitSources => Box::new([Segment::Text(copy_of(b"Engine admission limit: sources"))]),
+            JigPhrase::EngineLimitApplicationAnswers => Box::new([
+                Segment::Text(copy_of(b"the application's table of answers is full: ")),
+                Segment::Hole { index: 0, kind: HoleKind::Number },
+            ]),
             JigPhrase::EngineLimitSettingsProposals => {
                 Box::new([Segment::Text(copy_of(b"Engine admission limit: pending settings proposals"))])
             }

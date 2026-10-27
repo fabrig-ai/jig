@@ -70,7 +70,7 @@ pub enum Lacking {
 /// The admission limit reached.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Limit {
-    /// An engine structural admission category, without an invented numerical bound.
+    /// An engine admission category, with a numerical bound only where supplied.
     Admission { which: AdmissionLimit },
     /// A project live task limit.
     LiveTasks { project: u32, limit: u32 },

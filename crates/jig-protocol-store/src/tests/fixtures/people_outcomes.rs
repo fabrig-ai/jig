@@ -134,6 +134,9 @@ pub fn limit_kind_values() -> Box<[domain::LimitKind]> {
         domain::LimitKind::Sources,
         domain::LimitKind::SignIns,
         domain::LimitKind::SettingsProposals,
+        domain::LimitKind::ApplicationAnswers { limit: 0 },
+        domain::LimitKind::ApplicationAnswers { limit: 32 },
+        domain::LimitKind::ApplicationAnswers { limit: u32::MAX },
     ])
 }
 pub fn refusal_values() -> Box<[domain::Refusal]> {

@@ -343,8 +343,14 @@ pub(super) fn decode_lack(value: wire::Lack) -> domain::Lack {
         }
     }
 }
-pub(super) fn encode_limit_kind(value: domain::LimitKind, _limits: &wire::Limits) -> wire::LimitKind {
-    match value {
+pub(super) fn encode_limit_kind(
+    value: domain::LimitKind,
+    limits: &wire::Limits,
+) -> Result<wire::LimitKind, wire::Problem> {
+    Ok(match value {
+        domain::LimitKind::ApplicationAnswers { limit } => wire::LimitKind::ApplicationAnswers(
+            wire::LimitKindApplicationAnswers::new(limits, wire::LimitKindApplicationAnswersParts { limit })?,
+        ),
         domain::LimitKind::Projects => wire::LimitKind::Projects,
         domain::LimitKind::Words => wire::LimitKind::Words,
         domain::LimitKind::Identity => wire::LimitKind::Identity,
@@ -389,10 +395,11 @@ pub(super) fn encode_limit_kind(value: domain::LimitKind, _limits: &wire::Limits
         domain::LimitKind::Operations => wire::LimitKind::Operations,
         domain::LimitKind::Grace => wire::LimitKind::Grace,
         domain::LimitKind::Goals => wire::LimitKind::Goals,
-    }
+    })
 }
 pub(super) fn decode_limit_kind(value: wire::LimitKind) -> domain::LimitKind {
     match value {
+        wire::LimitKind::ApplicationAnswers(row) => domain::LimitKind::ApplicationAnswers { limit: row.limit() },
         wire::LimitKind::Projects => domain::LimitKind::Projects,
         wire::LimitKind::Words => domain::LimitKind::Words,
         wire::LimitKind::Identity => domain::LimitKind::Identity,
@@ -507,7 +514,7 @@ pub(super) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> 
         )?),
         domain::Refusal::Limit { which } => wire::Refusal::Limit(wire::RefusalLimit::new(
             limits,
-            wire::RefusalLimitParts { which: encode_limit_kind(*which, limits) },
+            wire::RefusalLimitParts { which: encode_limit_kind(*which, limits)? },
         )?),
         domain::Refusal::Moved { now } => wire::Refusal::Moved(wire::RefusalMoved::new(
             limits,

@@ -93,6 +93,9 @@ pub(super) fn lack(value: people::Lack) -> application::Lack {
 
 pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
     match value {
+        people::LimitKind::ApplicationAnswers { .. } => {
+            unreachable!("application answer capacity is refused before a core part starts")
+        }
         people::LimitKind::Words => application::LimitKind::Words,
         people::LimitKind::Identity => application::LimitKind::Identity,
         people::LimitKind::Roles => application::LimitKind::Roles,

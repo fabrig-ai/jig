@@ -267,6 +267,8 @@ pub enum LimitKind {
     Sources,
     /// As many sign-ins are under way as the deployment allows.
     SignIns,
+    /// A connector's table of kept application answers is full.
+    ApplicationAnswers { limit: u32 },
 }
 
 /// A party in an ending fact, independent of the tasks child's vocabulary.

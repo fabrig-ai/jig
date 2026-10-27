@@ -175,8 +175,13 @@ impl Words {
             Limit::Objects => self.text(b, JigPhrase::LimitObjects, &[]),
         }
     }
-    fn engine_limit(&self, b: &mut Builder, which: AdmissionLimit) {
+    pub(crate) fn engine_limit(&self, b: &mut Builder, which: AdmissionLimit) {
+        if let AdmissionLimit::ApplicationAnswers { limit } = which {
+            self.text(b, JigPhrase::EngineLimitApplicationAnswers, &[Hole::Number(u64::from(limit))]);
+            return;
+        }
         let phrase = match which {
+            AdmissionLimit::ApplicationAnswers { .. } => unreachable!("handled with its numeric bound"),
             AdmissionLimit::Goals => JigPhrase::EngineLimitGoals,
             AdmissionLimit::Operations => JigPhrase::EngineLimitOperations,
             AdmissionLimit::Grace => JigPhrase::EngineLimitGrace,

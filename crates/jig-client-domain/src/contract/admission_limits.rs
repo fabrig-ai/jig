@@ -1,4 +1,4 @@
-//! Structural engine limits, without fabricated amounts; client/domain/contract.md, 4.
+//! Engine admission limits, with numbers only where supplied; client/domain/contract.md, 4.
 /// The exact category supplied by engine admission.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AdmissionLimit {
@@ -46,4 +46,8 @@ pub enum AdmissionLimit {
     SignIns,
     SettingsProposals,
     Projects,
+    /// A connector's table of kept application answers is full.
+    ApplicationAnswers {
+        limit: u32,
+    },
 }

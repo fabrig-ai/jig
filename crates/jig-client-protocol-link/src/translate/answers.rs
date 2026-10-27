@@ -331,6 +331,7 @@ pub(crate) fn lacking(value: &w::Lacking, limits: &Limits) -> c::Lacking {
 
 pub(crate) fn admission_limit(value: &w::AdmissionLimit, _limits: &Limits) -> c::AdmissionLimit {
     match value {
+        w::AdmissionLimit::ApplicationAnswers(row) => c::AdmissionLimit::ApplicationAnswers { limit: row.limit() },
         w::AdmissionLimit::Goals => c::AdmissionLimit::Goals,
         w::AdmissionLimit::Operations => c::AdmissionLimit::Operations,
         w::AdmissionLimit::Grace => c::AdmissionLimit::Grace,

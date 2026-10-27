@@ -25,8 +25,10 @@ pub(crate) fn refusal(value: p::Refusal, limits: &w::Limits) -> Result<w::Refusa
             },
         )?),
         p::Refusal::Limit { which } => {
-            let which =
-                w::Limit::Admission(w::LimitAdmission::new(limits, w::LimitAdmissionParts { which: limit(which) })?);
+            let which = w::Limit::Admission(w::LimitAdmission::new(
+                limits,
+                w::LimitAdmissionParts { which: limit(which, limits)? },
+            )?);
             w::Refusal::Limit(w::RefusalLimit::new(limits, w::RefusalLimitParts { which })?)
         }
         p::Refusal::Moved { now } => moved(now, limits)?,
@@ -200,8 +202,11 @@ fn lack(value: p::Lack, limits: &w::Limits) -> Result<w::Lacking, w::Problem> {
         }
     })
 }
-pub(super) fn limit(value: p::LimitKind) -> w::AdmissionLimit {
-    match value {
+pub(super) fn limit(value: p::LimitKind, limits: &w::Limits) -> Result<w::AdmissionLimit, w::Problem> {
+    Ok(match value {
+        p::LimitKind::ApplicationAnswers { limit } => w::AdmissionLimit::ApplicationAnswers(
+            w::AdmissionLimitApplicationAnswers::new(limits, w::AdmissionLimitApplicationAnswersParts { limit })?,
+        ),
         p::LimitKind::Projects => w::AdmissionLimit::Projects,
         p::LimitKind::Words => w::AdmissionLimit::Words,
         p::LimitKind::Identity => w::AdmissionLimit::Identity,
@@ -246,7 +251,7 @@ pub(super) fn limit(value: p::LimitKind) -> w::AdmissionLimit {
         p::LimitKind::Sources => w::AdmissionLimit::Sources,
         p::LimitKind::SignIns => w::AdmissionLimit::SignIns,
         p::LimitKind::SettingsProposals => w::AdmissionLimit::SettingsProposals,
-    }
+    })
 }
 fn moved(value: p::Moved, limits: &w::Limits) -> Result<w::Refusal, w::Problem> {
     let (revision, what) = match value {

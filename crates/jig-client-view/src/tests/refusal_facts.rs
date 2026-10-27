@@ -366,3 +366,10 @@ fn settings_refusals_name_each_setting_fault_and_retained_holder_fact() {
     builder.close();
     assert!(contains(&builder.finish(), b"Settings changed; revision 31"));
 }
+
+#[test]
+fn an_application_answer_limit_says_the_configured_bound() {
+    let tree =
+        render(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::ApplicationAnswers { limit: 4 } } });
+    assert!(contains(&tree, b"the application's table of answers is full: 4"));
+}

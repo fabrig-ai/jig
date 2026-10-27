@@ -122,6 +122,7 @@ pub fn lack(value: people::Lack) -> client::Lacking {
 #[must_use]
 pub fn limit(value: people::LimitKind) -> client::AdmissionLimit {
     match value {
+        people::LimitKind::ApplicationAnswers { limit } => client::AdmissionLimit::ApplicationAnswers { limit },
         people::LimitKind::Projects => client::AdmissionLimit::Projects,
         people::LimitKind::Words => client::AdmissionLimit::Words,
         people::LimitKind::Identity => client::AdmissionLimit::Identity,

@@ -426,6 +426,10 @@ fn task_cause(b: &mut Builder, words: &Words, value: OwnerTaskCapacityCause) {
 }
 fn admission(b: &mut Builder, words: &Words, value: AdmissionLimit) {
     let phrase = match value {
+        AdmissionLimit::ApplicationAnswers { limit } => {
+            words.engine_limit(b, AdmissionLimit::ApplicationAnswers { limit });
+            return;
+        }
         AdmissionLimit::Goals => P::AdmissionGoals,
         AdmissionLimit::Operations => P::AdmissionOperations,
         AdmissionLimit::Grace => P::AdmissionGrace,

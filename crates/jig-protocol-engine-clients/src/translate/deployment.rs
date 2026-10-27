@@ -218,7 +218,7 @@ fn person_cause(value: people::CapacityCause, limits: &w::Limits) -> Result<w::O
         people::CapacityCause::Limit { which } => {
             w::OwnerPersonCapacityCause::Limit(w::OwnerPersonCapacityCauseLimit::new(
                 limits,
-                w::OwnerPersonCapacityCauseLimitParts { which: refusals::limit(which) },
+                w::OwnerPersonCapacityCauseLimitParts { which: refusals::limit(which, limits)? },
             )?)
         }
     })

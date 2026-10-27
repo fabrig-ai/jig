@@ -460,3 +460,22 @@ fn project_refusals_keep_their_facts() {
         assert_eq!(value.refusal(), &expected);
     }
 }
+
+#[test]
+fn an_application_answer_limit_preserves_its_configured_bound() {
+    for limit in [0, 4, u32::MAX] {
+        let limits = f::wire();
+        let expected = w::AdmissionLimit::ApplicationAnswers(
+            w::AdmissionLimitApplicationAnswers::new(&limits, w::AdmissionLimitApplicationAnswersParts { limit })
+                .unwrap(),
+        );
+        assert_eq!(
+            crate::translate::refusals::refusal(
+                p::Refusal::Limit { which: p::LimitKind::ApplicationAnswers { limit } },
+                &limits
+            )
+            .unwrap(),
+            f::admission_refusal(expected)
+        );
+    }
+}
