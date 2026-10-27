@@ -538,6 +538,9 @@ fn launch(
     script: &Script,
     held_turn: Option<u32>,
 ) {
+    let agent_limits = smith_agent_process_world::limits();
+    // smith's agent_shell.rs extra_operations reserves one hosted open per permitted root.
+    let root_opens = agent_limits.domain.run.directories;
     harness.host(skein_world::HostedProgram {
         program: b"agent-program".as_slice().into(),
         make: if matches!(script.story, crate::stories::Story::BeyondGrace) {
@@ -550,7 +553,11 @@ fn launch(
             processes::agent
         },
         instances: 2,
-        operations: smith_agent_process_world::limits().routes.checked_add(2).expect("agent operations"),
+        operations: agent_limits
+            .routes
+            .checked_add(2)
+            .and_then(|count| count.checked_add(root_opens))
+            .expect("agent operations and hosted root opens"),
     });
     let engine_factory = if matches!(script.story, crate::stories::Story::Providers) {
         processes::engine_providers
