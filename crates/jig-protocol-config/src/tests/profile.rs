@@ -112,3 +112,15 @@ fn table<const N: usize>(cases: [Case; N]) {
     }
     assert!(passed, "{failures:?}");
 }
+
+#[test]
+fn profiles_price_the_core_and_reference_roots_whole_decision() {
+    for name in [Profile::Small, Profile::Standard] {
+        let limits = limits(name);
+        let room = jig_domain_core::room_max(&limits.core).unwrap();
+        // The reference root adds two connector output allowances of nine.
+        assert_eq!(limits.journal.writes, room.writes + 18, "{name:?}");
+        assert_eq!(limits.journal.held, limits.journal.commits * limits.journal.writes, "{name:?}");
+        assert_eq!(limits.store.store.ops, 2 * limits.journal.writes + 4, "{name:?}");
+    }
+}

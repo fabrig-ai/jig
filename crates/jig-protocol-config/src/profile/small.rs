@@ -286,9 +286,10 @@ pub(super) const IO: skein_io::Limits = skein_io::Limits {
 // Close cancels each of Small's two pending sign-ins (protocol/llm.md, 5.2).
 // Account moves add 18 core route positions (accounts::max_out: 58 -> 76).
 // Retained-revision release adds 2 * 4 heads + 8 versions + one extent = 17.
-// Held room covers three decisions: 3 * 18,625 = 55,875.
+// Held room covers three decisions: 3 * 20,801 = 62,403.
+// Placed holds: tightened core room plus 18 connector slots needs 20,801 writes.
 pub(super) const JOURNAL: skein_lib::JournalLimits =
-    skein_lib::JournalLimits { commits: 3, writes: 18_625, held: 55_875, now: 256, release: 256 };
+    skein_lib::JournalLimits { commits: 3, writes: 20_801, held: 62_403, now: 256, release: 256 };
 pub(super) const LIMITS: Limits = Limits {
     core: CORE,
     store: STORE,
@@ -397,18 +398,18 @@ pub(super) const DRIVER: skein_oauth_accounts::Limits = skein_oauth_accounts::Li
 // Task/run settings revisions add nine bytes: u32 plus an optional u32.
 pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     key: 2079,
-    value: 1_567_838,
-    // Two operations per journal write, three creation rows and an orphan erase: 2 * 18,625 + 4.
-    ops: 37_254,
-    // 256 MiB values + 37,254 operations * (2,079 key + 9 framing) + 26 frame bytes.
-    commit: 346_221_834,
+    value: 1_567_847,
+    // Two operations per journal write, three creation rows and an orphan erase: 2 * 20,801 + 4.
+    ops: 41_606,
+    // 256 MiB values + 41,606 operations * (2,079 key + 9 framing) + 26 frame bytes.
+    commit: 355_308_810,
     queued: 3,
     // Three queued commits; segment holds two, snapshot follows one.
-    queued_bytes: 1_038_665_502,
+    queued_bytes: 1_065_926_430,
     budget: 268_435_456,
-    segment: 692_443_668,
-    snapshot_after: 346_221_834,
-    chunk: 1_569_937,
+    segment: 710_617_620,
+    snapshot_after: 355_308_810,
+    chunk: 1_569_946,
     // Accounting ceiling for applications' derived pages: the shipped largest
     // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
     // No row, chunk, decoder, queue or read-slot capacity changes with it.
