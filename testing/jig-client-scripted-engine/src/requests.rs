@@ -698,7 +698,8 @@ fn decision_kind(decision: &Decision) -> ActKind {
 type Target = (Option<u32>, Option<ObjectKey>, ActKind, Option<(Revision, Moved)>);
 fn target(ask: &Ask) -> Option<Target> {
     Some(match ask {
-        Ask::ChangeSettings(_)
+        Ask::Lift { .. }
+        | Ask::ChangeSettings(_)
         | Ask::MoveToNewest(_)
         | Ask::MakeProject { .. }
         | Ask::SignIn { .. }
@@ -750,7 +751,6 @@ fn target(ask: &Ask) -> Option<Target> {
         Ask::Cancel { project, task, .. } => (Some(*project), Some(ObjectKey::Task(*task)), ActKind::Cancel, None),
         Ask::Move { project, task, .. } => (Some(*project), Some(ObjectKey::Task(*task)), ActKind::Move, None),
         Ask::Withdraw { project, .. } => (Some(*project), None, ActKind::Withdraw, None),
-        Ask::Lift { .. } => return None,
         Ask::Seen { .. } => (None, None, ActKind::Seen, None),
         Ask::EditNote { project, .. } => (Some(*project), None, ActKind::EditNote, None),
         Ask::DeleteNote { project, .. } => (Some(*project), None, ActKind::DeleteNote, None),

@@ -262,14 +262,21 @@ pub enum OwnerHelloRefusal {
 /// The supplied closed personcapacityaction vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerPersonCapacityAction {
+    Lift {
+        hold: u64,
+    },
     /// Creating tasks as one batch.
     Create,
     /// Applying several task operations together.
     Compound,
     /// Application as supplied by its owner.
-    Application { connector: u16 },
+    Application {
+        connector: u16,
+    },
     /// Note as supplied by its owner.
-    Note { name: u64 },
+    Note {
+        name: u64,
+    },
     /// Service as supplied by its owner.
     Service,
     /// Adoption as supplied by its owner.
@@ -279,33 +286,63 @@ pub enum OwnerPersonCapacityAction {
     /// Policy as supplied by its owner.
     Policy,
     /// Pool as supplied by its owner.
-    Pool { person: u64 },
+    Pool {
+        person: u64,
+    },
     /// Escalation as supplied by its owner.
-    Escalation { task: u64 },
+    Escalation {
+        task: u64,
+    },
     /// Proposal as supplied by its owner.
-    Proposal { proposer: Proposer, number: u64 },
+    Proposal {
+        proposer: Proposer,
+        number: u64,
+    },
     /// Words as supplied by its owner.
-    Words { task: u64 },
+    Words {
+        task: u64,
+    },
     /// Question as supplied by its owner.
-    Question { task: u64, question: u64 },
+    Question {
+        task: u64,
+        question: u64,
+    },
     /// Amend as supplied by its owner.
-    Amend { task: u64 },
+    Amend {
+        task: u64,
+    },
     /// Move as supplied by its owner.
-    Move { task: u64 },
+    Move {
+        task: u64,
+    },
     /// `TakePerson` as supplied by its owner.
-    TakePerson { task: u64 },
+    TakePerson {
+        task: u64,
+    },
     /// `HandBackPerson` as supplied by its owner.
-    HandBackPerson { task: u64 },
+    HandBackPerson {
+        task: u64,
+    },
     /// `AnswerPerson` as supplied by its owner.
-    AnswerPerson { task: u64 },
+    AnswerPerson {
+        task: u64,
+    },
     /// Stop as supplied by its owner.
-    Stop { task: u64 },
+    Stop {
+        task: u64,
+    },
     /// Cancel as supplied by its owner.
-    Cancel { task: u64 },
+    Cancel {
+        task: u64,
+    },
     /// Release as supplied by its owner.
-    Release { task: u64 },
+    Release {
+        task: u64,
+    },
     /// `MarkSeen` as supplied by its owner.
-    MarkSeen { seen: SeenThrough },
+    MarkSeen {
+        seen: SeenThrough,
+    },
     /// An account sign-in, without the request's provider or holder.
     AccountSignIn,
     /// An account sign-out, without the request's source or holder.

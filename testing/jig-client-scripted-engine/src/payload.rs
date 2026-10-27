@@ -153,7 +153,6 @@ fields!(Decider { kind, role });
 impl Payload for Ask {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
-            Self::Lift { .. } => Some(0),
             Self::ChangeSettings(value) => value.heap(bounds),
             Self::Create { tasks, .. } => tasks.heap(bounds),
             Self::Propose { action, reason, .. } => sum(&[action.heap(bounds), reason.heap(bounds)]),
@@ -187,7 +186,11 @@ impl Payload for Ask {
                 | jig_client_domain::contract::AccountChange::MoveSource { .. }
                 | jig_client_domain::contract::AccountChange::SetUses { uses: None, .. } => Some(0),
             },
-            Self::MoveToNewest(_) | Self::Withdraw { .. } | Self::SignIn { .. } | Self::SignOut { .. } => Some(0),
+            Self::Lift { .. }
+            | Self::MoveToNewest(_)
+            | Self::Withdraw { .. }
+            | Self::SignIn { .. }
+            | Self::SignOut { .. } => Some(0),
             Self::Compound { operations, .. } => operations.heap(bounds),
             Self::Message { project, task, words } => {
                 sum(&[project.heap(bounds), task.heap(bounds), words.heap(bounds)])

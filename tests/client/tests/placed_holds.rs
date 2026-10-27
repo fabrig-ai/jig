@@ -39,7 +39,11 @@ impl Party {
 
     fn new(world: &mut World, sign_in: u64, person: u64) -> Self {
         let mut settings = wire::settings();
-        settings.models[0].name = b"scripted".as_slice().into();
+        let model = jig_core_world::world::scripted_model();
+        settings.models[0].name = model.name;
+        settings.models[0].efforts = model.efforts;
+        settings.models[0].window = model.window;
+        settings.models[0].output = model.output;
         let mut peer = Peer::started(&settings);
         let printed = peer.printed_link();
         let exchange = peer.post_link(&printed);
@@ -54,6 +58,8 @@ impl Party {
         limits.domain.rows = 32;
         limits.domain.projects = 64;
         limits.domain.text = 4096;
+        limits.domain.turn_text = 4096;
+        limits.domain.turn_bytes = 4096;
         limits.domain.document_bytes = 1_048_576;
         let mut party = Self {
             machine: client::Client::new(&limits, person).expect("client bounds"),
@@ -83,11 +89,12 @@ impl Party {
         });
         let watch = requests
             .iter()
-            .find_map(|request| match request {
-                client::Request::Exchange { message: client::Message::Watch(bytes), .. } => {
+            .find_map(|request| {
+                if let client::Request::Exchange { message: client::Message::Watch(bytes), .. } = request {
                     Some(w::Open::decode(&w::CEILINGS, &mut Reader::new(bytes)).expect("Me watch").watch())
+                } else {
+                    None
                 }
-                _ => None,
             })
             .expect("client opens Me");
         world.sign_in = Some(sign_in);
@@ -113,33 +120,47 @@ impl Party {
     fn exchange(&mut self, world: &mut World, requests: Vec<client::Request>) -> Vec<client::Request> {
         let (exchange, message) = requests
             .into_iter()
-            .find_map(|request| match request {
-                client::Request::Exchange { exchange, message, .. } => Some((exchange, message)),
-                _ => None,
+            .find_map(|request| {
+                if let client::Request::Exchange { exchange, message, .. } = request {
+                    Some((exchange, message))
+                } else {
+                    None
+                }
             })
             .expect("client exchange");
-        let (path, bytes): (&[u8], _) = match message {
-            client::Message::Request(bytes) => (b"/jig/v1/request", bytes),
-            client::Message::Read(bytes) => (b"/jig/v1/read", bytes),
-            _ => panic!("request or read"),
+        let (path, bytes): (&[u8], _) = if let client::Message::Request(bytes) = message {
+            (b"/jig/v1/request", bytes)
+        } else if let client::Message::Read(bytes) = message {
+            (b"/jig/v1/read", bytes)
+        } else {
+            panic!("request or read")
         };
         let socket = self.peer.post(path, bytes, Some(&self.bearer));
         let event = self.peer.take_core().expect("production wire reaches core");
-        match event {
-            core::Event::People(people::Event::Ask { ref reply_to, .. }) => {
-                let reply_to = skein_lib::ReplyTo::new(reply_to.clone().into_token());
-                world.send(root::Event::Core(event));
-                self.peer.answer_request(reply_to, world.people_answers.last().expect("durable reply").clone());
-            }
-            core::Event::Read { reply, sign_in, read } => {
-                assert_eq!(sign_in, self.sign_in);
-                world.sign_in = Some(sign_in);
-                reads::ask(world, 91, read);
-                self.peer.answer_read(reply, reads::latest(world).clone());
-            }
-            _ => panic!("one authenticated client act"),
+        if let core::Event::People(people::Event::Ask { reply_to, sign_in, key, ask, models }) = event {
+            let token = reply_to.into_token();
+            world.send(root::Event::Core(core::Event::People(people::Event::Ask {
+                reply_to: skein_lib::ReplyTo::new(token),
+                sign_in,
+                key,
+                ask,
+                models,
+            })));
+            self.peer.answer_request(
+                skein_lib::ReplyTo::new(token),
+                world.people_answers.last().expect("durable reply").clone(),
+            );
+        } else if let core::Event::Read { reply, sign_in, read } = event {
+            assert_eq!(sign_in, self.sign_in);
+            world.sign_in = Some(sign_in);
+            reads::ask(world, 91, read);
+            let answer = reads::latest(world).clone();
+            self.peer.answer_read(reply, answer);
+        } else {
+            panic!("one authenticated client act")
         }
-        let message = self.peer.answered(socket).expect("encoded durable answer").into();
+        let message =
+            self.peer.answered(socket).unwrap_or_else(|| panic!("encoded durable answer for {path:?}")).into();
         self.step(client::Event::Reply { exchange, message })
     }
 
@@ -147,9 +168,8 @@ impl Party {
         let key = client::Key { asker: client::Asker::JIG, number: self.next };
         self.next += 1;
         let requests = self.step(client::Event::Send { key, name: None, request: client::Ask::Jig(Box::new(ask)) });
-        self.exchange(world, requests).into_iter().find_map(|request| match request {
-            client::Request::Told { told: client::Told::Answered { outcome: client::Outcome::Answered(client::Answered::Jig(answer)), .. } } => Some(answer),
-            _ => None,
+        self.exchange(world, requests).into_iter().find_map(|request| {
+            if let client::Request::Told { told: client::Told::Answered { outcome: client::Outcome::Answered(client::Answered::Jig(answer)), .. } } = request { Some(answer) } else { None }
         }).expect("decoded final answer")
     }
 
@@ -160,15 +180,19 @@ impl Party {
         });
         self.exchange(world, requests)
             .into_iter()
-            .find_map(|request| match request {
-                client::Request::Told {
+            .find_map(|request| {
+                if let client::Request::Told {
                     told:
                         client::Told::Page {
                             page: client::Readout::Jig(c::ReadResult::Value(c::ReadValue::Task(task))),
                             ..
                         },
-                } => Some(task),
-                _ => None,
+                } = request
+                {
+                    Some(task)
+                } else {
+                    None
+                }
             })
             .expect("decoded task document")
     }
@@ -181,6 +205,7 @@ fn a_client_reads_a_stopped_goals_hold_and_only_its_owner_lifts_it() {
     limits.core.fleet.slots = 3;
     limits.core.tasks.inbox_messages = 8;
     limits.core.tasks.inbox_bytes = 512;
+    limits.core.people.inbox_recipients = 24;
     jig_core_world::peers::journal(&mut limits);
     let mut world = World::configured(960, false, config, limits);
     world.reads = Some(reads::Parties::new(world.store.applied));

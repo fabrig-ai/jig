@@ -294,6 +294,14 @@ fn settings_fault(value: people::SettingFault) -> client::SettingFault {
     }
 }
 
+#[must_use]
+pub fn hold_owner(value: people::HoldOwner) -> client::HoldOwner {
+    match value {
+        people::HoldOwner::Party { person } => client::HoldOwner::Party { person },
+        people::HoldOwner::Task { task } => client::HoldOwner::Task { task },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -475,12 +483,5 @@ mod tests {
             assert_eq!(actual, client::Refusal::Limit { which: client::Limit::Admission { which: expected } });
             assert!(client::EntranceRefusal::new(actual).is_ok());
         }
-    }
-}
-
-pub fn hold_owner(value: people::HoldOwner) -> client::HoldOwner {
-    match value {
-        people::HoldOwner::Party { person } => client::HoldOwner::Party { person },
-        people::HoldOwner::Task { task } => client::HoldOwner::Task { task },
     }
 }

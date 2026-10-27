@@ -450,7 +450,7 @@ pub(crate) fn owner_chip_hold(value: &w::OwnerChipHold, limits: &Limits) -> Resu
         None => None,
     };
     Ok(c::OwnerChipHold {
-        placed: crate::translate::answers::placed(value.placed(), limits)?,
+        placed: crate::translate::answers::placed(value.placed().as_ref(), limits)?,
         circle: match value.circle() {
             Some(circle) => Some(c::Circle { tasks: circle.tasks().clone(), cut: circle.cut() }),
             None => None,

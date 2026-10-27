@@ -629,7 +629,7 @@ pub(super) fn hold_for(
     Ok(line)
 }
 
-fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Result<Option<PlacedLine>, Missing> {
+pub(super) fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Result<Option<PlacedLine>, Missing> {
     let Some(hold) = core.tasks.placed_on(task) else { return Ok(None) };
     if hold.reason.len() > usize::try_from(limits.documents.text_bytes).expect("text bound fits") {
         return Err(Missing::TooLarge);
