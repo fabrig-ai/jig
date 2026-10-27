@@ -662,6 +662,9 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
     // Placed table and payloads, per-task placed identity, and bounded compound/walk scratch.
     const PLACED_HOLDS_BYTES: u64 = 16_032;
+    // Connector accounts retain 512 bytes beside each phase, including staged task clones
+    // and their wider source carriers.
+    const HOLD_ACCOUNT_BYTES: u64 = 176_408;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -678,6 +681,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_REVISIONS_BYTES
                 + SETTINGS_MOVES_BYTES
                 + PLACED_HOLDS_BYTES
+                + HOLD_ACCOUNT_BYTES
         )
     );
 }

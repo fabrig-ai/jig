@@ -105,6 +105,7 @@ fn task(account: Option<OwnerPart>) -> Task {
             wake: task.wake,
             person_wait: None,
             hold: Some(OwnerChipHold {
+                words: None,
                 placed: None,
                 circle: None,
                 account,

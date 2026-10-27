@@ -24,6 +24,7 @@ fn row(act: ActKind, reason: HoldCategory) -> OwnerEscalation {
         b"supplied retained task failure",
     ))))));
     let held = OwnerChipHold {
+        words: None,
         placed: None,
         circle: None,
         account: None,

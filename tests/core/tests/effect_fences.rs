@@ -197,7 +197,10 @@ fn a_delayed_judge_cannot_commit_a_step_of_a_cancelled_procedure() {
     let outputs = verdict(&mut core, &env, judge);
     assert!(outputs.iter().any(|request| matches!(
         request,
-        core::Request::Ask { ask: core::Ask::Effect(core::connector::Ask::Drop { .. }), .. }
+        core::Request::Ask {
+            ask: core::Ask::Effect(core::connector::Ask::Drop { why: core::connector::EffectRefusal::Obsolete, .. }),
+            ..
+        }
     )));
     assert!(!outputs.iter().any(|request| matches!(
         request,
@@ -464,7 +467,11 @@ fn a_kept_procedures_waiting_effect_is_refused_naming_its_pending_dependency() {
     assert!(outputs.iter().any(|request| matches!(
         request,
         core::Request::Ask {
-            ask: core::Ask::Effect(core::connector::Ask::Drop { answer: authority::Answer::Refuse, .. }),
+            ask: core::Ask::Effect(core::connector::Ask::Drop {
+                answer: authority::Answer::Refuse,
+                why: core::connector::EffectRefusal::Dependencies,
+                ..
+            }),
             ..
         }
     )));

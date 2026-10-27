@@ -1,9 +1,22 @@
 //! Bounded references to connector explanations (`client/domain/objects.md`, 5) and the circles
 //! of waits that hold a task (domain/tasks.md, 6.7).
 use crate::{Circle, Hold, HoldSource, Limits};
+/// Maximum retained connector account, independently of inbox message bounds.
+pub const ACCOUNT_BYTES: u32 = 512;
 pub(crate) fn valid(limits: &Limits, why: Hold, source: Option<&HoldSource>) -> bool {
     match source {
         None => why != Hold::Circle,
+        Some(HoldSource::Account { entry, words, .. }) => {
+            if let Hold::Uncertain { entry: held } = why
+                && *entry != Some(held)
+            {
+                return false;
+            }
+            why != Hold::Circle
+                && *entry != Some(0)
+                && !words.is_empty()
+                && words.len() <= usize::try_from(ACCOUNT_BYTES).expect("bounded account")
+        }
         Some(HoldSource::Circle(circle)) => why == Hold::Circle && valid_circle(limits, circle),
         Some(HoldSource::Resource(name)) => why == Hold::Drift && crate::holds::valid_name(limits, name),
         Some(HoldSource::Effect { entry, .. }) => {

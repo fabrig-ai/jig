@@ -373,6 +373,10 @@ pub fn read_was(source: wire::Was, limits: &wire::Limits) -> Result<domain::Was,
 /// Translate `HoldSource` to its store value.
 pub fn hold_source(source: &domain::HoldSource, limits: &wire::Limits) -> Result<wire::HoldSource, wire::Problem> {
     Ok(match source {
+        domain::HoldSource::Account { connector, entry, words } => wire::HoldSource::Account(wire::HoldAccount::new(
+            limits,
+            wire::HoldAccountParts { connector: *connector, entry: *entry, words: words.clone() },
+        )?),
         domain::HoldSource::Circle(circle) => wire::HoldSource::Circle(wire::Circle::new(
             limits,
             wire::CircleParts {
@@ -390,6 +394,10 @@ pub fn hold_source(source: &domain::HoldSource, limits: &wire::Limits) -> Result
 /// Read `HoldSource` from its store value.
 pub fn read_hold_source(source: wire::HoldSource, limits: &wire::Limits) -> Result<domain::HoldSource, wire::Problem> {
     Ok(match source {
+        wire::HoldSource::Account(value) => {
+            let wire::HoldAccountParts { connector, entry, words } = value.into_parts();
+            domain::HoldSource::Account { connector, entry, words }
+        }
         wire::HoldSource::Circle(value) => {
             let wire::CircleParts { tasks, cut } = value.into_parts();
             domain::HoldSource::Circle(domain::Circle { tasks: read_references(tasks), cut })

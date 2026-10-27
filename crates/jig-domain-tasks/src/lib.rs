@@ -164,3 +164,6 @@ pub use value::{
 };
 
 pub use run::run_attempt;
+
+/// Maximum bytes in a connector's retained hold account.
+pub use hold_origin::ACCOUNT_BYTES as HOLD_ACCOUNT_BYTES;

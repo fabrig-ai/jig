@@ -143,6 +143,7 @@ fn apply(domain: &mut Domain, env: &Env<Limits>, fence: Fence, decision: Procedu
             publish(domain, env, number, out);
         }
         ProcedureEnd::Hold(why) => crate::run::hold(domain, env, number, why, out),
+        ProcedureEnd::HoldFrom { why, source } => crate::run::hold_from(domain, env, number, why, Some(source), out),
         ProcedureEnd::Wait => publish(domain, env, number, out),
     }
     crate::wake::after_step(domain, env, number, out);
@@ -165,6 +166,13 @@ fn check(
         || decision.proposals.len() > 1
     {
         return Err(problem(number, Refusal::Batch));
+    }
+    if let ProcedureEnd::HoldFrom { why, source } = &decision.end
+        && (!why.valid()
+            || crate::placed::is_placed(*why)
+            || !crate::hold_origin::valid(&env.limits, *why, Some(source)))
+    {
+        return Err(problem(number, Refusal::Holds));
     }
     if let ProcedureEnd::Result(result) = &decision.end {
         let end = crate::End::Finished { result: result.clone(), cancel_delegates: false };

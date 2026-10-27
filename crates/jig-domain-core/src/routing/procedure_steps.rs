@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use jig_domain_tasks as tasks;
 use skein_lib::{Env, List, Queue};
 
-pub(super) fn problem(task: u64, why: tasks::Refusal) -> StepRefusal {
+pub(crate) fn problem(task: u64, why: tasks::Refusal) -> StepRefusal {
     StepRefusal::Refused(tasks::Problem { task: Some(task), why, blocked_by: None, capacity: None })
 }
 
@@ -83,6 +83,7 @@ pub(super) fn parts(
     let end = match &step.end {
         StepEnd::Wait => tasks::ProcedureEnd::Wait,
         StepEnd::Hold(why) => tasks::ProcedureEnd::Hold(*why),
+        StepEnd::HoldFrom { why, source } => tasks::ProcedureEnd::HoldFrom { why: *why, source: source.clone() },
         StepEnd::Result(result) => tasks::ProcedureEnd::Result(result.clone()),
     };
     Ok(tasks::ProcedureDecision {

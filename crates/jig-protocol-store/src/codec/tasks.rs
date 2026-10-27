@@ -36,6 +36,7 @@ pub fn limits(domain: &domain::Limits) -> Option<wire::Limits> {
         .ok()?,
     )?;
     let limits = wire::Limits {
+        hold_account_words: domain::HOLD_ACCOUNT_BYTES,
         placed_hold_reason: domain.message_bytes,
         placed_hold_exempt: domain.exemptions,
         proposed_settings_items: domain::SETTINGS_ITEMS,

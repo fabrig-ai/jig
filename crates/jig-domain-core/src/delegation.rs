@@ -81,6 +81,7 @@ pub struct StepMessage {
 pub enum StepEnd {
     Result(tasks::TaskResult),
     Hold(tasks::Hold),
+    HoldFrom { why: tasks::Hold, source: Box<tasks::HoldSource> },
     Wait,
 }
 
@@ -100,20 +101,29 @@ impl ProcedureStep {
 
 impl Core {
     /// Admit one procedure's delegated batch against its current task authority.
-    #[must_use]
-    pub fn procedure_batch_admit(&self, limits: &tasks::Limits, task: u64, batch: &[Delegate], decision: Wall) -> bool {
-        let Some(context) = self.tasks.delegation(task) else { return false };
+    pub fn procedure_batch_admit(
+        &self,
+        limits: &tasks::Limits,
+        task: u64,
+        batch: &[Delegate],
+        decision: Wall,
+    ) -> Result<(), crate::StepRefusal> {
+        let Some(context) = self.tasks.delegation(task) else {
+            return Err(crate::routing::procedure_steps::problem(task, tasks::Refusal::Batch));
+        };
         if batch.is_empty() || batch.len() > usize::try_from(limits.batch).expect("bounded batch") {
-            return false;
+            return Err(crate::routing::procedure_steps::problem(task, tasks::Refusal::Batch));
         }
         let mut asked = List::with_capacity(limits.batch);
         for member in batch {
             if !member.spec.inputs.is_empty() {
-                return false;
+                return Err(crate::routing::procedure_steps::problem(task, tasks::Refusal::Batch));
             }
-            let Some(executor) = self.delegation_executor(context.project, member.executor) else { return false };
+            let Some(executor) = self.delegation_executor(context.project, member.executor) else {
+                return Err(crate::routing::procedure_steps::problem(task, tasks::Refusal::Batch));
+            };
             let Some(symbolic) = symbolic_grants(&member.symbolic_grants, self.authority.limits().grants) else {
-                return false;
+                return Err(crate::routing::procedure_steps::problem(task, tasks::Refusal::Batch));
             };
             asked
                 .push(authority::Delegate {
@@ -124,16 +134,22 @@ impl Core {
                 .expect("bounded procedure batch");
         }
         let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("finding bound"));
-        self.connector_batch_admit(
+        let checked = self.connector_batch_admit(
             context.project,
             &context.authority,
             context.numbers,
             context.tasks_left,
             asked.into_boxed(),
             &mut findings,
-        )
-        .answer
-            == authority::Answer::Allow
+        );
+        if checked.answer == authority::Answer::Allow {
+            return Ok(());
+        }
+        let mut reasons = List::with_capacity(findings.len());
+        for _ in 0..findings.len() {
+            reasons.push(findings.pop().expect("finding count")).expect("finding bound");
+        }
+        Err(crate::StepRefusal::Denied { answer: checked.answer, findings: reasons.into_boxed() })
     }
     /// A delegate's models are its creator's, as a batch names none; a procedure's delegates take
     /// those it keeps, though it names none itself (domain/authority.md, sections 3 and 5).

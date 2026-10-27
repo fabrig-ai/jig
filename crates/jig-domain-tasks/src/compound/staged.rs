@@ -496,7 +496,9 @@ fn returned_circle(number: u64, phase: Phase) -> Option<(u64, crate::Circle)> {
     match phase {
         Phase::Held { why: crate::Hold::Circle, source: Some(source), .. } => match *source {
             crate::HoldSource::Circle(circle) => Some((number, circle)),
-            crate::HoldSource::Resource(_) | crate::HoldSource::Effect { .. } => unreachable!("circle source"),
+            crate::HoldSource::Resource(_) | crate::HoldSource::Effect { .. } | crate::HoldSource::Account { .. } => {
+                unreachable!("circle source")
+            }
         },
         Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_) => None,
     }

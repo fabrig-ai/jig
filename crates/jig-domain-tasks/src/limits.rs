@@ -228,6 +228,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
                         u64::from(limits.hold_segments).checked_mul(u64::try_from(size_of::<Box<[u8]>>()).ok()?)?,
                     )?
                     .checked_add(u64::from(limits.hold_bytes))?
+                    .checked_add(u64::from(crate::HOLD_ACCOUNT_BYTES))?
                     .checked_add(u64::from(limits.circle).checked_mul(8)?)?,
             )?,
         )?

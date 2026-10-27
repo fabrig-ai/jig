@@ -419,13 +419,8 @@ pub(super) fn procedure_step(
             }));
         }
         [_, ..] => {
-            if !core.procedure_batch_admit(&env.limits.tasks, task, &batch, env.wall) {
-                return super::procedure_steps::refused(
-                    core,
-                    task,
-                    step,
-                    super::procedure_steps::problem(task, tasks::Refusal::Batch),
-                );
+            if let Err(why) = core.procedure_batch_admit(&env.limits.tasks, task, &batch, env.wall) {
+                return super::procedure_steps::refused(core, task, step, why);
             }
             let context = core.tasks.delegation(task).expect("admitted procedure owner");
             let root = core.tasks.root(task).expect("procedure task live");

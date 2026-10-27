@@ -47,6 +47,7 @@ fn task_holds_with_a_placed_line_match_their_smallest_and_full_goldens() {
         let hold = w::OwnerChipHold::new(
             &w::CEILINGS,
             w::OwnerChipHoldParts {
+                words: None,
                 circle: None,
                 account: None,
                 source: None,

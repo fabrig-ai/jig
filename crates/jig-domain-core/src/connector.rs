@@ -88,6 +88,18 @@ pub struct EffectDescription {
     pub recovery: Recovery,
 }
 
+/// Why a described effect was not admitted, including refusals before authority checked it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EffectRefusal {
+    Authority,
+    Obsolete,
+    Description,
+    Capacity,
+    Dependencies,
+    Proposal,
+    Unavailable,
+}
+
 /// A connector's answer in jig's vocabulary, after root translation.
 #[derive(Debug)]
 pub enum Event {
@@ -253,6 +265,8 @@ pub enum Ask {
     Drop {
         owner: Token,
         answer: authority::Answer,
+        findings: Box<[authority::Finding]>,
+        why: EffectRefusal,
     },
     Make {
         entry: u64,
@@ -498,6 +512,21 @@ impl Core {
             },
             None => false,
         };
+        if let Some(row) = self.tasks.task(task)
+            && let tasks::Phase::Held { why, source: Some(source), .. } = &row.phase
+            && let tasks::HoldSource::Account { connector: owner, entry: Some(number), .. } = &**source
+            && *owner == connector
+            && *number == entry
+        {
+            let retained = match outcome {
+                OutboxOutcome::Failed | OutboxOutcome::Withdrawn => *why == tasks::Hold::EffectFailed,
+                OutboxOutcome::Held { entry } => *why == (tasks::Hold::Uncertain { entry }),
+                OutboxOutcome::Made | OutboxOutcome::NotMade | OutboxOutcome::Uncertain => false,
+            };
+            if retained {
+                return None;
+            }
+        }
         match outcome {
             OutboxOutcome::Held { entry } => Some(tasks::Event::HoldFrom {
                 task,

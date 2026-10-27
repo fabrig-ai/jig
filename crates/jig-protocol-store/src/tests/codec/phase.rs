@@ -391,3 +391,20 @@ fn each_configured_bound_hold_reads_back_with_its_value() {
         assert_eq!(saved_phase(&source), Ok(source));
     }
 }
+
+#[test]
+fn a_connectors_effect_or_procedure_account_survives_the_store() {
+    use jig_domain_tasks::{Active, Hold, HoldSource, Phase, Was};
+    for (why, entry, words) in [
+        (Hold::EffectFailed, Some(53), b"restart on production/checkout: permission refused".as_slice()),
+        (Hold::Uncertain { entry: 53 }, Some(53), b"restart on production/checkout: may or may not have been made"),
+        (Hold::Procedure, None, b"restart vetoed: amend authority and release"),
+    ] {
+        let source = Phase::Held {
+            was: Was::Active(Active::Due),
+            why,
+            source: Some(Box::new(HoldSource::Account { connector: 2, entry, words: words.into() })),
+        };
+        assert_eq!(saved_phase(&source), Ok(source));
+    }
+}

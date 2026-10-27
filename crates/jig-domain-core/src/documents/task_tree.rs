@@ -136,6 +136,8 @@ pub enum EscalationState {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HoldLine {
     pub placed: Option<PlacedLine>,
+    /// Connector-supplied account retained with the hold, never reconstructed by a client.
+    pub words: Option<Text>,
     pub circle: Option<tasks::Circle>,
     /// The connector's account, independently of the resource or outbox origin.
     pub account: Option<Part>,
@@ -534,6 +536,10 @@ pub(super) fn ending(limits: &Limits, value: &tasks::Ending) -> Result<Ending, M
 
 pub(super) fn hold_source(limits: &Limits, source: Option<&tasks::HoldSource>) -> Result<Option<Part>, Missing> {
     match source {
+        Some(tasks::HoldSource::Account { connector, entry, .. }) => Ok(match entry {
+            Some(entry) => Some(Part { connector: *connector, kind: PartKind::Outbox, key: PartKey::Number(*entry) }),
+            None => None,
+        }),
         None | Some(tasks::HoldSource::Circle(_)) => Ok(None),
         Some(tasks::HoldSource::Resource(name)) => {
             Ok(Some(part_path(limits, name.connector, PartKind::Resource, &name.path)?))
@@ -546,11 +552,16 @@ pub(super) fn hold_source(limits: &Limits, source: Option<&tasks::HoldSource>) -
 
 // client/domain/root.md, section 6: the core names the hold account from retained origin facts.
 fn hold_account(task: u64, reason: tasks::Hold, source: Option<&tasks::HoldSource>) -> Option<Part> {
+    if let Some(tasks::HoldSource::Account { connector, .. }) = source {
+        return Some(Part { connector: *connector, kind: PartKind::Hold, key: PartKey::Number(task) });
+    }
     match reason {
         tasks::Hold::Drift | tasks::Hold::Effects | tasks::Hold::EffectFailed => {
             let connector = match source {
                 Some(tasks::HoldSource::Resource(name)) => name.connector,
-                Some(tasks::HoldSource::Effect { connector, .. }) => *connector,
+                Some(tasks::HoldSource::Effect { connector, .. } | tasks::HoldSource::Account { connector, .. }) => {
+                    *connector
+                }
                 None | Some(tasks::HoldSource::Circle(_)) => return None,
             };
             Some(Part { connector, kind: PartKind::Hold, key: PartKey::Number(task) })
@@ -576,6 +587,15 @@ pub(super) fn hold(limits: &Limits, row: &tasks::TaskRecord) -> Result<Option<Ho
     match &row.phase {
         tasks::Phase::Held { was, why, source } => Ok(Some(HoldLine {
             placed: None,
+            words: match source.as_deref() {
+                Some(tasks::HoldSource::Account { words, .. }) => {
+                    Some(super::small::text(words, limits.documents.text_bytes))
+                }
+                None
+                | Some(
+                    tasks::HoldSource::Resource(_) | tasks::HoldSource::Effect { .. } | tasks::HoldSource::Circle(_),
+                ) => None,
+            },
             circle: match source.as_deref() {
                 Some(tasks::HoldSource::Circle(circle)) => {
                     let mut tasks = List::with_capacity(limits.documents.lines);
@@ -587,7 +607,12 @@ pub(super) fn hold(limits: &Limits, row: &tasks::TaskRecord) -> Result<Option<Ho
                         tasks: tasks.into_boxed(),
                     })
                 }
-                None | Some(tasks::HoldSource::Resource(_) | tasks::HoldSource::Effect { .. }) => None,
+                None
+                | Some(
+                    tasks::HoldSource::Resource(_)
+                    | tasks::HoldSource::Effect { .. }
+                    | tasks::HoldSource::Account { .. },
+                ) => None,
             },
             account: hold_account(row.number, *why, source.as_deref()),
             source: hold_source(limits, source.as_deref())?,

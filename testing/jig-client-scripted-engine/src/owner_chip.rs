@@ -43,6 +43,7 @@ impl Payload for OwnerChipHold {
         self.account
             .heap(bounds)?
             .checked_add(self.placed.heap(bounds)?)?
+            .checked_add(self.words.heap(bounds)?)?
             .checked_add(self.circle.heap(bounds)?)?
             .checked_add(self.source.heap(bounds)?)?
             .checked_add(self.reason.heap(bounds)?)?

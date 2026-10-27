@@ -790,7 +790,7 @@ fn effect_ask(domain: &mut Domain, env: &Env<Limits>, number: u16, ask: core::co
                 None => {}
             }
         }
-        core::connector::Ask::Drop { owner, answer } => {
+        core::connector::Ask::Drop { owner, answer, .. } => {
             if let Some(task) = domain.effect_procedures.remove(&owner) {
                 let signal = match answer {
                     authority::Answer::Allow => infrastructure::ProcedureSignal::EffectMade,

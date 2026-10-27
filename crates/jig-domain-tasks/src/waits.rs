@@ -1111,7 +1111,7 @@ fn circle_held(phase: &Phase) -> Option<&Circle> {
     match phase {
         Phase::Held { why: Hold::Circle, source: Some(source), .. } => match source.as_ref() {
             HoldSource::Circle(circle) => Some(circle),
-            HoldSource::Resource(_) | HoldSource::Effect { .. } => None,
+            HoldSource::Resource(_) | HoldSource::Effect { .. } | HoldSource::Account { .. } => None,
         },
         Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_) => None,
     }

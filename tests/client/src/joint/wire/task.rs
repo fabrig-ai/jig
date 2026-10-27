@@ -229,6 +229,7 @@ pub(crate) mod tests {
             authority: state.authority,
             hold: Some(documents::HoldLine {
                 placed: None,
+                words: None,
                 circle: None,
                 account: None,
                 source: None,

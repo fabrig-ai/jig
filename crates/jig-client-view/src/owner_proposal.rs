@@ -50,6 +50,9 @@ fn link_fits(value: &OwnerTaskLink, limits: &Limits, words: &Words) -> Option<()
     Some(())
 }
 fn hold_fits(value: &OwnerChipHold, limits: &Limits) -> Option<()> {
+    if let Some(words) = &value.words {
+        text_fits(words, limits)?;
+    }
     if let Some(part) = &value.source {
         crate::owner_chip::part_fits(part, limits)?;
     }
