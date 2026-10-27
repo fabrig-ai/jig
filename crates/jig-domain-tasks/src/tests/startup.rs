@@ -44,6 +44,65 @@ fn one_task() -> Harness {
     source
 }
 
+const PARENT: u64 = 1;
+const DELEGATE: u64 = 2;
+const PERSON: u64 = 9; // The existing Harness root creator, not the delegate's requester.
+const WORD: u64 = 1;
+
+fn delegate_with_person_word(kind: crate::MessageKind) -> Harness {
+    let mut source = Harness::new();
+    source.make(vec![task(PARENT, &[])]);
+    source.send(Event::Make {
+        reply_to: super::revisions::to(),
+        creator: crate::Party::Task(PARENT),
+        batch: Box::new([task(DELEGATE, &[])]),
+    });
+    let Some(Stored::Live(row)) = source.stored.get_mut(&Key::Live(DELEGATE)) else { panic!("delegate fixture") };
+    row.last_message = WORD;
+    row.inbox = Box::new([crate::Word {
+        number: WORD,
+        from: crate::Party::Person(PERSON),
+        kind,
+        words: b"whole words".as_slice().into(),
+        at: source.env.wall,
+        hits: 1,
+        eligible: true,
+    }]);
+    source
+}
+
+#[test]
+fn a_delegates_words_from_a_person_restore() {
+    let source = delegate_with_person_word(crate::MessageKind::Words);
+    let mut cold = cold(&source);
+    let out = cold.send(Event::Check);
+    assert!(cold.domain.checked(), "{out:?}");
+    assert_eq!(cold.domain.task(DELEGATE).expect("restored delegate").inbox[0].from, crate::Party::Person(PERSON));
+}
+
+#[test]
+fn a_delegates_question_or_answer_from_a_person_refuses() {
+    for kind in [crate::MessageKind::Question, crate::MessageKind::Answer { question: WORD }] {
+        let source = delegate_with_person_word(kind);
+        refused_delegate(&source);
+    }
+}
+
+#[test]
+fn a_delegates_words_from_person_zero_refuse() {
+    let mut source = delegate_with_person_word(crate::MessageKind::Words);
+    let Some(Stored::Live(row)) = source.stored.get_mut(&Key::Live(DELEGATE)) else { panic!("delegate fixture") };
+    row.inbox[0].from = crate::Party::Person(0);
+    refused_delegate(&source);
+}
+
+fn refused_delegate(source: &Harness) {
+    let mut cold = Harness::new();
+    cold.domain = Domain::new(&LIMITS, 91, source.domain.newest(), super::charters(), Box::new([0]));
+    let row = source.stored.get(&Key::Live(DELEGATE)).expect("delegate row").clone();
+    refusal(&cold.send(Event::Restore { record: row }), Refusal::Restore);
+}
+
 fn refusal(out: &[Request], why: Refusal) {
     let [Request::RestoreRefused { problem }] = out else { panic!("one restore refusal: {out:?}") };
     assert_eq!(problem.why, why);
