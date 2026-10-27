@@ -45,7 +45,8 @@ record Call {
     input: bytes 1048576
     deadline: duration
 }
-enum StartCause { other, grants }
+record HostPart { bound: u64 }
+enum StartCause { other, grants, host_part: HostPart }
 record InvalidStart { why: bytes 4096 cause: StartCause }
 enum Invalid { charter, transcript, grants, messages, start: InvalidStart }
 record InvalidValue { value: Invalid }
@@ -59,7 +60,7 @@ enum Preparation { transient, permanent: Resource }
 record PreparationValue { value: Preparation }
 record LimitedAccount { account: u32 reset: option duration }
 record RefusedAccount { account: u32 }
-enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
+enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output, host_part }
 record Exceeded { bound: Bound value: u64 }
 enum RunFailure {
     model, budget, policy, cancelled, stale,

@@ -31,6 +31,7 @@ fn charter() -> core::Charter {
         hosts: fleet::Kinds::Both,
         spend: 100,
         policy: core::RunPolicy {
+            tools: jig_domain_authority::Tools(2047),
             instructions: Box::from(b"instructions\nwhole".as_slice()),
             waiting: Duration::from_secs(2),
             resume: true,

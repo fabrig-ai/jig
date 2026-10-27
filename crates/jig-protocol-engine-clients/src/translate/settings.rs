@@ -152,6 +152,7 @@ fn charter(value: &core::Charter, limits: &w::Limits) -> Result<w::Charter, w::P
     w::Charter::new(
         limits,
         w::CharterParts {
+            tools: policy.tools.0,
             skein_bools: [policy.resume, policy.inspect, policy.modify, policy.shell, policy.agents],
             number: value.number,
             instructions: policy.instructions.clone(),

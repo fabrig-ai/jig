@@ -24,6 +24,7 @@ fields!(SettingModel {
     effort
 });
 fields!(Charter {
+    tools,
     number,
     instructions,
     waiting,

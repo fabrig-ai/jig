@@ -426,6 +426,7 @@ pub(crate) fn hold_category(value: &w::HoldCategory, limits: &Limits) -> c::Hold
                 w::Bound::History => c::Bound::History,
                 w::Bound::Window => c::Bound::Window,
                 w::Bound::Output => c::Bound::Output,
+                w::Bound::HostPart => c::Bound::HostPart,
             },
             value: value.value(),
         }),

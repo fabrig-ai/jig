@@ -165,6 +165,7 @@ pub(super) fn hold_reason(value: people::HoldReason) -> application::HoldReason 
                 people::Bound::History => application::Bound::History,
                 people::Bound::Window => application::Bound::Window,
                 people::Bound::Output => application::Bound::Output,
+                people::Bound::HostPart => application::Bound::HostPart,
             },
             value: value.value,
         }),

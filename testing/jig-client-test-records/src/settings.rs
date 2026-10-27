@@ -69,6 +69,7 @@ pub fn settings_values() -> List<SettingValue> {
     alternatives.push(other).expect("one alternative");
     values
         .push(SettingValue::Charter(Box::new(Charter {
+            tools: 1024,
             number: 2,
             instructions: text("instructions λ".as_bytes()),
             waiting: Duration::from_secs(11),

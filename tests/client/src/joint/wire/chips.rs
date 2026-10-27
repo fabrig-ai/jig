@@ -42,6 +42,7 @@ pub fn hold(value: tasks::Hold) -> client::HoldCategory {
                 tasks::Bound::History => client::Bound::History,
                 tasks::Bound::Window => client::Bound::Window,
                 tasks::Bound::Output => client::Bound::Output,
+                tasks::Bound::HostPart => client::Bound::HostPart,
             },
             value: value.value,
         }),

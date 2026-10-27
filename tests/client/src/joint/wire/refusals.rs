@@ -199,6 +199,7 @@ pub fn hold(value: people::HoldReason) -> client::HoldCategory {
                 people::Bound::History => client::Bound::History,
                 people::Bound::Window => client::Bound::Window,
                 people::Bound::Output => client::Bound::Output,
+                people::Bound::HostPart => client::Bound::HostPart,
             },
             value: value.value,
         }),

@@ -125,6 +125,7 @@ fn hold_reason(why: tasks::Hold) -> people::HoldReason {
                 tasks::Bound::History => people::Bound::History,
                 tasks::Bound::Window => people::Bound::Window,
                 tasks::Bound::Output => people::Bound::Output,
+                tasks::Bound::HostPart => people::Bound::HostPart,
             },
             value: value.value,
         }),

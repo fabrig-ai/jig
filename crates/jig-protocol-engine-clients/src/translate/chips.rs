@@ -44,6 +44,7 @@ pub fn hold(value: t::Hold, limits: &w::Limits) -> Result<w::HoldCategory, w::Pr
                     t::Bound::History => w::Bound::History,
                     t::Bound::Window => w::Bound::Window,
                     t::Bound::Output => w::Bound::Output,
+                    t::Bound::HostPart => w::Bound::HostPart,
                 },
                 value: value.value,
             },
