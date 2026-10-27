@@ -108,6 +108,7 @@ fn a_source_grant_change_carries_plain_history_and_discards_replay() {
             other @ (session::Request::JobsCancelled { .. }
             | session::Request::Turn { .. }
             | session::Request::Priced { .. }
+            | session::Request::Yield { .. }
             | session::Request::Yielded { .. }
             | session::Request::Used { .. }
             | session::Request::Ended { .. }
