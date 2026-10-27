@@ -92,7 +92,22 @@ fn member(role: bool, authority: w::OwnerAuthority, expected: p::Authority) -> (
             budget: w::NewBudget::AsAllowed(
                 w::BudgetAsAllowed::new(&l, w::BudgetAsAllowedParts { cap: Some(42) }).unwrap(),
             ),
-            wake: None,
+            wake: Some(
+                w::OwnerWakePolicy::new(
+                    &l,
+                    w::OwnerWakePolicyParts {
+                        markers: u32::MAX,
+                        words: w::WakeRule::Immediate,
+                        notices: w::WakeRule::Immediate,
+                        news: w::WakeRule::Immediate,
+                        results: w::ResultsWake::LastOrFailure,
+                        questions: true,
+                        answers: true,
+                        timers: true,
+                    },
+                )
+                .unwrap(),
+            ),
             dependencies,
             named: authority.grants().into(),
             tracked: Some(14),
@@ -134,6 +149,7 @@ fn expected_member(role: bool, expected: p::Authority) -> p::Member {
         authority: expected.clone(),
         budget: p::Budget::AsAllowed { cap: Some(42) },
         wake: p::WakePolicy {
+            markers: u32::MAX,
             words: p::WakeRule::Immediate,
             notices: p::WakeRule::Immediate,
             news: p::WakeRule::Immediate,

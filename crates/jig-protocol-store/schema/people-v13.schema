@@ -81,7 +81,7 @@ record Spec { words: bytes 8192 parameters: bytes 65536 pieces Parameter inputs:
 record WakeRuleBatch { count: u32 age: u64 }
 enum WakeRule { never, immediate, batch: WakeRuleBatch }
 enum ResultsWake { never, each, last_or_failure }
-record WakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool }
+record WakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool markers: u32 }
 record TrackingTracked { priority: u32 }
 enum Tracking { tracked: TrackingTracked, untracked }
 record ModelEffort { model: u8 effort: option u8 }

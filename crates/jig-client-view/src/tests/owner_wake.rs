@@ -47,6 +47,7 @@ fn owner_wake_renderer_keeps_every_rule_result_and_independent_switch() {
         ] {
             for switches in 0_u8..8 {
                 let value = OwnerWakePolicy {
+                    markers: 0,
                     words: rule,
                     notices: rule,
                     news: rule,
@@ -140,6 +141,7 @@ fn owner_wake_renderer_uses_checked_selected_language_with_reordered_holes() {
     )
     .unwrap();
     let value = OwnerWakePolicy {
+        markers: 0,
         words: WakeRule::Never,
         notices: WakeRule::Immediate,
         news: WakeRule::Batch { count: 7, age: Duration::from_nanos(13) },

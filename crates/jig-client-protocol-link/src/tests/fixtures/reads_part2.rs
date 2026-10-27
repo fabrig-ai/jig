@@ -37,6 +37,7 @@ pub fn read_wire_owner_wake_policy() -> w::OwnerWakePolicy {
     w::OwnerWakePolicy::new(
         &lim,
         w::OwnerWakePolicyParts {
+            markers: u32::MAX,
             words: read_wire_wake_rule(),
             notices: read_wire_wake_rule(),
             news: read_wire_wake_rule(),

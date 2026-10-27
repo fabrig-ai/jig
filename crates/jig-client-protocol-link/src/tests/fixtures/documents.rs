@@ -88,6 +88,7 @@ pub fn task() -> c::Task {
         taken_by: None,
         instructions: None,
         wake: c::OwnerWakePolicy {
+            markers: 0,
             words: c::WakeRule::Never,
             notices: c::WakeRule::Never,
             news: c::WakeRule::Never,

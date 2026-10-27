@@ -523,3 +523,15 @@ fn authorization_query_and_each_answer_round_trip_at_their_bounds() {
         assert_eq!(AuthorizeAnswer::decode(&limits, &mut Reader::new(&bytes)), Ok(answer));
     }
 }
+
+#[test]
+fn a_wake_policy_round_trips_every_marker_bit() {
+    let limits = fixtures::limits();
+    for markers in [0, 1, 1 << 31_u32, u32::MAX] {
+        let mut parts = fixtures::owner_wake_policy(&limits).into_parts();
+        parts.markers = markers;
+        let policy = OwnerWakePolicy::new(&limits, parts).expect("all marker sets admitted");
+        let bytes = fixtures::encoded(&policy, OwnerWakePolicy::measure, OwnerWakePolicy::encode);
+        assert_eq!(OwnerWakePolicy::decode(&limits, &mut Reader::new(&bytes)), Ok(policy));
+    }
+}

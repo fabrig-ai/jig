@@ -67,6 +67,7 @@ pub enum Parameter {
 /// Wake rules supplied by a person for the task's later messages.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct WakePolicy {
+    pub markers: u32,
     pub words: WakeRule,
     pub notices: WakeRule,
     pub news: WakeRule,

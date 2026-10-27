@@ -2156,6 +2156,7 @@ fn watched_task_policies_replace_every_channel_without_merging_standing_interest
     ] {
         for results in [ResultsWake::Never, ResultsWake::Each, ResultsWake::LastOrFailure] {
             supplied.wake = OwnerWakePolicy {
+                markers: 0,
                 words: rule,
                 notices: rule,
                 news: rule,

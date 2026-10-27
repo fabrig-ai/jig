@@ -117,7 +117,7 @@ enum OwnerExecutor { agent: OwnerExecutorAgent, procedure: OwnerExecutorProcedur
 record WakeRuleBatch { count: u32 age: duration }
 enum WakeRule { never, immediate, batch: WakeRuleBatch }
 enum ResultsWake { never, each, last_or_failure }
-record OwnerWakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool }
+record OwnerWakePolicy { words: WakeRule notices: WakeRule news: WakeRule results: ResultsWake questions: bool answers: bool timers: bool markers: u32 }
 record OwnerPersonStallNotice { message: u64 at: u64 activity: u64 }
 record OwnerPersonWait { since: u64 stall: duration deadline: u64 notice: option OwnerPersonStallNotice }
 enum OwnerPartKind { resource, pool, result, procedure, effect, outbox, hold }

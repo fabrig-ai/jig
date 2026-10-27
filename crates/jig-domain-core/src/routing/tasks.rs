@@ -260,6 +260,9 @@ pub(super) fn tag_tasks(
                 }
                 continue;
             }
+            tasks::Request::SubscribeTopic { task, connector, topic, markers } => {
+                Request::Ask { connector, ask: Ask::Effect(crate::connector::Ask::Subscribe { task, topic, markers }) }
+            }
             tasks::Request::EndTopic { task, subscription, connector } => {
                 Request::Ask { connector, ask: Ask::EndTopic { task, subscription } }
             }

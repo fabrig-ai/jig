@@ -164,6 +164,7 @@ pub fn task_record() -> w::Task {
             wake: w::OwnerWakePolicy::new(
                 &lim,
                 w::OwnerWakePolicyParts {
+                    markers: 0,
                     words: w::WakeRule::Never,
                     notices: w::WakeRule::Never,
                     news: w::WakeRule::Never,
@@ -333,6 +334,7 @@ pub fn wire_owner_chip_details_row() -> w::OwnerChipDetailsRow {
                     wake: w::OwnerWakePolicy::new(
                         &lim,
                         w::OwnerWakePolicyParts {
+                            markers: 0,
                             words: w::WakeRule::Never,
                             notices: w::WakeRule::Never,
                             news: w::WakeRule::Never,

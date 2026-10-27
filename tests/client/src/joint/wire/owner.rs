@@ -362,6 +362,7 @@ pub fn ledger(value: &documents::Ledger) -> client::PoolLedger {
 #[must_use]
 pub fn wake(value: tasks::WakePolicy) -> client::OwnerWakePolicy {
     client::OwnerWakePolicy {
+        markers: value.markers,
         words: wake_rule(value.words),
         notices: wake_rule(value.notices),
         news: wake_rule(value.news),
@@ -457,6 +458,7 @@ pub(super) mod tests {
                 note_resources: List::with_capacity(1),
             },
             wake: tasks::WakePolicy {
+                markers: 0,
                 words: tasks::WakeRule::Never,
                 notices: tasks::WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::ZERO },
                 news: tasks::WakeRule::Immediate,
@@ -801,6 +803,7 @@ pub(super) mod tests {
     fn owner_wake_and_subscriptions_keep_independent_rules_and_absent_or_zero_timer_periods() {
         let age = skein_lib::Duration::from_nanos(u64::MAX);
         let value = wake(tasks::WakePolicy {
+            markers: 0,
             words: tasks::WakeRule::Never,
             notices: tasks::WakeRule::Batch { count: u32::MAX, age },
             news: tasks::WakeRule::Immediate,

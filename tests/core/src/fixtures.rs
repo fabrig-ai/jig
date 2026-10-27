@@ -301,6 +301,7 @@ pub fn people_member(words: &[u8], spend: u64) -> jig_domain_people::Member {
             note_resources: Box::new([]),
         },
         wake: people::WakePolicy {
+            markers: 0,
             words: people::WakeRule::Immediate,
             notices: people::WakeRule::Never,
             news: people::WakeRule::Never,
@@ -479,6 +480,7 @@ pub fn create_chat(creating: &Creating, project: u32, role: u32, words: Box<[u8]
     member.label = jig_client_test_records::CHAT;
     member.contract = people::Contract::Report { words: 128 };
     member.wake = people::WakePolicy {
+        markers: 0,
         words: people::WakeRule::Immediate,
         notices: people::WakeRule::Immediate,
         news: people::WakeRule::Immediate,

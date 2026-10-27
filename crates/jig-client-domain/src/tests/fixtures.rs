@@ -188,6 +188,7 @@ fn document(number: u64) -> contract::Task {
         taken_by: None,
         instructions: None,
         wake: contract::OwnerWakePolicy {
+            markers: 0,
             words: contract::WakeRule::Never,
             notices: contract::WakeRule::Never,
             news: contract::WakeRule::Never,

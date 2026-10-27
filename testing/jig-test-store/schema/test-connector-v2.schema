@@ -46,7 +46,7 @@ record RecordProcedureDelegateOutcome { task: u64 step: u64 child: option u64 re
 record RecordResult { task: u64 code: u16 }
 record RecordTask { task: u64 project: u32 resources: list 64 ResourcePath }
 record RecordAdoption { project: u32 path: ResourcePath role: ResourceRole }
-record RecordSubscription { topic: u16 task: u64 wake_at: u16 keep_at: u16 }
+record RecordSubscription { topic: u16 task: u64 wake_at: u16 keep_at: u16 markers: u32 }
 record RecordPool { path: ResourcePath slots: u32 }
 record RecordMade { key: Key resources: list 64 ResourcePath state: u64 }
 record OutboxEntry { number: u64 task: u64 key: Key effect: Effect attempt: option Attempt phase: EffectPhase }

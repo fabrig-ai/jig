@@ -39,6 +39,7 @@ pub(super) fn member(words: &[u8]) -> Member {
             note_resources: Box::new([]),
         },
         wake: WakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Never,
             news: WakeRule::Never,

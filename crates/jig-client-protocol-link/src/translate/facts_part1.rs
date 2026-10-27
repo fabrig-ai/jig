@@ -321,6 +321,7 @@ pub(crate) fn results_wake(value: &w::ResultsWake, _limits: &Limits) -> c::Resul
 
 pub(crate) fn owner_wake_policy(value: &w::OwnerWakePolicy, limits: &Limits) -> c::OwnerWakePolicy {
     c::OwnerWakePolicy {
+        markers: value.markers(),
         words: wake_rule(value.words(), limits),
         notices: wake_rule(value.notices(), limits),
         news: wake_rule(value.news(), limits),

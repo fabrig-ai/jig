@@ -337,6 +337,7 @@ pub(super) mod tests {
                 attempt: Some(u64::MAX),
                 retry: Some(tasks::RetryNotice::Failed { class: tasks::Class::Invalid, count: u32::MAX, allowance: 0 }),
                 wake: tasks::WakePolicy {
+                    markers: 0,
                     words: tasks::WakeRule::Immediate,
                     notices: tasks::WakeRule::Never,
                     news: tasks::WakeRule::Batch { count: u32::MAX, age: Duration::ZERO },

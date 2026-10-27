@@ -116,6 +116,7 @@ pub(super) fn span_proposal() -> (Script, Ask) {
         dependencies: List::with_capacity(0),
         resources: List::with_capacity(0),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

@@ -25,6 +25,10 @@ pub enum ResultsWake {
 /// Inert creator-selected wake policy, bounded at task admission.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct WakePolicy {
+    /// Markers the task wakes on (tasks.md, 8.3): bit n is the
+    /// application's marker n; a connector classes news carrying one of
+    /// its own as waking for this task.
+    pub markers: u32,
     pub words: WakeRule,
     pub notices: WakeRule,
     pub news: WakeRule,
@@ -36,6 +40,7 @@ pub struct WakePolicy {
 
 impl WakePolicy {
     pub const DEFAULT: Self = Self {
+        markers: 0,
         words: WakeRule::Immediate,
         notices: WakeRule::Immediate,
         news: WakeRule::Immediate,
@@ -1793,6 +1798,8 @@ pub enum Request {
     Notify { task: u64, subscription: u64, target: u64, state: NoticeState, words: Box<[u8]> },
     /// Root allocates a commit-order message number for this due timer.
     Timer { task: u64, subscription: u64 },
+    /// An admitted subscription or changed marker set updates its connector in this decision.
+    SubscribeTopic { task: u64, connector: u16, topic: u64, markers: u32 },
     /// An ending task releases a connector topic interest in the same decision.
     EndTopic { task: u64, subscription: u64, connector: u16 },
     /// Accepted person words; root answers the keyed request after the inbox write commits.

@@ -31,6 +31,7 @@ fn value() -> OwnerChipDetails {
         attempt: Some(u64::MAX),
         retry: None,
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Immediate,
             news: WakeRule::Never,

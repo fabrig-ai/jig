@@ -398,22 +398,31 @@ fn shrinking_a_pool_reports_slots_and_lost_allocations_without_retracting_holds(
 #[test]
 fn topic_news_is_classified_per_subscriber_and_own_echoes_are_dropped() {
     let mut connector = domain();
-    run(&mut connector, Event::Subscribe { task: 1, topic: 7, wake_at: 5, keep_at: 2 });
-    run(&mut connector, Event::Subscribe { task: 2, topic: 7, wake_at: 8, keep_at: 4 });
+    run(&mut connector, Event::Subscribe { markers: 0, task: 1, topic: 7, wake_at: 5, keep_at: 2 });
+    run(&mut connector, Event::Subscribe { markers: 0, task: 2, topic: 7, wake_at: 8, keep_at: 4 });
     assert!(
-        run(&mut connector, Event::System(SystemEvent::News { topic: 7, importance: 9, origin: Origin::Own }))
-            .is_empty()
+        run(
+            &mut connector,
+            Event::System(SystemEvent::News { markers: 0, topic: 7, importance: 9, origin: Origin::Own })
+        )
+        .is_empty()
     );
     assert_eq!(
-        run(&mut connector, Event::System(SystemEvent::News { topic: 7, importance: 6, origin: Origin::Other })),
+        run(
+            &mut connector,
+            Event::System(SystemEvent::News { markers: 0, topic: 7, importance: 6, origin: Origin::Other })
+        ),
         Box::from([Request::News {
             topic: 7,
             subscribers: Box::from([Classed { task: 1, class: Class::Wake }, Classed { task: 2, class: Class::Keep }]),
         }])
     );
     assert!(
-        run(&mut connector, Event::System(SystemEvent::News { topic: 7, importance: 1, origin: Origin::Other }))
-            .is_empty()
+        run(
+            &mut connector,
+            Event::System(SystemEvent::News { markers: 0, topic: 7, importance: 1, origin: Origin::Other })
+        )
+        .is_empty()
     );
     assert_eq!(
         run(&mut connector, Event::Unsubscribe { task: 1, topic: 7 }),
@@ -428,7 +437,7 @@ fn restored_records_rebuild_adoptions_names_topics_and_pool_slots() {
     for event in [
         Event::Adopt { project: 1, resource: service(), role: ResourceRole::Participating },
         Event::Names { task: 1, project: 1, resources: Box::from([service()]) },
-        Event::Subscribe { task: 1, topic: 7, wake_at: 4, keep_at: 2 },
+        Event::Subscribe { markers: 0, task: 1, topic: 7, wake_at: 4, keep_at: 2 },
         Event::System(SystemEvent::Pool { path: pool(), slots: 1, lost: Box::from([]) }),
     ] {
         for request in run(&mut original, event) {
@@ -489,7 +498,7 @@ fn restored_records_rebuild_adoptions_names_topics_and_pool_slots() {
     assert_eq!(cold.slots(&pool()), Some(1));
     assert_eq!(cold.live_tasks(), 1);
     assert_eq!(
-        run(&mut cold, Event::System(SystemEvent::News { topic: 7, importance: 3, origin: Origin::Other })),
+        run(&mut cold, Event::System(SystemEvent::News { markers: 0, topic: 7, importance: 3, origin: Origin::Other })),
         Box::from([Request::News { topic: 7, subscribers: Box::from([Classed { task: 1, class: Class::Keep }]) }])
     );
 }

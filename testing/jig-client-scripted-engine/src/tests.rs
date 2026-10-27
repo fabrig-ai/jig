@@ -260,6 +260,7 @@ fn revision_refusals_scripts_retention_and_whole_payload_admission() {
             spec: specification(text(b"held work")),
             instructions: Some(DocumentText::complete(text(b""))),
             wake: OwnerWakePolicy {
+                markers: 0,
                 words: WakeRule::Immediate,
                 notices: WakeRule::Never,
                 news: WakeRule::Never,
@@ -381,6 +382,7 @@ fn task() -> Task {
         taken_by: None,
         instructions: Some(DocumentText::complete(text(b"instructions"))),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,
@@ -2229,6 +2231,7 @@ fn task_subscription_capacity_is_priced_separately_from_whole_activation_replace
             addressed: None,
             spec: None,
             wake: Some(OwnerWakePolicy {
+                markers: 0,
                 words: WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::from_nanos(u64::MAX) },
                 notices: WakeRule::Immediate,
                 news: WakeRule::Never,

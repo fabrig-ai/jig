@@ -68,6 +68,7 @@ pub fn phase_owner() -> (w::Chip, c::Chip) {
             attempt: None,
             retry: None,
             wake: c::OwnerWakePolicy {
+                markers: 0,
                 words: c::WakeRule::Never,
                 notices: c::WakeRule::Never,
                 news: c::WakeRule::Never,

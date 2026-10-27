@@ -147,6 +147,10 @@ pub(crate) fn subscribe(
     next.push(subscription).expect("subscription room preflighted");
     row.record.subscriptions = next.into_boxed();
     publish(domain, env, number, out);
+    if let SubscriptionKind::Topic { connector, topic } = subscription.kind {
+        let markers = record(domain, number).expect("subscriber live").wake.markers;
+        out.push(Request::SubscribeTopic { task: number, connector, topic, markers });
+    }
     arm(domain, env, subscription);
     match subscription.kind {
         SubscriptionKind::Task { target, held: true, .. } => {

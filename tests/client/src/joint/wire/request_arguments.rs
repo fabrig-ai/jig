@@ -6,6 +6,7 @@ use jig_domain_people as people;
 #[must_use]
 pub fn wake(value: client::OwnerWakePolicy) -> people::WakePolicy {
     people::WakePolicy {
+        markers: value.markers,
         words: wake_rule(value.words),
         notices: wake_rule(value.notices),
         news: wake_rule(value.news),

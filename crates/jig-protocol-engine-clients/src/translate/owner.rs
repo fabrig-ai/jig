@@ -124,6 +124,7 @@ pub fn wake(value: t::WakePolicy, limits: &w::Limits) -> Result<w::OwnerWakePoli
     w::OwnerWakePolicy::new(
         limits,
         w::OwnerWakePolicyParts {
+            markers: value.markers,
             words: wake_rule(value.words, limits)?,
             notices: wake_rule(value.notices, limits)?,
             news: wake_rule(value.news, limits)?,

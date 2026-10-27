@@ -512,6 +512,7 @@ fn genuine_owner_chip_fixture(number: u64) -> Chip {
         attempt: Some(u64::MAX),
         retry: None,
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Immediate,
             news: WakeRule::Batch { count: u32::MAX, age: Duration::ZERO },

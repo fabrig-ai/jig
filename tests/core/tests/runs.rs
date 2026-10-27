@@ -484,7 +484,7 @@ fn subscribe_topic(world: &mut World, task: u64, number: u64) {
         task,
         subscription: tasks::Subscription {
             number,
-            kind: tasks::SubscriptionKind::Topic { connector: 0, topic: number },
+            kind: tasks::SubscriptionKind::Topic { connector: 1, topic: number },
         },
     })));
     let key = root::Key::Core(core::Key::Tasks(tasks::Key::Live(task)));

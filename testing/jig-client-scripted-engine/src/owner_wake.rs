@@ -21,7 +21,7 @@ impl Payload for ResultsWake {
 }
 impl Payload for OwnerWakePolicy {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
-        let Self { words, notices, news, results, questions, answers, timers } = self;
+        let Self { words, notices, news, results, questions, answers, timers, markers } = self;
         words
             .heap(bounds)?
             .checked_add(notices.heap(bounds)?)?
@@ -29,7 +29,8 @@ impl Payload for OwnerWakePolicy {
             .checked_add(results.heap(bounds)?)?
             .checked_add(questions.heap(bounds)?)?
             .checked_add(answers.heap(bounds)?)?
-            .checked_add(timers.heap(bounds)?)
+            .checked_add(timers.heap(bounds)?)?
+            .checked_add(markers.heap(bounds)?)
     }
 }
 impl Payload for SubscriptionKind {
@@ -85,6 +86,7 @@ mod tests {
             for results in [ResultsWake::Never, ResultsWake::Each, ResultsWake::LastOrFailure] {
                 for switches in 0..8 {
                     let value = OwnerWakePolicy {
+                        markers: 0,
                         words: rule,
                         notices: rule,
                         news: rule,

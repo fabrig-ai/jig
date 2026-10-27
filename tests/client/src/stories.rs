@@ -155,6 +155,7 @@ fn batch_task(number: u64, spec: SpecificationDocument, executor: OwnerExecutor,
         dependencies: list([]),
         resources: list([]),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Never,
             news: WakeRule::Never,
@@ -205,6 +206,7 @@ pub fn task() -> Task {
         taken_by: None,
         instructions: Some(DocumentText::complete(text(b"instructions"))),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Never,
             news: WakeRule::Never,

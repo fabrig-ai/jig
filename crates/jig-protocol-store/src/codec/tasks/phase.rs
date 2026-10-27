@@ -76,10 +76,11 @@ pub fn read_results_wake(
 
 /// Translate `WakePolicy` to its store record.
 pub fn wake(source: &domain::WakePolicy, limits: &wire::Limits) -> Result<wire::WakePolicy, wire::Problem> {
-    let domain::WakePolicy { words, notices, news, results, questions, answers, timers } = source;
+    let domain::WakePolicy { markers, words, notices, news, results, questions, answers, timers } = source;
     wire::WakePolicy::new(
         limits,
         wire::WakePolicyParts {
+            markers: *markers,
             words: wake_rule(words, limits)?,
             notices: wake_rule(notices, limits)?,
             news: wake_rule(news, limits)?,
@@ -92,8 +93,10 @@ pub fn wake(source: &domain::WakePolicy, limits: &wire::Limits) -> Result<wire::
 }
 /// Read `WakePolicy` from its store record.
 pub fn read_wake(source: wire::WakePolicy, limits: &wire::Limits) -> Result<domain::WakePolicy, wire::Problem> {
-    let wire::WakePolicyParts { words, notices, news, results, questions, answers, timers } = source.into_parts();
+    let wire::WakePolicyParts { markers, words, notices, news, results, questions, answers, timers } =
+        source.into_parts();
     Ok(domain::WakePolicy {
+        markers,
         words: read_wake_rule(words, limits)?,
         notices: read_wake_rule(notices, limits)?,
         news: read_wake_rule(news, limits)?,

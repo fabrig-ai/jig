@@ -113,7 +113,7 @@ fn adoption() -> d::Record {
     d::Record::Adoption { project: 1, path: path(), role: d::ResourceRole::Participating }
 }
 fn subscription() -> d::Record {
-    d::Record::Subscription { topic: 1, task: 2, wake_at: 3, keep_at: 4 }
+    d::Record::Subscription { markers: 0, topic: 1, task: 2, wake_at: 3, keep_at: 4 }
 }
 fn pool() -> d::Record {
     d::Record::Pool { path: path(), slots: 1 }

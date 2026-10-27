@@ -172,6 +172,7 @@ pub(crate) fn member(words: &[u8], spend: u64) -> jig_domain_people::Member {
             note_resources: Box::new([]),
         },
         wake: people::WakePolicy {
+            markers: 0,
             words: people::WakeRule::Immediate,
             notices: people::WakeRule::Never,
             news: people::WakeRule::Never,

@@ -45,6 +45,7 @@ pub fn frame_two_projects() -> d::Frame {
 }
 pub fn wake() -> t::WakePolicy {
     t::WakePolicy {
+        markers: 0,
         words: t::WakeRule::Never,
         notices: t::WakeRule::Never,
         news: t::WakeRule::Never,

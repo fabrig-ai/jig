@@ -411,6 +411,7 @@ impl World {
             Request::Taken { .. }
             | Request::Waiting { .. }
             | Request::WriterWaiting { .. }
+            | Request::SubscribeTopic { .. }
             | Request::EndTopic { .. }
             | Request::ResolveUncertain { .. }
             | Request::Sent { .. }
@@ -780,6 +781,7 @@ impl World {
                 | Request::PersonStallDue { .. }
                 | Request::Notify { .. }
                 | Request::Timer { .. }
+                | Request::SubscribeTopic { .. }
                 | Request::EndTopic { .. }
                 | Request::WriterWaiting { .. } => {}
             }
@@ -879,7 +881,8 @@ impl World {
                 | Request::ResolveUncertain { .. }
                 | Request::MovedToNewest { .. }
                 | Request::Released { .. }
-                | Request::Release { .. } => {}
+                | Request::Release { .. }
+                | Request::SubscribeTopic { .. } => {}
                 Request::EndTopic { task, subscription, connector } => {
                     self.ended_topics.push((task, subscription, connector));
                 }

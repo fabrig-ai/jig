@@ -138,6 +138,7 @@ pub(super) fn escalation() -> Escalation {
             spec: specification(text(b"held work")),
             instructions: Some(DocumentText::complete(text(b""))),
             wake: OwnerWakePolicy {
+                markers: 0,
                 words: WakeRule::Immediate,
                 notices: WakeRule::Never,
                 news: WakeRule::Never,

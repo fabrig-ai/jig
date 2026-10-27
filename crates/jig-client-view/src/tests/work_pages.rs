@@ -226,6 +226,7 @@ pub(super) fn recurring_task(number: u64, words: &[u8]) -> ProposedTask {
         dependencies: list([]),
         resources: list([]),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

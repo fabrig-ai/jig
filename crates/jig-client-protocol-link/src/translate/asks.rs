@@ -161,6 +161,7 @@ pub(crate) fn wire_owner_wake_policy(
     w::OwnerWakePolicy::new(
         limits,
         w::OwnerWakePolicyParts {
+            markers: value.markers,
             words: wire_wake_rule(&value.words, limits)?,
             notices: wire_wake_rule(&value.notices, limits)?,
             news: wire_wake_rule(&value.news, limits)?,

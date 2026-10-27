@@ -664,6 +664,13 @@ pub(crate) fn apply_amend(
         task.record.spec = spec;
     }
     if let Some(wake) = amendment.wake {
+        if task.record.wake.markers != wake.markers {
+            for subscription in &task.record.subscriptions {
+                if let crate::SubscriptionKind::Topic { connector, topic } = subscription.kind {
+                    out.push(Request::SubscribeTopic { task: number, connector, topic, markers: wake.markers });
+                }
+            }
+        }
         task.record.wake = wake;
     }
     if let Some(dependencies) = amendment.dependencies {

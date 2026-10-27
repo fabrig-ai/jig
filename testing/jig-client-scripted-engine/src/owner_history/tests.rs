@@ -67,6 +67,7 @@ fn state() -> OwnerAmendmentState {
             cut: false,
         },
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Never,
             notices: WakeRule::Immediate,
             news: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(u64::MAX) },

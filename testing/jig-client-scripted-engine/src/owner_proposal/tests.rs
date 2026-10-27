@@ -37,6 +37,7 @@ fn state() -> OwnerAmendmentState {
         },
         authority: authority(),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

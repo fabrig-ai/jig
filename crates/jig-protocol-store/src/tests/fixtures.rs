@@ -334,6 +334,7 @@ pub fn task_person_proposal() -> jig_domain_tasks::PersonProposal {
 pub fn task_wake() -> jig_domain_tasks::WakePolicy {
     use jig_domain_tasks::{ResultsWake, WakePolicy, WakeRule};
     WakePolicy {
+        markers: u32::MAX,
         words: WakeRule::Batch { count: 3, age: skein_lib::Duration::from_nanos(7) },
         notices: WakeRule::Immediate,
         news: WakeRule::Never,
@@ -471,6 +472,7 @@ pub fn people_amendment() -> people::Amendment {
             inputs: Box::new([8]),
         }),
         wake: Some(people::WakePolicy {
+            markers: u32::MAX,
             words: people::WakeRule::Never,
             notices: people::WakeRule::Immediate,
             news: people::WakeRule::Batch { count: 2, age: skein_lib::Duration::from_nanos(99) },
@@ -498,6 +500,7 @@ pub fn people_member() -> people::Member {
         contract: people::Contract::Report { words: 17 },
         authority: people_authority(),
         wake: people::WakePolicy {
+            markers: u32::MAX,
             words: people::WakeRule::Never,
             notices: people::WakeRule::Never,
             news: people::WakeRule::Never,

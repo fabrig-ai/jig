@@ -63,6 +63,7 @@ pub fn conversation_member(forgettable: bool) -> people::Member {
             note_resources: Box::new([]),
         },
         wake: people::WakePolicy {
+            markers: 0,
             words: people::WakeRule::Immediate,
             notices: people::WakeRule::Immediate,
             news: people::WakeRule::Immediate,

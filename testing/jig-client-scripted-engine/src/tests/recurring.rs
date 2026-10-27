@@ -28,6 +28,7 @@ fn template(number: u64, words: &[u8]) -> ProposedTask {
         dependencies: list(vec![]),
         resources: list(vec![]),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

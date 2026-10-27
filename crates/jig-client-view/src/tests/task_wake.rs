@@ -9,6 +9,7 @@ fn whole_wake_channel_edits_preserve_batched_rules_flags_and_separate_subscripti
         for results in [ResultsWake::Never, ResultsWake::Each, ResultsWake::LastOrFailure] {
             let mut row = task_doc(&[ActKind::Amend]);
             row.wake = OwnerWakePolicy {
+                markers: 0,
                 words: rule,
                 notices: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(u64::MAX) },
                 news: WakeRule::Immediate,
@@ -97,6 +98,7 @@ fn task_overview_renders_numbered_standing_interests_independently_of_activation
         let mut row = task_doc(&[]);
         row.spec.specification.words = DocumentText::complete(text(b""));
         row.wake = OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Batch { count: u32::MAX, age: Duration::from_nanos(u64::MAX) },
             notices: WakeRule::Never,
             news: WakeRule::Immediate,

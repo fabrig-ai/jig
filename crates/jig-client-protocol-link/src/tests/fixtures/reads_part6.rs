@@ -33,6 +33,7 @@ pub fn read_value_document_specification() -> c::DocumentSpecification {
 
 pub fn read_value_owner_wake_policy() -> c::OwnerWakePolicy {
     c::OwnerWakePolicy {
+        markers: u32::MAX,
         words: read_value_wake_rule(),
         notices: read_value_wake_rule(),
         news: read_value_wake_rule(),

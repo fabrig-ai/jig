@@ -75,6 +75,7 @@ pub(super) fn full_template(number: u64) -> ProposedTask {
     task.dependencies = list([u64::MAX, 9]);
     task.resources = list([resource.clone(), resource]);
     task.wake = OwnerWakePolicy {
+        markers: 0,
         words: WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::from_nanos(u64::MAX) },
         notices: WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::from_nanos(u64::MAX) },
         news: WakeRule::Batch { count: u32::MAX, age: skein_lib::Duration::from_nanos(u64::MAX) },

@@ -808,6 +808,7 @@ fn escalation_doc(reason: HoldReason, acts: &[ActKind]) -> Escalation {
             spec: specification(text(b"held specification")),
             instructions: Some(DocumentText::complete(text(b"held instructions"))),
             wake: OwnerWakePolicy {
+                markers: 0,
                 words: WakeRule::Immediate,
                 notices: WakeRule::Never,
                 news: WakeRule::Never,
@@ -868,6 +869,7 @@ pub(super) fn task_doc(acts: &[ActKind]) -> Task {
         taken_by: None,
         instructions: Some(DocumentText::complete(text(b"whole task instructions"))),
         wake: OwnerWakePolicy {
+            markers: 0,
             words: WakeRule::Immediate,
             notices: WakeRule::Never,
             news: WakeRule::Never,

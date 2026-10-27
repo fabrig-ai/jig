@@ -224,6 +224,7 @@ fn shrinking_pools_news_and_values_cross_the_root_once() {
             waiting.push(task);
         }
         world.event(Event::Subscribe {
+            markers: 0,
             task,
             topic: kind(21, 1),
             wake_at: if task == 3 { 7 } else { 5 },
@@ -238,20 +239,34 @@ fn shrinking_pools_news_and_values_cross_the_root_once() {
     ));
     assert_eq!(held, [1, 2], "shrinking the pool does not retract existing holds");
     assert_eq!(waiting, [3], "a waiting task cannot take a vanished slot");
-    let news =
-        world.event(Event::System(SystemEvent::News { topic: kind(21, 1), importance: 5, origin: Origin::Other }));
+    let news = world.event(Event::System(SystemEvent::News {
+        markers: 0,
+        topic: kind(21, 1),
+        importance: 5,
+        origin: Origin::Other,
+    }));
     let Some(Request::News { subscribers, .. }) = news.first() else { panic!("news reaches subscribers") };
     assert_eq!(subscribers.len(), 3);
     assert_eq!(subscribers.iter().filter(|subscriber| subscriber.class == Class::Wake).count(), 2);
     assert_eq!(subscribers.iter().filter(|subscriber| subscriber.class == Class::Keep).count(), 1);
     assert!(
         world
-            .event(Event::System(SystemEvent::News { topic: kind(21, 1), importance: 1, origin: Origin::Other }))
+            .event(Event::System(SystemEvent::News {
+                markers: 0,
+                topic: kind(21, 1),
+                importance: 1,
+                origin: Origin::Other
+            }))
             .is_empty()
     );
     assert!(
         world
-            .event(Event::System(SystemEvent::News { topic: kind(21, 1), importance: 5, origin: Origin::Own }))
+            .event(Event::System(SystemEvent::News {
+                markers: 0,
+                topic: kind(21, 1),
+                importance: 5,
+                origin: Origin::Own
+            }))
             .is_empty()
     );
     let token = Token::new(9);

@@ -20,7 +20,7 @@ pub struct Domain {
     pub(crate) config: Config,
     pub(crate) tasks: Map<u64, Record>,
     pub(crate) adoptions: Map<(u32, Path), ResourceRole>,
-    subscriptions: Map<(u16, u64), (u16, u16)>,
+    subscriptions: Map<(u16, u64), (u16, u16, u32)>,
     pools: Map<Path, u32>,
     pub(crate) facts: Map<Path, crate::Fact>,
     pub(crate) judges: Map<Token, crate::requirements::Question>,
@@ -241,8 +241,8 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
                 None => out.push(Request::TopicRefused { token }),
             }
         }
-        Event::Subscribe { task, topic, wake_at, keep_at } => {
-            subscribe(domain, env, task, topic, wake_at, keep_at, out);
+        Event::Subscribe { task, topic, wake_at, keep_at, markers } => {
+            subscribe(domain, env, task, topic, wake_at, keep_at, markers, out);
         }
         Event::Unsubscribe { task, topic } => unsubscribe(domain, task, topic, out),
         Event::Describe { token, effect } => crate::outbox::describe(domain, env, token, effect, out),
@@ -457,6 +457,10 @@ fn adopt(
     out.push(Request::Adopted { project, resource, result });
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "topic identity, thresholds and marker selection accompany the step environment"
+)]
 fn subscribe(
     domain: &mut Domain,
     env: &Env<Limits>,
@@ -464,6 +468,7 @@ fn subscribe(
     topic: u16,
     wake_at: u16,
     keep_at: u16,
+    markers: u32,
     out: &mut Queue<Request>,
 ) {
     if !topic_known(&domain.config, topic) || keep_at > wake_at {
@@ -483,9 +488,9 @@ fn subscribe(
             return;
         }
     }
-    let previous = domain.subscriptions.insert(key, (wake_at, keep_at));
+    let previous = domain.subscriptions.insert(key, (wake_at, keep_at, markers));
     assert!(previous.is_ok(), "subscription capacity checked before mutation");
-    out.push(Request::Save { record: Record::Subscription { topic, task, wake_at, keep_at } });
+    out.push(Request::Save { record: Record::Subscription { topic, task, wake_at, keep_at, markers } });
 }
 
 fn unsubscribe(domain: &mut Domain, task: u64, topic: u16, out: &mut Queue<Request>) {
@@ -514,8 +519,11 @@ fn restore(domain: &mut Domain, record: Record, out: &mut Queue<Request>) {
             domain.adoptions.insert((project, path.clone()), role).expect("restored adoption fits");
             report_adoption(domain, project, &path, out);
         }
-        Record::Subscription { topic, task, wake_at, keep_at } => {
-            domain.subscriptions.insert((topic, task), (wake_at, keep_at)).expect("restored subscription fits");
+        Record::Subscription { topic, task, wake_at, keep_at, markers } => {
+            domain
+                .subscriptions
+                .insert((topic, task), (wake_at, keep_at, markers))
+                .expect("restored subscription fits");
         }
         Record::Pool { path, slots } => {
             domain.pools.insert(path, slots).expect("restored pool fits");
@@ -559,16 +567,16 @@ fn system_event(domain: &mut Domain, env: &Env<Limits>, event: SystemEvent, out:
                 out.push(Request::Drift { pool: path, tasks: lost });
             }
         }
-        SystemEvent::News { topic, importance, origin } => match origin {
+        SystemEvent::News { topic, importance, origin, markers } => match origin {
             Origin::Own => {}
             Origin::Other => {
                 if !topic_known(&domain.config, topic) {
                     return;
                 }
                 let mut subscribers = List::with_capacity(env.limits.subscribers_per_topic);
-                for ((subscribed_topic, task), (wake_at, keep_at)) in &domain.subscriptions {
+                for ((subscribed_topic, task), (wake_at, keep_at, selected)) in &domain.subscriptions {
                     if *subscribed_topic == topic {
-                        let class = if importance >= *wake_at {
+                        let class = if markers & selected != 0 || importance >= *wake_at {
                             Some(Class::Wake)
                         } else if importance >= *keep_at {
                             Some(Class::Keep)
