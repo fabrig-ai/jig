@@ -64,6 +64,7 @@ pub(super) fn ask(
             | people::Ask::MakeProject { .. }
             | people::Ask::ChangeSettings { .. }
             | people::Ask::MoveToNewest { .. }
+            | people::Ask::Restore { .. }
             | people::Ask::ChangePolicy { .. }
             | people::Ask::AccountSignIn { .. }
             | people::Ask::AccountSignOut { .. }

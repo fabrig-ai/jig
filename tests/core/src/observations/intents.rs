@@ -79,7 +79,7 @@ impl Intents {
         ask: &people::Ask,
     ) -> Vec<r::Observed> {
         let mut observed = named::party(ask);
-        if matches!(ask, people::Ask::Propose { .. }) {
+        if matches!(ask, people::Ask::Propose { .. } | people::Ask::Restore { .. }) {
             observed.extend(self.party_proposal(reply, person, key));
         }
         observed
@@ -138,7 +138,10 @@ impl Intents {
             let observed = self.party_answer(
                 person,
                 key,
-                matches!(reply, people::Reply::Outcome(people::Outcome::Proposed { .. })),
+                matches!(
+                    reply,
+                    people::Reply::Outcome(people::Outcome::Proposed { .. } | people::Outcome::Restored { .. })
+                ),
             );
             if matches!(reply, people::Reply::Again(_)) {
                 self.parties.remove(&(person, key));
@@ -160,9 +163,11 @@ impl Intents {
 
     pub fn record(&mut self, record: &core::Record) -> Vec<r::Observed> {
         match record {
-            core::Record::People(people::Stored::Answer { key, outcome, .. }) => {
-                self.party_answer(key.person, key.key, matches!(outcome, people::Outcome::Proposed { .. }))
-            }
+            core::Record::People(people::Stored::Answer { key, outcome, .. }) => self.party_answer(
+                key.person,
+                key.key,
+                matches!(outcome, people::Outcome::Proposed { .. } | people::Outcome::Restored { .. }),
+            ),
             core::Record::Core(core::CoreRecord::Call(row)) => {
                 if let Some(waiting) = self.calls.get_mut(&row.key)
                     && std::mem::take(waiting)

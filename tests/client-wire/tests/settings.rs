@@ -723,3 +723,34 @@ fn replaced_values_and_sizes_round_trip_their_wire_bytes() {
         assert_eq!(out.finish().as_ref(), bytes);
     }
 }
+
+#[test]
+fn restore_records_round_trip_with_omitted_application_settings() {
+    let limits = &w::CEILINGS;
+    let ask = w::Ask::Restore(
+        w::Restore::new(limits, w::RestoreParts { revision: 7, reason: b"earlier choices".as_slice().into() })
+            .expect("restore"),
+    );
+    let mut out = Writer::new(usize::try_from(ask.measure()).expect("measure"));
+    ask.encode(&mut out).expect("measured ask");
+    assert_eq!(w::Ask::decode(limits, &mut Reader::new(&out.finish())), Ok(ask));
+    let mut left_out = skein_lib::List::with_capacity(1);
+    left_out
+        .push(
+            w::ApplicationSetting::new(limits, w::ApplicationSettingParts { kind: 8, scope: 9, number: 10 })
+                .expect("identity"),
+        )
+        .expect("one omission");
+    let outcome = w::Outcome::Restored(
+        w::OutcomeRestored::new(limits, w::OutcomeRestoredParts { proposal: 11, to: 7, left_out }).expect("restored"),
+    );
+    let mut out = Writer::new(usize::try_from(outcome.measure()).expect("measure"));
+    outcome.encode(&mut out).expect("measured outcome");
+    assert_eq!(w::Outcome::decode(limits, &mut Reader::new(&out.finish())), Ok(outcome));
+    let refusal = w::Refusal::Forgotten(
+        w::RefusalForgotten::new(limits, w::RefusalForgottenParts { oldest: 3 }).expect("forgotten"),
+    );
+    let mut out = Writer::new(usize::try_from(refusal.measure()).expect("measure"));
+    refusal.encode(&mut out).expect("measured refusal");
+    assert_eq!(w::Refusal::decode(limits, &mut Reader::new(&out.finish())), Ok(refusal));
+}

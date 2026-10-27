@@ -9,7 +9,8 @@ pub(crate) fn valid(ask: &Ask) -> bool {
         Ask::MakeService { name, .. } => text(name),
         Ask::Propose { action: crate::Action::Settings { .. }, reason, .. }
         | Ask::Move { reason, .. }
-        | Ask::Cancel { reason, .. } => text(reason),
+        | Ask::Cancel { reason, .. }
+        | Ask::Restore { reason, .. } => text(reason),
         Ask::DecideEscalation { decision, .. } => match decision {
             EscalationDecision::Reject { reason } => text(reason),
             EscalationDecision::Release | EscalationDecision::Pass => true,

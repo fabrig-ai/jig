@@ -63,6 +63,7 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
     wire.taken_by_name_some = client.text;
     wire.party_name = client.text;
     wire.decision_rejected_reason = client.text;
+    wire.restore_reason = client.text;
     wire.decision_left_held_reason = client.text;
     wire.attempt_failure_reason = client.text;
     wire.owner_part_key_path_value = client.segments;

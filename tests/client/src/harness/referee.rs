@@ -549,6 +549,7 @@ fn decisions(ask: &Ask) -> Vec<(ObjectKey, ActKind)> {
         | Ask::Rename { .. }
         | Ask::ChangeSettings(_)
         | Ask::MoveToNewest(_)
+        | Ask::Restore(_)
         | Ask::MakeProject { .. }
         | Ask::SetPool { .. } => Vec::new(),
     }

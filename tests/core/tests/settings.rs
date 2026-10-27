@@ -1099,6 +1099,10 @@ fn a_held_record_below_the_history_cutoff_is_read_then_erased_without_a_copy() {
         panic!("held page below cutoff")
     };
     assert_eq!(page.rows.iter().map(|row| row.head.number).collect::<Vec<_>>(), [1]);
+    assert_eq!(
+        ask(&mut world, signed, 105, people::Ask::Restore { revision: 1, reason: Box::new([]) }),
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Forgotten { oldest: 3 }))
+    );
     let before = world.commits.len();
     fixtures::finish_chat(&mut world, 0, b"Done");
     assert!(!world.store.rows.contains_key(&key(settings::Key::Held(1))));

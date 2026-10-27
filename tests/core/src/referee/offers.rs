@@ -282,6 +282,7 @@ fn request(ask: &people::Ask) -> Option<(Act, Subject)> {
         people::Ask::SetPool { project, .. } => (Act::SetPool, Subject::Project { project: *project }),
         people::Ask::ChangeSettings { .. }
         | people::Ask::MoveToNewest { .. }
+        | people::Ask::Restore { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::Compound { .. }
         | people::Ask::Propose { .. }

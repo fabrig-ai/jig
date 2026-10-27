@@ -322,6 +322,7 @@ fn core_held(
                 | jig_domain_people::Outcome::ProjectMade { .. }
                 | jig_domain_people::Outcome::SettingsChanged { .. }
                 | jig_domain_people::Outcome::MovedToNewest { .. }
+                | jig_domain_people::Outcome::Restored { .. }
                 | jig_domain_people::Outcome::EscalationDecided { .. }
                 | jig_domain_people::Outcome::AccountSignInStarted { .. }
                 | jig_domain_people::Outcome::AccountSignedOut { .. }

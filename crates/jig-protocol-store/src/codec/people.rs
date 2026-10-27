@@ -68,6 +68,8 @@ pub fn derived_limits(domain: &core::Limits) -> Option<wire::Limits> {
         ask_create_batch: people.batch,
         action_batch_members: people.batch,
         ask_propose_reason: people.words,
+        ask_restore_reason: people.words,
+        outcome_restored_left_out: 0,
         member_words: people.words,
         member_parameters: 0,
         member_dependencies: 0,

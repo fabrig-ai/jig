@@ -117,6 +117,7 @@ pub enum AnswerOn {
 pub enum Ask {
     ChangeSettings(super::ChangeSettings),
     MoveToNewest(super::MoveToNewest),
+    Restore(super::Restore),
     /// Admit and create a batch together.
     Create {
         project: u32,
@@ -279,6 +280,7 @@ pub enum AccountHolder {
 pub enum Outcome {
     SettingsChanged(super::OutcomeSettingsChanged),
     MovedToNewest(super::OutcomeMovedToNewest),
+    Restored(super::OutcomeRestored),
     /// Whole committed owner facts, without inferred names or explanations.
     Owner(super::OwnerOutcome),
     /// A named thing was made.

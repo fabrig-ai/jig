@@ -121,6 +121,7 @@ pub(crate) struct Pending {
 enum Destination {
     Read(ReplyTo),
     Watch(Token),
+    Restore,
     Done,
 }
 
@@ -128,7 +129,9 @@ impl Pending {
     fn take_reply(&mut self) -> ReplyTo {
         match core::mem::replace(&mut self.destination, Destination::Done) {
             Destination::Read(reply) => reply,
-            Destination::Watch(_) | Destination::Done => unreachable!("a pending read owns its reply"),
+            Destination::Restore | Destination::Watch(_) | Destination::Done => {
+                unreachable!("a pending read owns its reply")
+            }
         }
     }
 }
@@ -521,13 +524,27 @@ fn start_jig(core: &mut Core, env: &Env<Limits>, reply: ReplyTo, sign_in: u64, p
     Requests::Out(out)
 }
 
-pub(crate) fn loaded(core: &mut Core, env: &Env<Limits>, load: Token, result: Loaded) -> Requests {
+pub(crate) fn loaded(
+    core: &mut Core,
+    env: &Env<Limits>,
+    work: &mut Queue<crate::Event>,
+    load: Token,
+    result: Loaded,
+) -> Requests {
     let name = Id::<Pending>::from_token(load);
     let Some(pending) = core.reads.get(name) else {
         return Requests::Out(Queue::with_capacity(0));
     };
     match &pending.destination {
         Destination::Watch(watcher) => return watch_loaded(core, env, name, *watcher, result),
+        Destination::Restore => {
+            let range = pending.range.clone();
+            let result = crate::routing::restore::loaded(core, env, work, range, result);
+            if core.restoring.is_none() || core.settings_offering.is_some() {
+                core.reads.retire(name);
+            }
+            return result;
+        }
         Destination::Read(_) => {}
         Destination::Done => return Requests::Out(Queue::with_capacity(0)),
     }
@@ -670,4 +687,17 @@ pub(super) fn load_settings(
     out.push(Request::Held(Box::new(Held::ReadLoad { load, range: Box::new(emitted) })));
     out.push(Request::Decided);
     Requests::Out(out)
+}
+
+/// A keyed restore shares the bounded load slab and owns its continuation.
+pub(crate) fn load_restore(core: &mut Core, range: Range) -> Option<Request> {
+    let emitted = range.clone();
+    if let Some(load) = core.restoring.as_ref().expect("restore flight").load {
+        core.reads.get_mut(Id::<Pending>::from_token(load)).expect("restore owns its slot").range = range;
+        return Some(Request::Held(Box::new(Held::ReadLoad { load, range: Box::new(emitted) })));
+    }
+    let pending = Pending { destination: Destination::Restore, sign_in: 0, party: range.party, range, tasks: None };
+    let load = core.reads.insert(pending).ok()?.token();
+    core.restoring.as_mut().expect("restore flight").load = Some(load);
+    Some(Request::Held(Box::new(Held::ReadLoad { load, range: Box::new(emitted) })))
 }

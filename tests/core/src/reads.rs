@@ -5,7 +5,7 @@ use crate::{Store, effects::World};
 use jig_domain_core::{self as core, reads};
 use jig_test_domain as root;
 use skein_lib::{ReplyTo, Token};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Independent prerequisite for an admitted read's one answer.
 #[derive(Debug)]
@@ -37,6 +37,7 @@ pub struct Parties {
     admissions: VecDeque<u64>,
     queued: VecDeque<u64>,
     flights: BTreeMap<u64, u64>,
+    keyed_loads: BTreeSet<u64>,
     pub loads: Vec<(Token, reads::Range)>,
     pub hold_loads: bool,
     pub receipts: Vec<(u64, u64, reads::Answer)>,
@@ -53,6 +54,7 @@ impl Parties {
             admissions: VecDeque::new(),
             queued: VecDeque::new(),
             flights: BTreeMap::new(),
+            keyed_loads: BTreeSet::new(),
             loads: Vec::new(),
             hold_loads: false,
             receipts: Vec::new(),
@@ -68,8 +70,11 @@ impl Parties {
                 self.admissions.push_back(reply);
             }
             root::Event::Core(core::Event::ReadLoaded { load, .. }) => {
-                let reply = self.flights.remove(&load.raw()).expect("one terminal for the observed load");
-                self.awaiting.get_mut(&reply).expect("admitted read").0 = self.made;
+                if let Some(reply) = self.flights.remove(&load.raw()) {
+                    self.awaiting.get_mut(&reply).expect("admitted read").0 = self.made;
+                } else {
+                    assert!(self.keyed_loads.remove(&load.raw()), "one terminal for a keyed history load");
+                }
             }
             root::Event::Core(_)
             | root::Event::Link { .. }
@@ -129,7 +134,11 @@ impl Parties {
     }
 
     pub fn load(&mut self, load: Token, range: reads::Range, store: &Store) -> Vec<jig_test_store::StoreOut> {
-        let reply = self.admissions.pop_front().expect("one owner load for an admitted read");
+        let Some(reply) = self.admissions.pop_front() else {
+            assert!(self.keyed_loads.insert(load.raw()), "one keyed history load in flight");
+            self.loads.push((load, range));
+            return if self.hold_loads { Vec::new() } else { self.complete() };
+        };
         self.awaiting
             .get(&reply)
             .expect("admitted read")
@@ -164,6 +173,7 @@ impl Parties {
         self.admissions.clear();
         self.queued.clear();
         self.flights.clear();
+        self.keyed_loads.clear();
         self.loads.clear();
         self.made = durable;
     }

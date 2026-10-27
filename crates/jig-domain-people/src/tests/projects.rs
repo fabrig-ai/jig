@@ -136,3 +136,27 @@ fn an_owners_move_to_newest_is_routed_and_its_answer_replayed() {
         Reply::Refused(Refusal::KeyConflict)
     );
 }
+
+#[test]
+fn a_restore_is_a_keyed_proposal_admitted_with_any_project_role() {
+    let mut test = Test::new(LIMITS);
+    test.signin(PARTY, SIGN_IN, identity(0, PARTY));
+    let ask = Ask::Restore { revision: 7, reason: b"earlier".as_slice().into() };
+    assert_eq!(capacity::action(&ask, PARTY), CapacityAction::Create);
+    assert_eq!(
+        reply(&test.request(SIGN_IN, 1, ask.clone())),
+        Reply::Outcome(Outcome::Refused(Refusal::Role { held: None }))
+    );
+    test.send(Event::Roles { project: 1, holdings: Box::new([Holding { person: PARTY, role: Role::Observer }]) });
+    let rows = test.request(SIGN_IN, 2, ask.clone());
+    let outcome = Outcome::Restored { proposal: 11, to: 7, left_out: Box::new([]) };
+    assert_eq!(
+        reply(&test.send(Event::Decided { request: route(&rows), outcome: outcome.clone() })),
+        Reply::Outcome(outcome.clone())
+    );
+    assert_eq!(reply(&test.request(SIGN_IN, 2, ask)), Reply::Outcome(outcome));
+    assert_eq!(
+        reply(&test.request(SIGN_IN, 2, Ask::Restore { revision: 8, reason: Box::new([]) })),
+        Reply::Refused(Refusal::KeyConflict)
+    );
+}

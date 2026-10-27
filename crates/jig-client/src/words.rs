@@ -12,7 +12,7 @@ pub use decision::DecisionWord;
 use skein_lib::List;
 use skein_ui::phrases::{HoleKind, HoleShape, Language, PhraseId, PhraseShape};
 /// Phrase count, for a caller composing a bounded phrasebook.
-pub const PHRASES: u32 = 117;
+pub const PHRASES: u32 = 118;
 /// Owner of jig's public enum vocabulary.
 pub const OWNER: skein_ui::Owner = skein_ui::Owner { number: 65_537 };
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +51,7 @@ pub enum RefusalWord {
     SignInRedirectAddress,
     SignInRedirectState,
     SignInRedirectTooMany,
+    Forgotten,
     Stale,
     Full,
     Circle,
@@ -136,6 +137,7 @@ impl Word {
     #[must_use]
     pub fn refusal(value: &Refusal) -> Self {
         Self::Refusal(match value {
+            Refusal::Forgotten(_) => RefusalWord::Forgotten,
             Refusal::Stale(_) => RefusalWord::Stale,
             Refusal::Full(_) => RefusalWord::Full,
             Refusal::Circle { .. } => RefusalWord::Circle,
@@ -217,7 +219,8 @@ impl Word {
     }
 }
 /// All public words, for composing phrasebook capacities without allocation.
-pub const ALL: [Word; 117] = [
+pub const ALL: [Word; 118] = [
+    Word::Refusal(RefusalWord::Forgotten),
     Word::Refusal(RefusalWord::Stale),
     Word::Refusal(RefusalWord::Full),
     Word::Hold(HoldWord::Exceeded(Bound::Reasoning)),
