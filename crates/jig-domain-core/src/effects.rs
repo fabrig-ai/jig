@@ -874,7 +874,9 @@ fn charge(core: &mut Core, work: &mut Queue<Event>, origin: &EffectOrigin, price
         let funder = match origin {
             EffectOrigin::Projection { .. } => return,
             EffectOrigin::Call { key, .. } => tasks::Funder::Task(key.task),
-            EffectOrigin::Procedure { task, .. } => tasks::Funder::Task(*task),
+            EffectOrigin::Procedure { task, .. } => {
+                core.procedure_effect_funder(*task).unwrap_or(tasks::Funder::Task(*task))
+            }
             EffectOrigin::Accept { proposal, by, .. } => match *by {
                 tasks::Party::Task(task) => tasks::Funder::Task(task),
                 tasks::Party::Person(person) => {
