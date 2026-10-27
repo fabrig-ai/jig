@@ -10,6 +10,10 @@ fn finish() -> Turn {
 fn story(turns: Vec<Turn>) -> Story {
     Story { turns, ..Story::default() }
 }
+fn transcript(turn: &jig_domain_core::TurnRecord) -> smith_transcript::Turn {
+    smith_transcript::Turn::decode(&smith_transcript::CEILINGS, &mut skein_lib::Reader::new(&turn.transcript))
+        .expect("committed transcript")
+}
 fn finished(run: &Run) {
     assert!(
         run.terminals.iter().any(|answer| matches!(
@@ -20,6 +24,14 @@ fn finished(run: &Run) {
         )),
         "{run:?}"
     );
+}
+fn same_source(run: &Run) {
+    // The initial activation and the activation after parking.
+    const STARTS: u32 = 2;
+    assert_eq!(run.starts, STARTS);
+    assert_eq!(run.grants.len(), STARTS as usize);
+    assert_eq!(&run.grants[0].1, &run.grants[1].1);
+    assert_eq!((&run.grants[0].2, &run.grants[0].3), (&run.grants[1].2, &run.grants[1].3));
 }
 #[test]
 fn a_program_run_answers_through_claude() {
@@ -91,16 +103,75 @@ fn a_waiting_program_run_resumes_on_its_source() {
         ]),
     );
     assert!(run.terminals.iter().any(|answer| answer.end == jig_domain_tasks::End::Parked), "{run:?}");
-    assert_eq!(run.starts, 2);
-    assert_eq!(run.grants.len(), 2);
-    assert_eq!(&run.grants[0].1, &run.grants[1].1);
-    assert_eq!((&run.grants[0].2, &run.grants[0].3), (&run.grants[1].2, &run.grants[1].3));
+    same_source(&run);
     assert!(
         run.observations.iter().any(|row| row.arguments.iter().any(|arg| arg == "--resume")),
         "the committed conversation resumes"
     );
     assert!(run.received.iter().any(|line| line.to_string().contains("After waiting")));
     finished(&run);
+}
+#[test]
+fn an_open_program_run_replies_parks_and_resumes() {
+    const REPLY: &str = "Hello again";
+    let run = program_runs::run(
+        Case::Open,
+        &story(vec![Turn { steps: vec![Step::Text(REPLY.into())], end: End::default() }]),
+    );
+    same_source(&run);
+    assert_eq!(run.grants, vec![(1, 1, 2, b"alice".to_vec()), (2, 1, 2, b"alice".to_vec())]);
+    assert_eq!(
+        run.terminals.iter().map(|answer| (answer.attempt, &answer.end)).collect::<Vec<_>>(),
+        vec![(1, &jig_domain_tasks::End::Parked), (2, &jig_domain_tasks::End::Parked)],
+        "{run:?}"
+    );
+    assert_eq!(run.sent_after_park, Some(1), "the person's next message follows the first durable park");
+    assert_eq!(run.messages, vec![(1, 1, b"Hello".to_vec()), (2, 2, b"After waiting".to_vec())]);
+    assert_eq!(
+        run.turns.iter().map(|turn| (turn.attempt, turn.turn, turn.read)).collect::<Vec<_>>(),
+        vec![(1, 1, Some(1)), (2, 1, Some(2))]
+    );
+    for turn in &run.turns {
+        let transcript = transcript(turn);
+        assert!(
+            transcript.messages().iter().any(|message| {
+                *message.role() == smith_transcript::Role::Assistant
+                    && message.blocks().iter().any(
+                        |block| matches!(block, smith_transcript::Block::Text(text) if text.text() == REPLY.as_bytes()),
+                    )
+            }),
+            "each activation commits its text reply"
+        );
+    }
+    let task = run.task.as_ref().expect("durable Open task");
+    assert_eq!(task.flags.ended_by, jig_domain_tasks::EndedBy::Requester);
+    assert_eq!(task.last_message, 2);
+    assert!(task.inbox.is_empty(), "both committed fences take their messages");
+    assert!(!run.run_waits.is_empty(), "the client observed the task's admission");
+    assert!(!run.run_waits.iter().any(|wait| matches!(
+        wait,
+        Some(jig_client::contract::TaskRunWait::Refused(jig_client::contract::TaskWaitRefused::Program(_)))
+    )));
+
+    let invocations: Vec<_> = run
+        .observations
+        .iter()
+        .filter(|row| row.arguments.first().is_some_and(|arg| arg == "-p"))
+        .map(|row| &row.arguments)
+        .collect();
+    let [first, second] = invocations.as_slice() else { panic!("two program processes: {run:?}") };
+    let argument = |args: &[String], flag: &str| {
+        args.windows(2).find(|pair| pair[0] == flag).map(|pair| pair[1].clone()).expect("program session")
+    };
+    let session = argument(first, "--session-id");
+    assert_eq!(argument(second, "--resume"), session);
+    assert!(!first.iter().any(|arg| arg == "--resume"));
+    assert!(!second.iter().any(|arg| arg == "--session-id"));
+    assert!(invocations.iter().all(|args| !args.iter().any(|arg| arg == "--json-schema")));
+    let [first_message, second_message] = run.received.as_slice() else { panic!("one user message per process") };
+    assert_eq!(first_message["type"], "user");
+    assert_eq!(second_message["type"], "user");
+    assert!(second_message["message"]["content"].to_string().contains("After waiting"));
 }
 #[test]
 fn a_granted_built_in_call_asks_smith_s_policy() {
@@ -121,9 +192,7 @@ fn a_granted_built_in_call_asks_smith_s_policy() {
     );
     let mut told = false;
     for turn in &run.turns {
-        let transcript =
-            smith_transcript::Turn::decode(&smith_transcript::CEILINGS, &mut skein_lib::Reader::new(&turn.transcript))
-                .expect("committed transcript");
+        let transcript = transcript(turn);
         for message in transcript.messages().as_slice() {
             told |= message
                 .blocks()
