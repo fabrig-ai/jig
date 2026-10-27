@@ -778,7 +778,7 @@ fn a_project_stop_covers_only_its_project() {
     assert!(!w.stops.contains(&(9, 9)));
     let mut child = task(10, &[]);
     child.project = 2;
-    child.funder = tasks::Funder::Task(9);
+    child.funder = tasks::Funder::Period { project: 2, period: 0 };
     assert_eq!(w.make(Party::Task(9), vec![child]), Reply::Made(vec![10]));
     due(&w, 10);
 }
