@@ -127,3 +127,19 @@ fn placed_hold_documents_preserve_the_smallest_and_full_owner_facts() {
         ));
     }
 }
+
+#[test]
+fn a_lift_capacity_diagnostic_keeps_the_hold_identity() {
+    let value = p::CapacityRefusal {
+        key: p::RequestKey { person: u64::MAX, key: [255; 16] },
+        project: None,
+        action: p::CapacityAction::Lift { hold: u64::MAX },
+        at: Wall::EPOCH,
+        cause: p::CapacityCause::Requests { limit: u32::MAX },
+    };
+    let record =
+        jig_protocol_engine_clients::translate::deployment::person_refusal(&value, &w::CEILINGS).expect("diagnostic");
+    let w::OwnerPersonCapacityAction::Lift(action) = record.action() else { panic!("lift action") };
+    assert_eq!(action.hold(), u64::MAX);
+    assert_eq!(record.project(), &None);
+}

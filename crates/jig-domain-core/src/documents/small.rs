@@ -45,7 +45,9 @@ pub(super) fn chip_with_core(
     row: &tasks::TaskRecord,
 ) -> Result<Chip, Missing> {
     let mut chip = chip_from_row(limits, row)?;
-    chip.details.hold = super::task_tree::hold_for(core, limits, party, row)?;
+    if let Some(hold) = &mut chip.details.hold {
+        hold.placed = super::task_tree::placed(core, limits, party, row.number)?;
+    }
     super::chip_phase::observe(core, limits, row, &mut chip.details)?;
     Ok(chip)
 }

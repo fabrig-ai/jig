@@ -40,9 +40,10 @@ fn both_task_hold_forms_keep_every_placed_fact_and_their_independent_revisions()
         let mut owner = jig_client_test_records::hold_record().into_parts();
         owner.placed = Some(placed.clone());
         let owner = w::OwnerChipHold::new(&w::CEILINGS, owner).unwrap();
-        let document =
-            c::TaskHold::Document(Box::new(crate::translate::documents::hold_fields(&document, &limits).unwrap()));
-        let owner = c::TaskHold::Owner(Box::new(crate::translate::facts::owner_chip_hold(&owner, &limits).unwrap()));
+        let document = c::TaskHold::Document(Box::new(translate::documents::hold_fields(&document, &limits).unwrap()));
+        let owner =
+            w::TaskHold::Owner(w::TaskHoldOwner::new(&w::CEILINGS, w::TaskHoldOwnerParts { value: owner }).unwrap());
+        let owner = translate::documents::task_hold_fields(&owner, &limits).unwrap();
         for hold in [document, owner] {
             let value = hold.placed().expect("placed accessor");
             assert_eq!(value.number, number);

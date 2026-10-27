@@ -274,14 +274,13 @@ pub(crate) fn executor(value: &w::Executor, _limits: &Limits) -> c::Executor {
     }
 }
 
-#[expect(clippy::manual_map, reason = "step code matches optional fields without closures")]
 pub(crate) fn hold_owner(value: &w::HoldOwner) -> c::HoldOwner {
     match value {
         w::HoldOwner::Party(row) => c::HoldOwner::Party { person: row.person() },
         w::HoldOwner::Task(row) => c::HoldOwner::Task { task: row.task() },
     }
 }
-pub(crate) fn placed(value: &Option<w::PlacedLine>, limits: &Limits) -> Result<Option<c::PlacedHold>, w::Problem> {
+pub(crate) fn placed(value: Option<&w::PlacedLine>, limits: &Limits) -> Result<Option<c::PlacedHold>, w::Problem> {
     let Some(value) = value else { return Ok(None) };
     if value.reason().len() > usize::try_from(limits.client.text).expect("text bound fits") {
         return Err(super::too_large());
@@ -304,6 +303,7 @@ pub(crate) fn placed(value: &Option<w::PlacedLine>, limits: &Limits) -> Result<O
         may_lift: value.may_lift(),
     }))
 }
+#[expect(clippy::manual_map, reason = "step code matches optional fields without closures")]
 pub(crate) fn lacking(value: &w::Lacking, limits: &Limits) -> c::Lacking {
     match value {
         w::Lacking::Approver => c::Lacking::Approver,

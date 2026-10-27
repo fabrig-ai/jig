@@ -139,7 +139,8 @@ fn details(b: &mut Builder, value: &OwnerOutcome, words: &Words) {
     match value {
         OwnerOutcome::AccountKeyKept { .. }
         | OwnerOutcome::AccountChanged
-        | OwnerOutcome::AccountSignInStarted { .. } => {}
+        | OwnerOutcome::AccountSignInStarted { .. }
+        | OwnerOutcome::Lifted { .. } => {}
         OwnerOutcome::AccountFinishing { source } => number(b, words, P::SourceNumber, u64::from(*source)),
         OwnerOutcome::AccountMovedIn { account, .. } => number(b, words, P::AccountNumber, u64::from(*account)),
         OwnerOutcome::AccountProgramDeclared { source, name } => {
@@ -169,7 +170,6 @@ fn details(b: &mut Builder, value: &OwnerOutcome, words: &Words) {
         | OwnerOutcome::ProjectMade { project }
         | OwnerOutcome::RolesSet { project }
         | OwnerOutcome::PolicyChanged { project } => number(b, words, P::Project, u64::from(*project)),
-        OwnerOutcome::Lifted { .. } => {}
         OwnerOutcome::Stopped { task }
         | OwnerOutcome::Cancelled { task }
         | OwnerOutcome::Released { task }
