@@ -3723,3 +3723,5 @@ fn a_restored_policy_cannot_pass_the_deployments_projects_mark() {
 mod ended_watches;
 
 mod restart_checks;
+
+mod funding;
