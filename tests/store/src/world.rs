@@ -805,11 +805,21 @@ impl World {
                 skein_kv::Request::Load { owner: OWNER, range: range.clone(), max: self.env.limits.store.page },
             );
             let Some(skein_kv::Event::Loaded { rows, next, .. }) = events.pop() else { panic!("fixture notes page") };
+            let last = rows.last().map(|row| row.key.clone());
             for row in rows {
                 result.insert(Box::from(&row.key[1..]), row.value);
             }
-            let Some(next) = next else { break };
-            range.start = next.into_vec().into_iter().chain([0]).collect::<Vec<_>>().into_boxed_slice();
+            if next.is_none() {
+                break;
+            }
+            // Raw KV's next is the first unread key. Like pages::past, make
+            // the exclusive cursor from the last returned row instead.
+            let mut cursor = skein_kv::KeyWriter::new(u32::MAX);
+            for &byte in last.as_deref().expect("continued note page is nonempty") {
+                cursor.tag(byte);
+            }
+            cursor.tag(0);
+            range.start = cursor.finish().expect("fixture note cursor");
         }
         self.fixture_kv(&mut map, skein_kv::Request::Close { owner: OWNER });
         self.file_events(0, file::Request::Close { owner: OWNER, file });
@@ -1021,4 +1031,49 @@ fn answer_site(
         Owner::Skein => panic!("no skein fixture site"),
     };
     Request::Site { owner, patcher, result }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixture_notes_keep_the_row_after_a_full_page() {
+        let mut records = crate::patches::Records::story();
+        // The story's two notes fill the existing two-row KV page.
+        records.notes.push((b"n/2".to_vec(), b"third note".to_vec()));
+        let mut world = records.committed(0, crate::patches::BASE);
+        world.open_switched().expect("fixture open");
+        records.check_public(&mut world, 1, &"three notes across the two-row page");
+    }
+
+    #[test]
+    fn raw_kv_next_names_the_first_unreturned_note() {
+        let mut world = World::unopened(0);
+        let mut map = skein_kv::Store::memory(&world.env.limits.store);
+        let ops = [b"n/0", b"n/1", b"n/2"]
+            .into_iter()
+            .map(|key| skein_kv::Op::Put { key: Box::from(key.as_slice()), value: Box::from(b"note".as_slice()) })
+            .collect();
+        world.fixture_kv(&mut map, skein_kv::Request::Commit { owner: OWNER, ops });
+        let mut page = world.fixture_kv(
+            &mut map,
+            skein_kv::Request::Load {
+                owner: OWNER,
+                range: skein_kv::Range::prefix(b"n/"),
+                max: world.env.limits.store.page,
+            },
+        );
+        let Some(skein_kv::Event::Loaded { rows, next: Some(next), .. }) = page.pop() else {
+            panic!("two-row note page with a continuation")
+        };
+        assert_eq!(rows.iter().map(|row| row.key.as_ref()).collect::<Vec<_>>(), [b"n/0", b"n/1"]);
+        assert_eq!(next.as_ref(), b"n/2");
+        let mut range = skein_kv::Range::prefix(b"n/");
+        range.start = next;
+        let mut page = world
+            .fixture_kv(&mut map, skein_kv::Request::Load { owner: OWNER, range, max: world.env.limits.store.page });
+        let Some(skein_kv::Event::Loaded { rows, next: None, .. }) = page.pop() else { panic!("last note page") };
+        assert_eq!(rows.iter().map(|row| row.key.as_ref()).collect::<Vec<_>>(), [b"n/2"]);
+    }
 }
