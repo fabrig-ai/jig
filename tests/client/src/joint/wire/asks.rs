@@ -1027,12 +1027,30 @@ mod tests {
                 people::PolicyChange::Projections { grants } => assert!(grants.is_empty()),
                 people::PolicyChange::Permissions { mappings } => assert!(mappings.is_empty()),
                 people::PolicyChange::Role(_)
+                | people::PolicyChange::RoleSpend { .. }
                 | people::PolicyChange::ProjectSpend { .. }
                 | people::PolicyChange::Templates { .. } => {
                     panic!("replacement kind retained")
                 }
             }
         }
+    }
+
+    #[test]
+    fn role_spend_keeps_its_role_and_full_width_amount() {
+        assert_eq!(
+            ask(
+                &client::Ask::ChangePolicy {
+                    project: 4,
+                    edit: client::PolicyEdit::RoleSpend { role: 4, period_spend: u64::MAX },
+                },
+                &[]
+            ),
+            Ok(people::Ask::ChangePolicy {
+                project: 4,
+                change: people::PolicyChange::RoleSpend { role: 4, period_spend: u64::MAX }
+            })
+        );
     }
 
     #[test]

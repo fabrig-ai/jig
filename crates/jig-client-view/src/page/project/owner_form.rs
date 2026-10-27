@@ -113,6 +113,14 @@ fn policy_complete(doc: &OwnerProject, edit: &PolicyEdit) -> bool {
     match edit {
         PolicyEdit::Templates { .. } => false,
         PolicyEdit::ProjectSpend { .. } => true,
+        PolicyEdit::RoleSpend { role, .. } => {
+            for before in &doc.policy.roles {
+                if before.number == *role {
+                    return true;
+                }
+            }
+            false
+        }
         PolicyEdit::Role(role) => {
             if doc.cut || doc.policy.cut {
                 return false;
@@ -141,6 +149,16 @@ pub fn baseline(doc: &OwnerProject, ask: &Ask) -> Option<Ask> {
             let edit = match edit {
                 PolicyEdit::Templates { .. } => return None,
                 PolicyEdit::ProjectSpend { .. } => PolicyEdit::ProjectSpend { period_spend: doc.policy.period_spend },
+                PolicyEdit::RoleSpend { role, .. } => {
+                    let mut spend = None;
+                    for row in &doc.policy.roles {
+                        if row.number == *role {
+                            spend = Some(row.period_spend);
+                            break;
+                        }
+                    }
+                    PolicyEdit::RoleSpend { role: *role, period_spend: spend? }
+                }
                 PolicyEdit::Role(role) => {
                     let mut source = None;
                     for row in &doc.policy.roles {
