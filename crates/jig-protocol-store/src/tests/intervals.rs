@@ -73,7 +73,7 @@ fn each_restart_range_holds_the_keys_it_admits_and_no_others() {
                 }
             }
             assert_eq!(intervals::cursor(&ranges, &bytes), expected, "{ranges:?} and {key:?}");
-            let typed = match jig_domain_core::restore_cursor(&ranges, &key) {
+            let domain = match jig_domain_core::restore_cursor(&ranges, &key) {
                 Some((interval, _)) => Some(interval),
                 None => None,
             };
@@ -81,32 +81,32 @@ fn each_restart_range_holds_the_keys_it_admits_and_no_others() {
                 Some(cursor) => Some(cursor.interval),
                 None => None,
             };
-            assert_eq!(typed, encoded, "typed and byte places agree: {ranges:?}, {key:?}");
+            assert_eq!(domain, encoded, "domain and byte places agree: {ranges:?}, {key:?}");
         }
     }
 }
 
 #[test]
-fn typed_and_encoded_cursors_order_the_same_restart_walk() {
+fn domain_and_encoded_cursors_order_the_same_restart_walk() {
     let keys = cursor_keys();
     let count = u32::try_from(keys.len()).expect("bounded keys");
     for ranges in cursor_requests() {
-        let mut typed = skein_lib::List::with_capacity(count);
+        let mut domain = skein_lib::List::with_capacity(count);
         let mut encoded = skein_lib::List::with_capacity(count);
         for key in &keys {
             if let Some(cursor) = jig_domain_core::restore_cursor(&ranges, key) {
-                typed.push(cursor).expect("one cursor per key");
+                domain.push(cursor).expect("one cursor per key");
             }
             if let Some(cursor) = intervals::cursor(&ranges, &key_bytes(key)) {
                 encoded.push((cursor.interval, cursor.after)).expect("one cursor per key");
             }
         }
-        let mut typed = typed.into_boxed();
+        let mut domain = domain.into_boxed();
         let mut encoded = encoded.into_boxed();
-        typed.sort();
+        domain.sort();
         encoded.sort();
         let mut converted = skein_lib::List::with_capacity(count);
-        for (interval, key) in typed {
+        for (interval, key) in domain {
             converted.push((interval, key_bytes(&key))).expect("one cursor per key");
         }
         assert_eq!(converted.into_boxed(), encoded, "walk order for {ranges:?}");
