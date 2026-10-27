@@ -30,6 +30,7 @@ fn answer(world: &World) -> &core::SettledAnswer {
 #[test]
 fn a_refusal_call_with_an_invalid_owning_attempt_is_rejected() {
     const SEED: u64 = 917;
+    const UNKNOWN: u64 = 999_999;
     let mut world = World::new(SEED, false);
     let mut key = world.call_key(1);
     key.attempt = 0;
@@ -38,7 +39,7 @@ fn a_refusal_call_with_an_invalid_owning_attempt_is_rejected() {
     let row = root::Record::Core(core::Record::Core(core::CoreRecord::Call(core::CallRecord {
         key,
         part: core::CallPart::MessageRefused(jig_domain_tasks::Problem::new(
-            Some(999_999),
+            Some(UNKNOWN),
             jig_domain_tasks::Refusal::Unknown,
         )),
         settled: None,
