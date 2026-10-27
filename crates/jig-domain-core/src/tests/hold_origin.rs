@@ -289,3 +289,102 @@ fn ordinary_writer_outcomes_still_hold_agents_and_wake_procedures() {
         assert_eq!(core.tasks.writer(&resources[0]).is_none(), outcome == OutboxOutcome::Failed);
     }
 }
+
+#[test]
+fn held_effects_and_procedures_keep_the_connectors_words_in_task_chip_and_escalation() {
+    for (why, entry, words) in [
+        (tasks::Hold::EffectFailed, Some(8), b"restart on production/checkout: system refused permission".as_slice()),
+        (
+            tasks::Hold::Uncertain { entry: 8 },
+            Some(8),
+            b"restart on production/checkout: may or may not have been made",
+        ),
+        (tasks::Hold::Procedure, None, b"restart vetoed: missing grant; amend authority and release"),
+    ] {
+        let (mut core, mut limits) = make_tree();
+        limits.documents.text_bytes = 512;
+        send_task(
+            &mut core,
+            &limits,
+            tasks::Event::HoldFrom {
+                task: 2,
+                why,
+                source: Box::new(tasks::HoldSource::Account { connector: 2, entry, words: words.into() }),
+            },
+        );
+        let row = core.tasks.task(2).unwrap();
+        let hold = chip_from_row(&limits, row).unwrap().details.hold.unwrap();
+        assert_eq!(hold.words.as_ref().unwrap().bytes.as_ref(), words);
+        assert_eq!(hold.account, Some(Part { connector: 2, kind: PartKind::Hold, key: PartKey::Number(2) }));
+        for subject in [Subject::Task { task: 2 }, Subject::Escalation { task: 2 }] {
+            let document = make(&core, &limits, 1, &subject, &window(), Wall::EPOCH).unwrap();
+            let task = if let Document::Task(task) = document {
+                task
+            } else if let Document::Escalation(escalation) = document {
+                escalation.task
+            } else {
+                panic!("task document")
+            };
+            assert_eq!(task.hold.unwrap(), hold);
+        }
+    }
+}
+
+#[test]
+fn a_refused_procedure_batch_sends_its_findings_to_its_connector() {
+    let (mut core, limits) = tree_core();
+    let mut parent = new_row(&core, 1, tasks::Funder::Period { project: 1, period: 1 }, None);
+    parent.executor = tasks::Executor::Procedure { connector: 2, code: 1 };
+    send_task(
+        &mut core,
+        &limits,
+        tasks::Event::Make {
+            reply_to: ReplyTo::new(Token::new(1)),
+            creator: tasks::Party::Person(1),
+            batch: Box::new([parent]),
+        },
+    );
+    let child = new_row(&core, 2, tasks::Funder::Task(1), None);
+    let mut authority = child.authority;
+    authority.budget.spend = u64::MAX;
+    let delegate = Delegate {
+        executor: child.executor,
+        spec: child.spec,
+        contract: child.contract,
+        authority,
+        deadline: tasks::Deadline::Named,
+        llm: None,
+        symbolic_grants: Box::new([]),
+        dependencies: Box::new([]),
+        wake: child.wake,
+        tracked: None,
+        label: 0,
+        flags: tasks::Flags::PLAIN,
+        budget: people::Budget::Named,
+    };
+    let (_, _, step_number) = core.tasks.procedure_due(1).expect("due procedure");
+    let Requests::Out(mut out) = step(
+        &mut core,
+        &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
+        Event::ProcedureStep {
+            task: 1,
+            step: step_number,
+            connector: 2,
+            code: 1,
+            decision: ProcedureStep { batch: Box::new([delegate]), ..ProcedureStep::new(StepEnd::Wait) },
+        },
+    );
+    let mut refused = false;
+    while let Some(request) = out.pop() {
+        if let Request::Ask {
+            connector: 2,
+            ask: Ask::StepRefused { task: 1, why: StepRefusal::Denied { findings, .. }, .. },
+        } = request
+        {
+            assert!(!findings.is_empty(), "the admission findings reach the connector");
+            refused = true;
+        }
+    }
+    assert!(refused);
+    assert!(core.tasks.task(1).unwrap().delegates.is_empty());
+}

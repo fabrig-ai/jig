@@ -125,6 +125,7 @@ pub fn authority() -> d::AuthorityLine {
 }
 pub fn hold() -> d::HoldLine {
     d::HoldLine {
+        words: None,
         placed: None,
         circle: None,
         account: None,

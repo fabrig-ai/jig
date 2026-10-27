@@ -219,6 +219,10 @@ pub fn held(value: &d::HoldLine, limits: &w::Limits) -> Result<w::OwnerChipHold,
     w::OwnerChipHold::new(
         limits,
         w::OwnerChipHoldParts {
+            words: match &value.words {
+                Some(text) => Some(owner::text(text, limits)?),
+                None => None,
+            },
             placed: match &value.placed {
                 Some(value) => Some(placed(value, limits)?),
                 None => None,

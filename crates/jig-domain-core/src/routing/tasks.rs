@@ -1224,7 +1224,12 @@ pub(super) fn tag_tasks(
                 if let Some((connector, owner)) = core.proposing_effects.remove(&token) {
                     out.push(Request::Ask {
                         connector,
-                        ask: Ask::Effect(crate::connector::Ask::Drop { owner, answer: authority::Answer::Refuse }),
+                        ask: Ask::Effect(crate::connector::Ask::Drop {
+                            owner,
+                            answer: authority::Answer::Refuse,
+                            findings: Box::new([]),
+                            why: crate::connector::EffectRefusal::Proposal,
+                        }),
                     });
                 }
                 if match &core.settings_offering {

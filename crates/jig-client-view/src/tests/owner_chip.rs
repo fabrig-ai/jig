@@ -58,6 +58,7 @@ pub(super) fn details() -> OwnerChipDetails {
 }
 fn hold() -> OwnerChipHold {
     OwnerChipHold {
+        words: None,
         placed: None,
         circle: None,
         account: None,
@@ -817,4 +818,14 @@ fn a_circle_hold_names_the_waits_in_order_and_lifts_on_its_own() {
         }
     }
     assert_eq!(shown, expected.len());
+}
+
+#[test]
+fn an_effect_or_procedure_hold_card_shows_its_retained_account() {
+    let mut value = details();
+    let mut held = hold();
+    held.words = Some(doc(b"restart on production/checkout: permission refused; amend authority and release", false));
+    value.hold = Some(held);
+    let (tree, _, _) = build(&value, words());
+    assert!(contains(&tree, b"restart on production/checkout: permission refused; amend authority and release"));
 }

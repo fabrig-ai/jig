@@ -151,7 +151,7 @@ enum HoldMode { stop, drain }
 record HoldScopeSubtree { task: u64 }
 enum HoldScope { subtree: HoldScopeSubtree, project }
 record PlacedLine { number: u64 owner: HoldOwner mode: HoldMode scope: HoldScope reason: bytes 65536 placed_at: u64 revision: u64 lifted: bool may_lift: bool }
-record OwnerChipHold { account: option OwnerPart source: option OwnerPart reason: HoldCategory revision: u64 before: OwnerPriorPhase escalation: option OwnerHoldEscalation tries: OwnerFailureTries hold_wait_since: option u64 circle: option Circle placed: option PlacedLine }
+record OwnerChipHold { account: option OwnerPart source: option OwnerPart reason: HoldCategory revision: u64 before: OwnerPriorPhase escalation: option OwnerHoldEscalation tries: OwnerFailureTries hold_wait_since: option u64 circle: option Circle placed: option PlacedLine words: option DocumentText }
 record OwnerNumbers { budget: u64 spent: u64 spent_below: u64 reserved: u64 }
 record FunderTask { value: u64 }
 record FunderPool { project: u32 person: u64 period: u64 }

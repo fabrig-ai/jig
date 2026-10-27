@@ -118,7 +118,8 @@ record Activation { value: Active }
 enum Was { waiting, active: Activation, closing: Closing }
 record HoldEffect { connector: u16 entry: u64 }
 record Circle { tasks: list 32 Number cut: bool }
-enum HoldSource { resource: Name, effect: HoldEffect, circle: Circle }
+record HoldAccount { connector: u16 entry: option u64 words: bytes 512 }
+enum HoldSource { resource: Name, effect: HoldEffect, circle: Circle, account: HoldAccount }
 record Held { was: Was why: Hold source: option HoldSource }
 record Final { ending: Ending }
 enum Phase { waiting, active: Activation, closing: Closing, held: Held, ended: Final }

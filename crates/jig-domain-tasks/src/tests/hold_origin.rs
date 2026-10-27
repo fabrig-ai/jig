@@ -109,3 +109,13 @@ fn hold_origin_shape_is_checked_on_admission_and_cold_restore() {
     h.restart();
     assert_eq!(origin(&h.domain.task(1).unwrap().phase), Some(&HoldSource::Effect { connector: 7, entry: 3 }));
 }
+
+#[test]
+fn connector_accounts_are_nonempty_bounded_and_name_the_uncertain_entry() {
+    let limits = LIMITS;
+    for (size, valid) in [(0, false), (1, true), (512, true), (513, false)] {
+        let source = HoldSource::Account { connector: 7, entry: Some(3), words: Box::from(&[b'x'; 513][..size]) };
+        assert_eq!(crate::hold_origin::valid(&limits, Hold::Uncertain { entry: 3 }, Some(&source)), valid);
+        assert!(!crate::hold_origin::valid(&limits, Hold::Uncertain { entry: 4 }, Some(&source)));
+    }
+}

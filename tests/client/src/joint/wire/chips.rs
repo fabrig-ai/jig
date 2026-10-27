@@ -138,6 +138,7 @@ pub fn held(value: &documents::HoldLine, limits: &Limits) -> Result<client::Owne
             lifted: hold.lifted,
             may_lift: hold.may_lift,
         }),
+        words: value.words.as_ref().map(|words| owner::text(words, limits)).transpose()?,
         circle: value.circle.as_ref().map(|circle| client::Circle { tasks: numbers(&circle.tasks), cut: circle.cut }),
         account: value.account.as_ref().map(|value| owner::part(value, limits)).transpose()?,
         source: value.source.as_ref().map(|value| owner::part(value, limits)).transpose()?,
@@ -419,6 +420,7 @@ pub(super) mod tests {
             for supplied in [None, Some(account.clone())] {
                 let source = documents::HoldLine {
                     placed: None,
+                    words: None,
                     circle: None,
                     account: supplied.clone(),
                     source: origin.clone(),
@@ -576,6 +578,7 @@ pub(super) mod tests {
         );
         let source = documents::HoldLine {
             placed: None,
+            words: None,
             circle: None,
             account: None,
             source: None,

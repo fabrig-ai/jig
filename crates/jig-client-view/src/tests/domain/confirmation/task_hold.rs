@@ -5,6 +5,7 @@ fn owner(reason: HoldCategory) -> OwnerChipHold {
     segments.push(Box::<[u8]>::from(*b"a/b")).unwrap();
     segments.push(Box::<[u8]>::from([255_u8, 0])).unwrap();
     OwnerChipHold {
+        words: None,
         placed: None,
         circle: None,
         account: None,

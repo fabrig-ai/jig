@@ -451,6 +451,10 @@ pub(crate) fn owner_chip_hold(value: &w::OwnerChipHold, limits: &Limits) -> Resu
     };
     Ok(c::OwnerChipHold {
         placed: crate::translate::answers::placed(value.placed().as_ref(), limits)?,
+        words: match value.words() {
+            Some(text) => Some(document_text(text, limits)?),
+            None => None,
+        },
         circle: match value.circle() {
             Some(circle) => Some(c::Circle { tasks: circle.tasks().clone(), cut: circle.cut() }),
             None => None,

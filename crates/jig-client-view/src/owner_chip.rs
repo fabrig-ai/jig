@@ -148,6 +148,11 @@ pub fn required(value: &OwnerChipDetails, limits: &Limits, words: &Words) -> Opt
         {
             return None;
         }
+        if let Some(account) = &hold.words
+            && account.bytes.bytes().len() > usize::try_from(limits.text).ok()?
+        {
+            return None;
+        }
         if let Some(part) = &hold.account {
             part_fits(part, limits)?;
         }
@@ -345,6 +350,9 @@ pub(crate) fn hold(b: &mut Builder, value: &OwnerChipHold, words: &Words, bindin
         crate::proposed_task::part(b, source, words, bindings);
     }
     reason(b, value.reason, words);
+    if let Some(account) = &value.words {
+        document(b, account, words);
+    }
     if let Some(circle) = &value.circle {
         for task in &circle.tasks {
             words.text(b, crate::phrases::jig::JigPhrase::CircleWaitsFor, &[Hole::Number(*task)]);

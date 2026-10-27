@@ -529,7 +529,9 @@ fn memory_below_the_components_sum_is_refused() {
         // answer copies save 3 * 96 = 288 (the settings load still exceeds 65,536).
         // Core: 18,789,463,490 -> 18,789,314,474; hub/provider terms unchanged.
         // 1,490,224 - 148,728 - 288 = 1,341,208; no store share enters this sum.
-        + 1_341_208;
+        + 1_341_208
+        // Connector hold accounts and their wider typed task/document/route carriers.
+        + 789_448;
     // Regenerate this charge with JIG_MEMORY_WRITE=1 through heavy, then run
     // normally to check it. The unchanged terms above keep the act saving local.
     let charge_path = skein_scratch::paths::package().join("src/tests/deployment_act_growth.txt");

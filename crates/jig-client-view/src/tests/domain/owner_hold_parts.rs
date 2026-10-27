@@ -32,6 +32,7 @@ fn chip(account: Option<OwnerPart>) -> Chip {
     let mut details = super::chip_facts::details();
     details.project = 41;
     details.hold = Some(OwnerChipHold {
+        words: None,
         placed: None,
         circle: None,
         account,

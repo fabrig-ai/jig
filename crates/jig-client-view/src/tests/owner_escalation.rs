@@ -11,6 +11,7 @@ fn escalation() -> OwnerEscalation {
     ))))));
     task.chip.executor = Executor::Agent { charter: 1 };
     let held = OwnerChipHold {
+        words: None,
         placed: None,
         circle: None,
         account: None,

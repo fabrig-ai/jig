@@ -345,6 +345,7 @@ pub struct ProcedureMessage {
 pub enum ProcedureEnd {
     Result(TaskResult),
     Hold(Hold),
+    HoldFrom { why: Hold, source: Box<HoldSource> },
     Wait,
 }
 
@@ -769,8 +770,17 @@ pub enum Phase {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum HoldSource {
     Resource(Name),
-    Effect { connector: u16, entry: u64 },
+    Effect {
+        connector: u16,
+        entry: u64,
+    },
     Circle(Circle),
+    /// The connector's retained account, including an effect's operation, resource and outcome.
+    Account {
+        connector: u16,
+        entry: Option<u64>,
+        words: Box<[u8]>,
+    },
 }
 
 /// A circle of waits: tasks each waiting for the next, the last for the first, so that none of

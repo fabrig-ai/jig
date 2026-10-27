@@ -139,7 +139,19 @@ fn answer(core: &mut Core, out: &mut Queue<Request>, to: ReplyTo, key: CallKey, 
 }
 
 fn drop_effect(out: &mut Queue<Request>, number: u16, owner: Token, answer: authority::Answer) {
-    out.push(Request::Ask { connector: number, ask: Ask::Effect(connector::Ask::Drop { owner, answer }) });
+    drop_with(out, number, owner, answer, connector::EffectRefusal::Unavailable);
+}
+fn drop_with(
+    out: &mut Queue<Request>,
+    number: u16,
+    owner: Token,
+    answer: authority::Answer,
+    why: connector::EffectRefusal,
+) {
+    out.push(Request::Ask {
+        connector: number,
+        ask: Ask::Effect(connector::Ask::Drop { owner, answer, findings: Box::new([]), why }),
+    });
 }
 
 #[expect(clippy::too_many_lines, reason = "one entry point fences each effect origin before describing it")]
@@ -239,7 +251,7 @@ pub(crate) fn start(core: &mut Core, env: &Env<Limits>, owner: Token, number: u1
                 None => true,
             };
             if !valid || !numbered {
-                drop_effect(&mut out, number, owner, authority::Answer::Refuse);
+                drop_with(&mut out, number, owner, authority::Answer::Refuse, connector::EffectRefusal::Obsolete);
                 end(&mut out);
                 return Requests::Out(out);
             }
@@ -420,7 +432,7 @@ pub(crate) fn connector(
 
 fn describe_busy(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &mut Queue<Request>, owner: Token) {
     if let Some(flight) = core.effect_flights.remove(&owner) {
-        drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+        drop_with(out, flight.connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Capacity);
         if !origin_current(core, flight.connector, &flight.origin) {
             discard_origin(core, &flight.origin);
             return;
@@ -447,7 +459,7 @@ fn describe_refused(
     owner: Token,
 ) {
     if let Some(flight) = core.effect_flights.remove(&owner) {
-        drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+        drop_with(out, flight.connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Description);
         if !origin_current(core, flight.connector, &flight.origin) {
             discard_origin(core, &flight.origin);
             return;
@@ -562,7 +574,7 @@ fn complete(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &m
     let flight = core.effect_flights.remove(&owner).expect("completed effect flight");
     if !origin_current(core, flight.connector, &flight.origin) {
         discard_origin(core, &flight.origin);
-        drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+        drop_with(out, flight.connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Obsolete);
         return;
     }
     let description = flight.description.expect("effect described before checking");
@@ -596,7 +608,7 @@ fn complete(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &m
         if let Some(task) = task
             && let Some(problem) = core.tasks.waiting_effect_problem(task)
         {
-            drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+            drop_with(out, flight.connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Dependencies);
             match origin {
                 EffectOrigin::Call { to, key, .. } => answer(core, out, to, key, CallPart::EffectRefused(problem)),
                 EffectOrigin::Procedure { task, step, .. } => {
@@ -631,7 +643,25 @@ fn complete(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &m
         }
     }
     if checked != authority::Answer::Allow {
-        drop_effect(out, flight.connector, owner, checked);
+        let mut reasons = List::with_capacity(findings.len());
+        for _ in 0..findings.len() {
+            let finding = findings.pop().expect("finding count");
+            reasons.push(finding).expect("finding bound");
+            findings.push(finding);
+        }
+        out.push(Request::Ask {
+            connector: flight.connector,
+            ask: Ask::Effect(connector::Ask::Drop {
+                owner,
+                answer: checked,
+                findings: reasons.into_boxed(),
+                why: if flight.connector == description.connector {
+                    connector::EffectRefusal::Authority
+                } else {
+                    connector::EffectRefusal::Description
+                },
+            }),
+        });
         match origin {
             EffectOrigin::Call { to, key, .. } => {
                 let mut reasons = List::with_capacity(findings.len());
@@ -681,7 +711,7 @@ fn complete(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &m
         EffectOrigin::Procedure { entry: Some(_), .. } | EffectOrigin::Projection { entry: Some(_), .. } => false,
     };
     if !acceptance_room(core, &origin) || (needs_entry && core.counters.deployment().connector_rows == u64::MAX) {
-        drop_effect(out, flight.connector, owner, authority::Answer::Refuse);
+        drop_with(out, flight.connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Capacity);
         match origin {
             EffectOrigin::Call { to, key, .. } => {
                 core.pending_calls.remove(&key);
@@ -1224,11 +1254,11 @@ pub(crate) fn procedure_propose(
     description: &connector::EffectDescription,
 ) {
     let Some(context) = core.tasks.delegation(task) else {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         return;
     };
     let Some(needed) = authority::needs(&authority::Action::Effect(description.effect.clone())) else {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         procedure_wait(core, work, task, step);
         return;
     };
@@ -1241,22 +1271,22 @@ pub(crate) fn procedure_propose(
     if core.proposal_admit_action(context.project, &action, env.wall).is_err()
         || core.procedure_proposals.len() >= env.limits.tasks.tasks
     {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         procedure_wait(core, work, task, step);
         return;
     }
     let Some(holder) = core.proposal_holder(&env.limits, task, &action, None, env.wall) else {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         procedure_wait(core, work, task, step);
         return;
     };
     if !crate::acts::bounds::proposal_has_recipient(core, holder) {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         procedure_wait(core, work, task, step);
         return;
     }
     let Some(proposal) = fresh(&mut core.counters, Family::Message) else {
-        drop_effect(out, connector, owner, authority::Answer::Refuse);
+        drop_with(out, connector, owner, authority::Answer::Refuse, connector::EffectRefusal::Proposal);
         procedure_wait(core, work, task, step);
         return;
     };
