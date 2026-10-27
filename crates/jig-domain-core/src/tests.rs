@@ -3730,6 +3730,28 @@ fn assert_decided_only(out: &[Request]) {
     let [Request::Decided] = out else { panic!("only Decided") };
 }
 
+#[test]
+fn a_live_pending_projection_without_its_task_stays_unresolved() {
+    let (mut core, limits) = core();
+    let goal = fresh(&mut core.counters, Family::Task).unwrap();
+    let row = ProjectionRecord::Goal {
+        goal: ProjectionGoal {
+            number: goal,
+            project: 1,
+            priority: 0,
+            words: b"missing live owner".as_slice().into(),
+            phase: tasks::Phase::Waiting,
+        },
+        pending: core.connectors.clone(),
+        changed: false,
+        fed_at: None,
+    };
+    let Restored::Live = core.restore_core(CoreRecord::Projection(row), &limits) else {
+        panic!("local shape is admitted before the post-load join");
+    };
+    assert_eq!(projections::unresolved(&core), 1);
+}
+
 fn assert_one_watch_ending(out: &[Request], expected: views::End) {
     let mut endings = 0_u32;
     for request in out {

@@ -47,6 +47,17 @@ fn answer(ask: Ask, outcome: Outcome) -> Stored {
 }
 
 #[test]
+fn an_accepted_create_with_invalid_open_flags_is_rejected() {
+    let [(ask, outcome), _] = answers(TaskExecutor::Agent { charter: 1 }, false);
+    let (mut domain, env, mut out) = restoring();
+    step(&mut domain, &env, Event::Restore { record: answer(ask, outcome) }, &mut out);
+    assert_eq!(
+        out.pop(),
+        Some(Request::RestoreRefused { key: Key::Answer(KEY), refusal: Refusal::Limit { which: LimitKind::Restore } })
+    );
+}
+
+#[test]
 fn a_refused_malformed_create_replays_its_answer_after_restart() {
     let (mut domain, env, mut out) = restoring();
     let identities = [

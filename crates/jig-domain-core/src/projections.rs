@@ -497,17 +497,6 @@ fn restore_goal(
     {
         return false;
     }
-    let closing = match goal.phase {
-        tasks::Phase::Ended(_) => true,
-        tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => false,
-    };
-    let untracked = match core.tasks.task(goal.number) {
-        Some(task) => task.tracked.is_none(),
-        None => false,
-    };
-    if !closing && !untracked && !pending.is_empty() {
-        return false;
-    }
     let mut seen = List::with_capacity(limits.connectors);
     for connector in &pending {
         if !core.connectors.contains(connector) || seen.as_slice().contains(connector) {
@@ -521,6 +510,30 @@ fn restore_goal(
             Box::new(Projection { goal, pending, changed, fed_at, plan: Box::new([]), milestones: Box::new([]) }),
         )
         .is_ok()
+}
+
+/// Task-dependent joins wait until every live task has loaded (engine.md, 6).
+pub(crate) fn unresolved(core: &Core) -> u32 {
+    let mut records = 0_u32;
+    for (_, state) in &core.projections {
+        if state.pending.is_empty() {
+            continue;
+        }
+        let closing = match state.goal.phase {
+            tasks::Phase::Ended(_) => true,
+            tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Held { .. } => {
+                false
+            }
+        };
+        let untracked = match core.tasks.task(state.goal.number) {
+            Some(task) => task.tracked.is_none(),
+            None => false,
+        };
+        if !closing && !untracked {
+            records = records.saturating_add(1);
+        }
+    }
+    records
 }
 
 fn restore_task(core: &mut Core, limits: &Limits, goal: u64, task: ProjectionTask) -> bool {

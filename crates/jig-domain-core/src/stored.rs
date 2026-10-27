@@ -179,7 +179,16 @@ impl CallPart {
             | CallPart::Unsubscribed
             | CallPart::Controlled
             | CallPart::NoteRefused(_)
-            | CallPart::ControlDenied { .. } => true,
+            | CallPart::ControlDenied { .. }
+            // Diagnostic subjects record what was asked, including unknown
+            // numbers; the call key, rather than its diagnostic, owns a run.
+            | CallPart::EffectRefused(_)
+            | CallPart::MessageRefused(_)
+            | CallPart::ProposalRefused(_)
+            | CallPart::EscalationRefused(_)
+            | CallPart::SubscriptionRefused(_)
+            | CallPart::DelegationRefused(_)
+            | CallPart::ControlRefused(_) => true,
             CallPart::Proposed { proposal, .. } | CallPart::ProposalDecided { proposal, .. } => {
                 *proposal != 0 && *proposal <= deployment.messages
             }
@@ -226,16 +235,6 @@ impl CallPart {
                         )
                         .expect("u32 fits usize")
             }
-            CallPart::EffectRefused(problem)
-            | CallPart::MessageRefused(problem)
-            | CallPart::ProposalRefused(problem)
-            | CallPart::EscalationRefused(problem)
-            | CallPart::SubscriptionRefused(problem)
-            | CallPart::DelegationRefused(problem)
-            | CallPart::ControlRefused(problem) => match problem.task {
-                Some(task) => task != 0 && task <= deployment.tasks,
-                None => true,
-            },
         }
     }
 }

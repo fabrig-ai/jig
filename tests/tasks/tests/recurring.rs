@@ -24,6 +24,23 @@ fn batch(world: &mut World, task: u64, period: u64, child: u64) {
 }
 
 #[test]
+fn a_funding_count_beyond_the_tree_allotment_is_rejected() {
+    let world = World::new(918, LIMITS);
+    let source = Funder::Period { project: 1, period: 0 };
+    let Stored::Ledger(mut ledger) = world.records[&Key::Ledger(source)].clone() else {
+        panic!("the world's opening period ledger");
+    };
+    ledger.made = LIMITS.tree_tasks + 1;
+    let mut restored = jig_tasks_world::domain(&LIMITS, 918);
+    let mut out = skein_lib::Queue::with_capacity(tasks::max_out(&LIMITS));
+    tasks::step(&mut restored, &world.env, Event::Restore { record: Stored::Ledger(ledger) }, &mut out);
+    assert_eq!(
+        out.pop(),
+        Some(tasks::Request::RestoreRefused { problem: tasks::Problem::new(None, tasks::Refusal::Restore) })
+    );
+}
+
+#[test]
 fn a_recurring_trees_lifetime_funding_reads_after_restart() {
     const LIVE_TASKS: u32 = 8; // The small profile's live capacity.
     const MASTER: u64 = 1;

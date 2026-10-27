@@ -199,7 +199,15 @@ pub fn shaped(member: &Member) -> bool {
     member.flags.conversation && agent
 }
 
-pub(crate) fn restore_shaped(ask: &crate::Ask) -> bool {
+pub(crate) fn restore_answer_shaped(ask: &crate::Ask, outcome: &crate::Outcome) -> bool {
+    if let crate::Outcome::Created { .. } | crate::Outcome::Proposed { .. } = outcome {
+        restore_shaped(ask)
+    } else {
+        true
+    }
+}
+
+fn restore_shaped(ask: &crate::Ask) -> bool {
     let batch = match ask {
         crate::Ask::Create { batch, .. } | crate::Ask::Propose { action: Action::Batch(batch), .. } => batch,
         crate::Ask::Propose { action: Action::Amend { .. } | Action::Settings { .. }, .. }

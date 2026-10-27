@@ -28,6 +28,25 @@ fn answer(world: &World) -> &core::SettledAnswer {
 }
 
 #[test]
+fn a_refusal_call_with_an_invalid_owning_attempt_is_rejected() {
+    const SEED: u64 = 917;
+    let mut world = World::new(SEED, false);
+    let mut key = world.call_key(1);
+    key.attempt = 0;
+    let (now, wall) = world.clocks();
+    let env = skein_lib::Env { now, wall, limits: jig_core_world::effects::fixture(SEED, false).1 };
+    let row = root::Record::Core(core::Record::Core(core::CoreRecord::Call(core::CallRecord {
+        key,
+        part: core::CallPart::MessageRefused(jig_domain_tasks::Problem::new(
+            Some(999_999),
+            jig_domain_tasks::Refusal::Unknown,
+        )),
+        settled: None,
+    })));
+    assert!(!root::restore_record(&mut world.domain, &env, row));
+}
+
+#[test]
 fn an_unknown_introduction_target_diagnostic_reads_after_restart() {
     const SEED: u64 = 913;
     const UNKNOWN: u64 = 999_999;

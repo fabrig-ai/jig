@@ -168,6 +168,11 @@ impl Core {
             self.restart_unresolved(RestoreChild::Tasks, records);
             return false;
         }
+        let records = crate::projections::unresolved(self);
+        if records != 0 {
+            self.restart_unresolved(RestoreChild::Core, records);
+            return false;
+        }
         let mut records = 0_u32;
         for ((_, task), _) in self.people.read_conversations() {
             if self.tasks.task(*task).is_none() {

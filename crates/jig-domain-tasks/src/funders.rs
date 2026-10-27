@@ -618,7 +618,6 @@ pub(crate) fn restore_funding(domain: &mut Domain, ledger: FundingRecord) -> boo
         || available(ledger.numbers).is_none()
         || ledger.closed
         || ledger.numbers.spent != 0
-        || ledger.made > domain.names.capacity()
     {
         return false;
     }
