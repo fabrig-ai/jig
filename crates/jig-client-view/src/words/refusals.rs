@@ -62,7 +62,7 @@ impl Words {
             Refusal::Limit { which } => self.limit(b, *which),
             Refusal::Moved { now, what } => {
                 let phrase = match what {
-                    Moved::Hold { .. } => JigPhrase::MovedHold,
+                    Moved::Hold { .. } | Moved::PlacedHold { .. } => JigPhrase::MovedHold,
                     Moved::Spec => JigPhrase::MovedSpec,
                     Moved::PersonTask => JigPhrase::MovedPerson,
                     Moved::Note => JigPhrase::MovedNote,
@@ -79,7 +79,7 @@ impl Words {
                             }
                         }
                     }
-                    Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting => {}
+                    Moved::PlacedHold { .. } | Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting => {}
                 }
             }
             Refusal::Ended { how } => self.ending(b, how),

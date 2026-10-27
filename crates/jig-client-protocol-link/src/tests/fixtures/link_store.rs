@@ -77,6 +77,7 @@ pub fn store_asks() -> List<c::Ask> {
                 decision: c::Decision::LeftHeld { reason: store_text() },
             },
         },
+        c::Ask::Lift { hold: u64::MAX, revision, with_tasks: true },
         c::Ask::Release { project: 7, task: u64::MAX, revision, again: Some(true) },
         c::Ask::Amend {
             project: 7,

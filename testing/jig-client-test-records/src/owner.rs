@@ -151,6 +151,7 @@ pub fn hold_record() -> w::OwnerChipHold {
     w::OwnerChipHold::new(
         &lim,
         w::OwnerChipHoldParts {
+            placed: None,
             circle: None,
             account: None,
             source: None,

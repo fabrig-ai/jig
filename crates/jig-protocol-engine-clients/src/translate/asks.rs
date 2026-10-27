@@ -78,6 +78,10 @@ fn decode(
             let v = value.into_parts();
             super::operations::decide(v.project, v.on)?
         }
+        w::Ask::Lift(value) => {
+            let v = value.into_parts();
+            p::Ask::Lift { hold: v.hold, revision: v.revision, with_tasks: v.with_tasks }
+        }
         w::Ask::Release(value) => {
             let v = value.into_parts();
             p::Ask::Release { project: v.project, task: v.task, revision: v.revision.value(), again: v.again }

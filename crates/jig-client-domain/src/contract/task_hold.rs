@@ -8,7 +8,39 @@ pub enum TaskHold {
     Document(Box<Hold>),
     Owner(Box<OwnerChipHold>),
 }
+/// Placed hold facts supplied by the engine (client/domain/contract.md, 5.6).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PlacedHold {
+    pub number: u64,
+    pub owner: super::HoldOwner,
+    pub mode: HoldMode,
+    pub scope: HoldScope,
+    pub reason: Box<[u8]>,
+    pub placed_at: skein_lib::Wall,
+    pub revision: Revision,
+    pub lifted: bool,
+    pub may_lift: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldMode {
+    Stop,
+    Drain,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldScope {
+    Subtree { task: u64 },
+    Project,
+}
+
 impl TaskHold {
+    #[must_use]
+    pub fn placed(&self) -> Option<&PlacedHold> {
+        match self {
+            Self::Document(value) => value.placed.as_ref(),
+            Self::Owner(value) => value.placed.as_ref(),
+        }
+    }
+
     /// The independently named hold revision, never the task spec's revision.
     #[must_use]
     pub fn revision(&self) -> Revision {

@@ -582,6 +582,10 @@ pub fn ask(value: &c::Ask, limits: &w::Limits) -> Result<w::Ask, w::Problem> {
             limits,
             w::DecideParts { project: *project, on: super::operations::decide(on, limits)? },
         )?),
+        c::Ask::Lift { hold, revision, with_tasks } => w::Ask::Lift(w::Lift::new(
+            limits,
+            w::LiftParts { hold: *hold, revision: revision.value, with_tasks: *with_tasks },
+        )?),
         c::Ask::Release { project, task, revision, again } => {
             let opt0 = match again {
                 Some(item) => Some(*item),

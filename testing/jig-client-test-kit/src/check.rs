@@ -11,6 +11,7 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Object {
+    PlacedHold(u64),
     Task(u64),
     Escalation(u64),
     PersonTask(u64),
@@ -56,6 +57,9 @@ impl Check {
                 self.record(&Object::Task(task.chip.task), task.spec_revision);
                 if let Some(hold) = &task.hold {
                     self.record(&Object::Escalation(task.chip.task), hold.revision());
+                    if let Some(placed) = hold.placed() {
+                        self.record(&Object::PlacedHold(placed.number), placed.revision);
+                    }
                 }
                 if let Some(revision) = task.person_revision {
                     self.record(&Object::PersonTask(task.chip.task), revision);
@@ -69,6 +73,9 @@ impl Check {
             Delivered::PartyEscalation(value) => {
                 self.record(&Object::Task(value.task.task), value.steering.revision);
                 self.record(&Object::Escalation(value.task.task), value.hold.revision);
+                if let Some(placed) = &value.hold.placed {
+                    self.record(&Object::PlacedHold(placed.number), placed.revision);
+                }
                 if let Some(revision) = value.steering.person_revision {
                     self.record(&Object::PersonTask(value.task.task), revision);
                 }
@@ -186,6 +193,7 @@ pub fn scene(tree: &Tree, node: NodeId) -> Scene {
 #[must_use]
 pub fn named(ask: &Ask) -> Vec<(Object, Revision)> {
     match ask {
+        Ask::Lift { hold, revision, .. } => vec![(Object::PlacedHold(*hold), *revision)],
         Ask::Release { task, revision, .. } | Ask::Decide { on: DecideOn::Escalation { task, revision, .. }, .. } => {
             vec![(Object::Escalation(*task), *revision)]
         }

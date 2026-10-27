@@ -29,6 +29,7 @@ pub(crate) fn route(outcome: &Outcome) -> Route {
             | OwnerOutcome::Adopted { .. }
             | OwnerOutcome::Stopped { .. }
             | OwnerOutcome::Cancelled { .. }
+            | OwnerOutcome::Lifted { .. }
             | OwnerOutcome::Released { .. }
             | OwnerOutcome::PersonTaken { .. }
             | OwnerOutcome::PersonHandedBack { .. }

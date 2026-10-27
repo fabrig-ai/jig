@@ -140,3 +140,39 @@ fn each_phase_says_its_existing_english() {
         assert_eq!(book.say(0, Word::Phase(*phase).id(), &[]).unwrap().text.as_ref(), *expected, "{phase:?}");
     }
 }
+
+#[test]
+fn a_party_hold_owner_refusal_names_the_hold_and_person() {
+    let book = book(Box::new([words::english()]));
+    let refusal = crate::contract::Refusal::Authority {
+        lacking: crate::contract::Lacking::HoldOwner {
+            hold: 7,
+            owner: crate::contract::HoldOwner::Party { person: 9 },
+        },
+        proposable: None,
+    };
+    assert_eq!(
+        book.say(0, Word::refusal(&refusal).id(), &[Hole::Number(7), Hole::Number(9)]).unwrap().text.as_ref(),
+        b"Held by hold 7, placed by person 9: only they, or a role above theirs, may release it"
+    );
+}
+#[test]
+fn a_task_hold_owner_refusal_names_the_hold_and_task() {
+    let book = book(Box::new([words::english()]));
+    let refusal = crate::contract::Refusal::Authority {
+        lacking: crate::contract::Lacking::HoldOwner { hold: 7, owner: crate::contract::HoldOwner::Task { task: 9 } },
+        proposable: None,
+    };
+    assert_eq!(
+        book.say(0, Word::refusal(&refusal).id(), &[Hole::Number(7), Hole::Number(9)]).unwrap().text.as_ref(),
+        b"Held by hold 7, placed by task 9: only they, or a role above theirs, may release it"
+    );
+}
+#[test]
+fn a_lifted_outcome_names_the_hold_and_released_count() {
+    let book = book(Box::new([words::english()]));
+    assert_eq!(
+        book.say(0, Word::Lifted.id(), &[Hole::Number(7), Hole::Number(2)]).unwrap().text.as_ref(),
+        b"Hold 7 lifted, 2 released"
+    );
+}

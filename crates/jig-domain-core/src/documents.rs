@@ -70,8 +70,8 @@ pub(crate) mod task_tree;
 mod task_wait;
 pub use task_tree::{
     AuthorityLine, BudgetLine, ContractLine, Dependency, Ending, EscalationState, FoldedCount, GrantLine, HoldLine,
-    NoteScope, Parameter, Part, PartKey, PartKind, PatternEnd, PhaseCounts, PriorPhase, ProposalRef, ResourceLine,
-    ResultValue, Task, TaskLink, TaskSettings, Tree, TreeRow, task_from_row,
+    NoteScope, Parameter, Part, PartKey, PartKind, PatternEnd, PhaseCounts, PlacedLine, PriorPhase, ProposalRef,
+    ResourceLine, ResultValue, Task, TaskLink, TaskSettings, Tree, TreeRow, task_from_row,
 };
 pub use task_wait::{OpenProgram, TaskRunWait, TaskSourceState, TaskWaitRefused, TaskWaitWhy};
 
@@ -528,7 +528,7 @@ pub(crate) fn document_scratch_worst_case(limits: &Limits) -> Option<u64> {
 /// Join volatile live observations to a loaded owner row. The reader checks
 /// project visibility first; this does not restore or change the row.
 pub fn chip_from_row_with_core(core: &Core, limits: &Limits, row: &tasks::TaskRecord) -> Result<Chip, Missing> {
-    small::chip_with_core(core, limits, row)
+    small::chip_with_core(core, limits, 0, row)
 }
 
 pub(crate) fn chip_heap_worst_case(limits: &DocumentLimits) -> Option<u64> {

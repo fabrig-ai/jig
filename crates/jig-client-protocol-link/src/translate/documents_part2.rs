@@ -26,6 +26,7 @@ pub(crate) fn hold_fields(value: &w::Hold, limits: &Limits) -> Result<c::Hold, w
         list1.push(spend_line_fields(item, limits)).expect("reserved supplied list");
     }
     Ok(c::Hold {
+        placed: crate::translate::answers::placed(value.placed(), limits)?,
         revision: crate::translate::answers::revision(value.revision(), limits),
         reason: hold_reason_fields(value.reason(), limits)?,
         before: crate::translate::facts::phase(value.before(), limits),

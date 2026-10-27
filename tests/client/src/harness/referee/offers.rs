@@ -162,6 +162,7 @@ impl Offers {
             | Ask::SetRoles { .. }
             | Ask::MakeService { .. }
             | Ask::Rename { .. }
+            | Ask::Lift { .. }
             | Ask::ChangeSettings(_)
             | Ask::MoveToNewest(_)
             | Ask::MakeProject { .. }

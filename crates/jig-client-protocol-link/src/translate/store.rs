@@ -108,6 +108,11 @@ pub(crate) fn restore_ask(value: w::Ask, limits: &Limits) -> Result<c::Ask, w::P
                 },
             },
         },
+        w::Ask::Lift(value) => c::Ask::Lift {
+            hold: value.hold(),
+            revision: c::Revision { value: value.revision() },
+            with_tasks: value.with_tasks(),
+        },
         w::Ask::Release(value) => c::Ask::Release {
             project: value.project(),
             task: value.task(),

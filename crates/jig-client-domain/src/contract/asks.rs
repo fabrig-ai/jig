@@ -171,6 +171,12 @@ pub enum Ask {
         revision: Revision,
         again: Option<bool>,
     },
+    /// Lift a placed hold, optionally releasing its tasks.
+    Lift {
+        hold: u64,
+        revision: Revision,
+        with_tasks: bool,
+    },
     /// Amend a task.
     Amend {
         project: u32,

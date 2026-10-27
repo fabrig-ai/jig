@@ -187,6 +187,7 @@ impl Component {
                     | w::Ask::SetRoles(_)
                     | w::Ask::SignIn(_)
                     | w::Ask::SignOut(_)
+                    | w::Ask::Lift(_)
                     | w::Ask::Stop(_)
                     | w::Ask::Take(_)
                     | w::Ask::Withdraw(_)) => other,
@@ -310,6 +311,7 @@ fn account_key_digest(ask: &w::Ask) -> Option<[u8; 32]> {
         | w::Ask::Decide(_)
         | w::Ask::Release(_)
         | w::Ask::Amend(_)
+        | w::Ask::Lift(_)
         | w::Ask::Stop(_)
         | w::Ask::Cancel(_)
         | w::Ask::MoveTask(_)
@@ -360,6 +362,7 @@ fn carried_bound(ask: &w::Ask, key_bytes: u32, moved_bytes: u64, redirect_bytes:
         | w::Ask::Decide(_)
         | w::Ask::Release(_)
         | w::Ask::Amend(_)
+        | w::Ask::Lift(_)
         | w::Ask::Stop(_)
         | w::Ask::Cancel(_)
         | w::Ask::MoveTask(_)

@@ -62,6 +62,7 @@ pub struct OwnerPersonStallNotice {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OwnerChipHold {
+    pub placed: Option<super::PlacedHold>,
     pub circle: Option<Circle>,
     /// Separate account supplied by the core; never inferred from the origin.
     pub account: Option<OwnerPart>,

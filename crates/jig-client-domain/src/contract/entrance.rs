@@ -34,6 +34,7 @@ fn fixed(refusal: &Refusal) -> bool {
             | Lacking::Funding
             | Lacking::Tool
             | Lacking::Scope
+            | Lacking::HoldOwner { .. }
             | Lacking::Models
             | Lacking::Reference
             | Lacking::ResourceAccess
@@ -55,7 +56,7 @@ fn fixed(refusal: &Refusal) -> bool {
                 Some(CurrentHold::Document(_)) => false,
                 None | Some(CurrentHold::Reason(_)) => true,
             },
-            Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting => true,
+            Moved::PlacedHold { .. } | Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting => true,
         },
         Refusal::Ended { how } => match how {
             Ending::Done | Ending::Deleted => true,

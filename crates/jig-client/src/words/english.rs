@@ -10,6 +10,15 @@ pub(super) fn language() -> Language {
     for word in ALL {
         let segments = match word {
             Word::Decision(value) => value.segments(),
+            Word::Lifted => Box::new([
+                Segment::Text(copy_of(b"Hold ")),
+                Segment::Hole { index: 0, kind: HoleKind::Number },
+                Segment::Text(copy_of(b" lifted, ")),
+                Segment::Hole { index: 1, kind: HoleKind::Number },
+                Segment::Text(copy_of(b" released")),
+            ]),
+            Word::Refusal(RefusalWord::HoldOwnerParty) => held_by(b"person "),
+            Word::Refusal(RefusalWord::HoldOwnerTask) => held_by(b"task "),
             Word::Phase(_) | Word::Hold(_) | Word::Refusal(_) | Word::Waiting(_) | Word::Status(_) => {
                 let (_, label, holes) = word.data();
                 let mut segments = List::with_capacity(3);
@@ -49,6 +58,9 @@ impl Word {
     pub(super) const fn data(self) -> (u16, &'static [u8], &'static [HoleKind]) {
         match self {
             Self::Decision(value) => value.data(),
+            Self::Refusal(RefusalWord::HoldOwnerParty) => (118, b"", &[HoleKind::Number, HoleKind::Number]),
+            Self::Refusal(RefusalWord::HoldOwnerTask) => (119, b"", &[HoleKind::Number, HoleKind::Number]),
+            Self::Lifted => (120, b"", &[HoleKind::Number, HoleKind::Number]),
             Self::Refusal(RefusalWord::Stale) => (112, b"Settings changed; newest revision ", &[HoleKind::Number]),
             Self::Refusal(RefusalWord::Full) => {
                 (113, b"Settings history is full; oldest held revision ", &[HoleKind::Number])
@@ -162,4 +174,15 @@ const fn exceeded(bound: Bound) -> (u16, &'static [u8], &'static [HoleKind]) {
         Bound::Window => (104, b"Held: the run no longer fits the model's window of ", &[HoleKind::Number]),
         Bound::Output => (105, b"Held: the request went past the model's output ceiling of ", &[HoleKind::Number]),
     }
+}
+
+fn held_by(kind: &[u8]) -> Box<[Segment]> {
+    Box::new([
+        Segment::Text(copy_of(b"Held by hold ")),
+        Segment::Hole { index: 0, kind: HoleKind::Number },
+        Segment::Text(copy_of(b", placed by ")),
+        Segment::Text(copy_of(kind)),
+        Segment::Hole { index: 1, kind: HoleKind::Number },
+        Segment::Text(copy_of(b": only they, or a role above theirs, may release it")),
+    ])
 }

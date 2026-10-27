@@ -46,6 +46,7 @@ fn value() -> OwnerChipDetails {
             notice: Some(OwnerPersonStallNotice { message: u64::MAX, at: Wall::from_nanos(4), activity: u64::MAX }),
         }),
         hold: Some(OwnerChipHold {
+            placed: None,
             circle: None,
             account: None,
             source: Some(part()),

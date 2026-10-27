@@ -86,6 +86,7 @@ fn state(words: &[u8], cut: bool) -> OwnerAmendmentState {
 }
 fn hold() -> OwnerChipHold {
     OwnerChipHold {
+        placed: None,
         circle: None,
         account: None,
         source: Some(part()),

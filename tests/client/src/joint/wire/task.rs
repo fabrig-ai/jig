@@ -228,6 +228,7 @@ pub(crate) mod tests {
             budget: chip.details.budget,
             authority: state.authority,
             hold: Some(documents::HoldLine {
+                placed: None,
                 circle: None,
                 account: None,
                 source: None,

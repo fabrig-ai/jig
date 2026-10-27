@@ -35,11 +35,17 @@ pub(super) fn visible(core: &Core, party: u64, number: u64) -> Result<&tasks::Ta
 
 pub(super) fn chip(core: &Core, limits: &Limits, party: u64, number: u64) -> Result<Chip, Missing> {
     let row = visible(core, party, number)?;
-    chip_with_core(core, limits, row)
+    chip_with_core(core, limits, party, row)
 }
 
-pub(super) fn chip_with_core(core: &Core, limits: &Limits, row: &tasks::TaskRecord) -> Result<Chip, Missing> {
+pub(super) fn chip_with_core(
+    core: &Core,
+    limits: &Limits,
+    party: u64,
+    row: &tasks::TaskRecord,
+) -> Result<Chip, Missing> {
     let mut chip = chip_from_row(limits, row)?;
+    chip.details.hold = super::task_tree::hold_for(core, limits, party, row)?;
     super::chip_phase::observe(core, limits, row, &mut chip.details)?;
     Ok(chip)
 }

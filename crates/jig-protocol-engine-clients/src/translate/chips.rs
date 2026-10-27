@@ -219,6 +219,10 @@ pub fn held(value: &d::HoldLine, limits: &w::Limits) -> Result<w::OwnerChipHold,
     w::OwnerChipHold::new(
         limits,
         w::OwnerChipHoldParts {
+            placed: match &value.placed {
+                Some(value) => Some(placed(value, limits)?),
+                None => None,
+            },
             circle: circle(value.circle.as_ref(), limits)?,
             account: match &value.account {
                 Some(item) => Some(owner::part(item, limits)?),
@@ -240,6 +244,30 @@ pub fn held(value: &d::HoldLine, limits: &w::Limits) -> Result<w::OwnerChipHold,
                 Some(item) => Some(item.as_nanos()),
                 None => None,
             },
+        },
+    )
+}
+fn placed(value: &d::PlacedLine, limits: &w::Limits) -> Result<w::PlacedLine, w::Problem> {
+    w::PlacedLine::new(
+        limits,
+        w::PlacedLineParts {
+            number: value.number,
+            owner: super::refusals::hold_owner(value.owner, limits)?,
+            mode: match value.mode {
+                t::Mode::Stop => w::HoldMode::Stop,
+                t::Mode::Drain => w::HoldMode::Drain,
+            },
+            scope: match value.scope {
+                t::Scope::Subtree { task } => {
+                    w::HoldScope::Subtree(w::HoldScopeSubtree::new(limits, w::HoldScopeSubtreeParts { task })?)
+                }
+                t::Scope::Project => w::HoldScope::Project,
+            },
+            reason: value.reason.clone(),
+            placed_at: value.placed_at.as_nanos(),
+            revision: value.revision,
+            lifted: value.lifted,
+            may_lift: value.may_lift,
         },
     )
 }

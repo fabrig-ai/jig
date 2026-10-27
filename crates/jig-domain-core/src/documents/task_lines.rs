@@ -83,7 +83,7 @@ pub fn task_line(
         tasks::Party::Person(_) | tasks::Party::Task(_) | tasks::Party::Deployment { .. } => None,
     };
     Ok(TaskLine {
-        chip: super::small::chip_with_core(core, limits, row)?,
+        chip: super::small::chip_with_core(core, limits, party, row)?,
         project: row.project,
         requester: row.requester,
         tracked: row.tracked,

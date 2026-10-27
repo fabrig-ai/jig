@@ -53,9 +53,8 @@ pub fn outcome(value: &people::Outcome, limits: &Limits) -> Result<Outcome, owne
         },
         people::Outcome::Stopped { task } => client::OwnerOutcome::Stopped { task: *task },
         people::Outcome::Cancelled { task } => client::OwnerOutcome::Cancelled { task: *task },
-        people::Outcome::Lifted { hold: task, .. } | people::Outcome::Released { task } => {
-            client::OwnerOutcome::Released { task: *task }
-        }
+        people::Outcome::Lifted { hold, released } => client::OwnerOutcome::Lifted { hold: *hold, released: *released },
+        people::Outcome::Released { task } => client::OwnerOutcome::Released { task: *task },
         people::Outcome::PersonTaken { task } => client::OwnerOutcome::PersonTaken { task: *task },
         people::Outcome::PersonHandedBack { task } => client::OwnerOutcome::PersonHandedBack { task: *task },
         people::Outcome::PersonAnswered { task } => client::OwnerOutcome::PersonAnswered { task: *task },

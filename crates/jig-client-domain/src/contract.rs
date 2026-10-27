@@ -94,7 +94,7 @@ pub mod owner_inbox;
 pub use owner_inbox::*;
 
 mod task_hold;
-pub use task_hold::TaskHold;
+pub use task_hold::{HoldMode, HoldScope, PlacedHold, TaskHold};
 
 mod owner_proposal;
 pub use owner_proposal::{OwnerFundingOffer, OwnerProposal, OwnerProposalAction, OwnerProposalWaiting};

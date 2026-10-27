@@ -29,7 +29,7 @@ pub(super) fn from_row(
         }
         delegates
             .push(LiveDelegate {
-                chip: super::small::chip_with_core(core, limits, delegate)?,
+                chip: super::small::chip_with_core(core, limits, party, delegate)?,
                 takeover_budget: core.tasks.takeover_budget(*number).ok_or(Missing::Unknown)?,
             })
             .expect("complete delegates fit checked bound");

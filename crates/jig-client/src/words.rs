@@ -12,11 +12,12 @@ pub use decision::DecisionWord;
 use skein_lib::List;
 use skein_ui::phrases::{HoleKind, HoleShape, Language, PhraseId, PhraseShape};
 /// Phrase count, for a caller composing a bounded phrasebook.
-pub const PHRASES: u32 = 117;
+pub const PHRASES: u32 = 120;
 /// Owner of jig's public enum vocabulary.
 pub const OWNER: skein_ui::Owner = skein_ui::Owner { number: 65_537 };
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Word {
+    Lifted,
     Phase(Phase),
     Hold(HoldWord),
     Refusal(RefusalWord),
@@ -47,6 +48,8 @@ pub enum HoldWord {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RefusalWord {
+    HoldOwnerParty,
+    HoldOwnerTask,
     SignInRedirectNotWaiting,
     SignInRedirectAddress,
     SignInRedirectState,
@@ -147,6 +150,10 @@ impl Word {
             Refusal::Taken { .. } => RefusalWord::Taken,
             Refusal::NotWaiting => RefusalWord::NotWaiting,
             Refusal::NoFurther => RefusalWord::NoFurther,
+            Refusal::Authority { lacking: crate::contract::Lacking::HoldOwner { owner, .. }, .. } => match owner {
+                crate::contract::HoldOwner::Party { .. } => RefusalWord::HoldOwnerParty,
+                crate::contract::HoldOwner::Task { .. } => RefusalWord::HoldOwnerTask,
+            },
             Refusal::Authority { .. } => RefusalWord::Authority,
             Refusal::Limit { .. } => RefusalWord::Limit,
             Refusal::Moved { .. } => RefusalWord::Moved,
@@ -217,7 +224,7 @@ impl Word {
     }
 }
 /// All public words, for composing phrasebook capacities without allocation.
-pub const ALL: [Word; 117] = [
+pub const ALL: [Word; 120] = [
     Word::Refusal(RefusalWord::Stale),
     Word::Refusal(RefusalWord::Full),
     Word::Hold(HoldWord::Exceeded(Bound::Reasoning)),
@@ -335,6 +342,9 @@ pub const ALL: [Word; 117] = [
     Word::Decision(DecisionWord::FunderPool),
     Word::Decision(DecisionWord::FunderRecurring),
     Word::Decision(DecisionWord::FunderPeriod),
+    Word::Lifted,
+    Word::Refusal(RefusalWord::HoldOwnerParty),
+    Word::Refusal(RefusalWord::HoldOwnerTask),
 ];
 #[must_use]
 pub fn phrase_shapes(text: u32) -> Box<[PhraseShape]> {

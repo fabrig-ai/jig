@@ -217,7 +217,7 @@ pub(super) fn heap_worst_case(limits: &super::DocumentLimits) -> Option<u64> {
     let path = List::<Box<[u8]>>::worst_case(limits.lines)?.checked_add(lines.checked_mul(text)?)?;
     u64::try_from(size_of::<ChipDetails>())
         .ok()?
-        .checked_add(text.checked_mul(7)?)?
+        .checked_add(text.checked_mul(8)?)?
         .checked_add(List::<u64>::worst_case(limits.lines)?)?
         .checked_add(List::<u16>::worst_case(limits.lines)?)?
         .checked_add(List::<super::task_tree::Dependency>::worst_case(limits.lines)?)?
