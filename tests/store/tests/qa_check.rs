@@ -63,6 +63,13 @@ fn refuses_check(world: &mut World, expected: &Check) {
 fn tokens_at_bounds_keep_numbers_across_many_pages() {
     // Two-row pages, seventeen tokens, including both ends of the drawn-number exclusion.
     const TOKENS: u64 = 17;
+    // Initial rows/wires (1), note seed (2), label page (3), shelves'
+    // held labels (4), note page (5), shelves' weights (6), seal (7):
+    // store.md 10.2 step 4. Secrets use their own commit numbers.
+    const PATCHED_LAST: u64 = 7;
+    // Nothing reopens at the switch (10.2 step 8); engine.md 6 then
+    // requires a separate start mark before the token reads.
+    const MARKED_LAST: u64 = PATCHED_LAST + 1;
     let mut records = patches::Records::story();
     records.tokens = (0..TOKENS - 1).map(|n| (n, vec![b'x'; TOKEN_BOUND])).collect();
     records.tokens.push((CARRIED_FIRST - 1, vec![]));
@@ -75,8 +82,10 @@ fn tokens_at_bounds_keep_numbers_across_many_pages() {
     let before = patches::source(&mut world);
     world.patch_sets(patches::SETS);
     let last = world.open_switched().expect("tokens patch with their map's bounds");
+    assert_eq!(last, PATCHED_LAST);
     patches::whole(&mut world);
     patches::kept(&before, &patches::source(&mut world), &"tokens");
+    assert_eq!(world.mark(), Some(MARKED_LAST));
     records.check(&mut world, 2, &"both token bounds and number bounds");
     assert_eq!(
         patches::counts(&mut world),
@@ -90,11 +99,14 @@ fn tokens_at_bounds_keep_numbers_across_many_pages() {
     let seal = manifest(&mut world, 2);
     assert_eq!(seal.store, last);
     assert!(seal.secrets.is_some_and(|number| number > TOKENS));
-    let core::Record::Core(core::CoreRecord::Deployment(header)) = world.get(root::header(last).key()) else {
+    let core::Record::Core(core::CoreRecord::Deployment(header)) = world.get(root::header(MARKED_LAST).key()) else {
         panic!("deployment header");
     };
-    assert_eq!(header.commits, last);
-    assert_eq!(world.commit(Box::new([jig_protocol_store::Write::Save(root::header(last + 1))])), Some(last + 1));
+    assert_eq!(header.commits, MARKED_LAST);
+    assert_eq!(
+        world.commit(Box::new([jig_protocol_store::Write::Save(root::header(MARKED_LAST + 1))])),
+        Some(MARKED_LAST + 1)
+    );
     world.crash(SEED);
     world.reopen();
     records.check(&mut world, 2, &"restart at patched levels");
