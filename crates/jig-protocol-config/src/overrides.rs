@@ -19,6 +19,8 @@ pub fn apply(limits: &mut Limits, name: &[u8], value: u64) -> Result<(), What> {
     let owner = name.get(..dot).ok_or(What::Override)?;
     let field = name.get(dot.checked_add(1).ok_or(What::Override)?..).ok_or(What::Override)?;
     match owner {
+        b"store" => set_store(&mut limits.store.store, field, value),
+        b"secrets" => set_store(&mut limits.store.secrets, field, value),
         b"tasks" => set_tasks(&mut core.tasks, field, value),
         b"people" => set_people(&mut core.people, field, value),
         b"fleet" => set_fleet(&mut core.fleet, field, value),
@@ -55,6 +57,14 @@ pub fn apply(limits: &mut Limits, name: &[u8], value: u64) -> Result<(), What> {
         _ => Err(What::Override),
     }
 }
+fn set_store(limits: &mut skein_kv::Limits, name: &[u8], value: u64) -> Result<(), What> {
+    if name != b"budget" {
+        return Err(What::Override);
+    }
+    *limits = profile::store_budget(*limits, value).ok_or(What::Override)?;
+    Ok(())
+}
+
 fn count(value: u64) -> Result<u32, What> {
     u32::try_from(value).or(Err(What::Override))
 }
@@ -757,6 +767,8 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
             fits.hub.expect("hub fit checked")
         }
         Some(b"link") => true,
+        Some(b"store") => store_fits(&limits.store.store),
+        Some(b"secrets") => store_fits(&limits.store.secrets),
         Some(
             b"core" | b"tasks" | b"people" | b"fleet" | b"authority" | b"brief" | b"accounts" | b"notes" | b"views"
             | b"documents",
@@ -768,6 +780,15 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
         }
         Some(_) | None => false,
     }
+}
+
+// A store must admit its largest value and a full one-operation record,
+// in addition to the KV component's own usability and memory checks.
+fn store_fits(limits: &skein_kv::Limits) -> bool {
+    let record = u64::from(limits.key).saturating_add(u64::from(limits.value)).saturating_add(35);
+    limits.budget >= u64::from(limits.value)
+        && u64::from(limits.commit) >= record
+        && skein_kv::worst_case(limits).is_some()
 }
 
 /// The accounts' driver listens for each sign-in at once, at least one, on two sockets each beside

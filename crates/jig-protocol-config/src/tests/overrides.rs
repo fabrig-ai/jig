@@ -1,3 +1,4 @@
+#![expect(clippy::disallowed_macros, reason = "tests are ordinary Rust (programming-model.md, 10.2)")]
 use super::fixtures::{document, path};
 use crate::{Limits, Problems, Profile, What, overrides, profile};
 
@@ -12,6 +13,99 @@ fn problem(bytes: &[u8], segments: &[&[u8]], what: What) {
     assert_eq!(errors.problems.len(), 1);
     assert_eq!(errors.problems.get(0).unwrap().path, path(segments));
     assert_eq!(errors.problems.get(0).unwrap().what, what);
+}
+
+#[test]
+fn a_store_budget_override_sets_the_budget_and_what_follows_from_it() {
+    const BUDGET: u64 = 16_777_216;
+    for profile_name in [Profile::Small, Profile::Standard] {
+        for owner in ["store", "secrets"] {
+            let original = profile(profile_name);
+            let mut expected = original;
+            let store = if owner == "store" { &mut expected.store.store } else { &mut expected.store.secrets };
+            *store = profile::store_budget(*store, BUDGET).unwrap();
+            assert_eq!(store.budget, BUDGET);
+            assert_eq!(u64::from(store.commit), BUDGET + u64::from(store.ops) * (u64::from(store.key) + 9) + 26);
+            assert_eq!(store.queued_bytes, u64::from(store.commit) * u64::from(store.queued));
+            assert_eq!(store.segment, u64::from(store.commit) * 2);
+            assert_eq!(store.snapshot_after, u64::from(store.commit));
+            let name = if profile_name == Profile::Small { "small" } else { "standard" };
+            let configuration = format!(r#"{{"profile":"{name}","overrides":{{"{owner}.budget":{BUDGET}}}}}"#);
+            assert_eq!(parse(configuration.as_bytes()), Ok(expected));
+        }
+    }
+}
+
+#[test]
+fn the_profiles_derive_their_store_limits_by_the_same_function() {
+    for profile_name in [Profile::Small, Profile::Standard] {
+        let limits = profile(profile_name);
+        for store in [limits.store.store, limits.store.secrets] {
+            // Clear the derived fields so retaining stale constants cannot pass.
+            let base = skein_kv::Limits { commit: 0, queued_bytes: 0, segment: 0, snapshot_after: 0, ..store };
+            assert_eq!(profile::store_budget(base, store.budget), Some(store));
+        }
+    }
+}
+
+#[test]
+fn a_store_budget_too_small_for_the_profile_is_refused_naming_it() {
+    for profile_name in [Profile::Small, Profile::Standard] {
+        let limits = profile(profile_name);
+        for (owner, store) in [("store", limits.store.store), ("secrets", limits.store.secrets)] {
+            let name = if profile_name == Profile::Small { "small" } else { "standard" };
+            let minimum = u64::from(store.value);
+            let admitted = format!(r#"{{"profile":"{name}","overrides":{{"{owner}.budget":{minimum}}}}}"#);
+            let found = parse(admitted.as_bytes()).expect("one largest value fits at the bound");
+            assert_eq!(if owner == "store" { found.store.store.budget } else { found.store.secrets.budget }, minimum);
+            for budget in [0, minimum - 1] {
+                let refused = format!(r#"{{"profile":"{name}","overrides":{{"{owner}.budget":{budget}}}}}"#);
+                let field = format!("{owner}.budget");
+                problem(refused.as_bytes(), &[b"limits", b"overrides", field.as_bytes()], What::Override);
+            }
+        }
+    }
+}
+
+#[test]
+fn store_budget_overrides_refuse_unknown_fields_and_unrepresentable_commits() {
+    for owner in ["store", "secrets"] {
+        for field in ["absent", "commit", "queued_bytes", "segment", "snapshot_after", "value"] {
+            let name = format!("{owner}.{field}");
+            assert_eq!(overrides::apply(&mut small(), name.as_bytes(), 1), Err(What::Override));
+        }
+        for budget in [u64::MAX, u64::from(u32::MAX)] {
+            let configuration = format!(r#"{{"profile":"small","overrides":{{"{owner}.budget":{budget}}}}}"#);
+            let field = format!("{owner}.budget");
+            refused(configuration.as_bytes(), field.as_bytes());
+        }
+    }
+}
+
+#[test]
+fn the_composed_reader_checks_both_store_budget_overrides_before_use() {
+    use super::fixtures::{ENGINE_SMALL, engine, with};
+    for owner in ["store", "secrets"] {
+        let minimum = small().store.store.value;
+        for budget in [minimum, minimum - 1] {
+            let replacement = format!(r#"{{"profile":"small","overrides":{{"{owner}.budget":{budget}}}}}"#);
+            let configuration = with(ENGINE_SMALL, br#"{"profile": "small"}"#, replacement.as_bytes());
+            let result = engine(&configuration);
+            if budget == minimum {
+                let found = result.expect("composed reader admits the boundary budget").limits;
+                assert_eq!(
+                    if owner == "store" { found.store.store.budget } else { found.store.secrets.budget },
+                    u64::from(minimum)
+                );
+            } else {
+                let errors = result.unwrap_err();
+                let field = format!("{owner}.budget");
+                assert_eq!(errors.problems.len(), 1);
+                assert_eq!(errors.problems.get(0).unwrap().path, path(&[b"limits", b"overrides", field.as_bytes()]));
+                assert_eq!(errors.problems.get(0).unwrap().what, What::Override);
+            }
+        }
+    }
 }
 
 #[test]
@@ -133,6 +227,8 @@ const SMALL: &[(&[u8], u64)] = &[
     (b"tasks.project_placed_holds", 4),
     (b"tasks.party_placed_holds", 2),
     (b"tasks.exemptions", 8),
+    (b"store.budget", 268_435_456),
+    (b"secrets.budget", 268_435_456),
     (b"tasks.tasks", 8),
     (b"tasks.funders", 8),
     (b"tasks.project_tasks", 8),

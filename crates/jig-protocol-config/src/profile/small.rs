@@ -396,26 +396,30 @@ pub(super) const DRIVER: skein_oauth_accounts::Limits = skein_oauth_accounts::Li
 // Ending authority adds (batch + 1)^2 = (2 + 1)^2 = 9 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
 // Task/run settings revisions add nine bytes: u32 plus an optional u32.
-pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
-    key: 2079,
-    value: 1_567_847,
-    // Two operations per journal write, three creation rows and an orphan erase: 2 * 20,801 + 4.
-    ops: 41_606,
-    // 256 MiB values + 41,606 operations * (2,079 key + 9 framing) + 26 frame bytes.
-    commit: 355_308_810,
-    queued: 3,
-    // Three queued commits; segment holds two, snapshot follows one.
-    queued_bytes: 1_065_926_430,
-    budget: 268_435_456,
-    segment: 710_617_620,
-    snapshot_after: 355_308_810,
-    chunk: 1_569_946,
-    // Accounting ceiling for applications' derived pages: the shipped largest
-    // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
-    // No row, chunk, decoder, queue or read-slot capacity changes with it.
-    page: skein_kv::Page { rows: 2, bytes: 1_590_110 },
-    deadline: Duration::from_secs(30),
-};
+pub(super) const STORE_KV: skein_kv::Limits = super::store_budget(
+    skein_kv::Limits {
+        key: 2079,
+        value: 1_567_847,
+        // Two operations per journal write, three creation rows and an orphan erase: 2 * 20,801 + 4.
+        ops: 41_606,
+        // 256 MiB values + 41,606 operations * (2,079 key + 9 framing) + 26 frame bytes.
+        commit: 0,
+        queued: 3,
+        // Three queued commits; segment holds two, snapshot follows one.
+        queued_bytes: 0,
+        budget: 268_435_456,
+        segment: 0,
+        snapshot_after: 0,
+        chunk: 1_569_946,
+        // Accounting ceiling for applications' derived pages: the shipped largest
+        // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
+        // No row, chunk, decoder, queue or read-slot capacity changes with it.
+        page: skein_kv::Page { rows: 2, bytes: 1_590_110 },
+        deadline: Duration::from_secs(30),
+    },
+    268_435_456,
+)
+.expect("profile store budget and framing fit");
 pub(super) const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {
     core: CORE,
     store: STORE_KV,
