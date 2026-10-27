@@ -188,3 +188,30 @@ fn a_settings_read_is_busy_when_the_shared_load_slots_are_full() {
         core::SettingsAnswer::Revision(reads::RevisionAnswer::Revision { .. })
     ));
 }
+
+#[test]
+fn a_charter_set_replaces_its_tools_and_retains_the_held_versions_mask() {
+    let (mut world, signed, _) = proposing_run(true);
+    let original = world.domain.settings().charter(1).expect("fixture charter").clone();
+    let mut next = original.clone();
+    next.policy.tools = jig_domain_authority::Tools(core::ToolFamilies::JIG.settings);
+    let item = settings::Item {
+        setting: settings::Setting::Charter(1),
+        edit: settings::Edit::Set(settings::Value::Charter(Box::new(next.clone()))),
+    };
+    changed(&change(&mut world, signed, 1, 1, Box::new([item])), 2);
+    for (revision, expected) in [(1, original), (2, next)] {
+        assert_eq!(
+            read(
+                &mut world,
+                signed,
+                reads::Read::Setting { setting: settings::Setting::Charter(1), revision, proposal: None }
+            ),
+            reads::Answer::Setting(Box::new(reads::SettingDocument {
+                setting: settings::Setting::Charter(1),
+                revision,
+                value: settings::Value::Charter(Box::new(expected)),
+            }))
+        );
+    }
+}

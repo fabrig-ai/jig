@@ -507,6 +507,7 @@ fn hold_reason(reason: &jig_domain_people::HoldReason) -> &'static [u8] {
             jig_domain_people::Bound::History => b"for its configured history bound",
             jig_domain_people::Bound::Window => b"for its configured window bound",
             jig_domain_people::Bound::Output => b"for its configured output bound",
+            jig_domain_people::Bound::HostPart => b"for its host part byte bound",
         },
         HoldReason::Failures { class } => match class {
             FailureClass::Transient => b"for transient failures",

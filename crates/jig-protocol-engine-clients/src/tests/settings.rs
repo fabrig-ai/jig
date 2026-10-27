@@ -158,6 +158,7 @@ fn charter() -> jig_domain_core::Charter {
         hosts: jig_domain_fleet::Kinds::Both,
         spend: 100,
         policy: core::RunPolicy {
+            tools: jig_domain_authority::Tools(2047),
             instructions: Box::from("instructions λ".as_bytes()),
             waiting: Duration::from_secs(2),
             resume: true,

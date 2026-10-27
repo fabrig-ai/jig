@@ -113,6 +113,7 @@ fn charter(value: w::Charter) -> c::Charter {
         },
         spend: v.spend,
         policy: c::RunPolicy {
+            tools: a::Tools(v.tools),
             instructions: v.instructions,
             waiting: v.waiting,
             resume,

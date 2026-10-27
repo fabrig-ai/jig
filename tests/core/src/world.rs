@@ -382,6 +382,7 @@ pub fn config(seed: u64) -> root::Config {
                     hosts: fleet::Kinds::Workers,
                     spend: 100,
                     policy: core::RunPolicy {
+                        tools: jig_domain_authority::Tools(2047),
                         instructions: b"Complete the task within its authority.".as_slice().into(),
                         waiting: Duration::from_secs(1),
                         resume: true,

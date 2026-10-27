@@ -268,6 +268,7 @@ fn a_run_failed_on_its_limited_or_refused_account_keeps_the_account() {
 fn only_an_agents_grants_refusal_carries_the_grants_start_cause() {
     for (why, expected) in [
         (smith::RunInvalid::Grants, host::StartCause::Grants),
+        (smith::RunInvalid::HostPart { bound: 33419 }, host::StartCause::HostPart { bound: 33419 }),
         (smith::RunInvalid::Messages, host::StartCause::Other),
         (smith::RunInvalid::Outcome, host::StartCause::Other),
         (smith::RunInvalid::Workspace, host::StartCause::Other),

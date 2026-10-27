@@ -112,6 +112,7 @@ pub fn wire_charter(value: &c::Charter, limits: &w::Limits) -> Result<w::Charter
     w::Charter::new(
         limits,
         w::CharterParts {
+            tools: value.tools,
             skein_bools: [value.resume, value.inspect, value.modify, value.shell, value.agents],
             number: value.number,
             instructions: bytes::copy_of(value.instructions.bytes()),
@@ -134,6 +135,7 @@ pub fn restore_charter(value: &w::Charter, limits: &Limits) -> Result<c::Charter
         alternatives.push(restore_setting_model(item, limits)?).expect("same capacity");
     }
     Ok(c::Charter {
+        tools: value.tools(),
         number: value.number(),
         instructions: text(value.instructions(), 1_114_240)?,
         waiting: value.waiting(),
