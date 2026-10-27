@@ -284,11 +284,18 @@ fn run_phase(
         )
     })
     .with_machine(Machine(machine));
+    let agent_limits = smith_agent_process_world::limits();
+    // smith's agent_shell.rs extra_operations reserves one hosted open per permitted root.
+    let root_opens = agent_limits.domain.run.directories;
     world.host(skein_world::HostedProgram {
         program: b"agent-program".as_slice().into(),
         make: agent,
         instances: 1,
-        operations: smith_agent_process_world::limits().routes.checked_add(2).expect("agent operations"),
+        operations: agent_limits
+            .routes
+            .checked_add(2)
+            .and_then(|count| count.checked_add(root_opens))
+            .expect("agent operations and hosted root opens"),
     });
     world.spawn_restartable(
         vec![

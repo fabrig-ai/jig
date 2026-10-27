@@ -112,7 +112,12 @@ fn agent(_spawn: &kernel::Spawn, inherited: &Inherited) -> Proc {
             pid: 101,
             trace: None,
             roots: Some(
-                inherited.roots.iter().filter(|(name, _)| name.as_ref() != b"programs").map(|(_, fd)| *fd).collect(),
+                inherited
+                    .roots
+                    .iter()
+                    .filter(|(name, _)| name.as_ref() != b"programs")
+                    .map(|(name, fd)| (name.clone(), *fd))
+                    .collect(),
             ),
             programs: Some(smith_agent_shell::ProgramResources {
                 relay: "/private/programs/relay".into(),
