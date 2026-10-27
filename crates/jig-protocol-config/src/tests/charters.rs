@@ -91,6 +91,18 @@ fn charter_documents_override_and_start_capacity_are_checked() {
         (
             2_u32,
             true,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":8,"core.tasks.charter_documents":2}}"#
+                .as_slice(),
+        ),
+        (
+            0,
+            false,
+            br#""limits":{"profile":"small","overrides":{"brief.sections":8,"core.tasks.charter_documents":0}}"#
+                .as_slice(),
+        ),
+        (
+            2_u32,
+            true,
             br#""limits":{"profile":"small","overrides":{"brief.sections":8,"tasks.charter_documents":2}}"#.as_slice(),
         ),
         (
