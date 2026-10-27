@@ -36,6 +36,7 @@ fn started() -> Service {
     core.people.initial_owners = 2;
     core.people.requests = 4;
     core.tasks.tasks = 2;
+    core.tasks.exemptions = 2;
     core.people.operations = 2;
     core.tasks.project_tasks = 2;
     core.tasks.tree_tasks = 2;

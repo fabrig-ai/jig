@@ -273,7 +273,24 @@ fn a_compound_that_changes_a_tasks_placed_hold_twice_is_refused_naming_the_secon
         vec![Operation::Stop { task: ROOT, hold: 100 }, Operation::Release { task: 7, again: None, message: None }],
         1_000,
     );
-    assert!(out.iter().any(|request| matches!(request, Request::Done { .. })));
+    assert!(out.iter().any(|request| match request {
+        Request::Done { .. } => true,
+        _ => false,
+    }));
     assert_eq!(test.domain.task(ROOT).unwrap().placed, Some(100));
     assert_eq!(test.domain.task(7).unwrap().placed, None);
+}
+
+#[test]
+fn repeated_subtree_placement_names_the_earlier_hold_before_capacity() {
+    let mut test = chat::cohort();
+    test.env.limits.placed_holds = 1;
+    let before = test.stored.clone();
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: ROOT, hold: 100 }, Operation::Stop { task: FIRST, hold: 101 }],
+        1_000,
+    );
+    refused(out, 1, FIRST, Refusal::Placed { hold: 100 });
+    assert_eq!(test.stored, before);
 }

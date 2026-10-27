@@ -717,3 +717,32 @@ fn a_restart_without_connectors_still_switches_before_adoption() {
         assert!(core.restart_ready());
     }
 }
+
+#[test]
+fn a_durable_placed_stop_restores_with_its_task_and_releases_after_restart() {
+    use jig_core_world::fixtures::{ask_as, live_row};
+    use jig_domain_people as people;
+    let mut world = World::new(2210, false);
+    let (task, attempt) = world.assignments[0];
+    let sign_in = world.sign_in.expect("signed in requester");
+    ask_as(&mut world, sign_in, 71, people::Ask::Stop { project: 1, task });
+    world.end(tasks::End::Parked, 0);
+    let hold = live_row(&world, task).placed.expect("placed stop");
+    let revision = live_row(&world, task).revisions.hold;
+    let key = root::Key::Core(core::Key::Tasks(tasks::Key::PlacedHold(hold)));
+    let durable = world.store.rows[&key].clone();
+    let assignments = world.assignments.len();
+    world.restart(2210, false);
+    assert_eq!(world.domain.restart_failure(), None);
+    assert!(world.domain.ready());
+    assert_eq!(world.assignments.len(), assignments);
+    assert_eq!(world.store.rows.get(&key), Some(&durable));
+    assert_eq!(live_row(&world, task).revisions.hold, revision);
+    hello(&mut world, Box::new([]));
+    account(&mut world);
+    ask_as(&mut world, sign_in, 72, people::Ask::Release { project: 1, task, revision, again: None });
+    assert_eq!(world.people_answers.last(), Some(&people::Reply::Outcome(people::Outcome::Released { task })));
+    assert!(!world.store.rows.contains_key(&key));
+    assert_eq!(live_row(&world, task).placed, None);
+    assert!(world.assignments.iter().any(|(number, next)| *number == task && *next > attempt));
+}

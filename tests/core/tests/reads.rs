@@ -345,7 +345,7 @@ fn a_question_read_after_its_task_ended_finds_both_lines_by_key() {
 fn an_escalation_read_shows_its_latest_decision_and_its_hold() {
     let mut world = world(792);
     let task = chat_task(&world);
-    request(&mut world, 92, people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     request(
         &mut world,

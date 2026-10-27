@@ -371,13 +371,7 @@ impl Core {
                     }
             }
             tasks::Stored::PlacedHold(hold) => {
-                hold.number != 0
-                    && hold.number <= deployment.messages
-                    && self.authority.policy(hold.project).is_some()
-                    && match hold.owner {
-                        tasks::Owner::Party { person } => person != 0 && self.people.identity(person).is_some(),
-                        tasks::Owner::Task { task } => task != 0 && task <= deployment.tasks,
-                    }
+                self.authority.policy(hold.project).is_some() && supported_placed_hold(hold, &deployment)
             }
             tasks::Stored::Stub(stub) => stub.task <= deployment.tasks,
             tasks::Stored::Live(task) => {
@@ -776,4 +770,13 @@ impl RunProof {
             terminal: None,
         }
     }
+}
+
+fn supported_placed_hold(hold: &jig_domain_tasks::PlacedHold, deployment: &Deployment) -> bool {
+    hold.number != 0
+        && hold.number <= deployment.messages
+        && match hold.owner {
+            jig_domain_tasks::Owner::Party { person } => person != 0 && person <= deployment.people,
+            jig_domain_tasks::Owner::Task { task } => task != 0 && task <= deployment.tasks,
+        }
 }

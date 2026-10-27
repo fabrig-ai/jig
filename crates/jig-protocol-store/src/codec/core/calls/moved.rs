@@ -53,8 +53,8 @@ pub(super) fn encode_hold_reason(
             wire::HoldReasonDependencyParts { task: *task },
         )?),
         domain::HoldReason::Stopped => wire::HoldReason::Stopped,
-        domain::HoldReason::Placed { hold: party } => {
-            wire::HoldReason::Placed(wire::HoldReasonPlaced::new(limits, wire::HoldReasonPlacedParts { hold: *party })?)
+        domain::HoldReason::Placed { hold } => {
+            wire::HoldReason::Placed(wire::HoldReasonPlaced::new(limits, wire::HoldReasonPlacedParts { hold: *hold })?)
         }
         domain::HoldReason::Drift => wire::HoldReason::Drift,
         domain::HoldReason::Effects => wire::HoldReason::Effects,
@@ -103,8 +103,8 @@ pub(super) fn decode_hold_reason(value: wire::HoldReason) -> domain::HoldReason 
         }
         wire::HoldReason::Stopped => domain::HoldReason::Stopped,
         wire::HoldReason::Placed(value) => {
-            let wire::HoldReasonPlacedParts { hold: party } = value.into_parts();
-            domain::HoldReason::Placed { hold: party }
+            let wire::HoldReasonPlacedParts { hold } = value.into_parts();
+            domain::HoldReason::Placed { hold }
         }
         wire::HoldReason::Drift => domain::HoldReason::Drift,
         wire::HoldReason::Effects => domain::HoldReason::Effects,

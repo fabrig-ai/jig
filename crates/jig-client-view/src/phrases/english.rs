@@ -534,6 +534,18 @@ pub fn language() -> Language {
                 Box::new([Segment::Text(copy_of(b"Engine admission limit: holder accounts"))])
             }
             JigPhrase::EngineLimitSources => Box::new([Segment::Text(copy_of(b"Engine admission limit: sources"))]),
+            JigPhrase::EngineLimitPlacedHolds => {
+                Box::new([Segment::Text(copy_of(b"Engine admission limit: placed holds"))])
+            }
+            JigPhrase::EngineLimitProjectPlacedHolds => {
+                Box::new([Segment::Text(copy_of(b"Engine admission limit: project placed holds"))])
+            }
+            JigPhrase::EngineLimitPartyPlacedHolds => {
+                Box::new([Segment::Text(copy_of(b"Engine admission limit: party placed holds"))])
+            }
+            JigPhrase::EngineLimitExemptions => {
+                Box::new([Segment::Text(copy_of(b"Engine admission limit: exemptions"))])
+            }
             JigPhrase::EngineLimitSettingsProposals => {
                 Box::new([Segment::Text(copy_of(b"Engine admission limit: pending settings proposals"))])
             }

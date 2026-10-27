@@ -281,6 +281,7 @@ fn prepared(clients: bool) -> crate::Service {
     let (mut config, [first, second]) = crate::startup::fixture_connectors(&f::engine_document());
     let core = &mut config.limits.core;
     core.tasks.tasks = 2;
+    core.tasks.exemptions = 2;
     core.people.operations = 2;
     core.tasks.project_tasks = 2;
     core.tasks.tree_tasks = 2;

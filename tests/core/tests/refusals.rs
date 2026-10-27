@@ -55,7 +55,7 @@ fn second_person(world: &mut World, role: bool) -> u64 {
 fn deciding_an_escalation_after_its_release_is_refused_as_not_waiting() {
     let mut world = World::new(152, false);
     let task = world.call_key(1).task;
-    ask(&mut world, 60, people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     let revision = hold_revision(&world, task);
     ask(&mut world, 61, people::Ask::Release { project: 1, task, revision, again: None });
@@ -76,7 +76,7 @@ fn deciding_an_escalation_another_party_decided_says_by_whom() {
     let first = world.sign_in.expect("first person");
     let second = second_person(&mut world, true);
     let task = world.call_key(1).task;
-    ask_as(&mut world, first, 60, people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     let revision = hold_revision(&world, task);
     ask_as(
@@ -112,7 +112,7 @@ fn deciding_an_escalation_another_party_decided_says_by_whom() {
 fn deciding_an_escalation_of_an_unseen_project_is_unknown() {
     let mut world = World::new(154, false);
     let task = world.call_key(1).task;
-    ask(&mut world, 60, people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     let revision = hold_revision(&world, task);
     let other = second_person(&mut world, false);

@@ -232,6 +232,12 @@ pub fn action(
             limits,
             wire::ProposedWideningParts { task: *task, authority: value::authority(authority, limits, moved)? },
         )?),
+        domain::ProposalAction::ReleasePlaced { task, hold, revision } => {
+            wire::ProposalAction::ReleasePlaced(wire::ReleasePlaced::new(
+                limits,
+                wire::ReleasePlacedParts { task: *task, hold: *hold, revision: *revision },
+            )?)
+        }
         domain::ProposalAction::Release { task } => {
             wire::ProposalAction::Release(wire::Task::new(limits, wire::TaskParts { task: *task })?)
         }
@@ -275,6 +281,10 @@ pub fn read_action(
         wire::ProposalAction::Widen(value) => {
             let wire::ProposedWideningParts { task, authority } = value.into_parts();
             domain::ProposalAction::Widen { task, authority: value::read_authority(authority, limits)? }
+        }
+        wire::ProposalAction::ReleasePlaced(value) => {
+            let wire::ReleasePlacedParts { task, hold, revision } = value.into_parts();
+            domain::ProposalAction::ReleasePlaced { task, hold, revision }
         }
         wire::ProposalAction::Release(value) => {
             let wire::TaskParts { task } = value.into_parts();

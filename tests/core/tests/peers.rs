@@ -238,6 +238,84 @@ fn a_person_stops_a_scripted_run_and_words_release_it_for_a_new_attempt() {
     assert!(peers.quiescent(), "{:?}", world.trace);
 }
 
+#[test]
+fn a_person_stops_a_goal_and_its_delegates_runs_are_cancelled_with_its_own() {
+    use jig_core_world::{fixtures::live_row, stories::delegates::delegate_pair};
+    let (mut config, mut limits) = fixture(209, 0);
+    // Three live runs reserve twenty each; this story's member may fund the whole tree.
+    config.core.seed_projects[0].policy.policy.roles[2].authority.budget.spend = 80;
+    limits.core.fleet.slots = 3;
+    limits.core.tasks.inbox_messages = 8;
+    limits.core.tasks.inbox_bytes = 512;
+    limits.core.people.inbox_recipients = 24;
+    jig_core_world::peers::journal(&mut limits);
+    let worker = Worker::new(7, 3, (0..6).map(|_| Box::new([Script::Wait]) as Box<[Script]>).collect());
+    let mut world = World::scripted(config, limits, Peers::new(vec![worker], vec![party(9, Role::Member, 30_000)]));
+    let person = world.peers.as_ref().expect("peers").parties[0].person.expect("member signed in");
+    world.send(root::Event::Core(core::Event::People(people::Event::Roles {
+        project: 1,
+        holdings: Box::new([people::Holding { person, role: people::Role::Member }]),
+    })));
+    acts(
+        &mut world,
+        0,
+        Box::new([Act::Request {
+            key: [61; 16],
+            ask: Ask::Goal {
+                words: Box::from(&b"a goal with two delegates"[..]),
+                budget: 80,
+                priority: 1,
+                deadline: None,
+            },
+        }]),
+    );
+    let goal = world.peers.as_ref().expect("peers").parties[0].last_task.expect("goal started");
+    assert_eq!(live_row(&world, goal).requester, tasks::Party::Person(person));
+    assert_eq!(live_row(&world, goal).tracked, Some(1));
+    let (first, second) = delegate_pair(&mut world);
+    let before: Vec<_> = [goal, first, second]
+        .into_iter()
+        .map(|task| {
+            let attempt = live_row(&world, task).attempt;
+            assert!(world.assignments.contains(&(task, attempt)), "each delegate has a live run");
+            (task, attempt)
+        })
+        .collect();
+    acts(&mut world, 0, Box::new([Act::Request { key: [62; 16], ask: Ask::Stop { task: Task::Number(goal) } }]));
+    assert_eq!(world.cancellations.len(), before.len());
+    let hold = live_row(&world, goal).placed.expect("placed subtree stop");
+    for &(task, attempt) in &before {
+        assert_eq!(world.cancellations.iter().filter(|run| **run == (task, attempt)).count(), 1);
+        let row = live_row(&world, task);
+        assert_eq!(row.placed, Some(hold));
+        assert!(
+            matches!(row.phase, tasks::Phase::Held { why: tasks::Hold::Placed { hold: number }, .. } if number == hold)
+        );
+    }
+    let key = root::Key::Core(core::Key::Tasks(tasks::Key::PlacedHold(hold)));
+    assert!(
+        matches!(world.store.rows.get(&key), Some(root::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(row))))
+        if row.owner == (tasks::Owner::Party { person }) && row.scope == (tasks::Scope::Subtree { task: goal }))
+    );
+    let revision = live_row(&world, goal).revisions.hold;
+    acts(
+        &mut world,
+        0,
+        Box::new([Act::Request {
+            key: [63; 16],
+            ask: Ask::Release { task: Task::Number(goal), revision, again: None },
+        }]),
+    );
+    for (task, attempt) in before {
+        let row = live_row(&world, task);
+        assert_eq!(row.placed, None);
+        assert!(!matches!(row.phase, tasks::Phase::Held { .. }));
+        assert!(row.attempt > attempt);
+        assert!(world.assignments.contains(&(task, row.attempt)));
+    }
+    assert!(!world.store.rows.contains_key(&key));
+}
+
 fn a_request_sent_twice_creates_one_chat_and_replays_the_same_answer() {
     let mut world = scripted(206, vec![Box::new([Script::Finish { report: Box::from(&b"done"[..]) }])], false);
     acts(

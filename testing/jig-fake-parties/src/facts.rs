@@ -255,7 +255,7 @@ pub enum HoldReason {
     },
     /// An authorized stop has no named party.
     Stopped,
-    /// A named party stopped the task.
+    /// A separately numbered placed hold keeps the task held.
     Placed {
         hold: u64,
     },

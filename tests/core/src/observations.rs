@@ -163,6 +163,8 @@ pub fn task(value: &tasks::TaskRecord) -> r::Task {
         phase: phase(&value.phase),
         spec_revision: value.revisions.spec,
         hold_revision: value.revisions.hold,
+        placed: value.placed,
+        placed_reason: matches!(value.phase, tasks::Phase::Held { why: tasks::Hold::Placed { .. }, .. }),
         dependencies: value.dependencies.to_vec(),
         delegates: value.delegates.to_vec(),
         pools: if value.holds_taken && !matches!(value.phase, tasks::Phase::Ended(_)) {
@@ -767,6 +769,18 @@ impl Observer {
                     core::settings::Record::Revision { revision, history: false },
                 ))) => {
                     snapshot.newest = snapshot.newest.max(revision.head.number);
+                }
+                root::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(value))) => {
+                    snapshot.placed_holds.insert(
+                        value.number,
+                        r::PlacedHold {
+                            root: match value.scope {
+                                tasks::Scope::Subtree { task } => Some(task),
+                                tasks::Scope::Project => None,
+                            },
+                            lifted: value.lifted,
+                        },
+                    );
                 }
                 root::Record::Core(core::Record::Tasks(tasks::Stored::PersonProposal(value)))
                     if matches!(value.state, tasks::PersonProposalState::Pending { .. }) =>

@@ -1269,7 +1269,12 @@ fn documents_every_escalation_reason_keeps_the_task_story_and_independent_revisi
     ];
     for reason in reasons {
         let (mut core, limits) = make_tree();
-        send_task(&mut core, &limits, tasks::Event::Hold { task: 2, why: reason });
+        let event = if let tasks::Hold::Placed { hold } = reason {
+            placed(2, 1, hold)
+        } else {
+            tasks::Event::Hold { task: 2, why: reason }
+        };
+        send_task(&mut core, &limits, event);
         let Document::Escalation(value) =
             make(&core, &limits, 1, &Subject::Escalation { task: 2 }, &window(), Wall::EPOCH).unwrap()
         else {
@@ -3727,3 +3732,21 @@ fn a_restored_policy_cannot_pass_the_deployments_projects_mark() {
 mod ended_watches;
 
 mod restart_checks;
+
+fn placed(task: u64, person: u64, number: u64) -> tasks::Event {
+    tasks::Event::Place {
+        reply_to: ReplyTo::new(Token::new(number)),
+        hold: tasks::PlacedHold {
+            number,
+            project: 1,
+            owner: tasks::Owner::Party { person },
+            mode: tasks::Mode::Stop,
+            scope: tasks::Scope::Subtree { task },
+            reason: Box::new([]),
+            placed_at: 0,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    }
+}

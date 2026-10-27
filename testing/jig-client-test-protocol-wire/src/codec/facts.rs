@@ -228,6 +228,10 @@ pub(super) fn encode_limit_kind(value: d::application_core::LimitKind) -> w::Lim
         d::application_core::LimitKind::Policy => w::LimitKind::Policy,
         d::application_core::LimitKind::Resource => w::LimitKind::Resource,
         d::application_core::LimitKind::Service => w::LimitKind::Service,
+        d::application_core::LimitKind::PlacedHolds => w::LimitKind::PlacedHolds,
+        d::application_core::LimitKind::ProjectPlacedHolds => w::LimitKind::ProjectPlacedHolds,
+        d::application_core::LimitKind::PartyPlacedHolds => w::LimitKind::PartyPlacedHolds,
+        d::application_core::LimitKind::Exemptions => w::LimitKind::Exemptions,
     }
 }
 pub(super) fn decode_limit_kind(value: w::LimitKind, _limits: &d::Limits) -> d::application_core::LimitKind {
@@ -267,6 +271,10 @@ pub(super) fn decode_limit_kind(value: w::LimitKind, _limits: &d::Limits) -> d::
         w::LimitKind::Policy => d::application_core::LimitKind::Policy,
         w::LimitKind::Resource => d::application_core::LimitKind::Resource,
         w::LimitKind::Service => d::application_core::LimitKind::Service,
+        w::LimitKind::PlacedHolds => d::application_core::LimitKind::PlacedHolds,
+        w::LimitKind::ProjectPlacedHolds => d::application_core::LimitKind::ProjectPlacedHolds,
+        w::LimitKind::PartyPlacedHolds => d::application_core::LimitKind::PartyPlacedHolds,
+        w::LimitKind::Exemptions => d::application_core::LimitKind::Exemptions,
     }
 }
 pub(super) fn encode_party(value: &d::application_core::Party) -> w::Party {
@@ -408,8 +416,8 @@ pub(super) fn encode_hold_reason(value: &d::application_core::HoldReason) -> w::
                 .expect("admitted fields fit schema"),
         ),
         d::application_core::HoldReason::Stopped => w::HoldReason::Stopped,
-        d::application_core::HoldReason::Placed { hold: party } => w::HoldReason::Placed(
-            w::HoldReasonPlaced::new(&w::CEILINGS, w::HoldReasonPlacedParts { hold: *party })
+        d::application_core::HoldReason::Placed { hold } => w::HoldReason::Placed(
+            w::HoldReasonPlaced::new(&w::CEILINGS, w::HoldReasonPlacedParts { hold: *hold })
                 .expect("admitted fields fit schema"),
         ),
         d::application_core::HoldReason::Drift => w::HoldReason::Drift,
@@ -459,8 +467,8 @@ pub(super) fn decode_hold_reason(value: w::HoldReason, limits: &d::Limits) -> d:
         }
         w::HoldReason::Stopped => d::application_core::HoldReason::Stopped,
         w::HoldReason::Placed(value) => {
-            let w::HoldReasonPlacedParts { hold: party } = value.into_parts();
-            d::application_core::HoldReason::Placed { hold: party }
+            let w::HoldReasonPlacedParts { hold } = value.into_parts();
+            d::application_core::HoldReason::Placed { hold }
         }
         w::HoldReason::Drift => d::application_core::HoldReason::Drift,
         w::HoldReason::Effects => d::application_core::HoldReason::Effects,

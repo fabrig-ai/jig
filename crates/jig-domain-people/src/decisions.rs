@@ -28,7 +28,7 @@ pub enum HoldReason {
     Dependency { task: u64 },
     /// An authorized stop has no named party.
     Stopped,
-    /// A named party stopped the task.
+    /// A separately numbered placed hold keeps the task held.
     Placed { hold: u64 },
     /// A resource drifted away from what the task needs.
     Drift,

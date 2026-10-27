@@ -132,6 +132,10 @@ pub struct Task {
     pub spec_revision: u64,
     /// Hold revision in the durable row.
     pub hold_revision: u64,
+    /// Separately numbered placed hold retained by this task.
+    pub placed: Option<u64>,
+    /// Its visible cause is the placed hold alone, not another held cause.
+    pub placed_reason: bool,
     pub dependencies: Vec<u64>,
     pub delegates: Vec<u64>,
     pub pools: Vec<Name>,
@@ -226,12 +230,21 @@ pub struct Acceptance {
     pub by: Source,
 }
 
+/// A placed hold's durable scope and ending, independent of domain types.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PlacedHold {
+    /// A subtree's root; None denotes a project scope.
+    pub root: Option<u64>,
+    pub lifted: bool,
+}
+
 /// One atomic committed view, supplied by the store adapter.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Snapshot {
     /// The newest settings revision in the committed view.
     pub newest: u32,
     pub tasks: BTreeMap<u64, Task>,
+    pub placed_holds: BTreeMap<u64, PlacedHold>,
     /// Committed conversation positions, live or ended, keyed by party then task.
     pub read_positions: BTreeMap<(u64, u64), u64>,
     pub receipts: BTreeSet<Receipt>,

@@ -354,6 +354,10 @@ fn task_action(b: &mut Builder, words: &Words, value: OwnerTaskCapacityAction) {
             text(b, words, P::TaskCapacityActionClaim, &[]);
             field_number(b, words, P::Attempt, attempt);
         }
+        OwnerTaskCapacityAction::Place { hold } => {
+            text(b, words, P::TaskCapacityActionPlace, &[]);
+            field_number(b, words, P::Number, hold);
+        }
         OwnerTaskCapacityAction::Release => {
             text(b, words, P::TaskCapacityActionRelease, &[]);
         }
@@ -364,6 +368,22 @@ fn task_action(b: &mut Builder, words: &Words, value: OwnerTaskCapacityAction) {
 }
 fn task_cause(b: &mut Builder, words: &Words, value: OwnerTaskCapacityCause) {
     match value {
+        OwnerTaskCapacityCause::PlacedHolds { limit } => {
+            admission(b, words, AdmissionLimit::PlacedHolds);
+            field_number(b, words, P::Limit, u64::from(limit));
+        }
+        OwnerTaskCapacityCause::ProjectPlacedHolds { limit } => {
+            admission(b, words, AdmissionLimit::ProjectPlacedHolds);
+            field_number(b, words, P::Limit, u64::from(limit));
+        }
+        OwnerTaskCapacityCause::PartyPlacedHolds { limit } => {
+            admission(b, words, AdmissionLimit::PartyPlacedHolds);
+            field_number(b, words, P::Limit, u64::from(limit));
+        }
+        OwnerTaskCapacityCause::Exemptions { limit } => {
+            admission(b, words, AdmissionLimit::Exemptions);
+            field_number(b, words, P::Limit, u64::from(limit));
+        }
         OwnerTaskCapacityCause::Tasks { limit } => {
             text(b, words, P::TaskCapacityCauseTasks, &[]);
             field_number(b, words, P::Limit, u64::from(limit));
@@ -469,6 +489,10 @@ fn admission(b: &mut Builder, words: &Words, value: AdmissionLimit) {
         AdmissionLimit::Sources => P::AdmissionSources,
         AdmissionLimit::Projects => P::AdmissionProjects,
         AdmissionLimit::SignIns => P::AdmissionSignIns,
+        AdmissionLimit::PlacedHolds => P::AdmissionPlacedHolds,
+        AdmissionLimit::ProjectPlacedHolds => P::AdmissionProjectPlacedHolds,
+        AdmissionLimit::PartyPlacedHolds => P::AdmissionPartyPlacedHolds,
+        AdmissionLimit::Exemptions => P::AdmissionExemptions,
         AdmissionLimit::SettingsProposals => P::AdmissionSettingsProposals,
     };
     text(b, words, phrase, &[]);

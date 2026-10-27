@@ -243,6 +243,7 @@ pub(crate) fn owner_task_capacity_action_fields(
         }
         w::OwnerTaskCapacityAction::Effect(row) => c::OwnerTaskCapacityAction::Effect { entry: row.entry() },
         w::OwnerTaskCapacityAction::Claim(row) => c::OwnerTaskCapacityAction::Claim { attempt: row.attempt() },
+        w::OwnerTaskCapacityAction::Place(row) => c::OwnerTaskCapacityAction::Place { hold: row.hold() },
         w::OwnerTaskCapacityAction::Release => c::OwnerTaskCapacityAction::Release,
         w::OwnerTaskCapacityAction::MoveTask => c::OwnerTaskCapacityAction::Move,
     }
@@ -253,6 +254,14 @@ pub(crate) fn owner_task_capacity_cause_fields(
     _limits: &Limits,
 ) -> c::OwnerTaskCapacityCause {
     match value {
+        w::OwnerTaskCapacityCause::PlacedHolds(row) => c::OwnerTaskCapacityCause::PlacedHolds { limit: row.limit() },
+        w::OwnerTaskCapacityCause::ProjectPlacedHolds(row) => {
+            c::OwnerTaskCapacityCause::ProjectPlacedHolds { limit: row.limit() }
+        }
+        w::OwnerTaskCapacityCause::PartyPlacedHolds(row) => {
+            c::OwnerTaskCapacityCause::PartyPlacedHolds { limit: row.limit() }
+        }
+        w::OwnerTaskCapacityCause::Exemptions(row) => c::OwnerTaskCapacityCause::Exemptions { limit: row.limit() },
         w::OwnerTaskCapacityCause::Tasks(row) => c::OwnerTaskCapacityCause::Tasks { limit: row.limit() },
         w::OwnerTaskCapacityCause::CreationFlights(row) => {
             c::OwnerTaskCapacityCause::CreationFlights { limit: row.limit() }

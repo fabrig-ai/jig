@@ -130,6 +130,10 @@ pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
         people::LimitKind::Policy => application::LimitKind::Policy,
         people::LimitKind::Resource => application::LimitKind::Resource,
         people::LimitKind::Service => application::LimitKind::Service,
+        people::LimitKind::PlacedHolds => application::LimitKind::PlacedHolds,
+        people::LimitKind::ProjectPlacedHolds => application::LimitKind::ProjectPlacedHolds,
+        people::LimitKind::PartyPlacedHolds => application::LimitKind::PartyPlacedHolds,
+        people::LimitKind::Exemptions => application::LimitKind::Exemptions,
         people::LimitKind::Projects
         | people::LimitKind::Accounts
         | people::LimitKind::HolderAccounts
@@ -168,7 +172,7 @@ pub(super) fn hold_reason(value: people::HoldReason) -> application::HoldReason 
         people::HoldReason::Stalled => application::HoldReason::Stalled,
         people::HoldReason::Dependency { task } => application::HoldReason::Dependency { task },
         people::HoldReason::Stopped => application::HoldReason::Stopped,
-        people::HoldReason::Placed { hold: party } => application::HoldReason::Placed { hold: party },
+        people::HoldReason::Placed { hold } => application::HoldReason::Placed { hold },
         people::HoldReason::Drift => application::HoldReason::Drift,
         people::HoldReason::Effects => application::HoldReason::Effects,
         people::HoldReason::EffectFailed => application::HoldReason::EffectFailed,

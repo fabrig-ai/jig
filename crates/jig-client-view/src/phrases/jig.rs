@@ -1007,6 +1007,10 @@ pub enum JigPhrase {
     EngineLimitHolderAccounts,
     EngineLimitSources,
     EngineLimitSignIns,
+    EngineLimitPlacedHolds,
+    EngineLimitProjectPlacedHolds,
+    EngineLimitPartyPlacedHolds,
+    EngineLimitExemptions,
     EngineLimitSettingsProposals,
     FailedBare,
     CancelledBare,
@@ -1664,6 +1668,10 @@ impl JigPhrase {
             Self::EngineLimitHolderAccounts => 566,
             Self::EngineLimitSources => 567,
             Self::EngineLimitSignIns => 568,
+            Self::EngineLimitPlacedHolds => 7920,
+            Self::EngineLimitProjectPlacedHolds => 7921,
+            Self::EngineLimitPartyPlacedHolds => 7922,
+            Self::EngineLimitExemptions => 7923,
             Self::EngineLimitSettingsProposals => 7918,
             Self::FailedBare => 448,
             Self::CancelledBare => 449,
@@ -1850,6 +1858,10 @@ impl JigPhrase {
             | Self::NameSpace
             | Self::NameDigits
             | Self::EngineLimitProjects
+            | Self::EngineLimitPlacedHolds
+            | Self::EngineLimitProjectPlacedHolds
+            | Self::EngineLimitPartyPlacedHolds
+            | Self::EngineLimitExemptions
             | Self::EngineLimitSettingsProposals
             | Self::EngineLimitSignIns
             | Self::EngineLimitService
@@ -2401,7 +2413,7 @@ impl JigPhrase {
     }
 }
 /// Every jig phrase; loading checks this whole contract.
-pub const ALL: [JigPhrase; 639] = [
+pub const ALL: [JigPhrase; 643] = [
     JigPhrase::SettingsChanged,
     JigPhrase::MovedToNewest,
     JigPhrase::SettingsStale,
@@ -2992,6 +3004,10 @@ pub const ALL: [JigPhrase; 639] = [
     JigPhrase::EngineLimitHolderAccounts,
     JigPhrase::EngineLimitSources,
     JigPhrase::EngineLimitSignIns,
+    JigPhrase::EngineLimitPlacedHolds,
+    JigPhrase::EngineLimitProjectPlacedHolds,
+    JigPhrase::EngineLimitPartyPlacedHolds,
+    JigPhrase::EngineLimitExemptions,
     JigPhrase::EngineLimitSettingsProposals,
     JigPhrase::FailedBare,
     JigPhrase::CancelledBare,

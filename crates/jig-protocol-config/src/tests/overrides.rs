@@ -129,6 +129,10 @@ fn an_invalid_compound_member_is_refused_naming_it() {
 }
 
 const SMALL: &[(&[u8], u64)] = &[
+    (b"tasks.placed_holds", 4),
+    (b"tasks.project_placed_holds", 4),
+    (b"tasks.party_placed_holds", 2),
+    (b"tasks.exemptions", 8),
     (b"tasks.tasks", 8),
     (b"tasks.funders", 8),
     (b"tasks.project_tasks", 8),
@@ -579,4 +583,27 @@ fn settings_revision_limits_are_positive_and_size_the_children() {
         }
         assert!(found);
     }
+}
+
+#[test]
+fn placed_hold_overrides_reject_zero_and_exemptions_past_the_live_set() {
+    for (bytes, key) in [
+        (br#"{"profile":"small","overrides":{"tasks.placed_holds":0}}"#.as_slice(), b"tasks.placed_holds".as_slice()),
+        (
+            br#"{"profile":"small","overrides":{"tasks.project_placed_holds":0}}"#.as_slice(),
+            b"tasks.project_placed_holds".as_slice(),
+        ),
+        (
+            br#"{"profile":"small","overrides":{"tasks.party_placed_holds":0}}"#.as_slice(),
+            b"tasks.party_placed_holds".as_slice(),
+        ),
+        (br#"{"profile":"small","overrides":{"tasks.exemptions":0}}"#.as_slice(), b"tasks.exemptions".as_slice()),
+    ] {
+        problem(bytes, &[b"limits", b"overrides", key], What::Override);
+    }
+    problem(
+        br#"{"profile":"small","overrides":{"tasks.exemptions":9}}"#,
+        &[b"limits", b"overrides", b"tasks.exemptions"],
+        What::Override,
+    );
 }

@@ -262,6 +262,9 @@ fn finding_text(finding: &authority::Finding) -> &'static [u8] {
 
 fn task_problem(problem: &jig_domain_tasks::Problem) -> Rendered {
     let why: &[u8] = match problem.why {
+        jig_domain_tasks::Refusal::Placed { .. } => b"held by a placed hold",
+        jig_domain_tasks::Refusal::HoldOwner { .. } => b"only the placed hold's owner may release it",
+        jig_domain_tasks::Refusal::HoldRevision { .. } => b"placed hold revision changed",
         jig_domain_tasks::Refusal::Unproposable => b"no proposal could be accepted",
         jig_domain_tasks::Refusal::PersonRevision { .. } => b"person revision",
         jig_domain_tasks::Refusal::ResourceUnavailable => b"resource unavailable",

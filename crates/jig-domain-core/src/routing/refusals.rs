@@ -27,30 +27,10 @@ pub(super) fn person_message_refusal(core: &Core, problem: tasks::Problem) -> pe
 
 fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
     let tasks::Problem { task, why, blocked_by, capacity } = problem;
-    if let Some(capacity) = capacity {
-        let which = match capacity.cause {
-            tasks::CapacityCause::PlacedHolds { .. } => Some(people::LimitKind::PlacedHolds),
-            tasks::CapacityCause::ProjectPlacedHolds { .. } => Some(people::LimitKind::ProjectPlacedHolds),
-            tasks::CapacityCause::PartyPlacedHolds { .. } => Some(people::LimitKind::PartyPlacedHolds),
-            tasks::CapacityCause::Exemptions { .. } => Some(people::LimitKind::Exemptions),
-            tasks::CapacityCause::Tasks { .. }
-            | tasks::CapacityCause::CreationFlights { .. }
-            | tasks::CapacityCause::ResourceReports { .. }
-            | tasks::CapacityCause::ProjectTasks { .. }
-            | tasks::CapacityCause::Tree { .. }
-            | tasks::CapacityCause::Delegates { .. }
-            | tasks::CapacityCause::Inbox { .. }
-            | tasks::CapacityCause::Holdings { .. }
-            | tasks::CapacityCause::HoldWaiters { .. }
-            | tasks::CapacityCause::Proposals { .. }
-            | tasks::CapacityCause::References { .. }
-            | tasks::CapacityCause::Subscriptions { .. }
-            | tasks::CapacityCause::Funders { .. }
-            | tasks::CapacityCause::Writers { .. } => None,
-        };
-        if let Some(which) = which {
-            return people::Outcome::Refused(people::Refusal::Limit { which });
-        }
+    if let Some(capacity) = capacity
+        && let Some(which) = placed_limit(capacity.cause)
+    {
+        return people::Outcome::Refused(people::Refusal::Limit { which });
     }
     let names = match blocked_by {
         Some(names) => names,
@@ -136,6 +116,29 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
         tasks::Refusal::Holds => people::Refusal::Limit { which: people::LimitKind::Holds },
     };
     people::Outcome::Refused(refusal)
+}
+
+fn placed_limit(cause: tasks::CapacityCause) -> Option<people::LimitKind> {
+    match cause {
+        tasks::CapacityCause::PlacedHolds { .. } => Some(people::LimitKind::PlacedHolds),
+        tasks::CapacityCause::ProjectPlacedHolds { .. } => Some(people::LimitKind::ProjectPlacedHolds),
+        tasks::CapacityCause::PartyPlacedHolds { .. } => Some(people::LimitKind::PartyPlacedHolds),
+        tasks::CapacityCause::Exemptions { .. } => Some(people::LimitKind::Exemptions),
+        tasks::CapacityCause::Tasks { .. }
+        | tasks::CapacityCause::CreationFlights { .. }
+        | tasks::CapacityCause::ResourceReports { .. }
+        | tasks::CapacityCause::ProjectTasks { .. }
+        | tasks::CapacityCause::Tree { .. }
+        | tasks::CapacityCause::Delegates { .. }
+        | tasks::CapacityCause::Inbox { .. }
+        | tasks::CapacityCause::Holdings { .. }
+        | tasks::CapacityCause::HoldWaiters { .. }
+        | tasks::CapacityCause::Proposals { .. }
+        | tasks::CapacityCause::References { .. }
+        | tasks::CapacityCause::Subscriptions { .. }
+        | tasks::CapacityCause::Funders { .. }
+        | tasks::CapacityCause::Writers { .. } => None,
+    }
 }
 
 fn llm_why(why: tasks::LlmFault) -> people::LlmWhy {

@@ -913,7 +913,7 @@ fn a_release_naming_an_old_hold_is_refused_as_moved_saying_what_holds_it_now() {
 fn a_release_after_a_pass_up_keeps_the_hold_revision_and_uses_the_partys_tree() {
     let mut world = World::new(151, false);
     let task = world.call_key(1).task;
-    ask(&mut world, 52, people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     let revision = live_row(&world, task).revisions.hold;
     ask(

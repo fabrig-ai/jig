@@ -49,7 +49,7 @@ pub fn hold(value: tasks::Hold) -> client::HoldCategory {
         tasks::Hold::Stalled => client::HoldCategory::Stalled,
         tasks::Hold::Dependency(task) => client::HoldCategory::Dependency { task },
         tasks::Hold::Stopped => client::HoldCategory::Stopped,
-        tasks::Hold::Placed { hold: party } => client::HoldCategory::Placed { hold: party },
+        tasks::Hold::Placed { hold } => client::HoldCategory::Placed { hold },
         tasks::Hold::Drift => client::HoldCategory::Drift,
         tasks::Hold::Effects => client::HoldCategory::Effects,
         tasks::Hold::EffectFailed => client::HoldCategory::EffectFailed,

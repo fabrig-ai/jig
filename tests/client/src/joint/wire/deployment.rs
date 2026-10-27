@@ -276,6 +276,7 @@ fn task_action(value: tasks::CapacityAction) -> client::OwnerTaskCapacityAction 
         tasks::CapacityAction::Subscription { number } => client::OwnerTaskCapacityAction::Subscription { number },
         tasks::CapacityAction::Effect { entry } => client::OwnerTaskCapacityAction::Effect { entry },
         tasks::CapacityAction::Claim { attempt } => client::OwnerTaskCapacityAction::Claim { attempt },
+        tasks::CapacityAction::Place { hold } => client::OwnerTaskCapacityAction::Place { hold },
         tasks::CapacityAction::Release => client::OwnerTaskCapacityAction::Release,
         tasks::CapacityAction::Move => client::OwnerTaskCapacityAction::Move,
     }
@@ -283,6 +284,12 @@ fn task_action(value: tasks::CapacityAction) -> client::OwnerTaskCapacityAction 
 
 fn task_cause(value: tasks::CapacityCause) -> client::OwnerTaskCapacityCause {
     match value {
+        tasks::CapacityCause::PlacedHolds { limit } => client::OwnerTaskCapacityCause::PlacedHolds { limit },
+        tasks::CapacityCause::ProjectPlacedHolds { limit } => {
+            client::OwnerTaskCapacityCause::ProjectPlacedHolds { limit }
+        }
+        tasks::CapacityCause::PartyPlacedHolds { limit } => client::OwnerTaskCapacityCause::PartyPlacedHolds { limit },
+        tasks::CapacityCause::Exemptions { limit } => client::OwnerTaskCapacityCause::Exemptions { limit },
         tasks::CapacityCause::Tasks { limit } => client::OwnerTaskCapacityCause::Tasks { limit },
         tasks::CapacityCause::CreationFlights { limit } => client::OwnerTaskCapacityCause::CreationFlights { limit },
         tasks::CapacityCause::ResourceReports { limit } => client::OwnerTaskCapacityCause::ResourceReports { limit },

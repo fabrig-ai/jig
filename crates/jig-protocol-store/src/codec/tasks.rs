@@ -5,6 +5,7 @@ pub mod index;
 mod models;
 pub mod phase;
 mod pieces;
+mod placed;
 pub mod proposals;
 pub mod record;
 pub mod state;
@@ -35,6 +36,8 @@ pub fn limits(domain: &domain::Limits) -> Option<wire::Limits> {
         .ok()?,
     )?;
     let limits = wire::Limits {
+        placed_hold_reason: domain.message_bytes,
+        placed_hold_exempt: domain.exemptions,
         proposed_settings_items: domain::SETTINGS_ITEMS,
         row_models: jig_domain_tasks::MODELS,
         model_name_value: jig_domain_core::MODEL_NAME_BYTES,
@@ -117,6 +120,7 @@ pub fn limits(domain: &domain::Limits) -> Option<wire::Limits> {
 pub fn encode(row: &domain::Stored, limits: &wire::Limits, names: &[Box<[u8]>]) -> Result<Box<[u8]>, wire::Problem> {
     let (models, moved) = models::encode(row, names, limits)?;
     let value = match row {
+        domain::Stored::PlacedHold(row) => wire::Value::PlacedHold(placed::encode(row, limits)?),
         domain::Stored::Ledger(row) => wire::Value::Ledger(value::funding(row, limits)?),
         domain::Stored::ClosedLedger(row) => wire::Value::ClosedLedger(value::funding(row, limits)?),
         domain::Stored::Writer(domain::WriterSlot { number, resource, writer, lost }) => {
@@ -171,6 +175,7 @@ pub fn encode(row: &domain::Stored, limits: &wire::Limits, names: &[Box<[u8]>]) 
 pub fn decode(bytes: &[u8], limits: &wire::Limits, names: &[Box<[u8]>]) -> Result<domain::Stored, wire::Problem> {
     let wire::RowParts { value, models: kept } = wire::Row::decode(limits, &mut Reader::new(bytes))?.into_parts();
     let mut row = match value {
+        wire::Value::PlacedHold(row) => domain::Stored::PlacedHold(Box::new(placed::decode(row))),
         wire::Value::Update(row) => domain::Stored::Update(index::read_update(row, limits)?),
         wire::Value::Result(row) => domain::Stored::Result(index::read_result_row(row, limits)?),
         wire::Value::EndedDelegate(row) => domain::Stored::EndedDelegate(index::read_edge(row, limits)?),

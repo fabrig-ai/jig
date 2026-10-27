@@ -817,6 +817,10 @@ fn take_funder(r: &mut Reader<'_>) -> Option<tasks::Funder> {
 
 fn put_task_key(w: &mut Writer, value: &tasks::Key) -> Option<()> {
     match value {
+        tasks::Key::PlacedHold(hold) => {
+            w.byte(21)?;
+            w.u64(*hold)?;
+        }
         tasks::Key::EndedByParty { party, label, ended_at, task } => {
             w.byte(19)?;
             w.u64(*party)?;
@@ -891,6 +895,7 @@ fn put_task_key(w: &mut Writer, value: &tasks::Key) -> Option<()> {
 }
 fn take_task_key(r: &mut Reader<'_>) -> Option<tasks::Key> {
     Some(match r.byte()? {
+        21 => tasks::Key::PlacedHold(r.u64()?),
         13 => tasks::Key::Result { party: r.u64()?, position: r.u64()? },
         19 => tasks::Key::EndedByParty {
             party: r.u64()?,

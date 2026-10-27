@@ -660,6 +660,10 @@ fn party_limit(value: people::LimitKind) -> parties::LimitKind {
         people::LimitKind::Grace => parties::LimitKind::Grace,
         people::LimitKind::Goals => parties::LimitKind::Goals,
         people::LimitKind::Service => parties::LimitKind::Service,
+        people::LimitKind::PlacedHolds => parties::LimitKind::PlacedHolds,
+        people::LimitKind::ProjectPlacedHolds => parties::LimitKind::ProjectPlacedHolds,
+        people::LimitKind::PartyPlacedHolds => parties::LimitKind::PartyPlacedHolds,
+        people::LimitKind::Exemptions => parties::LimitKind::Exemptions,
         people::LimitKind::Projects
         | people::LimitKind::Accounts
         | people::LimitKind::HolderAccounts
@@ -697,7 +701,7 @@ fn party_hold(value: people::HoldReason) -> parties::HoldReason {
         people::HoldReason::Stalled => parties::HoldReason::Stalled,
         people::HoldReason::Dependency { task } => parties::HoldReason::Dependency { task },
         people::HoldReason::Stopped => parties::HoldReason::Stopped,
-        people::HoldReason::Placed { hold: party } => parties::HoldReason::Placed { hold: party },
+        people::HoldReason::Placed { hold } => parties::HoldReason::Placed { hold },
         people::HoldReason::Drift => parties::HoldReason::Drift,
         people::HoldReason::Effects => parties::HoldReason::Effects,
         people::HoldReason::EffectFailed => parties::HoldReason::EffectFailed,

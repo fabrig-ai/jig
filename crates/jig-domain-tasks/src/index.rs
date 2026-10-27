@@ -61,8 +61,6 @@ impl Update {
 /// in this child. (domain/tasks.md, section 2).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Key {
-    /// One durable placed hold.
-    PlacedHold(u64),
     /// Logical mutable live-task row.
     Live(u64),
     /// Working-set pointer retained while a live task names the ending.
@@ -129,6 +127,8 @@ pub enum Key {
         ended_at: Newest,
         task: u64,
     },
+    /// One durable placed hold, after the existing key families.
+    PlacedHold(u64),
 }
 
 impl Key {

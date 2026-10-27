@@ -64,6 +64,8 @@ pub(super) fn task(number: u64) -> Task {
         phase: Phase::Active,
         spec_revision: 0,
         hold_revision: 0,
+        placed: None,
+        placed_reason: false,
         dependencies: vec![],
         delegates: vec![],
         pools: vec![],

@@ -19,6 +19,10 @@ pub fn owner_limits() -> jig_test_domain::Limits {
     let mut limits = jig_core_world::world::limits();
     // Client keeps closing watches until their engine terminals arrive.
     limits.core.views.watchers = jig_client_world::test::limits().client.domain.watches;
+    // Two clients may place distinct overlapping holds on the same task.
+    limits.core.tasks.placed_holds = 2;
+    limits.core.tasks.project_placed_holds = 2;
+    limits.core.tasks.party_placed_holds = 2;
     limits.core.documents.rows = 2;
     limits.core.documents.lines = 2;
     limits.core.documents.chips = 2;

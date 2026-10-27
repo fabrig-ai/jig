@@ -10,7 +10,8 @@ pub(super) fn as_task(value: &core::Record) -> Option<&tasks::TaskRecord> {
     match value {
         core::Record::Tasks(tasks::Stored::Live(task) | tasks::Stored::Ended(task)) => Some(task),
         core::Record::Tasks(
-            tasks::Stored::Stub(_)
+            tasks::Stored::PlacedHold(_)
+            | tasks::Stored::Stub(_)
             | tasks::Stored::Ledger(_)
             | tasks::Stored::Writer(_)
             | tasks::Stored::Pool(_)

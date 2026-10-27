@@ -235,7 +235,7 @@ fn a_seen_conversation_is_read_back_through_the_store_after_restart() {
 fn a_historical_escalation_is_read_through_the_store() {
     let mut world = World::new(132, false);
     let task = world.assigned.as_ref().expect("the world's chat").task;
-    jig_core_world::stories::reads::request(&mut world, 63, jig_domain_people::Ask::Stop { project: 1, task });
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::Stalled })));
     world.end(tasks::End::Parked, 0);
     let root::Record::Core(core::Record::Tasks(tasks::Stored::Live(row))) =
         &world.store.rows[&root::Key::Core(core::Key::Tasks(tasks::Key::Live(task)))]

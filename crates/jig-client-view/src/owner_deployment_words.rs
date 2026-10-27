@@ -223,6 +223,11 @@ pub enum DeploymentPhrase {
     AdmissionHolderAccounts,
     AdmissionSources,
     AdmissionSignIns,
+    TaskCapacityActionPlace,
+    AdmissionPlacedHolds,
+    AdmissionProjectPlacedHolds,
+    AdmissionPartyPlacedHolds,
+    AdmissionExemptions,
     AdmissionSettingsProposals,
     AdmissionProjects,
 
@@ -232,7 +237,7 @@ pub enum DeploymentPhrase {
     StoreBytes,
     StoreMark,
 }
-pub const ALL: [DeploymentPhrase; 286] = [
+pub const ALL: [DeploymentPhrase; 291] = [
     DeploymentPhrase::Agent(AgentPhrase::Model),
     DeploymentPhrase::Agent(AgentPhrase::Window),
     DeploymentPhrase::Agent(AgentPhrase::Output),
@@ -491,6 +496,11 @@ pub const ALL: [DeploymentPhrase; 286] = [
     DeploymentPhrase::AdmissionHolderAccounts,
     DeploymentPhrase::AdmissionSources,
     DeploymentPhrase::AdmissionSignIns,
+    DeploymentPhrase::TaskCapacityActionPlace,
+    DeploymentPhrase::AdmissionPlacedHolds,
+    DeploymentPhrase::AdmissionProjectPlacedHolds,
+    DeploymentPhrase::AdmissionPartyPlacedHolds,
+    DeploymentPhrase::AdmissionExemptions,
     DeploymentPhrase::AdmissionSettingsProposals,
     DeploymentPhrase::AdmissionProjects,
     DeploymentPhrase::Connectors,
@@ -736,6 +746,11 @@ impl DeploymentPhrase {
                 Self::AdmissionHolderAccounts => 9426,
                 Self::AdmissionSources => 9427,
                 Self::AdmissionSignIns => 9428,
+                Self::TaskCapacityActionPlace => 9490,
+                Self::AdmissionPlacedHolds => 9491,
+                Self::AdmissionProjectPlacedHolds => 9492,
+                Self::AdmissionPartyPlacedHolds => 9493,
+                Self::AdmissionExemptions => 9494,
                 Self::AdmissionSettingsProposals => 9431,
                 Self::AdmissionProjects => 9430,
 
@@ -914,6 +929,11 @@ impl DeploymentPhrase {
             | Self::AdmissionHolderAccounts
             | Self::AdmissionSources
             | Self::AdmissionProjects
+            | Self::TaskCapacityActionPlace
+            | Self::AdmissionPlacedHolds
+            | Self::AdmissionProjectPlacedHolds
+            | Self::AdmissionPartyPlacedHolds
+            | Self::AdmissionExemptions
             | Self::AdmissionSettingsProposals
             | Self::AdmissionSignIns
             | Self::AdmissionService
@@ -1176,6 +1196,11 @@ impl DeploymentPhrase {
             Self::AdmissionHolderAccounts => b"Structural limit: holder accounts",
             Self::AdmissionSources => b"Structural limit: sources",
             Self::AdmissionSignIns => b"Structural limit: account sign-ins",
+            Self::TaskCapacityActionPlace => b"Task Capacity Action Place",
+            Self::AdmissionPlacedHolds => b"Structural limit: placed holds",
+            Self::AdmissionProjectPlacedHolds => b"Structural limit: project placed holds",
+            Self::AdmissionPartyPlacedHolds => b"Structural limit: party placed holds",
+            Self::AdmissionExemptions => b"Structural limit: exemptions",
             Self::AdmissionSettingsProposals => b"Structural limit: pending settings proposals",
             Self::AdmissionProjects => b"The deployment has no room for another project",
 

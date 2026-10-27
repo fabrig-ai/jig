@@ -685,7 +685,7 @@ fn connector_values_view_every_moved_hold_reason_failure_and_ending_keeps_only_a
         (HoldReason::Stalled, b"stopped progressing".as_slice()),
         (HoldReason::Dependency { task: u64::MAX }, b"Dependency task 18446744073709551615"),
         (HoldReason::Stopped, b"Task stopped"),
-        (HoldReason::Placed { hold: u64::MAX }, b"18446744073709551615"),
+        (HoldReason::Placed { hold: u64::MAX }, b"Held by a placed hold"),
         (HoldReason::Drift, b"resource drifted"),
         (HoldReason::Effects, b"Effects need a decision"),
         (HoldReason::EffectFailed, b"effect failed permanently"),

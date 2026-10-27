@@ -228,6 +228,8 @@ fn position_snapshot(
             settings: r::SettingsRevision::default(),
             spec_revision: 0,
             hold_revision: 0,
+            placed: None,
+            placed_reason: false,
             tracked: false,
             number: 5,
             project: 1,

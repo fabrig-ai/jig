@@ -96,6 +96,10 @@ fn limit(value: owner::LimitKind) -> client::AdmissionLimit {
         owner::LimitKind::Policy => client::AdmissionLimit::Policy,
         owner::LimitKind::Resource => client::AdmissionLimit::Resource,
         owner::LimitKind::Service => client::AdmissionLimit::Service,
+        owner::LimitKind::PlacedHolds => client::AdmissionLimit::PlacedHolds,
+        owner::LimitKind::ProjectPlacedHolds => client::AdmissionLimit::ProjectPlacedHolds,
+        owner::LimitKind::PartyPlacedHolds => client::AdmissionLimit::PartyPlacedHolds,
+        owner::LimitKind::Exemptions => client::AdmissionLimit::Exemptions,
     }
 }
 fn hold(value: owner::HoldReason) -> client::HoldCategory {
@@ -125,7 +129,7 @@ fn hold(value: owner::HoldReason) -> client::HoldCategory {
             },
         },
         owner::HoldReason::Dependency { task } => client::HoldCategory::Dependency { task },
-        owner::HoldReason::Placed { hold: party } => client::HoldCategory::Placed { hold: party },
+        owner::HoldReason::Placed { hold } => client::HoldCategory::Placed { hold },
         owner::HoldReason::Uncertain { entry } => client::HoldCategory::Uncertain { entry },
         owner::HoldReason::PoolLost { pool } => client::HoldCategory::PoolLost { pool },
         owner::HoldReason::Stalled => client::HoldCategory::Stalled,

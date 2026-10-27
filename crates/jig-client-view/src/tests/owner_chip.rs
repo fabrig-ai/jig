@@ -283,7 +283,7 @@ fn all_hold_categories_and_six_failure_classes_retain_only_supplied_payloads_and
         (HoldCategory::Stalled, b"Held stalled".as_slice()),
         (HoldCategory::Dependency { task: u64::MAX }, b"Held dependency task: 18446744073709551615"),
         (HoldCategory::Stopped, b"Held stopped"),
-        (HoldCategory::Placed { hold: u64::MAX }, b"Held stopped by party: 18446744073709551615"),
+        (HoldCategory::Placed { hold: u64::MAX }, b"Held by a placed hold"),
         (HoldCategory::Drift, b"Held drift"),
         (HoldCategory::Effects, b"Held effects"),
         (HoldCategory::EffectFailed, b"Held effect failed"),

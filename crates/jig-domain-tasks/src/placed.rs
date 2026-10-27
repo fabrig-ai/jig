@@ -52,6 +52,18 @@ impl Domain {
     pub fn placed_hold(&self, number: u64) -> Option<&PlacedHold> {
         self.placed.get(&number)
     }
+    /// Borrow the next retained hold by number, without a snapshot allocation.
+    #[must_use]
+    pub fn next_placed_hold(&self, after: u64) -> Option<&PlacedHold> {
+        let mut next = None;
+        for (number, _) in &self.placed {
+            if *number > after {
+                next = Some(*number);
+                break;
+            }
+        }
+        self.placed.get(&next?)
+    }
     /// Borrow the placed hold currently holding this task, even under a cause of 5.5.
     #[must_use]
     pub fn placed_on(&self, task: u64) -> Option<&PlacedHold> {
@@ -251,14 +263,15 @@ pub(crate) fn check_place(
     if root.project != hold.project {
         return Err(Box::new(Problem::new(Some(task), Refusal::Project)));
     }
-    if let Some(cause) = room(domain, staged, limits, &hold) {
-        return Err(Box::new(capacity(&hold, cause)));
-    }
     let mut tasks = List::with_capacity(limits.tasks);
     for (number, _) in &domain.names {
         if covers(domain, staged, &hold, *number) && !crate::compound::has(&staged.closing, *number) {
+            staged.placed_change_once(*number)?;
             tasks.push(*number).expect("subtree bounded by live tasks");
         }
+    }
+    if let Some(cause) = room(domain, staged, limits, &hold) {
+        return Err(Box::new(capacity(&hold, cause)));
     }
     Ok(Placement { hold, tasks })
 }
@@ -353,6 +366,9 @@ pub(crate) fn check_release(
 ) -> Result<Option<Box<ReleaseChanges>>, Refusal> {
     let row = staged.record(domain, number).ok_or(Refusal::Unknown)?;
     let Some(identity) = row.placed else { return Ok(None) };
+    if let Err(problem) = staged.placed_change_once(number) {
+        return Err(problem.why);
+    }
     if task_caller(by) && !domain.may_lift(identity, by, false) {
         return Err(Refusal::HoldOwner { hold: identity });
     }
@@ -390,6 +406,9 @@ fn replacements(
     for (number, _) in &domain.names {
         let row = staged.record(domain, *number).expect("indexed row");
         if row.placed == Some(hold) && (only.is_none() || only == Some(*number)) {
+            if let Err(problem) = staged.placed_change_once(*number) {
+                return Err(problem.why);
+            }
             let next = covering(domain, staged, *number, Some(hold));
             if placed_reason(&row.phase).is_some()
                 && (row.revision == u64::MAX || (next.is_some() && row.revisions.hold == u64::MAX))

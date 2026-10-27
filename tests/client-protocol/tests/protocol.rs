@@ -138,7 +138,7 @@ fn signed_out_with_requests_pending_then_signed_in_again() {
                     within: skein_lib::Duration::from_secs(1),
                 },
                 Step::Press { find: Find::named(skein_ui::Role::Button, b"Sign in with Test") },
-                Step::See { find: Find::text(b"Held stopped"), within: skein_lib::Duration::from_secs(5) },
+                Step::See { find: Find::text(b"Held by a placed hold"), within: skein_lib::Duration::from_secs(5) },
             ],
         );
         bytes::finish(&mut world);

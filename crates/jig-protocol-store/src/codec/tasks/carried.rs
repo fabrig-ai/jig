@@ -49,6 +49,10 @@ pub(super) fn encode_capacity_action(
             limits,
             wire::CapacityActionClaimParts { attempt: *attempt },
         )?),
+        tasks::CapacityAction::Place { hold } => wire::CapacityAction::Place(wire::CapacityActionPlace::new(
+            limits,
+            wire::CapacityActionPlaceParts { hold: *hold },
+        )?),
         tasks::CapacityAction::Release => wire::CapacityAction::Release,
         tasks::CapacityAction::Move => wire::CapacityAction::MoveTask,
     })
@@ -91,6 +95,7 @@ pub(super) fn decode_capacity_action(value: wire::CapacityAction, _limits: &Limi
             let wire::CapacityActionClaimParts { attempt } = value.into_parts();
             tasks::CapacityAction::Claim { attempt }
         }
+        wire::CapacityAction::Place(value) => tasks::CapacityAction::Place { hold: value.hold() },
         wire::CapacityAction::Release => tasks::CapacityAction::Release,
         wire::CapacityAction::MoveTask => tasks::CapacityAction::Move,
     }
@@ -101,6 +106,24 @@ pub(super) fn encode_capacity_cause(
     limits: &Limits,
 ) -> Result<wire::CapacityCause, wire::Problem> {
     Ok(match value {
+        tasks::CapacityCause::PlacedHolds { limit } => wire::CapacityCause::PlacedHolds(
+            wire::CapacityCausePlacedHolds::new(limits, wire::CapacityCausePlacedHoldsParts { limit: *limit })?,
+        ),
+        tasks::CapacityCause::ProjectPlacedHolds { limit } => {
+            wire::CapacityCause::ProjectPlacedHolds(wire::CapacityCauseProjectPlacedHolds::new(
+                limits,
+                wire::CapacityCauseProjectPlacedHoldsParts { limit: *limit },
+            )?)
+        }
+        tasks::CapacityCause::PartyPlacedHolds { limit } => {
+            wire::CapacityCause::PartyPlacedHolds(wire::CapacityCausePartyPlacedHolds::new(
+                limits,
+                wire::CapacityCausePartyPlacedHoldsParts { limit: *limit },
+            )?)
+        }
+        tasks::CapacityCause::Exemptions { limit } => wire::CapacityCause::Exemptions(
+            wire::CapacityCauseExemptions::new(limits, wire::CapacityCauseExemptionsParts { limit: *limit })?,
+        ),
         tasks::CapacityCause::Tasks { limit } => wire::CapacityCause::Tasks(wire::CapacityCauseTasks::new(
             limits,
             wire::CapacityCauseTasksParts { limit: *limit },
@@ -157,6 +180,12 @@ pub(super) fn encode_capacity_cause(
 }
 pub(super) fn decode_capacity_cause(value: wire::CapacityCause, _limits: &Limits) -> tasks::CapacityCause {
     match value {
+        wire::CapacityCause::PlacedHolds(value) => tasks::CapacityCause::PlacedHolds { limit: value.limit() },
+        wire::CapacityCause::ProjectPlacedHolds(value) => {
+            tasks::CapacityCause::ProjectPlacedHolds { limit: value.limit() }
+        }
+        wire::CapacityCause::PartyPlacedHolds(value) => tasks::CapacityCause::PartyPlacedHolds { limit: value.limit() },
+        wire::CapacityCause::Exemptions(value) => tasks::CapacityCause::Exemptions { limit: value.limit() },
         wire::CapacityCause::Tasks(value) => {
             let wire::CapacityCauseTasksParts { limit } = value.into_parts();
             tasks::CapacityCause::Tasks { limit }
@@ -240,6 +269,16 @@ pub(super) fn decode_capacity(value: wire::Capacity, limits: &Limits) -> tasks::
 
 pub(super) fn encode_refusal(value: &tasks::Refusal, limits: &Limits) -> Result<wire::Refusal, wire::Problem> {
     Ok(match value {
+        tasks::Refusal::Placed { hold } => {
+            wire::Refusal::Placed(wire::RefusalPlaced::new(limits, wire::RefusalPlacedParts { hold: *hold })?)
+        }
+        tasks::Refusal::HoldOwner { hold } => {
+            wire::Refusal::HoldOwner(wire::RefusalHoldOwner::new(limits, wire::RefusalHoldOwnerParts { hold: *hold })?)
+        }
+        tasks::Refusal::HoldRevision { revision } => wire::Refusal::HoldRevision(wire::RefusalHoldRevision::new(
+            limits,
+            wire::RefusalHoldRevisionParts { revision: *revision },
+        )?),
         tasks::Refusal::Unproposable => wire::Refusal::Unproposable,
         tasks::Refusal::PersonRevision { revision } => wire::Refusal::PersonRevision(wire::RefusalPersonRevision::new(
             limits,
@@ -297,6 +336,9 @@ pub(super) fn encode_refusal(value: &tasks::Refusal, limits: &Limits) -> Result<
 }
 pub(super) fn decode_refusal(value: wire::Refusal, _limits: &Limits) -> tasks::Refusal {
     match value {
+        wire::Refusal::Placed(value) => tasks::Refusal::Placed { hold: value.hold() },
+        wire::Refusal::HoldOwner(value) => tasks::Refusal::HoldOwner { hold: value.hold() },
+        wire::Refusal::HoldRevision(value) => tasks::Refusal::HoldRevision { revision: value.revision() },
         wire::Refusal::Unproposable => tasks::Refusal::Unproposable,
         wire::Refusal::PersonRevision(value) => {
             let wire::RefusalPersonRevisionParts { revision } = value.into_parts();

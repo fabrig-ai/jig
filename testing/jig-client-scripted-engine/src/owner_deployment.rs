@@ -190,6 +190,7 @@ impl Payload for OwnerTaskCapacityAction {
             | Self::Subscription { .. }
             | Self::Effect { .. }
             | Self::Claim { .. }
+            | Self::Place { .. }
             | Self::Release
             | Self::Move => Some(0),
         }
@@ -198,7 +199,11 @@ impl Payload for OwnerTaskCapacityAction {
 impl Payload for OwnerTaskCapacityCause {
     fn heap(&self, _bounds: &Bounds) -> Option<u64> {
         match self {
-            Self::Tasks { .. }
+            Self::PlacedHolds { .. }
+            | Self::ProjectPlacedHolds { .. }
+            | Self::PartyPlacedHolds { .. }
+            | Self::Exemptions { .. }
+            | Self::Tasks { .. }
             | Self::CreationFlights { .. }
             | Self::ResourceReports { .. }
             | Self::ProjectTasks { .. }

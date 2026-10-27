@@ -238,7 +238,8 @@ pub fn world(seed: u64) -> (Outcome, Reach) {
             world.fault(FrontFault::Restart { offline: Duration::from_millis(rng.between(120, 170)) });
         }
     }
-    world.person(client, vec![Step::See { find: Find::text(b"Held stopped"), within: Duration::from_secs(2) }]);
+    world
+        .person(client, vec![Step::See { find: Find::text(b"Held by a placed hold"), within: Duration::from_secs(2) }]);
     let settled = world.run(Until::Done);
     assert_eq!(settled.verdict, Verdict::Passed, "recovered seed {seed}: {settled:?}");
     if client_fault == ClientFault::NoAnswer {

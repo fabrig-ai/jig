@@ -1321,6 +1321,7 @@ dependencies = [
  "jig-client-protocol-wire",
  "jig-domain-core",
  "jig-domain-people",
+ "jig-domain-tasks",
  "jig-protocol-config",
  "jig-protocol-store",
  "jig-test-store",

@@ -331,60 +331,126 @@ pub enum OwnerPersonCapacityCause {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerTaskCapacityAction {
     /// Batch as supplied by its owner.
-    Batch { first: Option<u64>, members: u32 },
+    Batch {
+        first: Option<u64>,
+        members: u32,
+    },
     /// Proposal as supplied by its owner.
-    Proposal { number: u64 },
+    Proposal {
+        number: u64,
+    },
     /// `PersonProposal` as supplied by its owner.
-    PersonProposal { number: u64 },
+    PersonProposal {
+        number: u64,
+    },
     /// Message as supplied by its owner.
-    Message { task: u64, number: u64 },
+    Message {
+        task: u64,
+        number: u64,
+    },
     /// Source as supplied by its owner.
-    Source { funder: Funder },
+    Source {
+        funder: Funder,
+    },
     /// Introduce as supplied by its owner.
-    Introduce { left: u64, right: u64 },
+    Introduce {
+        left: u64,
+        right: u64,
+    },
     /// Subscription as supplied by its owner.
-    Subscription { number: u64 },
+    Subscription {
+        number: u64,
+    },
     /// Effect as supplied by its owner.
-    Effect { entry: u64 },
+    Effect {
+        entry: u64,
+    },
     /// Claim as supplied by its owner.
-    Claim { attempt: u64 },
+    Claim {
+        attempt: u64,
+    },
     /// Release as supplied by its owner.
     Release,
     /// Move as supplied by its owner.
     Move,
+    Place {
+        hold: u64,
+    },
 }
 
 /// The supplied closed taskcapacitycause vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerTaskCapacityCause {
     /// Tasks as supplied by its owner.
-    Tasks { limit: u32 },
+    Tasks {
+        limit: u32,
+    },
     /// `CreationFlights` as supplied by its owner.
-    CreationFlights { limit: u32 },
+    CreationFlights {
+        limit: u32,
+    },
     /// `ResourceReports` as supplied by its owner.
-    ResourceReports { limit: u32 },
+    ResourceReports {
+        limit: u32,
+    },
     /// `ProjectTasks` as supplied by its owner.
-    ProjectTasks { limit: u32 },
+    ProjectTasks {
+        limit: u32,
+    },
     /// Tree as supplied by its owner.
-    Tree { limit: u32 },
+    Tree {
+        limit: u32,
+    },
     /// Delegates as supplied by its owner.
-    Delegates { limit: u32 },
+    Delegates {
+        limit: u32,
+    },
     /// Inbox as supplied by its owner.
-    Inbox { task: u64, messages: u32, bytes: u32 },
+    Inbox {
+        task: u64,
+        messages: u32,
+        bytes: u32,
+    },
     /// Holdings as supplied by its owner.
-    Holdings { limit: u32 },
+    Holdings {
+        limit: u32,
+    },
     /// `HoldWaiters` as supplied by its owner.
-    HoldWaiters { limit: u32 },
+    HoldWaiters {
+        limit: u32,
+    },
     /// Proposals as supplied by its owner.
-    Proposals { limit: u32 },
+    Proposals {
+        limit: u32,
+    },
     /// References as supplied by its owner.
-    References { limit: u32 },
+    References {
+        limit: u32,
+    },
     /// Subscriptions as supplied by its owner.
-    Subscriptions { limit: u32 },
+    Subscriptions {
+        limit: u32,
+    },
     /// Funders as supplied by its owner.
-    Funders { limit: u32 },
+    Funders {
+        limit: u32,
+    },
     /// Writers as supplied by its owner.
-    Writers { limit: u32 },
+    Writers {
+        limit: u32,
+    },
+    PlacedHolds {
+        limit: u32,
+    },
+    ProjectPlacedHolds {
+        limit: u32,
+    },
+    PartyPlacedHolds {
+        limit: u32,
+    },
+    Exemptions {
+        limit: u32,
+    },
 }
 
 /// Where the account's record could not load.

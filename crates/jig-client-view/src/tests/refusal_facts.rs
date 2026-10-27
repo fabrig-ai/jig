@@ -183,10 +183,13 @@ fn sparse_current_hold_facts_keep_only_supplied_categories_and_numeric_identitie
         match reason {
             HoldCategory::Exceeded(_) => unreachable!("bound phrases have their own table"),
             HoldCategory::Circle => assert!(contains(&tree, b"Held for a circle of waits")),
-            HoldCategory::Dependency { .. }
-            | HoldCategory::Placed { .. }
-            | HoldCategory::Uncertain { .. }
-            | HoldCategory::PoolLost { .. } => assert!(contains(&tree, b"123")),
+            HoldCategory::Placed { .. } => {
+                assert!(contains(&tree, b"Held by a placed hold"));
+                assert!(!contains(&tree, b"123"));
+            }
+            HoldCategory::Dependency { .. } | HoldCategory::Uncertain { .. } | HoldCategory::PoolLost { .. } => {
+                assert!(contains(&tree, b"123"));
+            }
             HoldCategory::Failures { .. }
             | HoldCategory::Stalled
             | HoldCategory::Stopped

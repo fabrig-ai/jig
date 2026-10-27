@@ -130,7 +130,6 @@ enum PersonField {
     Grace,
     Added,
     Inbox,
-    Stopped,
     Cancelled,
     HeldCancellation,
     EscalationHolder,
@@ -146,7 +145,6 @@ const PERSON_FIELDS: &[PersonField] = &[
     PersonField::Grace,
     PersonField::Added,
     PersonField::Inbox,
-    PersonField::Stopped,
     PersonField::Cancelled,
     PersonField::HeldCancellation,
     PersonField::EscalationHolder,
@@ -180,13 +178,6 @@ fn naming(row: &mut tasks::TaskRecord, field: PersonField, person: u64) {
                 hits: 1,
                 eligible: true,
             }]);
-        }
-        PersonField::Stopped => {
-            row.phase = tasks::Phase::Held {
-                was: tasks::Was::Active(tasks::Active::Idle),
-                why: tasks::Hold::Placed { hold: person },
-                source: None,
-            }
         }
         PersonField::Cancelled => row.phase = tasks::Phase::Closing(closing),
         PersonField::HeldCancellation => {
@@ -355,4 +346,35 @@ fn a_pending_generation_with_every_account_restored_admits_the_switch() {
     checked(&mut core, &limits);
     assert!(core.restart_checked());
     assert_eq!(core.restore_failure(), None);
+}
+
+#[test]
+fn a_live_tasks_placed_hold_resolves_its_party_owner_even_beside_another_cause() {
+    for person in [PERSON, MISSING_PERSON] {
+        let (mut core, limits, _) = live();
+        send_task(&mut core, &limits, placed(TASK, person, 71));
+        let mut row = core.tasks.task(TASK).unwrap().clone();
+        assert_eq!(row.placed, Some(71));
+        assert_eq!(core.task_references_resolve(&row), person == PERSON);
+        row.phase =
+            tasks::Phase::Held { was: tasks::Was::Active(tasks::Active::Due), why: tasks::Hold::Budget, source: None };
+        assert_eq!(core.task_references_resolve(&row), person == PERSON);
+    }
+}
+
+#[test]
+fn a_placed_hold_masked_by_another_still_resolves_its_owner_before_switch() {
+    let (mut core, mut limits) = at_switch();
+    limits.tasks.placed_holds = 2;
+    limits.tasks.project_placed_holds = 2;
+    limits.tasks.party_placed_holds = 2;
+    core.tasks = fixtures::fresh_tasks(&core, &limits);
+    make_task(&mut core, &limits, TASK);
+    send_task(&mut core, &limits, placed(TASK, PERSON, 71));
+    send_task(&mut core, &limits, placed(TASK, MISSING_PERSON, 72));
+    assert_eq!(core.tasks.task(TASK).unwrap().placed, Some(71));
+    assert_eq!(core.tasks.next_placed_hold(71).unwrap().number, 72);
+    checked(&mut core, &limits);
+    assert!(!core.restart_checked());
+    unresolved(&core, RestoreChild::Tasks, 1);
 }

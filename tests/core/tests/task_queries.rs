@@ -9,17 +9,15 @@ use jig_test_domain as root;
 use skein_lib::{ReplyTo, Token};
 
 #[test]
-fn a_stopped_chat_reads_as_waiting_on_its_party() {
+fn a_placed_stop_reads_as_held_without_a_generic_escalation() {
     let mut world = world(1201);
     let task = world.assigned.as_ref().expect("chat").task;
     request(&mut world, 1, people::Ask::Stop { project: 1, task });
     ask(&mut world, 2, reads::Read::Task { task });
     let reads::Answer::Document(document) = latest(&world) else { panic!("a live task") };
     let documents::Document::Task(value) = document.as_ref() else { panic!("the task's document") };
-    assert!(matches!(value.waits_on, WaitsOn::Party {
-        whom: people::Whom::Person(1), entries: 1, task: waiting,
-        kind: people::EntryKind::Escalation { .. },
-    } if waiting == task));
+    assert_eq!(value.waits_on, WaitsOn::Nothing);
+    assert!(matches!(value.hold.as_ref().map(|hold| hold.reason), Some(tasks::Hold::Placed { .. })));
 }
 
 fn delegate_question(world: &mut jig_core_world::effects::World, parent: u64) {

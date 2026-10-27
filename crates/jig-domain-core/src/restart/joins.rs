@@ -10,6 +10,20 @@ impl Core {
                 records = records.saturating_add(1);
             }
         }
+        // People expose identities after the live restore, not while each
+        // tasks row is arriving. Check every hold, including one masked by an
+        // earlier overlapping hold that no task currently displays.
+        let mut after = 0;
+        while let Some(hold) = self.tasks.next_placed_hold(after) {
+            after = hold.number;
+            let owner = match hold.owner {
+                tasks::Owner::Party { person } => tasks::Party::Person(person),
+                tasks::Owner::Task { task } => tasks::Party::Task(task),
+            };
+            if self.authority.policy(hold.project).is_none() || !self.party_resolves(owner) {
+                records = records.saturating_add(1);
+            }
+        }
         records
     }
 

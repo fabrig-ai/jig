@@ -309,3 +309,16 @@ fn the_census_reads_only_the_named_question_activity_positions() {
         }
     }
 }
+
+#[test]
+fn tasks_restore_includes_placed_holds_beyond_the_history_families() {
+    let ranges = intervals::restore(&RestoreRange::Tasks);
+    for number in [0, 1, u64::MAX] {
+        assert!(fixtures::within(&ranges, &key_bytes(&Key::Tasks(jig_domain_tasks::Key::PlacedHold(number)))));
+        assert!(fixtures::within(&ranges, &key_bytes(&Key::Tasks(jig_domain_tasks::Key::Live(number)))));
+        assert!(!fixtures::within(
+            &ranges,
+            &key_bytes(&Key::Tasks(jig_domain_tasks::Key::History { task: number, revision: 1 }))
+        ));
+    }
+}

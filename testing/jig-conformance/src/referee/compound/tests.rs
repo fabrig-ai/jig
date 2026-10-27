@@ -8,6 +8,8 @@ fn task(number: u64) -> Task {
         settings: crate::referee::SettingsRevision::default(),
         spec_revision: 0,
         hold_revision: 0,
+        placed: None,
+        placed_reason: false,
         tracked: false,
         number,
         project: 1,
@@ -100,4 +102,51 @@ fn a_refused_compound_leaves_every_named_row_unchanged() {
     let (mut referee, snapshot) = referee();
     referee.observe(AT, Observed::Durable { number: 2, snapshot }).expect("unchanged tasks");
     referee.observe(AT, Observed::Compound { tasks: vec![1, 2], made: false }).expect("refusal changed nothing");
+}
+
+#[test]
+fn a_root_release_names_only_its_placed_subtree_and_preserves_other_causes() {
+    use crate::referee::{PlacedHold, Revision};
+    let mut before = Snapshot::default();
+    for number in [1, 2, 7] {
+        let mut row = task(number);
+        row.phase = Phase::Held;
+        row.hold_revision = 3;
+        row.placed = Some(100);
+        row.placed_reason = true;
+        if number == 2 {
+            row.source = Source::Task(1);
+        }
+        before.tasks.insert(number, row);
+    }
+    before.placed_holds.insert(100, PlacedHold { root: Some(1), lifted: false });
+    let mut after = before.clone();
+    after.placed_holds.remove(&100);
+    for number in [1, 2] {
+        after.tasks.get_mut(&number).unwrap().phase = Phase::Active;
+        after.tasks.get_mut(&number).unwrap().placed = None;
+    }
+    let mut revisions = super::super::revisions::Revisions::default();
+    revisions.named(1, Revision::Hold(3));
+    assert_eq!(revisions.durable(&before, &after), Ok(()));
+    for fault in 0..4 {
+        let mut before = before.clone();
+        let mut after = after.clone();
+        match fault {
+            0 => {
+                after.tasks.get_mut(&7).unwrap().phase = Phase::Active;
+            }
+            1 => {
+                before.tasks.get_mut(&2).unwrap().placed_reason = false;
+            }
+            2 => {
+                after.placed_holds.insert(100, PlacedHold { root: Some(1), lifted: false });
+            }
+            3 => {}
+            _ => unreachable!(),
+        }
+        let mut revisions = super::super::revisions::Revisions::default();
+        revisions.named(1, Revision::Hold(if fault == 3 { 2 } else { 3 }));
+        assert!(revisions.durable(&before, &after).is_err(), "fault {fault}");
+    }
 }

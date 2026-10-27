@@ -225,6 +225,9 @@ fn person_cause(value: people::CapacityCause, limits: &w::Limits) -> Result<w::O
 }
 fn task_action(value: tasks::CapacityAction, limits: &w::Limits) -> Result<w::OwnerTaskCapacityAction, w::Problem> {
     Ok(match value {
+        tasks::CapacityAction::Place { hold } => w::OwnerTaskCapacityAction::Place(
+            w::OwnerTaskCapacityActionPlace::new(limits, w::OwnerTaskCapacityActionPlaceParts { hold })?,
+        ),
         tasks::CapacityAction::Release => w::OwnerTaskCapacityAction::Release,
         tasks::CapacityAction::Move => w::OwnerTaskCapacityAction::MoveTask,
         tasks::CapacityAction::Batch { first, members } => w::OwnerTaskCapacityAction::Batch(
@@ -267,6 +270,24 @@ fn task_action(value: tasks::CapacityAction, limits: &w::Limits) -> Result<w::Ow
 }
 fn task_cause(value: tasks::CapacityCause, limits: &w::Limits) -> Result<w::OwnerTaskCapacityCause, w::Problem> {
     Ok(match value {
+        tasks::CapacityCause::PlacedHolds { limit } => w::OwnerTaskCapacityCause::PlacedHolds(
+            w::OwnerTaskCapacityCausePlacedHolds::new(limits, w::OwnerTaskCapacityCausePlacedHoldsParts { limit })?,
+        ),
+        tasks::CapacityCause::ProjectPlacedHolds { limit } => {
+            w::OwnerTaskCapacityCause::ProjectPlacedHolds(w::OwnerTaskCapacityCauseProjectPlacedHolds::new(
+                limits,
+                w::OwnerTaskCapacityCauseProjectPlacedHoldsParts { limit },
+            )?)
+        }
+        tasks::CapacityCause::PartyPlacedHolds { limit } => {
+            w::OwnerTaskCapacityCause::PartyPlacedHolds(w::OwnerTaskCapacityCausePartyPlacedHolds::new(
+                limits,
+                w::OwnerTaskCapacityCausePartyPlacedHoldsParts { limit },
+            )?)
+        }
+        tasks::CapacityCause::Exemptions { limit } => w::OwnerTaskCapacityCause::Exemptions(
+            w::OwnerTaskCapacityCauseExemptions::new(limits, w::OwnerTaskCapacityCauseExemptionsParts { limit })?,
+        ),
         tasks::CapacityCause::Tasks { limit } => w::OwnerTaskCapacityCause::Tasks(w::OwnerTaskCapacityCauseTasks::new(
             limits,
             w::OwnerTaskCapacityCauseTasksParts { limit },

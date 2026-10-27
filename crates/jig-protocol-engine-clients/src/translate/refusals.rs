@@ -241,6 +241,10 @@ pub(super) fn limit(value: p::LimitKind) -> w::AdmissionLimit {
         p::LimitKind::Policy => w::AdmissionLimit::Policy,
         p::LimitKind::Resource => w::AdmissionLimit::Resource,
         p::LimitKind::Service => w::AdmissionLimit::Service,
+        p::LimitKind::PlacedHolds => w::AdmissionLimit::PlacedHolds,
+        p::LimitKind::ProjectPlacedHolds => w::AdmissionLimit::ProjectPlacedHolds,
+        p::LimitKind::PartyPlacedHolds => w::AdmissionLimit::PartyPlacedHolds,
+        p::LimitKind::Exemptions => w::AdmissionLimit::Exemptions,
         p::LimitKind::Accounts => w::AdmissionLimit::Accounts,
         p::LimitKind::HolderAccounts => w::AdmissionLimit::HolderAccounts,
         p::LimitKind::Sources => w::AdmissionLimit::Sources,
@@ -281,8 +285,8 @@ fn hold(value: p::HoldReason, limits: &w::Limits) -> Result<w::HoldCategory, w::
             limits,
             w::HoldCategoryDependencyParts { task },
         )?),
-        p::HoldReason::Placed { hold: party } => {
-            w::HoldCategory::Placed(w::HoldCategoryPlaced::new(limits, w::HoldCategoryPlacedParts { hold: party })?)
+        p::HoldReason::Placed { hold } => {
+            w::HoldCategory::Placed(w::HoldCategoryPlaced::new(limits, w::HoldCategoryPlacedParts { hold })?)
         }
         p::HoldReason::Uncertain { entry } => {
             w::HoldCategory::Uncertain(w::HoldCategoryUncertain::new(limits, w::HoldCategoryUncertainParts { entry })?)

@@ -65,8 +65,8 @@ pub(super) fn encode_hold_reason(
             wire::HoldReasonDependencyParts { task: *task },
         )?),
         domain::HoldReason::Stopped => wire::HoldReason::Stopped,
-        domain::HoldReason::Placed { hold: party } => {
-            wire::HoldReason::Placed(wire::HoldReasonPlaced::new(limits, wire::HoldReasonPlacedParts { hold: *party })?)
+        domain::HoldReason::Placed { hold } => {
+            wire::HoldReason::Placed(wire::HoldReasonPlaced::new(limits, wire::HoldReasonPlacedParts { hold: *hold })?)
         }
         domain::HoldReason::Drift => wire::HoldReason::Drift,
         domain::HoldReason::Effects => wire::HoldReason::Effects,
@@ -115,8 +115,8 @@ pub(super) fn decode_hold_reason(value: wire::HoldReason) -> domain::HoldReason 
         }
         wire::HoldReason::Stopped => domain::HoldReason::Stopped,
         wire::HoldReason::Placed(value) => {
-            let wire::HoldReasonPlacedParts { hold: party } = value.into_parts();
-            domain::HoldReason::Placed { hold: party }
+            let wire::HoldReasonPlacedParts { hold } = value.into_parts();
+            domain::HoldReason::Placed { hold }
         }
         wire::HoldReason::Drift => domain::HoldReason::Drift,
         wire::HoldReason::Effects => domain::HoldReason::Effects,
@@ -380,6 +380,10 @@ pub(super) fn encode_limit_kind(value: domain::LimitKind, _limits: &wire::Limits
         domain::LimitKind::Policy => wire::LimitKind::Policy,
         domain::LimitKind::Resource => wire::LimitKind::Resource,
         domain::LimitKind::Service => wire::LimitKind::Service,
+        domain::LimitKind::PlacedHolds => wire::LimitKind::PlacedHolds,
+        domain::LimitKind::ProjectPlacedHolds => wire::LimitKind::ProjectPlacedHolds,
+        domain::LimitKind::PartyPlacedHolds => wire::LimitKind::PartyPlacedHolds,
+        domain::LimitKind::Exemptions => wire::LimitKind::Exemptions,
         domain::LimitKind::Accounts => wire::LimitKind::Accounts,
         domain::LimitKind::HolderAccounts => wire::LimitKind::HolderAccounts,
         domain::LimitKind::Sources => wire::LimitKind::Sources,
@@ -428,6 +432,10 @@ pub(super) fn decode_limit_kind(value: wire::LimitKind) -> domain::LimitKind {
         wire::LimitKind::Policy => domain::LimitKind::Policy,
         wire::LimitKind::Resource => domain::LimitKind::Resource,
         wire::LimitKind::Service => domain::LimitKind::Service,
+        wire::LimitKind::PlacedHolds => domain::LimitKind::PlacedHolds,
+        wire::LimitKind::ProjectPlacedHolds => domain::LimitKind::ProjectPlacedHolds,
+        wire::LimitKind::PartyPlacedHolds => domain::LimitKind::PartyPlacedHolds,
+        wire::LimitKind::Exemptions => domain::LimitKind::Exemptions,
         wire::LimitKind::Accounts => domain::LimitKind::Accounts,
         wire::LimitKind::HolderAccounts => domain::LimitKind::HolderAccounts,
         wire::LimitKind::Sources => domain::LimitKind::Sources,

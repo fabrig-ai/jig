@@ -88,7 +88,7 @@ fn proposal_bits(value: &d::Proposal) -> u64 {
         d::ProposalAction::Widen { authority, .. }
         | d::ProposalAction::Effect { authority, .. }
         | d::ProposalAction::ProcedureEffect { authority, .. } => authority_bits(authority),
-        d::ProposalAction::Release { .. } => 0,
+        d::ProposalAction::ReleasePlaced { .. } | d::ProposalAction::Release { .. } => 0,
     }
 }
 fn referenced(row: &d::Stored) -> u64 {
@@ -127,6 +127,7 @@ fn referenced(row: &d::Stored) -> u64 {
         | d::Stored::Activity(_)
         | d::Stored::Milestone(_)
         | d::Stored::ClosedLedger(_)
+        | d::Stored::PlacedHold(_)
         | d::Stored::Stub(_)
         | d::Stored::Ledger(_)
         | d::Stored::Writer(_)
@@ -179,7 +180,7 @@ fn proposal(value: &mut d::Proposal, moved: &[u64; 64]) {
         d::ProposalAction::Widen { authority: value, .. }
         | d::ProposalAction::Effect { authority: value, .. }
         | d::ProposalAction::ProcedureEffect { authority: value, .. } => authority(value, moved),
-        d::ProposalAction::Release { .. } => {}
+        d::ProposalAction::ReleasePlaced { .. } | d::ProposalAction::Release { .. } => {}
     }
 }
 /// Every authority-bearing durable tasks variant, including pending policy-held proposals.
@@ -217,6 +218,7 @@ pub(super) fn remap(row: &mut d::Stored, moved: &[u64; 64]) {
         | d::Stored::Activity(_)
         | d::Stored::Milestone(_)
         | d::Stored::ClosedLedger(_)
+        | d::Stored::PlacedHold(_)
         | d::Stored::Stub(_)
         | d::Stored::Ledger(_)
         | d::Stored::Writer(_)

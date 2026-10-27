@@ -1274,6 +1274,10 @@ impl Payload for AdmissionLimit {
             | Self::Sources
             | Self::Projects
             | Self::SignIns
+            | Self::PlacedHolds
+            | Self::ProjectPlacedHolds
+            | Self::PartyPlacedHolds
+            | Self::Exemptions
             | Self::SettingsProposals
             | Self::Service => Some(0),
         }

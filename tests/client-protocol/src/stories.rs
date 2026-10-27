@@ -64,7 +64,8 @@ pub fn submit_stop(world: &mut Story, client: ClientId) {
     panic!("the stop crossed its transport boundary");
 }
 pub fn held(world: &mut Story, client: ClientId) {
-    world.person(client, vec![Step::See { find: Find::text(b"Held stopped"), within: Duration::from_secs(5) }]);
+    world
+        .person(client, vec![Step::See { find: Find::text(b"Held by a placed hold"), within: Duration::from_secs(5) }]);
     finish(world);
 }
 #[must_use]

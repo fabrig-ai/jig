@@ -353,7 +353,6 @@ impl ChipPhrase {
             | Self::RequesterPerson
             | Self::RequesterDeployment
             | Self::Dependency
-            | Self::Placed
             | Self::Uncertain
             | Self::PoolLost => Some(HoleKind::Number),
             Self::PhaseSince
@@ -410,6 +409,7 @@ impl ChipPhrase {
             | Self::InvalidFailure
             | Self::Stalled
             | Self::Stopped
+            | Self::Placed
             | Self::Drift
             | Self::Effects
             | Self::EffectFailed
@@ -512,7 +512,7 @@ impl ChipPhrase {
             Self::Stalled => b"Held stalled",
             Self::Dependency => b"Held dependency task: ",
             Self::Stopped => b"Held stopped",
-            Self::Placed => b"Held stopped by party: ",
+            Self::Placed => b"Held by a placed hold",
             Self::Drift => b"Held drift",
             Self::Effects => b"Held effects",
             Self::EffectFailed => b"Held effect failed",

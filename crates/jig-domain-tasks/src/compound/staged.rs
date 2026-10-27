@@ -119,7 +119,7 @@ impl Staged {
         Ok(())
     }
 
-    fn placed_change_once(&self, number: u64) -> Result<(), Box<crate::Problem>> {
+    pub(crate) fn placed_change_once(&self, number: u64) -> Result<(), Box<crate::Problem>> {
         for earlier in &self.plans {
             let hold = if let Some(placement) = earlier.placement()
                 && super::has(&placement.tasks, number)

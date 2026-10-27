@@ -126,12 +126,13 @@ fn a_held_actual_commit_keeps_the_stop_answer_pending_until_its_completion() {
         Some(jig_core_world::effects::Cut::Submitted(submitted))
     );
     assert_eq!(answers(&mut world), 1, "only starting the chat is answered durably");
-    assert!(!shown(&world, client, b"Held stopped"));
+    assert!(!shown(&world, client, b"Held by a placed hold"));
     assert!(world.front().session.driver.withhold_completion().expect("actual store applied").is_none());
     assert_eq!(answers(&mut world), 2, "the stop is durable while its completion is withheld");
-    assert!(!shown(&world, client, b"Held stopped"), "durability alone cannot fabricate a callback");
+    assert!(!shown(&world, client, b"Held by a placed hold"), "durability alone cannot fabricate a callback");
     world.front().session.driver.release_commits();
-    world.person(client, vec![Step::See { find: Find::text(b"Held stopped"), within: Duration::from_secs(1) }]);
+    world
+        .person(client, vec![Step::See { find: Find::text(b"Held by a placed hold"), within: Duration::from_secs(1) }]);
     let outcome = world.run(Until::Done);
     assert_eq!(outcome.verdict, skein_world::domain::Verdict::Passed, "{outcome:?}");
     assert!(outcome.judged.0 > 0);
@@ -171,14 +172,15 @@ fn a_failed_commit_stops_the_engine_and_the_person_sees_offline_before_keyed_rec
     assert!(matches!(outcome.verdict, skein_world::domain::Verdict::Open { .. }));
     assert!(outcome.judged.0 > 0);
     assert!(shown(&world, client, b"Offline"));
-    assert!(!shown(&world, client, b"Held stopped"));
+    assert!(!shown(&world, client, b"Held by a placed hold"));
     let owner = &world.front().session.driver.world;
     assert!(owner.stopped);
     assert_eq!(owner.store.applied, applied);
     assert_eq!(owner.store.rows, rows);
     assert_eq!(answers(&mut world), 1);
     world.fault(crate::FrontFault::Restart { offline: Duration::from_millis(150) });
-    world.person(client, vec![Step::See { find: Find::text(b"Held stopped"), within: Duration::from_secs(1) }]);
+    world
+        .person(client, vec![Step::See { find: Find::text(b"Held by a placed hold"), within: Duration::from_secs(1) }]);
     let outcome = world.run(Until::Done);
     assert_eq!(outcome.verdict, skein_world::domain::Verdict::Passed, "{outcome:?}");
     assert!(outcome.judged.0 > 0);
@@ -216,11 +218,12 @@ fn a_reload_with_a_stop_pending_recovers_its_lost_committed_answer_by_the_origin
     assert_eq!(answers(&mut world), 1);
     assert!(world.front().session.driver.withhold_completion().expect("actual durable commit").is_none());
     assert_eq!(answers(&mut world), 2);
-    assert!(!shown(&world, client, b"Held stopped"));
+    assert!(!shown(&world, client, b"Held by a placed hold"));
     world.fault(crate::FrontFault::NoAnswer);
     world.front().session.driver.release_commits();
     world.fault(crate::Fault::Reload { client });
-    world.person(client, vec![Step::See { find: Find::text(b"Held stopped"), within: Duration::from_secs(1) }]);
+    world
+        .person(client, vec![Step::See { find: Find::text(b"Held by a placed hold"), within: Duration::from_secs(1) }]);
     let outcome = world.run(Until::Done);
     assert_eq!(outcome.verdict, skein_world::domain::Verdict::Passed, "{outcome:?}");
     assert!(outcome.judged.0 > 0);
@@ -258,7 +261,7 @@ fn a_dropped_watch_and_slow_delivery_show_the_page_behind_before_the_held_chat_i
         client,
         vec![
             Step::Press { find: Find::exactly_named(Role::Button, b"Confirm") },
-            Step::See { find: Find::text(b"Held stopped"), within },
+            Step::See { find: Find::text(b"Held by a placed hold"), within },
         ],
     );
     let outcome = world.run(Until::Done);
@@ -317,7 +320,7 @@ fn a_crash_after_the_stop_commit_cold_restarts_offline_and_answers_the_same_key_
     assert_eq!(answers(&mut world), 1);
     assert!(world.front().session.driver.withhold_completion().expect("actual durable commit").is_none());
     assert_eq!(answers(&mut world), 2);
-    assert!(!shown(&world, client, b"Held stopped"));
+    assert!(!shown(&world, client, b"Held by a placed hold"));
     // Crash the actual root before that durable transaction's completion is delivered.
     world.fault(crate::FrontFault::Restart { offline: Duration::from_millis(150) });
     let within = Duration::from_secs(1);
@@ -325,7 +328,7 @@ fn a_crash_after_the_stop_commit_cold_restarts_offline_and_answers_the_same_key_
         client,
         vec![
             Step::See { find: Find::text(b"Offline"), within },
-            Step::See { find: Find::text(b"Held stopped"), within },
+            Step::See { find: Find::text(b"Held by a placed hold"), within },
         ],
     );
     let outcome = world.run(Until::Done);

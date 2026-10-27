@@ -27,5 +27,8 @@ fn a_stopped_task_s_hold_reads_in_jig_s_words() {
     };
     let book = Phrasebook::load(words::phrase_shapes(32), Box::new([words::english()]), &limits)
         .expect("public English words");
-    assert_eq!(book.say(0, Word::hold(reason).id(), &[]).expect("bounded hold phrase").text.as_ref(), b"Task stopped");
+    assert_eq!(
+        book.say(0, Word::hold(reason).id(), &[]).expect("bounded hold phrase").text.as_ref(),
+        b"Held by a placed hold"
+    );
 }
