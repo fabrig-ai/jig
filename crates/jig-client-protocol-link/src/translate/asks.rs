@@ -493,6 +493,10 @@ pub(crate) fn wire_policy_permission(
 pub(crate) fn wire_policy_edit(value: &c::PolicyEdit, limits: &w::Limits) -> Result<w::PolicyEdit, w::Problem> {
     Ok(match value {
         c::PolicyEdit::Templates { overrides } => super::operations::templates(overrides, limits)?,
+        c::PolicyEdit::RoleSpend { role, period_spend } => w::PolicyEdit::RoleSpend(w::PolicyEditRoleSpend::new(
+            limits,
+            w::PolicyEditRoleSpendParts { role: *role, period_spend: *period_spend },
+        )?),
         c::PolicyEdit::ProjectSpend { period_spend } => w::PolicyEdit::ProjectSpend(w::PolicyEditProjectSpend::new(
             limits,
             w::PolicyEditProjectSpendParts { period_spend: *period_spend },

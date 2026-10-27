@@ -12,6 +12,7 @@ pub enum PolicyEdit {
     Projections { grants: List<OwnerGrant> },
     Permissions { mappings: List<PolicyPermission> },
     Templates { overrides: List<TemplateOverride> },
+    RoleSpend { role: u32, period_spend: u64 },
 }
 
 /// A role's actual authority, period allotment and decision flags.
