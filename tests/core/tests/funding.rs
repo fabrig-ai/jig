@@ -112,3 +112,114 @@ fn changed_role() -> people::PolicyRole {
         decides: authority::Proposals::ALL.0,
     }
 }
+
+#[test]
+fn a_raised_project_funds_its_next_chat() {
+    let mut config = world::config(604);
+    config.core.seed_projects[0].policy.policy.period_spend = 500;
+    let mut world = World::configured(604, false, config, world::limits());
+    let period = tasks::Funder::Period { project: 1, period: 1 };
+    let before = *ledger(&world, period);
+    assert_eq!(before.numbers.reserved, 500);
+    let owner = world.sign_in;
+    let second = jig_core_world::fixtures::second_party(&mut world, b"second-party", people::Role::Owner);
+    world.sign_in = Some(second);
+    let chat = jig_core_world::fixtures::chat(&world, 1, b"second party chat".as_slice().into());
+    ask(&mut world, 7, chat.clone());
+    jig_core_world::fixtures::refusal(
+        &world,
+        people::Refusal::Authority { proposable: None, lacking: people::Lack::Funding },
+    );
+    world.sign_in = owner;
+    ask(
+        &mut world,
+        8,
+        people::Ask::ChangePolicy { project: 1, change: people::PolicyChange::ProjectSpend { period_spend: 1000 } },
+    );
+    assert_eq!(
+        world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::PolicyChanged { project: 1 }))
+    );
+    let mut raised = before;
+    raised.numbers.budget = 1000;
+    assert_eq!(*ledger(&world, period), raised);
+    world.sign_in = Some(second);
+    ask(&mut world, 9, chat);
+    assert!(matches!(world.people_answers.last(), Some(people::Reply::Outcome(people::Outcome::Created { .. }))));
+    let pool = tasks::Funder::Pool { project: 1, person: 2, period: 1 };
+    assert_eq!(ledger(&world, pool).parent, Some(period));
+    assert_eq!(ledger(&world, pool).numbers.budget, 500);
+    assert_eq!(ledger(&world, pool).numbers.reserved, 100);
+    let Some(people::Reply::Outcome(people::Outcome::Created { first, .. })) = world.people_answers.last() else {
+        panic!("created chat answer")
+    };
+    let root::Record::Core(core::Record::Tasks(tasks::Stored::Live(chat))) =
+        &world.store.rows[&root::Key::Core(core::Key::Tasks(tasks::Key::Live(*first)))]
+    else {
+        panic!("second party's live chat")
+    };
+    assert_eq!(chat.funder, pool);
+    assert_eq!(ledger(&world, period).numbers.budget, 1000);
+    assert_eq!(ledger(&world, period).numbers.reserved, 1000);
+}
+
+#[test]
+fn a_cut_below_what_is_used_funds_nothing_more_and_takes_nothing_back() {
+    let mut world = World::configured(605, false, world::config(605), world::limits());
+    jig_core_world::fixtures::finish_chat(&mut world, 25, b"finished chat");
+    jig_core_world::fixtures::second_party(&mut world, b"second-party", people::Role::Owner);
+    ask(&mut world, 13, people::Ask::SetPool { project: 1, person: 2, budget: 250 });
+    let period = tasks::Funder::Period { project: 1, period: 1 };
+    let pool = tasks::Funder::Pool { project: 1, person: 1, period: 1 };
+    let before = *ledger(&world, period);
+    let pool_before = *ledger(&world, pool);
+    assert_eq!(pool_before.numbers.spent_below, 25);
+    let used = before.numbers.spent + before.numbers.spent_below + before.numbers.reserved;
+    assert_eq!(used, 750);
+    ask(
+        &mut world,
+        10,
+        people::Ask::ChangePolicy { project: 1, change: people::PolicyChange::ProjectSpend { period_spend: 500 } },
+    );
+    assert_eq!(
+        world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::PolicyChanged { project: 1 }))
+    );
+    let mut cut = before;
+    cut.numbers.budget = used;
+    assert_eq!(*ledger(&world, period), cut);
+    assert_eq!(*ledger(&world, pool), pool_before);
+    let chat = jig_core_world::fixtures::chat(&world, 1, b"after cut".as_slice().into());
+    ask(&mut world, 11, chat);
+    jig_core_world::fixtures::refusal(
+        &world,
+        people::Refusal::Authority { proposable: None, lacking: people::Lack::Budget { needs: used, left: 500 } },
+    );
+    assert_eq!(*ledger(&world, period), cut);
+    assert_eq!(*ledger(&world, pool), pool_before);
+}
+
+#[test]
+fn a_raise_survives_a_restart() {
+    let mut config = world::config(606);
+    config.core.seed_projects[0].policy.policy.period_spend = 500;
+    let mut world = World::configured(606, false, config, world::limits());
+    let period = tasks::Funder::Period { project: 1, period: 1 };
+    let mut expected = *ledger(&world, period);
+    expected.numbers.budget = 1000;
+    ask(
+        &mut world,
+        12,
+        people::Ask::ChangePolicy { project: 1, change: people::PolicyChange::ProjectSpend { period_spend: 1000 } },
+    );
+    let mut config = world::config(606);
+    config.core.seed_projects[0].policy.policy.period_spend = 500;
+    world.restart_with(config);
+    assert_eq!(*ledger(&world, period), expected);
+    let root::Record::Core(core::Record::People(people::Stored::Policy { value, .. })) =
+        &world.store.rows[&root::Key::Core(core::Key::People(people::Key::Policy(1)))]
+    else {
+        panic!("restored project policy")
+    };
+    assert_eq!(value.period_spend, 1000);
+}
