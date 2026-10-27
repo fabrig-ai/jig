@@ -15,7 +15,30 @@ use skein_lib::{Duration, Reader, Secret, Time};
 use skein_world::{HostedProgram, Inherited, StartupRoot};
 use std::{cell::RefCell, rc::Rc};
 
+const SETTLE: Duration = Duration::from_secs(45);
+
+fn worker_open(root: kernel::Fd) -> Proc {
+    let mut worker = processes::worker_program_runs(root);
+    let Proc::Worker(host) = &mut worker else { unreachable!("worker factory") };
+    // Release this channel when the first inbox message is durable, before any placement.
+    host.relay.until = Some(Time::ZERO.saturating_add(SETTLE));
+    worker
+}
+
+fn say(key: [u8; 16], words: &[u8]) -> jig_fake_parties::Act {
+    jig_fake_parties::Act::Request {
+        key,
+        ask: jig_fake_parties::Ask::Say { task: jig_fake_parties::Task::Last, words: words.into(), release: None },
+    }
+}
+
 fn engine(inherited: &Inherited) -> Proc {
+    engine_configured(inherited, false)
+}
+fn engine_open(inherited: &Inherited) -> Proc {
+    engine_configured(inherited, true)
+}
+fn engine_configured(inherited: &Inherited, open: bool) -> Proc {
     let document = String::from_utf8(fixtures::engine_document())
         .expect("engine JSON")
         .replace(
@@ -25,7 +48,15 @@ fn engine(inherited: &Inherited) -> Proc {
         .replace(r#""dialect": 1,"#, r#""dialect": 1, "program": "claude_code","#)
         .replace(r#""window": 1048576"#, r#""window": 272000"#)
         .replace(r#""inspect": false"#, r#""inspect": true"#);
-    processes::engine_document(inherited, document.as_bytes())
+    if open {
+        let mut document: serde_json::Value = serde_json::from_str(&document).expect("engine JSON");
+        document["engine"]["templates"][0]["ended_by"] = "requester".into();
+        // Only the listening interval changes; the run and reserve deadlines stay fixed.
+        document["engine"]["charters"][0]["waiting_ms"] = 10.into();
+        processes::engine_document(inherited, &serde_json::to_vec(&document).expect("Open engine JSON"))
+    } else {
+        processes::engine_document(inherited, document.as_bytes())
+    }
 }
 fn declarations() -> smith_agent_service::profile::Configuration {
     let mut declarations = smith_agent_process_world::declarations(4096);
@@ -158,6 +189,7 @@ pub enum Case {
     Unauthorized,
     SignOut,
     Waiting,
+    Open,
     Builtin,
 }
 #[derive(Default, Debug)]
@@ -176,12 +208,67 @@ pub struct Run {
     pub authenticated_failures: Vec<u32>,
     pub signed_out: bool,
     pub received: Vec<serde_json::Value>,
+    pub messages: Vec<(u64, u64, Vec<u8>)>,
+    pub sent_after_park: Option<u64>,
+    pub run_waits: Vec<Option<jig_client::contract::TaskRunWait>>,
+    pub task: Option<Box<jig_domain_tasks::TaskRecord>>,
+}
+impl Run {
+    fn worker(&mut self, wire: &processes::Wire) {
+        self.starts = u32::try_from(wire.placements.len()).expect("attempts");
+        self.grants.clear();
+        self.messages.clear();
+        for (_, kind, body) in &wire.frames {
+            if *kind == wire::Kind::Assignment.number() {
+                let assignment = wire::Assignment::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("assignment");
+                for message in assignment.messages() {
+                    self.messages.push((assignment.attempt(), message.name(), message.words().to_vec()));
+                }
+                for grant in assignment.grants() {
+                    if let wire::GrantValue::Program(value) = grant.value() {
+                        self.grants.push((
+                            assignment.attempt(),
+                            grant.number(),
+                            grant.generation(),
+                            value.name().to_vec(),
+                        ));
+                    }
+                }
+            }
+        }
+        self.answers = wire
+            .frames
+            .iter()
+            .filter(|(_, kind, _)| *kind == wire::Kind::Answer.number())
+            .map(|(_, _, body)| wire::Answer::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("answer"))
+            .collect();
+        self.limited = wire
+            .frames
+            .iter()
+            .filter(|(_, kind, _)| *kind == wire::Kind::Limited.number())
+            .map(|(_, _, body)| wire::Limited::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("limited notice"))
+            .collect();
+        self.unauthorized = wire
+            .frames
+            .iter()
+            .filter(|(_, kind, _)| *kind == wire::Kind::Unauthorized.number())
+            .map(|(_, _, body)| {
+                wire::Unauthorized::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("unauthorized notice")
+            })
+            .collect();
+    }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Action {
     Ready,
     Sent,
     Resumed,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Opening {
+    Creating,
+    Watching,
+    Ready,
 }
 struct Judge {
     shared: Rc<RefCell<Run>>,
@@ -194,6 +281,7 @@ struct Judge {
     done: bool,
     case: Case,
     action: Action,
+    opening: Opening,
 }
 impl skein_world::Referee<Proc> for Judge {
     fn act(&mut self, now: Time, procs: &mut [Proc]) {
@@ -226,6 +314,9 @@ impl skein_world::Referee<Proc> for Judge {
             })
             .collect();
         let parked = terminals.iter().any(|answer| answer.end == jig_domain_tasks::End::Parked);
+        if self.case == Case::Open {
+            self.prepare_open(procs);
+        }
         self.steer(procs, parked);
         let signed_out = procs.iter().any(|process| {
             let Proc::Client(client) = process else { return false };
@@ -242,14 +333,7 @@ impl skein_world::Referee<Proc> for Judge {
             })
         });
         if self.case == Case::SignOut && signed_out && self.action == Action::Sent {
-            self.party.extend(Box::new([jig_fake_parties::Act::Request {
-                key: [4; 16],
-                ask: jig_fake_parties::Ask::Say {
-                    task: jig_fake_parties::Task::Last,
-                    words: b"Continue after signing out".as_slice().into(),
-                    release: None,
-                },
-            }]));
+            self.party.extend(Box::new([say([4; 16], b"Continue after signing out")]));
             self.action = Action::Resumed;
         }
         self.done = match self.case {
@@ -257,6 +341,7 @@ impl skein_world::Referee<Proc> for Judge {
                 terminals.iter().any(|answer| matches!(answer.end, jig_domain_tasks::End::Finished { .. }))
             }
             Case::SignOut => signed_out && !terminals.is_empty(),
+            Case::Open => terminals.iter().filter(|answer| answer.end == jig_domain_tasks::End::Parked).count() == 2,
             Case::Answer | Case::Limited | Case::Unauthorized | Case::Builtin => !terminals.is_empty(),
         };
         self.record(procs, turns, terminals, signed_out);
@@ -266,7 +351,7 @@ impl skein_world::Referee<Proc> for Judge {
         None
     }
     fn overdue(&self, now: Time) -> Option<String> {
-        (now > Time::ZERO.saturating_add(Duration::from_secs(45))).then(|| {
+        (now > Time::ZERO.saturating_add(SETTLE)).then(|| {
             format!(
                 "program run settles: terminals {:?}; starts {}; diagnostics {}",
                 self.shared.borrow().terminals,
@@ -284,16 +369,46 @@ impl skein_world::Referee<Proc> for Judge {
 }
 
 impl Judge {
+    fn prepare_open(&mut self, procs: &mut [Proc]) {
+        if self.opening == Opening::Creating
+            && let Some(task) = self.party.last_task
+        {
+            let client = procs
+                .iter_mut()
+                .find_map(|p| if let Proc::Client(client) = p { Some(client) } else { None })
+                .expect("native watcher");
+            client.account_request(jig_client::Event::Watch {
+                handle: jig_client::Handle { asker: jig_client::Asker(78), number: 70 },
+                subject: jig_client::Watchable::Jig(jig_client::contract::Subject::Task { task }),
+            });
+            self.opening = Opening::Watching;
+        }
+        if self.opening == Opening::Watching
+            && self.store.rows.values().any(|row| {
+                matches!(row, jig_test_domain::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(task)))
+                if task.inbox.iter().any(|message| message.words.as_ref() == b"Hello"))
+            })
+        {
+            for proc in procs.iter_mut() {
+                if let Proc::Worker(host) = proc {
+                    host.relay.until = None;
+                }
+            }
+            self.opening = Opening::Ready;
+        }
+    }
     fn steer(&mut self, procs: &mut [Proc], parked: bool) {
-        if self.action == Action::Ready && self.case == Case::Waiting && parked {
-            self.party.extend(Box::new([jig_fake_parties::Act::Request {
-                key: [2; 16],
-                ask: jig_fake_parties::Ask::Say {
-                    task: jig_fake_parties::Task::Last,
-                    words: b"After waiting".as_slice().into(),
-                    release: None,
-                },
-            }]));
+        if self.action == Action::Ready && matches!(self.case, Case::Waiting | Case::Open) && parked {
+            self.shared.borrow_mut().sent_after_park = self.store.rows.values().find_map(|row| {
+                if let jig_test_domain::Record::Core(core::Record::Core(core::CoreRecord::Terminal(answer))) = row
+                    && answer.end == jig_domain_tasks::End::Parked
+                {
+                    Some(answer.attempt)
+                } else {
+                    None
+                }
+            });
+            self.party.extend(Box::new([say([2; 16], b"After waiting")]));
             self.action = Action::Sent;
         }
         if self.action == Action::Ready && self.case == Case::SignOut && waiting_on(procs, 1) {
@@ -315,14 +430,7 @@ impl Judge {
         // Each new fake invocation begins its turn script again. A fresh word answers
         // the resumed invocation's own wait, after its initial resumption message.
         if self.case == Case::Waiting && self.action == Action::Sent && waiting_on(procs, 2) {
-            self.party.extend(Box::new([jig_fake_parties::Act::Request {
-                key: [3; 16],
-                ask: jig_fake_parties::Ask::Say {
-                    task: jig_fake_parties::Task::Last,
-                    words: b"Continue after waiting".as_slice().into(),
-                    release: None,
-                },
-            }]));
+            self.party.extend(Box::new([say([3; 16], b"Continue after waiting")]));
             self.action = Action::Resumed;
         }
     }
@@ -339,6 +447,13 @@ impl Judge {
         run.turns = turns;
         run.terminals = terminals;
         run.signed_out = signed_out;
+        run.task = self.store.rows.values().find_map(|row| {
+            if let jig_test_domain::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(task))) = row {
+                Some(task.clone())
+            } else {
+                None
+            }
+        });
         run.held =
             self.store
                 .rows
@@ -365,52 +480,7 @@ impl Judge {
         for proc in procs {
             match proc {
                 Proc::Worker(host) => {
-                    run.starts = u32::try_from(host.wire.placements.len()).expect("attempts");
-                    run.grants.clear();
-                    for (_, kind, body) in &host.wire.frames {
-                        if *kind == wire::Kind::Assignment.number() {
-                            let assignment =
-                                wire::Assignment::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("assignment");
-                            for grant in assignment.grants() {
-                                if let wire::GrantValue::Program(value) = grant.value() {
-                                    run.grants.push((
-                                        assignment.attempt(),
-                                        grant.number(),
-                                        grant.generation(),
-                                        value.name().to_vec(),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    run.answers = host
-                        .wire
-                        .frames
-                        .iter()
-                        .filter(|(_, kind, _)| *kind == wire::Kind::Answer.number())
-                        .map(|(_, _, body)| {
-                            wire::Answer::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("answer")
-                        })
-                        .collect();
-                    run.limited = host
-                        .wire
-                        .frames
-                        .iter()
-                        .filter(|(_, kind, _)| *kind == wire::Kind::Limited.number())
-                        .map(|(_, _, body)| {
-                            wire::Limited::decode(&wire::CEILINGS, &mut Reader::new(body)).expect("limited notice")
-                        })
-                        .collect();
-                    run.unauthorized = host
-                        .wire
-                        .frames
-                        .iter()
-                        .filter(|(_, kind, _)| *kind == wire::Kind::Unauthorized.number())
-                        .map(|(_, _, body)| {
-                            wire::Unauthorized::decode(&wire::CEILINGS, &mut Reader::new(body))
-                                .expect("unauthorized notice")
-                        })
-                        .collect();
+                    run.worker(&host.wire);
                     if self.done && !host.stopping {
                         host.stopping = true;
                         host.service.shutdown();
@@ -420,12 +490,23 @@ impl Judge {
                     host.stopping = true;
                     host.service.shutdown();
                 }
-                Proc::Engine(_)
-                | Proc::Agent { .. }
-                | Proc::Client(_)
-                | Proc::Auth(_)
-                | Proc::Peer(_)
-                | Proc::Probe(_) => {}
+                Proc::Client(client) => {
+                    run.run_waits = client
+                        .received
+                        .iter()
+                        .filter_map(|received| {
+                            if let jig_client_protocol_world::native::Received::Delivery(
+                                jig_client::contract::Delivery::Task(task),
+                            ) = received
+                            {
+                                Some(task.run_wait)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                }
+                Proc::Engine(_) | Proc::Agent { .. } | Proc::Auth(_) | Proc::Peer(_) | Proc::Probe(_) => {}
             }
         }
     }
@@ -446,6 +527,14 @@ fn waiting_on(procs: &[Proc], attempt: u64) -> bool {
             false
         }
     })
+}
+
+fn party(case: Case) -> jig_fake_parties::Party {
+    let mut script = fixtures::party_script(&fixtures::one_chat(b"Hello")).into_vec();
+    if case == Case::Open {
+        script.push(say([5; 16], b"Hello"));
+    }
+    jig_fake_parties::Party::new(1, jig_fake_parties::Role::Owner, 100, script.into_boxed_slice())
 }
 
 #[must_use]
@@ -473,16 +562,12 @@ pub fn run(case: Case, story: &smith_fake_claude::Story) -> Run {
         rules: Rules::default(),
         views: Views::default(),
         accounts: account_setup::Setup::program(),
-        party: jig_fake_parties::Party::new(
-            1,
-            jig_fake_parties::Role::Owner,
-            100,
-            fixtures::party_script(&fixtures::one_chat(b"Hello")),
-        ),
+        party: party(case),
         period: false,
         done: false,
         case,
         action: Action::Ready,
+        opening: Opening::Creating,
     };
     let mut world = skein_world::World::new(912, skein_sim::Config::calm(), judge, skein_world::Memory::Unchecked)
         .with_machine(Files { files, base });
@@ -513,9 +598,12 @@ pub fn run(case: Case, story: &smith_fake_claude::Story) -> Run {
     });
     world.spawn_restartable(
         vec![StartupRoot { name: b"state".as_slice().into(), path: b"state".as_slice().into() }],
-        engine,
+        if case == Case::Open { engine_open } else { engine },
     );
-    world.spawn_root(skein_sim::Handle::new(worker.raw()), processes::worker_program_runs);
+    world.spawn_root(
+        skein_sim::Handle::new(worker.raw()),
+        if case == Case::Open { worker_open } else { processes::worker_program_runs },
+    );
     world.spawn_root(skein_sim::Handle::new(client.raw()), |root| {
         let mut client = jig_client_protocol_world::native::NativeClient::new(
             jig_client_protocol_world::native::settings(),
