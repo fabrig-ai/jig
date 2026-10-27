@@ -423,10 +423,32 @@ pub(super) fn change_policy_request(
     out: &mut Queue<Request>,
     change: people::PolicyChange,
 ) {
-    if work.room() < env.limits.tasks.tasks.checked_add(1).expect("task recheck bound") || out.room() < 2 {
+    if work.room() < env.limits.tasks.tasks.checked_add(2).expect("task recheck and period resize bound")
+        || out.room() < 2
+    {
         super::refusals::pool_again(work, request, people::Again::Busy);
         return;
     }
+    let period = core.period(project);
+    let resize = match &change {
+        people::PolicyChange::ProjectSpend { period_spend } => {
+            match core.tasks.funding(tasks::Funder::Period { project, period }) {
+                Some(row) => match crate::funding::resized(*period_spend, row.numbers) {
+                    Some(budget) => Some(budget),
+                    None => {
+                        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                        return;
+                    }
+                },
+                None => None,
+            }
+        }
+        people::PolicyChange::Role(_)
+        | people::PolicyChange::Templates { .. }
+        | people::PolicyChange::Projections { .. }
+        | people::PolicyChange::Requirements { .. }
+        | people::PolicyChange::Permissions { .. } => None,
+    };
     match core.change_policy(&env.limits, person, project, change) {
         Ok(snapshot) => {
             core.touch_project_parties(project);
@@ -436,6 +458,14 @@ pub(super) fn change_policy_request(
                 name,
                 value: snapshot,
             }))));
+            if let Some(budget) = resize {
+                work.push(Event::Tasks(tasks::Event::ResizePeriod {
+                    reply_to: ReplyTo::new(Token::new(u64::MAX - 2)),
+                    project,
+                    period,
+                    budget,
+                }));
+            }
             let mut reroutes = core.proposal_recheck_project(&env.limits, project, env.wall);
             for _ in 0..reroutes.len() {
                 work.push(Event::Tasks(reroutes.pop().expect("policy holder recheck")));
