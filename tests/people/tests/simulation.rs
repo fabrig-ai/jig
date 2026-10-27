@@ -952,3 +952,53 @@ fn a_full_pool_reuses_wall_expired_room_before_its_timer_runs_in_one_commit() {
     assert_eq!(world.records().values().filter(|record| matches!(record, Stored::SignIn { .. })).count(), 2);
     world.assert_settled();
 }
+
+#[test]
+fn a_lift_is_admitted_keyed_joined_saved_and_replayed() {
+    let mut world = World::new(Settings::calm(930));
+    member(&mut world);
+    world.defer_routes(true);
+    let ask = Ask::Lift { hold: 31, revision: 2, with_tasks: true };
+    let first = world.request(SIGN_IN, [41; 16], ask.clone());
+    let duplicate = world.request(SIGN_IN, [41; 16], ask.clone());
+    assert_eq!(world.stats().routes, 1);
+    assert!(world.reply(first).is_none() && world.reply(duplicate).is_none());
+    let conflict = world.request(SIGN_IN, [41; 16], Ask::Lift { hold: 31, revision: 2, with_tasks: false });
+    world.commit_all();
+    assert_eq!(world.reply(conflict), Some(Reply::Refused(Refusal::KeyConflict)));
+    world.finish_lift_deferred(31, 2);
+    world.defer_routes(false);
+    world.commit_all();
+    let expected = Some(Reply::Outcome(Outcome::Lifted { hold: 31, released: 2 }));
+    assert_eq!(world.reply(first), expected);
+    assert_eq!(world.reply(duplicate), expected);
+    world.restart();
+    let replay = world.request(SIGN_IN, [41; 16], ask);
+    world.commit_all();
+    assert_eq!(world.reply(replay), expected);
+    assert_eq!(world.stats().routes, 1);
+    world.assert_settled();
+}
+
+#[test]
+fn a_hold_owner_refusal_is_saved_and_replayed() {
+    let mut world = World::new(Settings { authority_refuses: true, ..Settings::calm(931) });
+    member(&mut world);
+    let ask = Ask::Lift { hold: 31, revision: 2, with_tasks: true };
+    let first = world.request(SIGN_IN, [42; 16], ask.clone());
+    world.commit_all();
+    let expected = Some(Reply::Outcome(Outcome::Refused(Refusal::Authority {
+        proposable: None,
+        lacking: jig_domain_people::Lack::HoldOwner {
+            hold: 31,
+            owner: jig_domain_people::HoldOwner::Party { person: 2 },
+        },
+    })));
+    assert_eq!(world.reply(first), expected);
+    world.restart();
+    let replay = world.request(SIGN_IN, [42; 16], ask);
+    world.commit_all();
+    assert_eq!(world.reply(replay), expected);
+    assert_eq!(world.stats().routes, 1);
+    world.assert_settled();
+}

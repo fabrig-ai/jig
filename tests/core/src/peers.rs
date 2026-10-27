@@ -606,7 +606,7 @@ fn party_lack(value: people::Lack) -> parties::Lack {
         people::Lack::Tool => parties::Lack::Tool,
         people::Lack::Scope => parties::Lack::Scope,
         people::Lack::Models => parties::Lack::Models,
-        people::Lack::Reference => parties::Lack::Reference,
+        people::Lack::HoldOwner { .. } | people::Lack::Reference => parties::Lack::Reference,
         people::Lack::ResourceAccess => parties::Lack::ResourceAccess,
         people::Lack::ResourceUnavailable => parties::Lack::ResourceUnavailable,
         people::Lack::Shape => parties::Lack::Shape,
@@ -675,7 +675,7 @@ fn party_limit(value: people::LimitKind) -> parties::LimitKind {
 fn party_moved(value: people::Moved) -> parties::Moved {
     match value {
         people::Moved::Hold { revision, reason } => parties::Moved::Hold { revision, reason: party_hold(reason) },
-        people::Moved::Spec { revision } => parties::Moved::Spec { revision },
+        people::Moved::PlacedHold { revision } | people::Moved::Spec { revision } => parties::Moved::Spec { revision },
         people::Moved::Person { revision } => parties::Moved::Person { revision },
         people::Moved::Note { revision } => parties::Moved::Note { revision },
     }

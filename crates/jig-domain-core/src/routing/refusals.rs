@@ -40,7 +40,17 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
         tasks::Refusal::Unproposable => {
             people::Refusal::Authority { lacking: people::Lack::Approver, proposable: Some(people::Accepter::Nobody) }
         }
-        tasks::Refusal::HoldRevision { revision } | tasks::Refusal::PersonRevision { revision } => {
+        tasks::Refusal::HoldRevision { revision } => {
+            people::Refusal::Moved { now: people::Moved::PlacedHold { revision } }
+        }
+        tasks::Refusal::HoldOwner { hold } => match core.tasks.placed_hold(hold) {
+            Some(row) => people::Refusal::Authority {
+                proposable: None,
+                lacking: people::Lack::HoldOwner { hold, owner: crate::roles::hold_owner(row.owner) },
+            },
+            None => people::Refusal::Unknown,
+        },
+        tasks::Refusal::PersonRevision { revision } => {
             people::Refusal::Moved { now: people::Moved::Person { revision } }
         }
         tasks::Refusal::Busy => return people::Outcome::Again(people::Again::Busy),
@@ -49,18 +59,16 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
             people::Refusal::Authority { proposable: None, lacking: people::Lack::ResourceUnavailable }
         }
         tasks::Refusal::Unknown => people::Refusal::Unknown,
-        tasks::Refusal::State | tasks::Refusal::Placed { .. } | tasks::Refusal::HoldOwner { .. } => {
-            match current_task(core, task) {
-                Some(row) => match &row.phase {
-                    tasks::Phase::Closing(closing) => ended(&closing.ending),
-                    tasks::Phase::Ended(ending) => ended(ending),
-                    tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Held { .. } => {
-                        people::Refusal::NotWaiting
-                    }
-                },
-                None => people::Refusal::Unknown,
-            }
-        }
+        tasks::Refusal::State | tasks::Refusal::Placed { .. } => match current_task(core, task) {
+            Some(row) => match &row.phase {
+                tasks::Phase::Closing(closing) => ended(&closing.ending),
+                tasks::Phase::Ended(ending) => ended(ending),
+                tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Held { .. } => {
+                    people::Refusal::NotWaiting
+                }
+            },
+            None => people::Refusal::Unknown,
+        },
         tasks::Refusal::Executor => {
             people::Refusal::Authority { proposable: None, lacking: people::Lack::TaskKind { executor: None } }
         }

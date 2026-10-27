@@ -103,6 +103,9 @@ pub(super) fn encode_call_part(value: &domain::CallPart, limits: &Limits) -> Res
                 wire::CallPartProposalRefusedParts { value: encode_task_problem(value, limits)? },
             )?)
         }
+        domain::CallPart::HoldOwner { task, hold, revision, owner } => {
+            encode_hold_owner(*task, *hold, *revision, owner, limits)?
+        }
         domain::CallPart::Again { task, required } => encode_again(*task, *required, limits)?,
         domain::CallPart::PassedUp { task } => encode_passed_up(*task, limits)?,
         domain::CallPart::Controlled => wire::CallPart::Controlled,
@@ -110,10 +113,7 @@ pub(super) fn encode_call_part(value: &domain::CallPart, limits: &Limits) -> Res
             &limits.core,
             wire::CallPartRevisedParts { task: *task, revision: *revision },
         )?),
-        domain::CallPart::Moved { task, now } => wire::CallPart::Moved(wire::CallPartMoved::new(
-            &limits.core,
-            wire::CallPartMovedParts { task: *task, now: moved::encode_moved(now, &limits.core)? },
-        )?),
+        domain::CallPart::Moved { task, now } => encode_moved_part(*task, now, limits)?,
         domain::CallPart::ControlRefused(value) => wire::CallPart::ControlRefused(wire::CallPartControlRefused::new(
             &limits.core,
             wire::CallPartControlRefusedParts { value: encode_task_problem(value, limits)? },
@@ -213,6 +213,10 @@ pub(super) fn decode_call_part(value: wire::CallPart, limits: &Limits) -> Result
         wire::CallPart::ProposalRefused(value) => {
             let wire::CallPartProposalRefusedParts { value } = value.into_parts();
             domain::CallPart::ProposalRefused(decode_task_problem(value, limits)?)
+        }
+        wire::CallPart::HoldOwner(value) => {
+            let wire::CallPartHoldOwnerParts { task, hold, revision, owner } = value.into_parts();
+            domain::CallPart::HoldOwner { task, hold, revision, owner: moved::decode_hold_owner(owner) }
         }
         wire::CallPart::Again(value) => decode_again(value),
         wire::CallPart::PassedUp(value) => decode_passed_up(value),
@@ -646,4 +650,28 @@ fn decode_holder(value: wire::ProposalHolder, limits: &Limits) -> tasks::Proposa
             tasks::ProposalHolder::Policy { project, kind: super::decode_proposal_kind(kind, limits) }
         }
     }
+}
+
+fn encode_hold_owner(
+    task: u64,
+    hold: u64,
+    revision: u64,
+    owner: &jig_domain_people::HoldOwner,
+    limits: &Limits,
+) -> Result<wire::CallPart, wire::Problem> {
+    Ok(wire::CallPart::HoldOwner(wire::CallPartHoldOwner::new(
+        &limits.core,
+        wire::CallPartHoldOwnerParts { task, hold, revision, owner: moved::encode_hold_owner(owner, &limits.core)? },
+    )?))
+}
+
+fn encode_moved_part(
+    task: u64,
+    now: &jig_domain_people::Moved,
+    limits: &Limits,
+) -> Result<wire::CallPart, wire::Problem> {
+    Ok(wire::CallPart::Moved(wire::CallPartMoved::new(
+        &limits.core,
+        wire::CallPartMovedParts { task, now: moved::encode_moved(now, &limits.core)? },
+    )?))
 }

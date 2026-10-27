@@ -392,6 +392,7 @@ pub(crate) fn check_release(
         hold.exempt = exempt.into_boxed();
     }
     let tasks = replacements(domain, staged, limits, identity, if whole { None } else { Some(number) })?;
+    revision_room(domain, staged, &hold, &tasks, Some(number))?;
     Ok(Some(Box::new(ReleaseChanges { hold, tasks })))
 }
 
@@ -497,6 +498,9 @@ pub(crate) fn lift(domain: &mut Domain, env: &Env<Limits>, to: ReplyTo, lift: Li
     } else {
         List::with_capacity(0)
     };
+    if let Err(why) = revision_room(domain, &Staged::new(0), &hold, &tasks, None) {
+        return crate::domain::refused(to, None, why, out);
+    }
     let released = apply_changes(domain, env, ReleaseChanges { hold, tasks }, None, by, out);
     out.push(Request::Lifted { reply_to: to, released });
 }
@@ -791,6 +795,39 @@ pub(crate) fn check_detach(domain: &Domain, staged: &Staged, ancestor: u64, numb
             && !staged.descendant(domain, root, ancestor, domain.names.capacity())
         {
             return Err(Refusal::Placed { hold: identity });
+        }
+    }
+    Ok(())
+}
+
+/// A lift can withdraw a proposal and release its proposer in the same decision.
+fn revision_room(
+    domain: &Domain,
+    staged: &Staged,
+    hold: &PlacedHold,
+    replacements: &List<(u64, Option<u64>)>,
+    explicit: Option<u64>,
+) -> Result<(), Refusal> {
+    let changed = domain.placed_hold(hold.number).expect("retained hold").revision != hold.revision;
+    for (number, _) in &domain.names {
+        let row = staged.record(domain, *number).expect("indexed task");
+        let mut writes = u64::from(explicit == Some(*number));
+        if explicit != Some(*number) && placed_reason(&row.phase).is_some() {
+            for (task, next) in replacements {
+                if *task == *number && next.is_none() {
+                    writes = 1;
+                }
+            }
+        }
+        if changed
+            && let Some(proposal) = &row.proposal
+            && let Some((named, _)) = proposal_hold(&proposal.action)
+            && named == hold.number
+        {
+            writes = writes.checked_add(1).expect("at most two task histories");
+        }
+        if row.revision.checked_add(writes).is_none() {
+            return Err(Refusal::State);
         }
     }
     Ok(())

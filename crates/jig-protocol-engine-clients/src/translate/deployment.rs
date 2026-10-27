@@ -174,6 +174,9 @@ fn person_action(
         people::CapacityAction::Cancel { task } => w::OwnerPersonCapacityAction::Cancel(
             w::OwnerPersonCapacityActionCancel::new(limits, w::OwnerPersonCapacityActionCancelParts { task })?,
         ),
+        people::CapacityAction::Lift { hold } => w::OwnerPersonCapacityAction::Release(
+            w::OwnerPersonCapacityActionRelease::new(limits, w::OwnerPersonCapacityActionReleaseParts { task: hold })?,
+        ),
         people::CapacityAction::Release { task } => w::OwnerPersonCapacityAction::Release(
             w::OwnerPersonCapacityActionRelease::new(limits, w::OwnerPersonCapacityActionReleaseParts { task })?,
         ),

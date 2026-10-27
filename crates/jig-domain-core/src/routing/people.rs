@@ -199,6 +199,7 @@ pub(super) fn tag_people(
                     | people::Outcome::Withdrawn { .. }
                     | people::Outcome::Stopped { .. }
                     | people::Outcome::Cancelled { .. }
+                    | people::Outcome::Lifted { .. }
                     | people::Outcome::Released { .. }
                     | people::Outcome::PersonTaken { .. }
                     | people::Outcome::PersonHandedBack { .. }
@@ -272,6 +273,9 @@ pub(super) fn tag_people(
                     }
                     ask @ people::Ask::Cancel { .. } => {
                         cancel_request(core, env, work, request, person, project, role, ask);
+                    }
+                    people::Ask::Lift { hold, revision, with_tasks } => {
+                        super::party_controls::lift_request(core, work, request, person, hold, revision, with_tasks);
                     }
                     ask @ people::Ask::Release { .. } => {
                         release_request(core, env, work, request, person, project, role, ask);

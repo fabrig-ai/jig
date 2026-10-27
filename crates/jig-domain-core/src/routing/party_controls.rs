@@ -77,26 +77,9 @@ pub(super) fn amend_route(
         pool_refused(work, request, why);
         return;
     }
-    if let Some(revision) = release {
-        if let Err(why) = core.hold_revision(task, revision) {
-            pool_refused(work, request, why);
-            return;
-        }
-        match core.tasks.task(task).expect("amend admission found task").phase {
-            tasks::Phase::Held { why: tasks::Hold::Uncertain { .. }, .. } => {
-                pool_refused(
-                    work,
-                    request,
-                    people::Refusal::Authority { proposable: None, lacking: people::Lack::Again { required: true } },
-                );
-                return;
-            }
-            tasks::Phase::Held { .. }
-            | tasks::Phase::Waiting
-            | tasks::Phase::Active(_)
-            | tasks::Phase::Closing(_)
-            | tasks::Phase::Ended(_) => {}
-        }
+    if let Err(why) = amend_release_admit(core, person, task, release) {
+        pool_refused(work, request, why);
+        return;
     }
     amendment.release = release;
     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
@@ -207,7 +190,8 @@ pub(super) fn cancel_request(
     let admitted = core.control_admit(&ask, person, project, role, &env.limits.tasks);
     let (reason, grace) = match ask {
         people::Ask::Cancel { reason, grace, .. } => (reason, grace),
-        people::Ask::Compound { .. }
+        people::Ask::Lift { .. }
+        | people::Ask::Compound { .. }
         | people::Ask::MarkSeen { .. }
         | people::Ask::Application { .. }
         | people::Ask::EditNote { .. }
@@ -278,7 +262,8 @@ pub(super) fn release_request(
         Ok(task) => {
             let (revision, again) = match ask {
                 people::Ask::Release { revision, again, .. } => (revision, again),
-                people::Ask::Compound { .. }
+                people::Ask::Lift { .. }
+                | people::Ask::Compound { .. }
                 | people::Ask::MarkSeen { .. }
                 | people::Ask::Application { .. }
                 | people::Ask::EditNote { .. }
@@ -404,4 +389,61 @@ pub(super) fn move_request(
             work.push(Event::People(people::Event::Decided { request, outcome: people::Outcome::Refused(why) }));
         }
     }
+}
+
+pub(super) fn lift_request(
+    core: &mut Core,
+    work: &mut Queue<Event>,
+    request: Token,
+    person: u64,
+    hold: u64,
+    revision: u64,
+    with_tasks: bool,
+) {
+    let admission = lift_admit(core, person, hold, revision);
+    match admission {
+        Ok(()) => {
+            assert!(core.person_tasks.insert(request, PersonTaskRoute::Lift(hold)) == Ok(None), "one lift route");
+            work.push(Event::Tasks(tasks::Event::Lift {
+                reply_to: ReplyTo::new(request),
+                by: tasks::Party::Person(person),
+                hold,
+                revision,
+                with_tasks,
+            }));
+        }
+        Err(why) => pool_refused(work, request, why),
+    }
+}
+fn lift_admit(core: &Core, person: u64, hold: u64, revision: u64) -> Result<(), people::Refusal> {
+    let hold = core.tasks.placed_hold(hold).ok_or(people::Refusal::Unknown)?;
+    if core.people.role(person, hold.project).is_none() {
+        return Err(people::Refusal::Unknown);
+    }
+    if hold.revision != revision {
+        return Err(people::Refusal::Moved { now: people::Moved::PlacedHold { revision: hold.revision } });
+    }
+    core.party_hold_admit(person, hold)
+}
+
+fn amend_release_admit(core: &Core, person: u64, task: u64, release: Option<u64>) -> Result<(), people::Refusal> {
+    let Some(revision) = release else { return Ok(()) };
+    core.hold_revision(task, revision)?;
+    match core.tasks.task(task).expect("amend admission found task").phase {
+        tasks::Phase::Held { why: tasks::Hold::Uncertain { .. }, .. } => {
+            return Err(people::Refusal::Authority {
+                proposable: None,
+                lacking: people::Lack::Again { required: true },
+            });
+        }
+        tasks::Phase::Held { .. }
+        | tasks::Phase::Waiting
+        | tasks::Phase::Active(_)
+        | tasks::Phase::Closing(_)
+        | tasks::Phase::Ended(_) => {}
+    }
+    if let Some(hold) = core.tasks.placed_on(task) {
+        core.party_hold_admit(person, hold)?;
+    }
+    Ok(())
 }

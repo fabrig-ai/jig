@@ -136,6 +136,7 @@ pub fn remap_models(ask: &mut Ask, moved: &[u64; 64]) {
         | Ask::Withdraw { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::TakePerson { .. }
         | Ask::HandBackPerson { .. }
@@ -220,6 +221,7 @@ pub fn valid_model_context(ask: &Ask, names: &[Box<[u8]>]) -> bool {
         | Ask::Withdraw { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::TakePerson { .. }
         | Ask::HandBackPerson { .. }
@@ -288,6 +290,7 @@ pub(crate) fn has_model_selector(ask: &Ask) -> bool {
         | Ask::Withdraw { .. }
         | Ask::Stop { .. }
         | Ask::Cancel { .. }
+        | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::TakePerson { .. }
         | Ask::HandBackPerson { .. }

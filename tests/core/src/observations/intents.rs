@@ -34,14 +34,20 @@ impl Intents {
         use jig_test_domain::Event;
         if let Event::Core(core::Event::People(people::Event::Ask { models: _, reply_to, sign_in, key, ask })) = event {
             let person = signed_party(store, *sign_in);
-            return person.map_or_else(Vec::new, |person| self.party(reply_to, person, *key, ask));
+            return person.map_or_else(Vec::new, |person| {
+                let mut observed = named::placed_party(store, ask);
+                observed.extend(self.party(reply_to, person, *key, ask));
+                observed
+            });
         }
         if let Event::Core(core::Event::ProposeSettings { reply_to, sign_in, key, .. }) = event {
             let person = signed_party(store, *sign_in);
             return person.map_or_else(Vec::new, |person| self.party_proposal(reply_to, person, *key));
         }
         if let Event::Core(event) = event {
-            return self.inbound(event);
+            let mut observed = named::placed_run(store, event);
+            observed.extend(self.inbound(event));
+            return observed;
         }
         if let Event::Answer { task, attempt, end, .. } = event {
             return self.terminal(*task, *attempt, end);

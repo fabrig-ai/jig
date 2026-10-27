@@ -85,6 +85,27 @@ pub(super) fn named_proposal_accept(
     ) {
         return proposal_refused(core, to, key, why);
     }
+    if crate::proposals::placed_release(&proposal.action) {
+        let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
+            return proposal_refused(core, to, key, tasks::Refusal::Busy);
+        };
+        assert!(core.pending_calls.insert(key, true).is_ok(), "release acceptance call room");
+        assert!(
+            core.routing_calls.insert(token, RoutedCall::Decide { key, proposal: proposal.number }) == Ok(None),
+            "one release acceptance route"
+        );
+        work.push(Event::Tasks(tasks::Event::DecideProposal {
+            reply_to: to,
+            proposer: proposal.proposer,
+            proposal: proposal.number,
+            message: Some(message),
+            by: tasks::Party::Task(key.task),
+            decision: tasks::ProposalDecision::Accept,
+        }));
+        let mut out = Queue::with_capacity(1);
+        out.push(Request::Decided);
+        return Requests::Out(out);
+    }
     match proposal.action {
         tasks::ProposalAction::Effect { connector, .. } | tasks::ProposalAction::ProcedureEffect { connector, .. } => {
             assert!(core.pending_calls.insert(key, true).is_ok(), "effect acceptance call room");
@@ -285,6 +306,23 @@ pub(crate) fn named_propose(
         *task = key.task;
     }
     core.keep_proposal_models(key.task, &mut action);
+    if let tasks::ProposalAction::ReleasePlaced { task, hold, revision } = &action
+        && let Err(why) = core.release_proposal_admit(key.task, *task, *hold, *revision, env.limits.tasks.depth)
+    {
+        if let tasks::Refusal::HoldRevision { revision } = why {
+            let mut out = Queue::with_capacity(3);
+            call_decision(
+                core,
+                &mut out,
+                to,
+                key,
+                CallPart::Moved { task: *task, now: jig_domain_people::Moved::PlacedHold { revision } },
+            );
+            out.push(Request::Decided);
+            return Requests::Out(out);
+        }
+        return proposal_refused(core, to, key, why);
+    }
     if let tasks::ProposalAction::Amend { task, revision, amendment } = &action
         && let Err(jig_domain_people::Refusal::Moved { now }) = core.party_amend_revision(*task, *revision, amendment)
     {

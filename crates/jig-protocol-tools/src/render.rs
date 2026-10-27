@@ -106,6 +106,7 @@ pub fn render(part: &CallPart) -> Rendered {
             ],
             false,
         ),
+        CallPart::HoldOwner { task, hold, revision, owner } => hold_owner(*task, *hold, *revision, owner),
         CallPart::Moved { task, now } => moved(*task, now),
         CallPart::Again { task, required } => text(
             &[
@@ -466,6 +467,9 @@ fn moved(task: u64, now: &jig_domain_people::Moved) -> Rendered {
             ],
             true,
         ),
+        Moved::PlacedHold { revision } => {
+            text(&[b"Moved: placed hold revision ", Decimal::of(*revision).as_bytes()], true)
+        }
         Moved::Note { revision } => text(
             &[
                 b"Moved: note ",
@@ -545,6 +549,28 @@ fn proposed(proposal: u64, holder: jig_domain_tasks::ProposalHolder) -> Rendered
         }),
     };
     text(&[b"Proposed ", Decimal::of(proposal).as_bytes(), b", to ", &to], false)
+}
+
+fn hold_owner(task: u64, hold: u64, revision: u64, owner: &jig_domain_people::HoldOwner) -> Rendered {
+    let (kind, number): (&[u8], u64) = match owner {
+        jig_domain_people::HoldOwner::Party { person } => (b"person ", *person),
+        jig_domain_people::HoldOwner::Task { task } => (b"task ", *task),
+    };
+    text(
+        &[
+            b"task ",
+            Decimal::of(task).as_bytes(),
+            b" is held by hold ",
+            Decimal::of(hold).as_bytes(),
+            b" (revision ",
+            Decimal::of(revision).as_bytes(),
+            b"), placed by ",
+            kind,
+            Decimal::of(number).as_bytes(),
+            b"; only they may release it: propose the release with the hold's revision.",
+        ],
+        true,
+    )
 }
 
 #[cfg(test)]

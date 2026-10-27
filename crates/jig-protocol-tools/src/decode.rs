@@ -156,6 +156,15 @@ fn propose(value: &json::Value, limits: &Limits) -> Result<core::NamedAction, Pr
     let reason = value.required(b"reason")?.text()?;
     let kind = value.required(b"action")?.text()?;
     Ok(match kind.as_ref() {
+        b"release" => core::NamedAction::Propose {
+            action: tasks::ProposalAction::ReleasePlaced {
+                task: value.required(b"task")?.number()?,
+                hold: value.required(b"hold")?.number()?,
+                revision: value.required(b"revision")?.number()?,
+            },
+            reason,
+            as_holder: false,
+        },
         b"amend" => core::NamedAction::Propose {
             action: tasks::ProposalAction::Amend {
                 task: value.required(b"target")?.number()?,

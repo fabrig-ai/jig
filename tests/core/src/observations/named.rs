@@ -141,3 +141,71 @@ impl Names {
         Vec::new()
     }
 }
+
+// A placed-hold revision names releases of the tasks that record currently holds.
+// Derive these names from the peer's explicit ask and the previous durable rows.
+pub(super) fn placed_party(store: &crate::Store, ask: &people::Ask) -> Vec<r::Observed> {
+    if let people::Ask::Lift { hold, revision, with_tasks: true } = ask {
+        return placed_names(store, *hold, *revision, None);
+    }
+    if let people::Ask::DecideProposal {
+        proposer: people::Proposer::Task(proposer),
+        proposal,
+        decision: people::ProposalDecision::Accept,
+        ..
+    } = ask
+    {
+        return proposal_names(store, *proposer, *proposal);
+    }
+    Vec::new()
+}
+pub(super) fn placed_run(store: &crate::Store, event: &core::Event) -> Vec<r::Observed> {
+    if let core::Event::NamedAction {
+        action: core::NamedAction::DecideProposal { proposer, proposal, choice: core::ProposalChoice::Accept },
+        ..
+    } = event
+    {
+        proposal_names(store, *proposer, *proposal)
+    } else {
+        Vec::new()
+    }
+}
+fn proposal_names(store: &crate::Store, proposer: u64, proposal: u64) -> Vec<r::Observed> {
+    let key = jig_test_domain::Key::Core(core::Key::Tasks(tasks::Key::Live(proposer)));
+    if let Some(jig_test_domain::Record::Core(core::Record::Tasks(tasks::Stored::Live(row)))) = store.rows.get(&key)
+        && let Some(p) = &row.proposal
+        && p.number == proposal
+        && let tasks::ProposalAction::ReleasePlaced { task, hold, revision } = p.action
+    {
+        return placed_names(store, hold, revision, Some(task));
+    }
+    Vec::new()
+}
+fn placed_names(store: &crate::Store, number: u64, revision: u64, only: Option<u64>) -> Vec<r::Observed> {
+    let key = jig_test_domain::Key::Core(core::Key::Tasks(tasks::Key::PlacedHold(number)));
+    let Some(jig_test_domain::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(hold)))) =
+        store.rows.get(&key)
+    else {
+        return Vec::new();
+    };
+    if hold.revision != revision || hold.lifted {
+        return Vec::new();
+    }
+    let whole = only.is_none() || matches!(hold.scope, tasks::Scope::Subtree { task } if Some(task) == only);
+    store
+        .rows
+        .values()
+        .filter_map(|row| {
+            if let jig_test_domain::Record::Core(core::Record::Tasks(tasks::Stored::Live(row))) = row
+                && row.placed == Some(number)
+                && (whole || only == Some(row.number))
+                && (only == Some(row.number)
+                    || matches!(row.phase, tasks::Phase::Held { why: tasks::Hold::Placed { .. }, .. }))
+            {
+                Some(named(row.number, r::Revision::Hold(row.revisions.hold)))
+            } else {
+                None
+            }
+        })
+        .collect()
+}

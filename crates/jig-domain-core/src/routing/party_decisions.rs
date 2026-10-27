@@ -228,6 +228,34 @@ pub(super) fn person_proposal_accept(
     if super::proposal_revisions::person(core, work, request, person, &proposal) {
         return;
     }
+    if crate::proposals::placed_release(&proposal.action) {
+        let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
+            pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+            return;
+        };
+        assert!(
+            core.routing_people_proposals.insert(
+                request,
+                PersonProposalRoute::Deciding {
+                    request,
+                    proposer: proposal.proposer,
+                    proposal: proposal.number,
+                    by: person,
+                    moved: None,
+                }
+            ) == Ok(None),
+            "one release acceptance"
+        );
+        work.push(Event::PersonProposal(tasks::Event::DecideProposal {
+            reply_to: ReplyTo::new(request),
+            proposer: proposal.proposer,
+            proposal: proposal.number,
+            message: Some(message),
+            by: tasks::Party::Person(person),
+            decision: tasks::ProposalDecision::Accept,
+        }));
+        return;
+    }
     let source = tasks::Funder::Pool { project: proposal.project, person, period: core.period(proposal.project) };
     if let Err(why) = core.action_accounts(&proposal.action, source) {
         pool_refused(work, request, core.account_refusal(why));

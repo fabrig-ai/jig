@@ -105,6 +105,16 @@ pub(crate) fn proposal(
             }
             match act {
                 Act::Accept => {
+                    if let tasks::ProposalAction::ReleasePlaced { hold, .. } = row.action {
+                        return core
+                            .party_hold_admit(party, core.tasks.placed_hold(hold).ok_or(people::Refusal::Unknown)?);
+                    }
+                    if let tasks::ProposalAction::Amend { task, amendment, .. } = &row.action
+                        && amendment.release.is_some()
+                        && let Some(hold) = core.tasks.placed_on(*task)
+                    {
+                        core.party_hold_admit(party, hold)?;
+                    }
                     let action = core
                         .proposal_action_for_check(&row.action, decision)
                         .ok_or(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape })?;
@@ -117,6 +127,7 @@ pub(crate) fn proposal(
                     )
                 }
                 Act::Reject => Ok(()),
+                Act::PassUp if crate::proposals::placed_release(&row.action) => Err(people::Refusal::NoFurther),
                 Act::PassUp => match current {
                     tasks::ProposalHolder::Person(_) => Ok(()),
                     tasks::ProposalHolder::Policy { .. } => Err(people::Refusal::NoFurther),

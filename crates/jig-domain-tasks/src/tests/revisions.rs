@@ -1534,3 +1534,81 @@ fn place(task: u64, person: u64, number: u64) -> Event {
         },
     }
 }
+
+#[test]
+fn a_refused_release_refuses_its_acceptance_and_changes_nothing() {
+    let mut h = Harness::new();
+    h.make(vec![task(200, &[]), task(201, &[])]);
+    h.send(place(200, 1, 400));
+    h.send(Event::Propose {
+        reply_to: to(),
+        proposal: crate::Proposal {
+            number: 401,
+            proposer: 201,
+            project: 1,
+            action: crate::ProposalAction::ReleasePlaced { task: 200, hold: 400, revision: 1 },
+            reason: Box::new([]),
+            as_holder: false,
+            state: crate::ProposalState::Pending { holder: crate::ProposalHolder::Person(1), since: h.env.wall },
+        },
+    });
+    // Inject the stale boundary case: ordinary lifting would already withdraw it.
+    h.domain.placed.get_mut(&400).expect("retained hold").revision = 2;
+    let before = h.domain.task(200).expect("held task").clone();
+    let pending = h.domain.task(201).expect("proposer").clone();
+    let stored = h.stored.clone();
+    let out = h.send(Event::DecideProposal {
+        reply_to: to(),
+        proposer: 201,
+        proposal: 401,
+        message: Some(402),
+        by: Party::Person(1),
+        decision: crate::ProposalDecision::Accept,
+    });
+    assert!(out.iter().any(|r| match r {
+        Request::Refused { problem, .. } => problem.why == crate::Refusal::HoldRevision { revision: 2 },
+        _ => false,
+    }));
+    assert_eq!(h.domain.task(200), Some(&before));
+    assert_eq!(h.domain.task(201), Some(&pending));
+    assert_eq!(h.stored, stored);
+}
+
+#[test]
+fn a_release_acceptance_reserves_the_siblings_withdrawal_and_release_revisions() {
+    let mut h = Harness::new();
+    h.make(vec![task(200, &[]), task(201, &[])]);
+    h.send(place(200, 1, 400));
+    for proposer in [200, 201] {
+        h.send(Event::Propose {
+            reply_to: to(),
+            proposal: crate::Proposal {
+                number: 401 + proposer,
+                proposer,
+                project: 1,
+                action: crate::ProposalAction::ReleasePlaced { task: 200, hold: 400, revision: 1 },
+                reason: Box::new([]),
+                as_holder: false,
+                state: crate::ProposalState::Pending { holder: crate::ProposalHolder::Person(1), since: h.env.wall },
+            },
+        });
+    }
+    crate::domain::task_mut(&mut h.domain, 200).expect("held proposer").record.revision = u64::MAX - 1;
+    let target = h.domain.task(200).expect("held target").clone();
+    let pending = h.domain.task(201).expect("accepting proposer").clone();
+    let out = h.send(Event::DecideProposal {
+        reply_to: to(),
+        proposer: 201,
+        proposal: 602,
+        message: Some(700),
+        by: Party::Person(1),
+        decision: crate::ProposalDecision::Accept,
+    });
+    assert!(out.iter().any(|r| match r {
+        Request::Refused { problem, .. } => problem.why == crate::Refusal::State,
+        _ => false,
+    }));
+    assert_eq!(h.domain.task(200), Some(&target));
+    assert_eq!(h.domain.task(201), Some(&pending));
+    assert!(!h.domain.placed_hold(400).expect("unchanged hold").lifted);
+}

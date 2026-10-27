@@ -253,7 +253,9 @@ fn person_action(value: people::CapacityAction) -> client::OwnerPersonCapacityAc
         people::CapacityAction::AnswerPerson { task } => client::OwnerPersonCapacityAction::AnswerPerson { task },
         people::CapacityAction::Stop { task } => client::OwnerPersonCapacityAction::Stop { task },
         people::CapacityAction::Cancel { task } => client::OwnerPersonCapacityAction::Cancel { task },
-        people::CapacityAction::Release { task } => client::OwnerPersonCapacityAction::Release { task },
+        people::CapacityAction::Lift { hold: task } | people::CapacityAction::Release { task } => {
+            client::OwnerPersonCapacityAction::Release { task }
+        }
         people::CapacityAction::MarkSeen { seen } => client::OwnerPersonCapacityAction::MarkSeen {
             seen: match seen {
                 people::Seen::Results { through } => client::SeenThrough::Results { through },

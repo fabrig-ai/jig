@@ -835,6 +835,17 @@ pub(crate) fn decide(
             return refused(to, Some(proposer), Refusal::Read, out);
         }
     }
+    if decision == ProposalDecision::Accept {
+        match release_plan(domain, env, &proposal, by) {
+            Ok(Some(plan)) => {
+                // Keep the accepted proposal in this step while the lift withdraws its siblings.
+                drop(task_mut(domain, proposer).expect("pending proposer").record.proposal.take());
+                crate::control::apply_release(domain, env, by, plan, out);
+            }
+            Ok(None) => {}
+            Err(why) => return refused(to, Some(proposer), why, out),
+        }
+    }
     let words = match &decision {
         ProposalDecision::Reject { reason } => reason.clone(),
         ProposalDecision::Accept | ProposalDecision::Pass { .. } => Box::new([]),
@@ -990,4 +1001,46 @@ pub(crate) fn withdraw(
     domain.proposal_alarms.cancel(proposer);
     publish(domain, env, proposer, out);
     out.push(Request::ProposalDecided { reply_to: to, proposer, number, outcome: ProposalOutcome::Withdrawn });
+}
+
+/// The accepted action and its decision are preflighted before either changes (domain/tasks.md, 5.9).
+fn release_plan(
+    domain: &Domain,
+    env: &Env<Limits>,
+    proposal: &Proposal,
+    by: Party,
+) -> Result<Option<crate::control::ReleasePlan>, Refusal> {
+    let ProposalAction::ReleasePlaced { task, hold, revision } = proposal.action else { return Ok(None) };
+    let current = domain.placed_hold(hold).ok_or(Refusal::Unknown)?;
+    if current.revision != revision || current.lifted {
+        return Err(Refusal::HoldRevision { revision: current.revision });
+    }
+    let target = record(domain, task).ok_or(Refusal::Unknown)?;
+    if target.placed != Some(hold) {
+        return Err(match target.placed {
+            Some(hold) => Refusal::Placed { hold },
+            None => Refusal::State,
+        });
+    }
+    if !crate::control::allowed(domain, task, by, env.limits.tasks) {
+        return Err(Refusal::Reference);
+    }
+    let plan = crate::control::check_release(domain, &crate::compound::Staged::new(0), env, task, by, None, None)?;
+    // The release may also write the proposer's release history before its accepted history.
+    let proposer = record(domain, proposal.proposer).expect("pending proposer");
+    let mut released = task == proposal.proposer;
+    if let Some(changes) = &plan.placed {
+        for (number, replacement) in &changes.tasks {
+            if *number == proposal.proposer
+                && replacement.is_none()
+                && crate::placed::placed_reason(&proposer.phase).is_some()
+            {
+                released = true;
+            }
+        }
+    }
+    if released && proposer.revision >= u64::MAX.saturating_sub(1) {
+        return Err(Refusal::State);
+    }
+    Ok(Some(plan))
 }

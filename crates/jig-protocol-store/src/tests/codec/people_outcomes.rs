@@ -240,3 +240,20 @@ fn move_to_newest_asks_and_outcomes_round_trip_under_people_13() {
     super::ask_round_trip(domain::Ask::MoveToNewest { revision: 7 });
     people_round_trip(values::answered(domain::Outcome::MovedToNewest { newest: 9, moved: 3, stayed: 1 }));
 }
+
+#[test]
+fn placed_hold_requests_answers_and_owner_facts_round_trip_in_people_13() {
+    for with_tasks in [false, true] {
+        super::ask_round_trip(domain::Ask::Lift { hold: 31, revision: 2, with_tasks });
+    }
+    people_round_trip(values::answered(domain::Outcome::Lifted { hold: 31, released: 2 }));
+    for owner in [domain::HoldOwner::Party { person: 9 }, domain::HoldOwner::Task { task: 7 }] {
+        people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Authority {
+            proposable: None,
+            lacking: domain::Lack::HoldOwner { hold: 31, owner },
+        })));
+    }
+    people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Moved {
+        now: domain::Moved::PlacedHold { revision: 2 },
+    })));
+}
