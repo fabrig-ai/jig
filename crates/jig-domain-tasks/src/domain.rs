@@ -63,6 +63,7 @@ pub struct Domain {
     pub(crate) writers: Map<crate::Name, crate::WriterSlot>,
     pub(crate) next_writer: u64,
     pub(crate) funding: Map<crate::Funder, crate::FundingRecord>,
+    pub(crate) placed: Map<u64, crate::PlacedHold>,
     pub(crate) person_proposals: Map<u64, crate::PersonProposal>,
     pub(crate) charters: Box<[crate::CharterModels]>,
     /// Each configured model's count of declared efforts, in configuration's order.
@@ -245,6 +246,7 @@ impl Domain {
             next_writer: 0,
             funding: Map::with_capacity(limits.funders),
             person_proposals: Map::with_capacity(limits.tasks),
+            placed: Map::with_capacity(limits.placed_holds),
             charters,
             efforts,
             rng: Rng::new(seed),
@@ -527,6 +529,9 @@ pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
     limits
         .tasks
         .checked_mul(28)?
+        // A compound may stop and release a whole subtree at every operation.
+        .checked_add(limits.tasks.checked_mul(limits.tasks)?.checked_mul(16)?)?
+        .checked_add(limits.placed_holds.checked_mul(2)?)?
         .checked_add(limits.batch.checked_mul(30)?)?
         .checked_add(limits.funders.checked_mul(3)?)?
         .checked_add(limits.tasks.checked_mul(limits.subscriptions)?.checked_mul(2)?)?
@@ -749,6 +754,14 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::PreparationWaiting { task } => crate::run::preparation_waiting(domain, env, task, out),
         Event::PreparationFailed { task } => crate::run::preparation_failed(domain, env, task, out),
         Event::PreparationUnread { task } => crate::run::preparation_unread(domain, env, task, out),
+        Event::Place { reply_to, hold } => crate::placed::place(domain, env, reply_to, hold, out),
+        Event::Lift { reply_to, by, hold, revision, with_tasks } => crate::placed::lift(
+            domain,
+            env,
+            reply_to,
+            crate::placed::Lift { by, number: hold, revision, with_tasks },
+            out,
+        ),
         Event::Hold { task, why } => crate::run::hold(domain, env, task, why, out),
         Event::HoldFrom { task, why, source } => crate::run::hold_from(domain, env, task, why, Some(source), out),
         Event::EffectsSettled { task } => crate::closing::effects_settled(domain, env, task, out),
@@ -1060,6 +1073,7 @@ fn milestone(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queu
 }
 
 pub(crate) fn publish(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue<Request>) {
+    crate::placed::enforce(&mut task_mut(domain, number).expect("published task live").record);
     crate::settings::publish(domain, number);
     crate::waits::refresh(domain, number);
     crate::proposals::withdraw_on_close(domain, env, number, out);
@@ -1338,6 +1352,7 @@ pub(crate) fn make_admitted(
             published: None,
             procedure_offered: None,
             record: TaskRecord {
+                placed: None,
                 settings: crate::SettingsRevision { task: domain.newest, run: None },
                 label: new.label,
                 flags: new.flags,
@@ -1446,12 +1461,17 @@ pub(crate) fn make_admitted(
             crate::holds::take(domain, env, number, out);
             task_mut(domain, number).expect("handed child live").record.phase = Phase::Active(Active::Due);
         }
+        let held = crate::placed::covering(domain, &crate::compound::Staged::new(0), number, None);
+        task_mut(domain, number).expect("new task").record.placed = held;
+        if let Some(hold) = held {
+            fact(domain, Fact::Held { task: number, why: crate::Hold::Placed { hold } });
+        }
         publish(domain, env, number, out);
         if let Some(requester) = parent {
             out.push(Request::Save { record: Stored::Delegate(crate::Edge { requester, task: number }) });
         }
         fact(domain, Fact::Made { task: number, requester: creator });
-        if inherited {
+        if inherited && held.is_none() {
             activate(domain, number, out);
         }
     }

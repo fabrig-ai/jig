@@ -23,6 +23,10 @@ const CONTINUE_MESSAGE: u64 = 1;
 const RETRY: Retry = Retry { retries: 2, base: Duration::from_millis(10), max: Duration::from_secs(1) };
 
 pub(super) const LIMITS: Limits = Limits {
+    placed_holds: 16,
+    project_placed_holds: 8,
+    party_placed_holds: 4,
+    exemptions: 1,
     tasks: 16,
     funders: 32,
     project_tasks: 16,
@@ -587,7 +591,7 @@ fn words_release_a_stop_before_its_cancelled_run_answers() {
         writes: Box::new([]),
     });
     test.send(Event::Started { task: 1, attempt: 1 });
-    test.send(Event::Hold { task: 1, why: Hold::StoppedBy { party: 9 } });
+    test.send(place(1, 9, 91));
     let word = crate::Word {
         number: CONTINUE_MESSAGE,
         from: Party::Person(REQUESTER),
@@ -671,7 +675,7 @@ fn words_release_a_stop_before_its_cancelled_run_answers() {
 fn an_amendment_releases_only_the_named_hold_and_preflights_both_changes() {
     let mut h = Harness::new();
     h.make(vec![task(1, &[])]);
-    h.send(Event::Hold { task: 1, why: Hold::StoppedBy { party: 9 } });
+    h.send(place(1, 9, 91));
     let revision = h.revisions(1).hold;
     let mut change = amendment();
     change.release = Some(revision);
@@ -1511,4 +1515,22 @@ fn a_recurring_tasks_period_batch_and_an_accepted_proposals_tasks_are_made_on_th
     let Stored::Live(row) = &h.stored[&Key::Live(201)] else { panic!("accepted task saved") };
     assert_eq!(row.settings, crate::SettingsRevision { task: 3, run: None });
     assert_eq!(h.domain.task(200).expect("proposer kept its revision").settings.task, 2);
+}
+
+fn place(task: u64, person: u64, number: u64) -> Event {
+    Event::Place {
+        reply_to: to(),
+        hold: crate::PlacedHold {
+            number,
+            project: 1,
+            owner: crate::Owner::Party { person },
+            mode: crate::Mode::Stop,
+            scope: crate::Scope::Subtree { task },
+            reason: Box::new([]),
+            placed_at: 0,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    }
 }

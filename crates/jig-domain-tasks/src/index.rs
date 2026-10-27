@@ -61,6 +61,8 @@ impl Update {
 /// in this child. (domain/tasks.md, section 2).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Key {
+    /// One durable placed hold.
+    PlacedHold(u64),
     /// Logical mutable live-task row.
     Live(u64),
     /// Working-set pointer retained while a live task names the ending.
@@ -134,7 +136,8 @@ impl Key {
     #[must_use]
     pub const fn live(&self) -> bool {
         match self {
-            Self::Live(_)
+            Self::PlacedHold(_)
+            | Self::Live(_)
             | Self::Stub(_)
             | Self::Ledger(_)
             | Self::Writer(_)

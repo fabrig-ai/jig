@@ -786,7 +786,10 @@ pub(crate) fn apply(
         }
         Control::Release { again, message } => {
             if let Err(why) = release(domain, env, number, by, again, message, out) {
-                return refused(to, Some(number), why, out);
+                return out.push(Request::Refused {
+                    reply_to: to,
+                    problem: release_problem(domain, &crate::compound::Staged::new(0), &env.limits, number, by, why),
+                });
             }
             out.push(Request::Done { reply_to: to });
         }
@@ -810,6 +813,11 @@ pub(crate) fn release(
         }
         Err(why) => {
             if why == Refusal::Busy {
+                let problem = release_problem(domain, &crate::compound::Staged::new(0), &env.limits, number, by, why);
+                if let Some(capacity) = problem.capacity {
+                    domain.remember_capacity(env.wall, capacity);
+                    return Err(why);
+                }
                 let project = record(domain, number).expect("release task live").project;
                 domain.remember_capacity(
                     env.wall,
@@ -827,6 +835,7 @@ pub(crate) fn release(
 }
 
 pub(crate) struct ReleasePlan {
+    pub(crate) placed: Option<Box<crate::placed::ReleaseChanges>>,
     pub(crate) number: u64,
     pub(crate) entry: Option<u64>,
     pub(crate) again: Option<bool>,
@@ -847,6 +856,7 @@ pub(crate) fn check_release(
     if task.revision == u64::MAX {
         return Err(Refusal::State);
     }
+    let placed = crate::placed::check_release(domain, staged, &env.limits, number, by)?;
     let entry = match task.phase {
         Phase::Held { why: crate::Hold::Uncertain { entry }, .. } => Some(entry),
         Phase::Held { .. } | Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => None,
@@ -894,7 +904,7 @@ pub(crate) fn check_release(
             return Err(Refusal::State);
         }
     };
-    Ok(ReleasePlan { number, entry, again, notice, next })
+    Ok(ReleasePlan { placed, number, entry, again, notice, next })
 }
 
 pub(crate) fn apply_release(
@@ -904,7 +914,12 @@ pub(crate) fn apply_release(
     plan: ReleasePlan,
     out: &mut Queue<Request>,
 ) {
-    let ReleasePlan { number, entry, again, notice, next } = plan;
+    let ReleasePlan { placed, number, entry, again, notice, next } = plan;
+    let mut held = None;
+    if let Some(changes) = placed {
+        held = Some(changes.hold.number);
+        crate::placed::apply_changes(domain, env, *changes, Some(number), by, out);
+    }
     if let Some(entry) = entry {
         out.push(Request::ResolveUncertain {
             task: number,
@@ -934,6 +949,9 @@ pub(crate) fn apply_release(
     history(domain, number, env.wall, by, Change::Released, &[], out);
     publish(domain, env, number, out);
     return_to_waits(domain, env, number, out);
+    if let Some(held) = held {
+        crate::placed::prune(domain, held, out);
+    }
 }
 
 /// Admission projects the same return judgement without changing the committed index.
@@ -1192,4 +1210,34 @@ pub(crate) fn preview_amend(
     row.last_message = part.message;
     row.inbox = checked.prepared.inbox;
     Ok(())
+}
+
+pub(crate) fn release_problem(
+    domain: &Domain,
+    staged: &crate::compound::Staged,
+    limits: &Limits,
+    number: u64,
+    by: Party,
+    why: Refusal,
+) -> crate::Problem {
+    if why == Refusal::Busy
+        && let Some(row) = staged.record(domain, number)
+        && let Some(identity) = row.placed
+        && let Some(hold) = staged.placed_hold(domain, identity)
+        && !hold.lifted
+        && hold.scope != (crate::Scope::Subtree { task: number })
+        && hold.exempt.len() >= usize::try_from(limits.exemptions).expect("bounded exemptions")
+    {
+        return crate::Problem::capacity(
+            Some(number),
+            why,
+            crate::Capacity {
+                project: Some(row.project),
+                by,
+                action: crate::CapacityAction::Release,
+                cause: crate::CapacityCause::Exemptions { limit: limits.exemptions },
+            },
+        );
+    }
+    crate::Problem::new(Some(number), why)
 }

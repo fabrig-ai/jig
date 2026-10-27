@@ -13,7 +13,7 @@ pub enum Operation {
     Amend { task: u64, message: u64, stop_run: bool, amendment: Box<Amendment> },
     Release { task: u64, again: Option<bool>, message: Option<u64> },
     Message { task: u64, word: Word },
-    Stop { task: u64 },
+    Stop { task: u64, hold: u64 },
 }
 impl Operation {
     fn task(&self) -> u64 {
@@ -23,7 +23,7 @@ impl Operation {
             | Self::Amend { task, .. }
             | Self::Release { task, .. }
             | Self::Message { task, .. }
-            | Self::Stop { task } => *task,
+            | Self::Stop { task, .. } => *task,
         }
     }
 }
@@ -34,7 +34,23 @@ pub(crate) enum Plan {
     Amend(Box<crate::control::AmendPlan>),
     Release(Box<crate::control::ReleasePlan>),
     Message(Box<crate::inbox::MessagePlan>),
-    Stop(Option<Box<crate::run::StopPlan>>),
+    Stop(Box<crate::placed::Placement>),
+}
+
+impl Plan {
+    pub(crate) fn placement(&self) -> Option<&crate::placed::Placement> {
+        match self {
+            Self::Stop(plan) => Some(plan),
+            Self::Cancel(_) | Self::Move { .. } | Self::Amend(_) | Self::Release(_) | Self::Message(_) => None,
+        }
+    }
+    pub(crate) fn placed_change(&self) -> Option<&crate::placed::ReleaseChanges> {
+        match self {
+            Self::Release(plan) => plan.placed.as_deref(),
+            Self::Amend(plan) => plan.release.as_ref()?.placed.as_deref(),
+            Self::Cancel(_) | Self::Move { .. } | Self::Message(_) | Self::Stop(_) => None,
+        }
+    }
 }
 
 pub(crate) struct Staged {
@@ -338,7 +354,7 @@ fn check(
         Operation::Release { task, again, message } => {
             match crate::control::check_release(domain, staged, env, task, by, again, message) {
                 Ok(plan) => Ok(Plan::Release(Box::new(plan))),
-                Err(why) => Err(Box::new(Problem::new(Some(task), why))),
+                Err(why) => Err(Box::new(crate::control::release_problem(domain, staged, &env.limits, task, by, why))),
             }
         }
         Operation::Message { task, word } => {
@@ -352,19 +368,20 @@ fn check(
                 crate::inbox::Message { project: request.project, number: task, word, authorized: true },
             )?)))
         }
-        Operation::Stop { task } => {
-            let plan = crate::run::check_stop(
-                domain,
-                staged,
-                env,
-                task,
-                crate::Hold::StoppedBy { party: person(request.by)? },
-                None,
-            );
-            match plan {
-                Some(plan) => Ok(Plan::Stop(Some(Box::new(plan)))),
-                None => Ok(Plan::Stop(None)),
-            }
+        Operation::Stop { task, hold } => {
+            let placed = crate::PlacedHold {
+                number: hold,
+                project: request.project,
+                owner: crate::Owner::Party { person: person(request.by)? },
+                mode: crate::Mode::Stop,
+                scope: crate::Scope::Subtree { task },
+                reason: Box::new([]),
+                placed_at: env.wall.as_nanos().checked_div(1_000_000).expect("milliseconds divisor"),
+                revision: 1,
+                exempt: Box::new([]),
+                lifted: false,
+            };
+            Ok(Plan::Stop(Box::new(crate::placed::check_place(domain, staged, &env.limits, placed)?)))
         }
         Operation::Move { task, reason } => match crate::moving::check(
             domain,
@@ -394,8 +411,7 @@ fn apply(domain: &mut Domain, env: &Env<Limits>, by: Party, plan: Plan, out: &mu
         Plan::Message(plan) => {
             crate::inbox::apply_message(domain, env, *plan, out);
         }
-        Plan::Stop(Some(plan)) => crate::run::apply_stop(domain, env, *plan, out),
-        Plan::Stop(None) => {}
+        Plan::Stop(plan) => crate::placed::apply_place(domain, env, *plan, out),
     }
 }
 
@@ -432,5 +448,6 @@ pub(crate) fn worst_case(limits: &Limits, payload: u64) -> Option<u64> {
                     .checked_add(u64::from(limits.circle).checked_mul(8)?)?,
             )?,
         )?
+        .checked_add(crate::placed::compound_bytes(limits)?)?
         .checked_add(payload)
 }

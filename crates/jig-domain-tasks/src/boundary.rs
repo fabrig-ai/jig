@@ -613,8 +613,8 @@ pub enum Hold {
     Dependency(/** `Dependency` that ended failed or cancelled, causing this dependent to be held. */ u64),
     /// Root reports a person's stop or another authorized stop decision.
     Stopped,
-    /// The numbered party stopped this task.
-    StoppedBy { party: u64 },
+    /// The placed hold that holds this task, when no cause of 5.5 does.
+    Placed { hold: u64 },
     /// Root reports resource drift requiring a decision; tasks owns no connector drift detection.
     Drift,
     /// Root reports a permanently failed effect requiring a decision.
@@ -646,7 +646,7 @@ impl Hold {
     pub(crate) const fn valid(self) -> bool {
         match self {
             Hold::Dependency(task) => task != 0,
-            Hold::StoppedBy { party } => party != 0,
+            Hold::Placed { hold } => hold != 0,
             Hold::Uncertain { entry } => entry != 0,
             Hold::PoolLost { pool } => pool != 0,
             Hold::Exceeded(_)
@@ -965,6 +965,8 @@ pub struct SettingsRevision {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 #[expect(clippy::struct_excessive_bools, reason = "independent durable lifecycle facts are explicit")]
 pub struct TaskRecord {
+    /// The placed hold holding this task, whatever its phase says (domain/tasks.md, 5.9).
+    pub placed: Option<u64>,
     /// Settings read by this task and its run (domain/engine.md, 17.3).
     pub settings: SettingsRevision,
     /// Opaque application label, immutable after creation.
@@ -1134,6 +1136,8 @@ pub use crate::index::Key;
 /// funding, writer slots and pool counts are restored before admission.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Stored {
+    /// A standing hold, or a lifted hold still named by live tasks.
+    PlacedHold(Box<crate::PlacedHold>),
     /// One party's durable update index.
     Update(crate::Update),
     Result(crate::ResultRow),
@@ -1184,6 +1188,7 @@ impl Stored {
     #[must_use]
     pub const fn key(&self) -> Key {
         match self {
+            Stored::PlacedHold(row) => Key::PlacedHold(row.number),
             Stored::Update(row) => row.key(),
             Stored::EndedByParty(row) => row.key(),
             Stored::EndedByProject(row) => row.key(),
@@ -1210,6 +1215,12 @@ impl Stored {
 /// (domain/tasks.md, sections 4–5).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Refusal {
+    /// A standing placed hold forbids delegation into its scope or detachment from it.
+    Placed { hold: u64 },
+    /// The task caller may not lift this placed hold.
+    HoldOwner { hold: u64 },
+    /// The named placed hold revision moved.
+    HoldRevision { revision: u64 },
     /// An explicit account preference was refused before the task changes.
     Account { account: u32, why: crate::AccountWhy },
     /// A cancel gave a grace longer than the configured span.
@@ -1355,6 +1366,10 @@ pub enum Accepted {
 /// notifications have no reply destination and may be ignored if stale. (domain/tasks.md, sections 4–5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Event {
+    /// Root-checked placement; the root numbers it and judges standing, the child judges room.
+    Place { reply_to: ReplyTo, hold: crate::PlacedHold },
+    /// Root-checked lift naming the placed hold revision (domain/tasks.md, 5.9).
+    Lift { reply_to: ReplyTo, by: Party, hold: u64, revision: u64, with_tasks: bool },
     /// Move eligible live agent tasks on `from`, or every older revision, to the newest (engine.md, 17.4).
     MoveToNewest { from: Option<u32> },
     /// Replace held charter versions and name the newest settings after a commit or start
@@ -1730,6 +1745,8 @@ pub enum Event {
 /// saves/erases with effects and delays outward replies until durability. (domain/tasks.md, section 5).
 #[derive(PartialEq, Eq, Debug)]
 pub enum Request {
+    /// Placed hold lifted; count of tasks released from their held phase.
+    Lifted { reply_to: ReplyTo, released: u32 },
     /// The selected live agent tasks moved to the newest, and those that could not move.
     MovedToNewest { moved: u32, stayed: u32 },
     /// The last live holder of this settings revision ended in this step.

@@ -1157,6 +1157,9 @@ fn circle_cut(why: &Refusal) -> bool {
         | Refusal::HoldKind
         | Refusal::HoldTaken
         | Refusal::Holds
+        | Refusal::Placed { .. }
+        | Refusal::HoldOwner { .. }
+        | Refusal::HoldRevision { .. }
         | Refusal::Llm { .. } => unreachable!("circle judge"),
     }
 }

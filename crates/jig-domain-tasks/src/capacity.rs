@@ -17,11 +17,16 @@ pub enum CapacityAction {
     Effect { entry: u64 },
     Claim { attempt: u64 },
     Release,
+    Place { hold: u64 },
     Move,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum CapacityCause {
+    PlacedHolds { limit: u32 },
+    ProjectPlacedHolds { limit: u32 },
+    PartyPlacedHolds { limit: u32 },
+    Exemptions { limit: u32 },
     Tasks { limit: u32 },
     CreationFlights { limit: u32 },
     ResourceReports { limit: u32 },

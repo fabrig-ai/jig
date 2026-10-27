@@ -25,6 +25,7 @@ fn lines(world: &World, task: u64) -> Vec<ActivityLine> {
             | Stored::Stub(_)
             | Stored::Milestone(_)
             | Stored::History(_)
+            | Stored::PlacedHold(_)
             | Stored::PersonProposal(_) => None,
         })
         .collect()

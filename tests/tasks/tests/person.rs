@@ -32,6 +32,7 @@ fn notified(world: &World, task: u64) -> &tasks::ActivityLine {
             | tasks::Stored::Update(_)
             | tasks::Stored::Pool(_)
             | tasks::Stored::ClosedLedger(_)
+            | tasks::Stored::PlacedHold(_)
             | tasks::Stored::DecidedProposal(_) => None,
         })
         .expect("immutable outward notification")
@@ -150,14 +151,28 @@ fn a_persons_wait_starts_after_dependencies_and_notifies_its_requester_once_acro
     assert_eq!(response(&mut world, |reply_to| Event::TakePerson { reply_to, task: 2, person: 10 }), Reply::Done);
     assert_eq!(response(&mut world, |reply_to| Event::HandBackPerson { reply_to, task: 2, person: 10 }), Reply::Done);
     assert_eq!(world.record(2).person_wait, Some(wait), "claims do not restart the question");
-    world.send(Event::Hold { task: 2, why: tasks::Hold::StoppedBy { party: 9 } });
+    response(&mut world, |reply_to| Event::Place {
+        reply_to,
+        hold: tasks::PlacedHold {
+            number: 91,
+            project: 1,
+            owner: tasks::Owner::Party { person: 9 },
+            mode: tasks::Mode::Stop,
+            scope: tasks::Scope::Subtree { task: 2 },
+            reason: Box::new([]),
+            placed_at: 0,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    });
     world.elapse(skein_lib::Duration::from_secs(1));
     assert_eq!(world.record(2).person_wait, Some(wait), "held tasks do not send a stall notice");
     world.restart();
     assert_eq!(
         response(&mut world, |reply_to| Event::Control {
             reply_to,
-            by: Party::Task(1),
+            by: Party::Person(9),
             task: 2,
             control: tasks::Control::Release { again: None, message: None },
         }),

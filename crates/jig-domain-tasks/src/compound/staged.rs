@@ -8,6 +8,7 @@ use core::ops::Deref;
 pub struct CompoundTask<'a> {
     /// Original record for fields unchanged by the admitted operations.
     pub base: &'a TaskRecord,
+    pub placed: Option<u64>,
     pub phase: Phase,
     pub revision: u64,
     pub revisions: Revisions,
@@ -126,6 +127,7 @@ impl Staged {
                 row.phase = crate::closing::cancelled(&row.phase, cancel.by, cancel.at, &cancel.reason);
                 row.revision = row.revision.checked_add(1).expect("admission checked");
             }
+            project_placed(&mut row, plan);
             match plan {
                 Plan::Move { plan, .. } => {
                     if super::has(&plan.subtree, number) {
@@ -151,6 +153,13 @@ impl Staged {
                 Plan::Release(plan) if plan.number == number => {
                     row.phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by)
                         .amended(row.executor, plan.next.clone());
+                    if let Some(hold) = row.placed {
+                        row.phase = Phase::Held {
+                            was: crate::run::was(row.phase.clone()),
+                            why: crate::Hold::Placed { hold },
+                            source: None,
+                        };
+                    }
                     row.revision = row.revision.checked_add(1).expect("admission checked");
                     project_dependency_hold(domain, &mut row);
                     if let Some(notice) = &plan.notice {
@@ -162,10 +171,6 @@ impl Staged {
                     row.last_message = plan.prepared.word.number;
                     row.inbox = &plan.prepared.inbox;
                     row.wake(&plan.prepared.word);
-                }
-                Plan::Stop(Some(plan)) if plan.number == number => {
-                    row.phase = plan.next.clone();
-                    row.revisions.hold = row.revisions.hold.checked_add(1).expect("admission checked");
                 }
                 Plan::Cancel(plan) if plan.number == number => match &plan.finish {
                     Some(crate::grace::FinishPlan::Word { finish, reason, prepared }) => {
@@ -194,7 +199,7 @@ impl Staged {
                 && *changed == number
             {
                 row.phase = Phase::Held {
-                    was: crate::run::was(row.phase),
+                    was: crate::run::was(row.phase.clone()),
                     why: crate::Hold::Circle,
                     source: Some(Box::new(crate::HoldSource::Circle(circle.clone()))),
                 };
@@ -462,6 +467,7 @@ fn borrowed(base: &TaskRecord) -> CompoundTask<'_> {
     CompoundTask {
         base,
         phase: base.phase.clone(),
+        placed: base.placed,
         revision: base.revision,
         revisions: base.revisions,
         tracked: base.tracked,
@@ -484,5 +490,44 @@ fn borrowed(base: &TaskRecord) -> CompoundTask<'_> {
         llm: &base.llm,
         kept_account: base.kept_account,
         grace: base.grace.clone(),
+    }
+}
+
+fn project_placed(row: &mut CompoundTask<'_>, plan: &Plan) {
+    if let Some(changes) = plan.placed_change() {
+        for (target, placed) in &changes.tasks {
+            if *target == row.number {
+                row.placed = *placed;
+                if crate::placed::placed_reason(&row.phase).is_some() {
+                    row.phase = match &row.phase {
+                        Phase::Held { was, .. } => crate::placed::resumed(was),
+                        Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => {
+                            unreachable!("placed phase")
+                        }
+                    };
+                    if let Some(hold) = placed {
+                        row.phase = Phase::Held {
+                            was: crate::run::was(row.phase.clone()),
+                            why: crate::Hold::Placed { hold: *hold },
+                            source: None,
+                        };
+                    }
+                }
+            }
+        }
+    }
+    if let Some(plan) = plan.placement()
+        && super::has(&plan.tasks, row.number)
+        && row.placed.is_none()
+    {
+        row.placed = Some(plan.hold.number);
+        if crate::placed::reason(&row.phase).is_none() {
+            row.phase = Phase::Held {
+                was: crate::run::was(row.phase.clone()),
+                why: crate::Hold::Placed { hold: plan.hold.number },
+                source: None,
+            };
+            row.revisions.hold = row.revisions.hold.checked_add(1).expect("admission checked");
+        }
     }
 }

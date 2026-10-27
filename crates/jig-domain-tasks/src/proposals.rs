@@ -14,7 +14,7 @@ fn kind(action: &ProposalAction) -> ProposalKind {
         ProposalAction::Effect { .. } | ProposalAction::ProcedureEffect { .. } => ProposalKind::Effect,
         ProposalAction::Amend { .. } => ProposalKind::Amend,
         ProposalAction::Widen { .. } => ProposalKind::Widen,
-        ProposalAction::Release { .. } => ProposalKind::Release,
+        ProposalAction::Release { .. } | ProposalAction::ReleasePlaced { .. } => ProposalKind::Release,
     }
 }
 
@@ -94,6 +94,8 @@ pub enum ProposalAction {
     Widen { task: u64, authority: Authority },
     /// Release a held task whose decision needs the holder.
     Release { task: u64 },
+    /// Release from a placed hold, naming what the proposer saw.
+    ReleasePlaced { task: u64, hold: u64, revision: u64 },
 }
 
 /// Current decision recipient, selected by root from the nearest covering holder.
@@ -677,6 +679,22 @@ pub(crate) fn admission_problem(domain: &Domain, limits: &Limits, proposal: &Pro
             return Some(proposal_problem(proposal.proposer, Refusal::State));
         }
     }
+    match &proposal.action {
+        ProposalAction::ReleasePlaced { task: target, hold, revision } => {
+            let Some(placed) = domain.placed_hold(*hold) else {
+                return Some(proposal_problem(proposal.proposer, Refusal::Unknown));
+            };
+            if placed.lifted || placed.revision != *revision || record(domain, *target).is_none() {
+                return Some(proposal_problem(proposal.proposer, Refusal::HoldRevision { revision: placed.revision }));
+            }
+        }
+        ProposalAction::Batch(_)
+        | ProposalAction::Effect { .. }
+        | ProposalAction::ProcedureEffect { .. }
+        | ProposalAction::Amend { .. }
+        | ProposalAction::Widen { .. }
+        | ProposalAction::Release { .. } => {}
+    }
     None
 }
 
@@ -747,7 +765,8 @@ pub(crate) fn check_result(domain: &Domain, env: &Env<Limits>, task: u64, propos
             | ProposalAction::ProcedureEffect { .. }
             | ProposalAction::Amend { .. }
             | ProposalAction::Widen { .. }
-            | ProposalAction::Release { .. },
+            | ProposalAction::Release { .. }
+            | ProposalAction::ReleasePlaced { .. },
             _,
         )
         | (

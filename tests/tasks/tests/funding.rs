@@ -59,6 +59,7 @@ fn ledger(world: &World, funder: Funder) -> tasks::FundingRecord {
         | Stored::Activity(_)
         | Stored::Milestone(_)
         | Stored::History(_)
+        | Stored::PlacedHold(_)
         | Stored::PersonProposal(_) => {
             unreachable!()
         }

@@ -660,6 +660,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_REVISIONS_BYTES: u64 = 10 * (24 + 64) + 416 + 16 * 3 * 8 + 5 * 4;
     // One bounded snapshot of the sixteen task numbers moved in a settings decision.
     const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
+    // Placed table and payloads, per-task placed identity, and bounded compound/walk scratch.
+    const PLACED_HOLDS_BYTES: u64 = 16_032;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -675,6 +677,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_PROPOSAL_BYTES
                 + SETTINGS_REVISIONS_BYTES
                 + SETTINGS_MOVES_BYTES
+                + PLACED_HOLDS_BYTES
         )
     );
 }
@@ -727,4 +730,60 @@ fn pool_task(number: u64, dependencies: &[u64]) -> tasks::New {
     let mut new = task(number, dependencies);
     new.funder = Funder::Pool { project: 1, person: 9, period: 7 };
     new
+}
+
+#[test]
+fn saturated_placed_records_reasons_and_exemptions_fit_and_measure_exactly() {
+    let limits =
+        Limits { tasks: 4, placed_holds: 4, project_placed_holds: 4, party_placed_holds: 4, exemptions: 3, ..LIMITS };
+    let mut source = jig_tasks_world::World::new(322, limits);
+    source.make(Party::Person(1), vec![task(1, &[])]);
+    source.make(Party::Task(1), vec![task(2, &[]), task(3, &[]), task(4, &[])]);
+    for number in 100..104 {
+        let reply_to = source.to();
+        source.send(Event::Place {
+            reply_to,
+            hold: tasks::PlacedHold {
+                number,
+                project: 1,
+                owner: tasks::Owner::Party { person: 1 },
+                mode: tasks::Mode::Stop,
+                scope: tasks::Scope::Subtree { task: 1 },
+                reason: vec![1; limits.message_bytes as usize].into_boxed_slice(),
+                placed_at: 0,
+                revision: 1,
+                exempt: Box::new([]),
+                lifted: false,
+            },
+        });
+    }
+    for task in 2..=4 {
+        for _ in 100..104 {
+            let reply_to = source.to();
+            source.send(Event::Control {
+                reply_to,
+                by: Party::Person(1),
+                task,
+                control: tasks::Control::Release { again: None, message: None },
+            });
+        }
+    }
+    let mut measured = Measured::new(&limits);
+    for row in source.records.values().filter(|row| row.key().live()) {
+        measured.event(Event::Restore { record: row.clone() });
+        if let Stored::PlacedHold(hold) = row {
+            assert_eq!(hold.exempt.len(), limits.exemptions as usize);
+            let meter = Meter::new();
+            meter.start();
+            let cloned = row.clone();
+            let _peak = meter.end();
+            assert_eq!(tasks::stored_bytes(&cloned), Some(meter.held()));
+        }
+    }
+    measured.event(Event::Check);
+    measured.event(Event::Restored);
+    let revision = measured.d.placed_hold(100).expect("restored hold").revision;
+    let reply_to = measured.to();
+    measured.event(Event::Lift { reply_to, by: Party::Person(1), hold: 100, revision, with_tasks: true });
+    assert!(!measured.refused);
 }

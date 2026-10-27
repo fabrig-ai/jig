@@ -359,6 +359,7 @@ impl Accounting {
                             | Stored::Activity(_)
                             | Stored::Milestone(_)
                             | Stored::History(_)
+                            | Stored::PlacedHold(_)
                             | Stored::PersonProposal(_) => None,
                         })
                         .sum();
@@ -411,6 +412,7 @@ impl Accounting {
                             | Stored::Activity(_)
                             | Stored::Milestone(_)
                             | Stored::History(_)
+                            | Stored::PlacedHold(_)
                             | Stored::PersonProposal(_) => None,
                         })
                         .sum();
@@ -480,6 +482,7 @@ impl Accounting {
                 | Stored::Activity(_)
                 | Stored::Milestone(_)
                 | Stored::History(_)
+                | Stored::PlacedHold(_)
                 | Stored::PersonProposal(_) => {}
             }
         }

@@ -261,7 +261,8 @@ pub(crate) fn invalid_followups(
             | crate::ProposalAction::ProcedureEffect { .. }
             | crate::ProposalAction::Amend { .. }
             | crate::ProposalAction::Widen { .. }
-            | crate::ProposalAction::Release { .. } => {
+            | crate::ProposalAction::Release { .. }
+            | crate::ProposalAction::ReleasePlaced { .. } => {
                 return Some(InvalidResult::Form);
             }
         },
@@ -576,6 +577,9 @@ pub(crate) fn hold_from(
     source: Option<Box<crate::HoldSource>>,
     out: &mut Queue<Request>,
 ) {
+    if crate::placed::is_placed(why) {
+        return;
+    }
     if let Some(plan) = check_stop(domain, &crate::compound::Staged::new(0), env, number, why, source) {
         apply_stop(domain, env, plan, out);
     }

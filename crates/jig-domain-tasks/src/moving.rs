@@ -154,6 +154,9 @@ pub(crate) fn check(
             {
                 return Err(crate::Problem::new(Some(*child), Refusal::State));
             }
+            if let Err(why) = crate::placed::check_detach(domain, staged, number, *child) {
+                return Err(crate::Problem::new(Some(*child), why));
+            }
             subtree.push(*child).expect("live task bound");
         }
     }

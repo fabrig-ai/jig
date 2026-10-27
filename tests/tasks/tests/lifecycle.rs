@@ -504,12 +504,31 @@ fn hold_reasons_survive_restart_and_release_without_losing_task_state() {
         Hold::HoldsWaited,
         Hold::PoolLost { pool: 8 },
         Hold::Procedure,
-        Hold::StoppedBy { party: 1 },
+        Hold::Placed { hold: 91 },
     ];
     for (index, reason) in reasons.into_iter().enumerate() {
         let mut w = World::new(106 + u64::try_from(index).expect("bounded reason index"), LIMITS);
         w.make(Party::Person(1), vec![task(1, &[])]);
-        w.send(Event::Hold { task: 1, why: reason });
+        if let Hold::Placed { hold } = reason {
+            let reply_to = w.to();
+            w.send(Event::Place {
+                reply_to,
+                hold: jig_domain_tasks::PlacedHold {
+                    number: hold,
+                    project: 1,
+                    owner: jig_domain_tasks::Owner::Party { person: 1 },
+                    mode: jig_domain_tasks::Mode::Stop,
+                    scope: jig_domain_tasks::Scope::Subtree { task: 1 },
+                    reason: Box::new([]),
+                    placed_at: 0,
+                    revision: 1,
+                    exempt: Box::new([]),
+                    lifted: false,
+                },
+            });
+        } else {
+            w.send(Event::Hold { task: 1, why: reason });
+        }
         assert_eq!(w.record(1).phase, Phase::Held { was: Was::Active(Active::Due), why: reason, source: None });
         w.restart();
         assert_eq!(w.record(1).phase, Phase::Held { was: Was::Active(Active::Due), why: reason, source: None });

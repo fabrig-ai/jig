@@ -460,6 +460,7 @@ fn restore_refuses_task_funding_outside_its_requester_ancestry() {
             | Stored::Activity(_)
             | Stored::Milestone(_)
             | Stored::History(_)
+            | Stored::PlacedHold(_)
             | Stored::PersonProposal(_) => {}
         }
     }

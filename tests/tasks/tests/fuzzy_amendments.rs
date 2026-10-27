@@ -303,7 +303,11 @@ fn amend(world: &mut World, task: u64, dependencies: &[u64], seen: &mut BTreeSet
                 );
             }
         }
-        reply @ (Reply::Made(_) | Reply::Acknowledged(_) | Reply::Turn(_) | Reply::WriterWaiting(_)) => {
+        reply @ (Reply::Made(_)
+        | Reply::Lifted { .. }
+        | Reply::Acknowledged(_)
+        | Reply::Turn(_)
+        | Reply::WriterWaiting(_)) => {
             panic!("unexpected amendment reply: {reply:?}");
         }
     }
@@ -329,6 +333,7 @@ fn control(world: &mut World, task: u64, control: Control) {
         Reply::Done => {}
         Reply::Refused(problem) if problem.why == Refusal::State => {}
         reply @ (Reply::Made(_)
+        | Reply::Lifted { .. }
         | Reply::Refused(_)
         | Reply::Acknowledged(_)
         | Reply::Turn(_)
@@ -381,7 +386,11 @@ fn compound(world: &mut World, operations: Vec<jig_domain_tasks::Operation>, see
                 );
             }
         }
-        reply @ (Reply::Made(_) | Reply::Acknowledged(_) | Reply::Turn(_) | Reply::WriterWaiting(_)) => {
+        reply @ (Reply::Made(_)
+        | Reply::Lifted { .. }
+        | Reply::Acknowledged(_)
+        | Reply::Turn(_)
+        | Reply::WriterWaiting(_)) => {
             panic!("unexpected compound reply: {reply:?}");
         }
     }
@@ -406,6 +415,7 @@ fn apply(world: &mut World, operation: Operation, seen: &mut BTreeSet<Reached>, 
                     Reply::Done => {}
                     Reply::Refused(problem) if problem.why == Refusal::Funding => {}
                     reply @ (Reply::Made(_)
+                    | Reply::Lifted { .. }
                     | Reply::Refused(_)
                     | Reply::Acknowledged(_)
                     | Reply::Turn(_)
@@ -442,6 +452,7 @@ fn apply(world: &mut World, operation: Operation, seen: &mut BTreeSet<Reached>, 
                     }
                     Reply::Refused(problem) if problem.why == Refusal::LiveDelegates => {}
                     reply @ (Reply::Made(_)
+                    | Reply::Lifted { .. }
                     | Reply::Done
                     | Reply::Refused(_)
                     | Reply::Acknowledged(_)

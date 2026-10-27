@@ -60,6 +60,7 @@ fn check_with_result_proposal(
             crate::Capacity::batch(creator, batch, None, crate::CapacityCause::Tasks { limit: limits.tasks }),
         ));
     }
+    check_placed(domain, creator)?;
     let parent = match creator {
         Party::Task(number) => {
             let Some(parent) = record(domain, number) else {
@@ -154,7 +155,8 @@ fn matches_result_action(parent: &crate::TaskRecord, number: u64, batch: &[New])
             | crate::ProposalAction::ProcedureEffect { .. }
             | crate::ProposalAction::Amend { .. }
             | crate::ProposalAction::Widen { .. }
-            | crate::ProposalAction::Release { .. } => return false,
+            | crate::ProposalAction::Release { .. }
+            | crate::ProposalAction::ReleasePlaced { .. } => return false,
         },
         Some(_) | None => return false,
     };
@@ -523,4 +525,22 @@ pub fn bounded_batch(limits: &Limits, batch: &[New]) -> bool {
 fn live_room(domain: &Domain, limits: &Limits, size: u32) -> bool {
     domain.names.len().saturating_add(size) <= limits.tasks
         && domain.tasks.capacity().saturating_sub(domain.tasks.len()) >= size
+}
+
+fn check_placed(domain: &Domain, creator: Party) -> Result<(), Problem> {
+    let number = match creator {
+        Party::Task(number) => number,
+        Party::Person(_) | Party::Deployment { .. } => return Ok(()),
+    };
+    let Some(parent) = record(domain, number) else {
+        return Err(problem(Some(number), Refusal::Unknown));
+    };
+    match parent.executor {
+        Executor::Agent { .. } => {}
+        Executor::Procedure { .. } | Executor::Person(_) => return Ok(()),
+    }
+    if let Some(hold) = crate::placed::delegation_hold(domain, number) {
+        return Err(problem(Some(number), Refusal::Placed { hold }));
+    }
+    Ok(())
 }

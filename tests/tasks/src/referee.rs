@@ -10,6 +10,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Seen {
+    Placed {
+        live: Vec<TaskRecord>,
+        holds: Vec<jig_domain_tasks::PlacedHold>,
+        stops: BTreeSet<(u64, u64)>,
+        limits: Box<Limits>,
+    },
     Batch {
         members: Vec<u64>,
         accepted: bool,
@@ -396,6 +402,7 @@ impl Expectations for Tasks {
                     judge.fail("live task limit exceeded");
                 }
             }
+            Seen::Placed { live, holds, stops, limits } => placed(&live, &holds, &stops, &limits, judge),
             Seen::Stored { live, limits } => {
                 stored(&live, &limits, judge);
                 self.preparing.clear();
@@ -683,4 +690,96 @@ fn holder_count(live: &[TaskRecord], name: &ResourceName) -> usize {
         }
     }
     count
+}
+
+fn in_scope(live: &[TaskRecord], number: u64, scope: jig_domain_tasks::Scope) -> bool {
+    let jig_domain_tasks::Scope::Subtree { task: root } = scope else { return false };
+    let mut at = number;
+    for _ in 0..live.len() {
+        if at == root {
+            return true;
+        }
+        match live.iter().find(|row| row.number == at).map(|row| row.requester) {
+            Some(Party::Task(parent)) => at = parent,
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn placed(
+    live: &[TaskRecord],
+    holds: &[jig_domain_tasks::PlacedHold],
+    stops: &BTreeSet<(u64, u64)>,
+    limits: &Limits,
+    judge: &mut Judge<Name, Stimulus>,
+) {
+    use jig_domain_tasks::{Escalation, Hold, Owner};
+    if holds.len() > limits.placed_holds as usize {
+        judge.fail("placed hold table exceeds bound");
+    }
+    for row in live {
+        if let Some(number) = row.placed {
+            match holds.iter().find(|hold| hold.number == number) {
+                Some(hold)
+                    if row.project == hold.project
+                        && !hold.exempt.contains(&row.number)
+                        && (hold.lifted || in_scope(live, row.number, hold.scope)) => {}
+                _ => judge.fail("task names missing or noncovering placed hold"),
+            }
+            if !matches!(row.phase, Phase::Held { .. } | Phase::Closing(_)) {
+                judge.fail("placed task is not held or ending");
+            }
+        }
+        if let Phase::Held { why: Hold::Placed { hold }, .. } = row.phase {
+            if row.placed != Some(hold) {
+                judge.fail("placed reason differs from task hold");
+            }
+            if !matches!(row.escalation, Escalation::Unheld { .. }) {
+                judge.fail("placed reason escalated");
+            }
+        }
+    }
+    for hold in holds {
+        if hold.exempt.len() > limits.exemptions as usize {
+            judge.fail("exemptions exceed bound");
+        }
+        if hold.lifted && !live.iter().any(|row| row.placed == Some(hold.number)) {
+            judge.fail("unreferenced lifted hold retained");
+        }
+        if holds.iter().filter(|other| other.project == hold.project).count() > limits.project_placed_holds as usize {
+            judge.fail("project placed holds exceed bound");
+        }
+        if matches!(hold.owner, Owner::Party { .. })
+            && holds.iter().filter(|other| other.owner == hold.owner).count() > limits.party_placed_holds as usize
+        {
+            judge.fail("party placed holds exceed bound");
+        }
+        if hold.lifted {
+            continue;
+        }
+        for row in
+            live.iter().filter(|row| in_scope(live, row.number, hold.scope) && !hold.exempt.contains(&row.number))
+        {
+            if row.placed.is_none() && !matches!(row.phase, Phase::Closing(_)) {
+                judge.fail("standing hold missed a task");
+            }
+            let attempt = match row.phase {
+                Phase::Held {
+                    was:
+                        Was::Active(
+                            jig_domain_tasks::Active::Claimed { attempt }
+                            | jig_domain_tasks::Active::Running { attempt },
+                        ),
+                    ..
+                } => Some(attempt),
+                Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_) => None,
+            };
+            if let Some(attempt) = attempt
+                && !stops.contains(&(row.number, attempt))
+            {
+                judge.fail("standing stop left a run uncancelled");
+            }
+        }
+    }
 }

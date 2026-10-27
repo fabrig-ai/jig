@@ -10,6 +10,14 @@ use skein_lib::{Deadlines, Id, List, Map, Queue, Slab};
 /// and retry policies; validate through `worst_case` before construction. (domain/tasks.md, section 10).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Limits {
+    /// Placed holds in the deployment, including lifted holds kept for their tasks.
+    pub placed_holds: u32,
+    /// Placed holds retained in one project.
+    pub project_placed_holds: u32,
+    /// Placed holds retained for one party owner.
+    pub party_placed_holds: u32,
+    /// Tasks one standing placed hold may exempt; at most tasks.
+    pub exemptions: u32,
     /// Maximum retained live task slots, name-index entries and retry alarms.
     pub tasks: u32,
     /// Maximum retained finite period, pool and recurring allotment identities.
@@ -126,7 +134,12 @@ pub(crate) fn stub_capacity(limits: &Limits) -> Option<u32> {
 pub fn worst_case(limits: &Limits) -> Option<u64> {
     crate::domain::output_bound(limits)?;
     crate::activity::line_bytes_limit(limits)?;
-    if limits.circle == 0
+    if limits.placed_holds == 0
+        || limits.project_placed_holds == 0
+        || limits.party_placed_holds == 0
+        || limits.exemptions == 0
+        || limits.exemptions > limits.tasks
+        || limits.circle == 0
         || limits.tasks == 0
         || limits.batch == 0
         || limits.tree_tasks == 0
@@ -285,6 +298,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
             .checked_add(u64::from(limits.hold_bytes))?,
     )?;
     Slab::<Task>::worst_case(limits.tasks)?
+        .checked_add(crate::placed::worst_case(limits)?)?
         .checked_add(crate::waits::worst_case(limits)?)?
         .checked_add(Map::<u64, crate::PersonProposal>::worst_case(limits.tasks)?)?
         .checked_add(u64::from(limits.tasks).checked_mul(proposal_payload)?)?

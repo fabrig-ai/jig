@@ -16,7 +16,7 @@ pub(crate) fn valid(limits: &Limits, why: Hold, source: Option<&HoldSource>) -> 
                     | Hold::Stalled
                     | Hold::Dependency(_)
                     | Hold::Stopped
-                    | Hold::StoppedBy { .. }
+                    | Hold::Placed { .. }
                     | Hold::Drift
                     | Hold::Budget
                     | Hold::Deadline

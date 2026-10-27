@@ -375,7 +375,8 @@ fn a_compound_release_exposes_its_waiters_queue_to_later_dependencies() {
 #[test]
 fn a_compound_stop_removes_its_waiters_queue_from_the_walk() {
     let mut world = queued_delegate();
-    let operations = vec![Operation::Stop { task: WAITER }, amendment(&world, HOLDER, &[REQUESTER])];
+    let operations =
+        vec![Operation::Stop { task: WAITER, hold: 100 + WAITER }, amendment(&world, HOLDER, &[REQUESTER])];
     assert_eq!(compound(&mut world, operations), Reply::Done);
     assert_eq!(world.record(HOLDER).waiting_on.as_ref(), [REQUESTER]);
 }

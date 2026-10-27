@@ -322,7 +322,10 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
     let status = status(&ending);
     let endings = task.ended_below.ended(status);
     let subscriptions = task.subscriptions.clone();
+    let placed = task.placed;
     let mut ended = task.clone();
+    ended.placed = None;
+    crate::placed::ended(domain, env, number, out);
     crate::settings::release(domain, &ended);
     ended.settings.run = None;
     for subscription in &subscriptions {
@@ -349,6 +352,9 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
         Executor::Person(_) | Executor::Procedure { .. } => {}
     }
     domain.tasks.retire(id);
+    if let Some(hold) = placed {
+        crate::placed::prune(domain, hold, out);
+    }
     domain.alarms.cancel(number);
     domain.grace_alarms.cancel(number);
     out.push(Request::Erase { key: Key::Live(number) });

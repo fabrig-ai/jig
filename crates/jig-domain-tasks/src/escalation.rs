@@ -276,6 +276,9 @@ pub(crate) fn context(domain: &Domain, number: u64) -> Option<Box<EscalationCont
         Phase::Held { why, .. } => *why,
         Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => return None,
     };
+    if crate::placed::is_placed(why) {
+        return None;
+    }
     Some(Box::new(EscalationContext {
         task: number,
         project: task.project,
@@ -288,6 +291,10 @@ pub(crate) fn context(domain: &Domain, number: u64) -> Option<Box<EscalationCont
 
 pub(crate) fn begin(record: &mut crate::TaskRecord) -> bool {
     match record.phase {
+        Phase::Held { why: Hold::Placed { .. }, .. } => {
+            record.escalation = Escalation::Unheld { revision: record.revisions.hold };
+            return false;
+        }
         Phase::Held { .. } => {}
         Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => {
             // Ending/cancellation retires current semantic decision state; root owns history.

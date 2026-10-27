@@ -129,7 +129,8 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
         | crate::ProposalAction::ProcedureEffect { .. }
         | crate::ProposalAction::Amend { .. }
         | crate::ProposalAction::Widen { .. }
-        | crate::ProposalAction::Release { .. } => false,
+        | crate::ProposalAction::Release { .. }
+        | crate::ProposalAction::ReleasePlaced { .. } => false,
     };
     if task.result_proposal && (proposal.as_holder || !result_batch) {
         return false;
@@ -161,7 +162,9 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
                         }
                         crate::ProposalAction::Amend { .. } => crate::ProposalKind::Amend,
                         crate::ProposalAction::Widen { .. } => crate::ProposalKind::Widen,
-                        crate::ProposalAction::Release { .. } => crate::ProposalKind::Release,
+                        crate::ProposalAction::Release { .. } | crate::ProposalAction::ReleasePlaced { .. } => {
+                            crate::ProposalKind::Release
+                        }
                     }
         }
     };
@@ -208,6 +211,7 @@ fn valid_proposal(task: &TaskRecord, limits: &Limits) -> bool {
             *target != 0 && crate::batch::valid_authority(limits, authority)
         }
         crate::ProposalAction::Release { task: target } => *target != 0,
+        crate::ProposalAction::ReleasePlaced { task, hold, revision } => *task != 0 && *hold != 0 && *revision != 0,
     };
     if !action_valid {
         return false;
@@ -240,8 +244,12 @@ fn valid_escalation(task: &TaskRecord, limits: &Limits) -> bool {
         return false;
     }
     let held = match task.phase {
+        Phase::Held { why: crate::Hold::Placed { .. }, .. }
+        | Phase::Waiting
+        | Phase::Active(_)
+        | Phase::Closing(_)
+        | Phase::Ended(_) => false,
         Phase::Held { .. } => true,
-        Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => false,
     };
     match &task.escalation {
         crate::Escalation::Unheld { revision } => *revision != u64::MAX && !held,
@@ -752,6 +760,15 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
         Startup::Restoring => {}
     }
     match stored {
+        Stored::PlacedHold(hold) => {
+            if !crate::placed::shaped(&hold, &env.limits)
+                || domain.placed.contains_key(&hold.number)
+                || domain.placed.len() >= env.limits.placed_holds
+            {
+                return failed(domain, None, Refusal::Restore, out);
+            }
+            domain.placed.insert(hold.number, *hold).expect("restored hold room");
+        }
         Stored::PersonProposal(row) => restore_person_proposal(domain, env, *row, out),
         Stored::Live(task) => {
             let number = task.number;
@@ -1038,6 +1055,9 @@ pub(crate) fn check(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Requ
         {
             return failed(domain, Some(*number), Refusal::Restore, out);
         }
+    }
+    if !crate::placed::check(domain, &env.limits) {
+        return failed(domain, None, Refusal::Restore, out);
     }
     for (number, _) in &domain.stubs {
         if domain.names.contains_key(number) || !crate::closing::named_by_live(domain, *number) {

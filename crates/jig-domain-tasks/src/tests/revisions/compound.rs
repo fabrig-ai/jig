@@ -11,7 +11,7 @@ const OTHER_PROJECT: u32 = 2;
 const FIRST_MESSAGE: u64 = 1;
 const SECOND_MESSAGE: u64 = 2;
 const OTHER_PARTY: u64 = 10;
-const HOLDS: [Hold; 3] = [Hold::StoppedBy { party: REQUESTER }, Hold::StoppedBy { party: OTHER_PARTY }, Hold::Budget];
+const HOLDS: [Hold; 3] = [Hold::Placed { hold: REQUESTER }, Hold::Placed { hold: OTHER_PARTY }, Hold::Budget];
 
 pub(super) fn compound(test: &mut Harness, operations: Vec<Operation>, pool_budget: u64) -> Vec<Request> {
     let mut bounded = List::with_capacity(u32::try_from(operations.len()).unwrap());
@@ -80,7 +80,7 @@ fn a_compound_makes_its_operations_in_order_in_one_step() {
 fn an_operation_on_a_task_an_earlier_cancel_closed_is_refused() {
     let mut test = chat::cohort();
     let before = test.stored.clone();
-    let out = compound(&mut test, vec![cancel(ROOT), Operation::Stop { task: FIRST }], 1_000);
+    let out = compound(&mut test, vec![cancel(ROOT), Operation::Stop { task: FIRST, hold: 100 + FIRST }], 1_000);
     refused(out, 1, FIRST, Refusal::State);
     assert_eq!(test.stored, before);
 }
@@ -104,7 +104,7 @@ fn moves_count_one_pool_across_the_request() {
 #[test]
 fn an_amendment_then_a_release_of_one_held_task_are_made_together() {
     let mut test = chat::cohort();
-    test.send(Event::Hold { task: FIRST, why: Hold::StoppedBy { party: REQUESTER } });
+    test.send(place(FIRST, REQUESTER, REQUESTER));
     let change = Amendment {
         spec: Some(Spec { words: b"changed".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
         ..amendment()
@@ -126,7 +126,7 @@ fn an_amendment_then_a_release_of_one_held_task_are_made_together() {
 #[test]
 fn words_then_a_stop_release_in_one_request_wake_the_task() {
     let mut test = chat::cohort();
-    test.send(Event::Hold { task: FIRST, why: Hold::StoppedBy { party: REQUESTER } });
+    test.send(place(FIRST, REQUESTER, REQUESTER));
     let word = crate::Word {
         number: FIRST_MESSAGE,
         from: Party::Person(REQUESTER),
@@ -157,7 +157,11 @@ fn an_operation_on_another_projects_task_is_refused_at_its_place() {
     other.funder = Funder::Period { project: OTHER_PROJECT, period: 0 };
     test.make(vec![other]);
     let before = test.stored.clone();
-    let out = compound(&mut test, vec![Operation::Stop { task: ROOT }, Operation::Stop { task: SECOND }], 1_000);
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: ROOT, hold: 100 + ROOT }, Operation::Stop { task: SECOND, hold: 100 + SECOND }],
+        1_000,
+    );
     refused(out, 1, SECOND, Refusal::Project);
     assert_eq!(test.stored, before);
 }
@@ -166,7 +170,14 @@ fn an_operation_on_another_projects_task_is_refused_at_its_place() {
 fn words_alone_keep_the_hold_and_its_revision() {
     for why in HOLDS {
         let mut test = chat::cohort();
-        test.send(Event::Hold { task: FIRST, why });
+        match why {
+            Hold::Placed { hold } => {
+                test.send(place(FIRST, hold, hold));
+            }
+            _ => {
+                test.send(Event::Hold { task: FIRST, why });
+            }
+        }
         let before = test.domain.task(FIRST).unwrap().clone();
         let out = test.send(Event::AuthorizedMessage {
             reply_to: to(),
@@ -195,4 +206,50 @@ fn words_alone_keep_the_hold_and_its_revision() {
             "{why:?}"
         );
     }
+}
+
+#[test]
+fn a_stop_after_a_move_uses_the_moved_tree() {
+    let mut test = chat::cohort();
+    let out = compound(
+        &mut test,
+        vec![Operation::Move { task: FIRST, reason: Box::new([]) }, Operation::Stop { task: ROOT, hold: 91 }],
+        1_000,
+    );
+    assert!(out.iter().any(|request| match request {
+        Request::Done { .. } => true,
+        _ => false,
+    }));
+    assert_eq!(test.domain.task(FIRST).unwrap().placed, None);
+    assert_eq!(test.domain.task(ROOT).unwrap().placed, Some(91));
+    assert_eq!(test.domain.task(SECOND).unwrap().placed, Some(91));
+}
+
+#[test]
+fn moving_a_held_delegate_cannot_escape_a_standing_scope() {
+    let mut test = chat::cohort();
+    let before = test.stored.clone();
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: ROOT, hold: 91 }, Operation::Move { task: FIRST, reason: Box::new([]) }],
+        1_000,
+    );
+    refused(out, 1, FIRST, Refusal::Placed { hold: 91 });
+    assert_eq!(test.stored, before);
+}
+
+#[test]
+fn moving_a_stopped_scope_root_preserves_its_hold() {
+    let mut test = chat::cohort();
+    let out = compound(
+        &mut test,
+        vec![Operation::Stop { task: FIRST, hold: 91 }, Operation::Move { task: FIRST, reason: Box::new([]) }],
+        1_000,
+    );
+    assert!(out.iter().any(|request| match request {
+        Request::Done { .. } => true,
+        _ => false,
+    }));
+    assert_eq!(test.domain.task(FIRST).unwrap().placed, Some(91));
+    assert_eq!(test.domain.task(FIRST).unwrap().requester, Party::Person(REQUESTER));
 }

@@ -16,6 +16,10 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const RETRY: Retry = Retry { retries: 2, base: Duration::from_millis(10), max: Duration::from_secs(1) };
 
 pub const LIMITS: Limits = Limits {
+    placed_holds: 16,
+    project_placed_holds: 8,
+    party_placed_holds: 4,
+    exemptions: 1,
     tasks: 16,
     funders: 32,
     project_tasks: 16,
@@ -120,6 +124,7 @@ pub fn task(number: u64, dependencies: &[u64]) -> New {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Reply {
+    Lifted { released: u32 },
     Made(Vec<u64>),
     Done,
     Refused(Problem),
@@ -425,6 +430,7 @@ impl World {
             | Request::ProcedureRefused { .. }
             | Request::CompoundRefused { .. }
             | Request::Refused { .. }
+            | Request::Lifted { .. }
             | Request::Done { .. }
             | Request::Acknowledged { .. }
             | Request::TurnAcknowledged { .. }
@@ -471,7 +477,9 @@ impl World {
             }
             Event::Turn { task, cumulative, .. }
             | Event::Activation { task, cause: Cause::Priced { cumulative }, .. } => Some((*task, *cumulative)),
-            Event::MoveToNewest { .. }
+            Event::Place { .. }
+            | Event::Lift { .. }
+            | Event::MoveToNewest { .. }
             | Event::Charters { .. }
             | Event::ResourceAccess { .. }
             | Event::Resource { .. }
@@ -546,7 +554,9 @@ impl World {
             | Event::Notice { word, .. } => {
                 self.message = self.message.max(word.number);
             }
-            Event::Charters { .. }
+            Event::Place { .. }
+            | Event::Lift { .. }
+            | Event::Charters { .. }
             | Event::ResourceAccess { .. }
             | Event::Resource { .. }
             | Event::Kinds { .. }
@@ -735,6 +745,7 @@ impl World {
                 | Request::ProcedureRefused { .. }
                 | Request::CompoundRefused { .. }
                 | Request::Refused { .. }
+                | Request::Lifted { .. }
                 | Request::Done { .. }
                 | Request::Acknowledged { accepted: Accepted::Already, .. }
                 | Request::TurnAcknowledged { .. }
@@ -874,10 +885,12 @@ impl World {
                         self.reply(reply_to, Reply::Done);
                     }
                 }
+                Request::Lifted { reply_to, released } => self.reply(reply_to, Reply::Lifted { released }),
                 Request::PersonProposed { reply_to, .. }
                 | Request::Sent { reply_to, .. }
                 | Request::Done { reply_to }
-                | Request::ProposalDecided { reply_to, .. } => self.reply(reply_to, Reply::Done),
+                | Request::ProposalDecided { reply_to, .. }
+                | Request::EscalationDecided { reply_to, .. } => self.reply(reply_to, Reply::Done),
                 Request::Made { reply_to, tasks } => {
                     let token = reply_to.into_token();
                     if token.raw() != u64::MAX - 1 {
@@ -912,15 +925,46 @@ impl World {
                     self.observe(Seen::Closing { task });
                 }
                 Request::RestoreRefused { problem } => panic!("world store corrupted: {problem:?}"),
-                Request::EscalationsInspected { .. }
-                | Request::EscalationsRechecked { .. }
-                | Request::EscalationDecided { .. } => {
+                Request::EscalationsInspected { .. } | Request::EscalationsRechecked { .. } => {
                     panic!("this child world sends no escalation decisions")
                 }
             }
         }
         self.observe(Seen::Limit { live: self.live(), cap: self.env.limits.tasks });
-        let live = self.records.values().filter_map(live_row).cloned().collect();
+        let live: Vec<_> = self.records.values().filter_map(live_row).cloned().collect();
+        let holds = self
+            .records
+            .values()
+            .filter_map(|row| match row {
+                Stored::PlacedHold(hold) => Some(*hold.clone()),
+                Stored::Update(_)
+                | Stored::Result(_)
+                | Stored::EndedByParty(_)
+                | Stored::EndedByProject(_)
+                | Stored::EndedDelegate(_)
+                | Stored::Delegate(_)
+                | Stored::Activity(_)
+                | Stored::Milestone(_)
+                | Stored::PersonProposal(_)
+                | Stored::DecidedProposal(_)
+                | Stored::ClosedLedger(_)
+                | Stored::History(_)
+                | Stored::Live(_)
+                | Stored::Ended(_)
+                | Stored::Stub(_)
+                | Stored::Ledger(_)
+                | Stored::Writer(_)
+                | Stored::Pool(_) => None,
+            })
+            .collect();
+        if !self.restoring {
+            self.observe(Seen::Placed {
+                live: live.clone(),
+                holds,
+                stops: self.stops.clone(),
+                limits: Box::new(self.env.limits),
+            });
+        }
         self.observe(Seen::Stored { live, limits: Box::new(self.env.limits) });
         let mut live = Vec::new();
         let mut pools = Vec::new();
@@ -944,6 +988,7 @@ impl World {
                 | Stored::EndedDelegate(_)
                 | Stored::Delegate(_)
                 | Stored::Update(_)
+                | Stored::PlacedHold(_)
                 | Stored::PersonProposal(_) => {}
             }
         }
@@ -973,6 +1018,21 @@ impl World {
     }
 
     #[must_use]
+    pub fn may_lift(&self, hold: u64, by: Party, outranks: bool) -> bool {
+        self.domain.may_lift(hold, by, outranks)
+    }
+
+    #[must_use]
+    pub fn placed_hold(&self, number: u64) -> Option<&tasks::PlacedHold> {
+        self.domain.placed_hold(number)
+    }
+
+    #[must_use]
+    pub fn capacity_refusals(&self) -> skein_lib::List<tasks::CapacityRefusal> {
+        self.domain.capacity_refusals()
+    }
+
+    #[must_use]
     pub fn record(&self, number: u64) -> &tasks::TaskRecord {
         match &self.records[&Key::Live(number)] {
             Stored::Live(record) => record,
@@ -992,6 +1052,7 @@ impl World {
             | Stored::Activity(_)
             | Stored::Milestone(_)
             | Stored::History(_)
+            | Stored::PlacedHold(_)
             | Stored::PersonProposal(_) => {
                 unreachable!("live key")
             }
@@ -1027,6 +1088,7 @@ impl World {
                 | Key::EndedDelegate { .. }
                 | Key::Delegate { .. }
                 | Key::Update { .. }
+                | Key::PlacedHold(_)
                 | Key::PersonProposal(_) => None,
             })
             .collect();
@@ -1105,6 +1167,7 @@ impl World {
                 | Stored::Activity(_)
                 | Stored::Milestone(_)
                 | Stored::History(_)
+                | Stored::PlacedHold(_)
                 | Stored::PersonProposal(_) => None,
             })
             .max()
@@ -1392,6 +1455,7 @@ fn live_row(record: &Stored) -> Option<&jig_domain_tasks::TaskRecord> {
         | Stored::Ledger(_)
         | Stored::Writer(_)
         | Stored::Pool(_)
+        | Stored::PlacedHold(_)
         | Stored::PersonProposal(_)
         | Stored::History(_)
         | Stored::Milestone(_)

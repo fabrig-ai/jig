@@ -16,6 +16,9 @@ use core::mem::{size_of, size_of_val};
 #[must_use]
 pub fn stored_bytes(record: &Stored) -> Option<u64> {
     match record {
+        Stored::PlacedHold(hold) => bytes(size_of::<crate::PlacedHold>())?
+            .checked_add(bytes(hold.reason.len())?)?
+            .checked_add(bytes(size_of_val(&*hold.exempt))?),
         Stored::Activity(row) => match &row.line {
             crate::Line::Words { words, kind, .. } => bytes(words.len())?.checked_add(kind_bytes(kind)?),
             crate::Line::Heard(word) | crate::Line::Notified { word, .. } => word_bytes(word),
@@ -361,7 +364,7 @@ fn proposal_bytes(proposal: &Proposal) -> Option<u64> {
         | ProposalAction::Widen { authority, .. } => {
             total = total.checked_add(authority_bytes(authority)?)?;
         }
-        ProposalAction::Release { .. } => {}
+        ProposalAction::Release { .. } | ProposalAction::ReleasePlaced { .. } => {}
     }
     Some(total)
 }
