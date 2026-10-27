@@ -887,7 +887,8 @@ fn inbox_context_memory_prices_every_reserved_container_and_complete_document_en
     // Four pending inventory heads add 96 bytes; the two value sets and
     // bounded review/item-head carriers add 115,248 bytes at this fixture.
     // Four older held revision heads, each with its holder count, add 288 bytes.
-    const SETTINGS_DOCUMENT: u64 = 120_496 + 4 * 72;
+    // The two charter values each carry their eight-byte host-family mask.
+    const SETTINGS_DOCUMENT: u64 = 120_496 + 4 * 72 + 2 * 8;
 
     let (mut core, limits) = fixture();
     waiting(

@@ -69,6 +69,7 @@ fn charter(
     problems: &mut Problems,
 ) -> Option<Charter> {
     let mut object = check::object(document, at, path, problems)?;
+    let tools = check::integer(&mut object, document, b"tools", path, problems);
     let number = check::count(&mut object, document, b"number", path, problems);
     let instructions =
         check::path(&mut object, document, b"instructions", path, Directory::Config, directories, problems);
@@ -97,6 +98,7 @@ fn charter(
         hosts: hosts?,
         spend: spend?,
         policy: RunPolicy {
+            tools: jig_domain_authority::Tools(tools?),
             instructions: instructions?,
             waiting: waiting?,
             resume: resume?,

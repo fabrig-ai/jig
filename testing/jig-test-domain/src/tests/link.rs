@@ -139,7 +139,7 @@ fn received_answer(domain: &mut crate::Domain, up: jig_domain_host::LinkUp) -> (
 }
 #[test]
 fn a_start_refusal_reaches_the_core_as_invalid_without_reading_a_result() {
-    for cause in [host::StartCause::Other, host::StartCause::Grants] {
+    for cause in [host::StartCause::Other, host::StartCause::Grants, host::StartCause::HostPart { bound: 33419 }] {
         let mut domain = fixtures::domain();
         let host::LinkUp::Answer { run, attempt, mut answer } = fixtures::start_refusal() else {
             panic!("start refusal fixture");
@@ -159,7 +159,13 @@ fn a_start_refusal_reaches_the_core_as_invalid_without_reading_a_result() {
         let Some(crate::Work::Core(core::Event::AnswerPayload { end, .. })) = work.pop() else {
             panic!("invalid start reaches the core without a result codec");
         };
-        assert_eq!(end, tasks::End::Failed(tasks::Class::Invalid));
+        let expected = match cause {
+            host::StartCause::HostPart { bound } => {
+                tasks::End::Exceeded(tasks::Exceeded { bound: tasks::Bound::HostPart, value: bound })
+            }
+            host::StartCause::Other | host::StartCause::Grants => tasks::End::Failed(tasks::Class::Invalid),
+        };
+        assert_eq!(end, expected);
     }
 }
 

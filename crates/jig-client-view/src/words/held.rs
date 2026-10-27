@@ -23,7 +23,8 @@ impl Words {
                     | jig_client::contract::Bound::Tools
                     | jig_client::contract::Bound::HistoryItems
                     | jig_client::contract::Bound::Window
-                    | jig_client::contract::Bound::Output => &[Hole::Number(value.value)],
+                    | jig_client::contract::Bound::Output
+                    | jig_client::contract::Bound::HostPart => &[Hole::Number(value.value)],
                 };
                 self.text(b, JigPhrase::Word(Word::hold(&reason)), holes);
             }
