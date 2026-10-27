@@ -1442,7 +1442,7 @@ fn a_patch_manifest_records_the_copys_secret_commit_and_write_clock() {
             before: crate::format::recorded(levels(0, 0)),
             after: crate::format::recorded(levels(2, 2)),
             counts: fixture_counts(0),
-            store: 8,
+            store: 9,
             secrets: Some(1),
             written: WRITTEN,
         })
