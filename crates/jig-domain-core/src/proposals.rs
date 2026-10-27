@@ -133,6 +133,15 @@ fn holder(
     after: Option<tasks::ProposalHolder>,
     decision: Wall,
 ) -> Option<tasks::ProposalHolder> {
+    if let tasks::ProposalAction::ReleasePlaced { hold, .. } = action {
+        if after.is_some() {
+            return None;
+        }
+        return Some(match core.tasks.placed_hold(*hold)?.owner {
+            tasks::Owner::Party { person } => tasks::ProposalHolder::Person(person),
+            tasks::Owner::Task { task } => tasks::ProposalHolder::Task(task),
+        });
+    }
     let context = core.tasks.delegation(proposer)?;
     let needed = core.proposal_admit_action(context.project, action, decision).ok()?;
     let (kind, policy_kind) = kind(action);
@@ -230,6 +239,13 @@ impl Core {
         action: &tasks::ProposalAction,
         decision: Wall,
     ) -> Result<(), tasks::Refusal> {
+        if let tasks::ProposalAction::ReleasePlaced { hold, .. } = action {
+            return if self.tasks.may_lift(*hold, tasks::Party::Task(holder), false) {
+                Ok(())
+            } else {
+                Err(tasks::Refusal::HoldOwner { hold: *hold })
+            };
+        }
         let Some(checked) = action_for_check(self, action, decision) else { return Err(tasks::Refusal::Executor) };
         let Some(needed) = authority::needs(&checked) else { return Err(tasks::Refusal::AuthorityShape) };
         self.proposal_admit_action(project, action, decision)?;
@@ -436,5 +452,56 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
         | tasks::Stored::Stub(_)
         | tasks::Stored::Activity(_)
         | tasks::Stored::Milestone(_) => None,
+    }
+}
+
+impl Core {
+    pub(crate) fn release_proposal_admit(
+        &self,
+        proposer: u64,
+        task: u64,
+        hold: u64,
+        revision: u64,
+        depth: u32,
+    ) -> Result<(), tasks::Refusal> {
+        let row = self.tasks.task(task).ok_or(tasks::Refusal::Unknown)?;
+        let mut at = task;
+        let mut above = false;
+        for _ in 0..=depth {
+            if at == proposer {
+                above = true;
+                break;
+            }
+            match self.tasks.task(at).ok_or(tasks::Refusal::Unknown)?.requester {
+                tasks::Party::Task(parent) => at = parent,
+                tasks::Party::Person(_) | tasks::Party::Deployment { .. } => break,
+            }
+        }
+        if !above {
+            return Err(tasks::Refusal::Reference);
+        }
+        if row.placed != Some(hold) {
+            return Err(match self.tasks.placed_on(task) {
+                Some(now) => tasks::Refusal::Placed { hold: now.number },
+                None => tasks::Refusal::State,
+            });
+        }
+        let hold = self.tasks.placed_hold(hold).ok_or(tasks::Refusal::Unknown)?;
+        if hold.revision != revision || hold.lifted {
+            return Err(tasks::Refusal::HoldRevision { revision: hold.revision });
+        }
+        Ok(())
+    }
+}
+
+pub(crate) const fn placed_release(action: &tasks::ProposalAction) -> bool {
+    match action {
+        tasks::ProposalAction::ReleasePlaced { .. } => true,
+        tasks::ProposalAction::Batch(_)
+        | tasks::ProposalAction::Effect { .. }
+        | tasks::ProposalAction::ProcedureEffect { .. }
+        | tasks::ProposalAction::Amend { .. }
+        | tasks::ProposalAction::Widen { .. }
+        | tasks::ProposalAction::Release { .. } => false,
     }
 }

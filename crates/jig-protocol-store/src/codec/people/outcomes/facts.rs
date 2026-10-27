@@ -150,6 +150,10 @@ pub(super) fn encode_moved(value: &domain::Moved, limits: &wire::Limits) -> Resu
         domain::Moved::Person { revision } => {
             wire::Moved::Person(wire::MovedPerson::new(limits, wire::MovedPersonParts { revision: *revision })?)
         }
+        domain::Moved::PlacedHold { revision } => wire::Moved::PlacedHold(wire::MovedPlacedHold::new(
+            limits,
+            wire::MovedPlacedHoldParts { revision: *revision },
+        )?),
         domain::Moved::Note { revision } => {
             wire::Moved::Note(wire::MovedNote::new(limits, wire::MovedNoteParts { revision: *revision })?)
         }
@@ -169,6 +173,7 @@ pub(super) fn decode_moved(value: wire::Moved) -> domain::Moved {
             let wire::MovedPersonParts { revision } = value.into_parts();
             domain::Moved::Person { revision }
         }
+        wire::Moved::PlacedHold(value) => domain::Moved::PlacedHold { revision: value.revision() },
         wire::Moved::Note(value) => {
             let wire::MovedNoteParts { revision } = value.into_parts();
             domain::Moved::Note { revision }
@@ -237,6 +242,10 @@ pub(super) fn decode_ending(value: wire::Ending) -> domain::Ending {
 }
 pub(super) fn encode_lack(value: &domain::Lack, limits: &wire::Limits) -> Result<wire::Lack, wire::Problem> {
     Ok(match value {
+        domain::Lack::HoldOwner { hold, owner } => wire::Lack::HoldOwner(wire::LackHoldOwner::new(
+            limits,
+            wire::LackHoldOwnerParts { hold: *hold, owner: encode_hold_owner(owner, limits)? },
+        )?),
         domain::Lack::Approver => wire::Lack::Approver,
         domain::Lack::Budget { needs, left } => {
             wire::Lack::Budget(wire::LackBudget::new(limits, wire::LackBudgetParts { needs: *needs, left: *left })?)
@@ -289,6 +298,10 @@ pub(super) fn encode_lack(value: &domain::Lack, limits: &wire::Limits) -> Result
 }
 pub(super) fn decode_lack(value: wire::Lack) -> domain::Lack {
     match value {
+        wire::Lack::HoldOwner(value) => {
+            let wire::LackHoldOwnerParts { hold, owner } = value.into_parts();
+            domain::Lack::HoldOwner { hold, owner: decode_hold_owner(owner) }
+        }
         wire::Lack::Approver => domain::Lack::Approver,
         wire::Lack::Budget(value) => {
             let wire::LackBudgetParts { needs, left } = value.into_parts();
@@ -848,5 +861,25 @@ const fn decode_sign_in_redirect_why(value: &wire::SignInRedirectWhy) -> domain:
         wire::SignInRedirectWhy::Address => domain::SignInRedirectWhy::Address,
         wire::SignInRedirectWhy::State => domain::SignInRedirectWhy::State,
         wire::SignInRedirectWhy::TooMany => domain::SignInRedirectWhy::TooMany,
+    }
+}
+
+pub(super) fn encode_hold_owner(
+    value: &domain::HoldOwner,
+    limits: &wire::Limits,
+) -> Result<wire::HoldOwner, wire::Problem> {
+    Ok(match value {
+        domain::HoldOwner::Party { person } => {
+            wire::HoldOwner::Party(wire::HoldOwnerParty::new(limits, wire::HoldOwnerPartyParts { person: *person })?)
+        }
+        domain::HoldOwner::Task { task } => {
+            wire::HoldOwner::Task(wire::HoldOwnerTask::new(limits, wire::HoldOwnerTaskParts { task: *task })?)
+        }
+    })
+}
+pub(super) fn decode_hold_owner(value: wire::HoldOwner) -> domain::HoldOwner {
+    match value {
+        wire::HoldOwner::Party(value) => domain::HoldOwner::Party { person: value.person() },
+        wire::HoldOwner::Task(value) => domain::HoldOwner::Task { task: value.task() },
     }
 }

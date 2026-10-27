@@ -34,6 +34,7 @@ pub(crate) fn number(ask: &people::Ask) -> u64 {
         | people::Ask::DecideEscalation { .. }
         | people::Ask::Stop { .. }
         | people::Ask::Cancel { .. }
+        | people::Ask::Lift { .. }
         | people::Ask::Release { .. }
         | people::Ask::Create { .. }
         | people::Ask::Propose { .. }
@@ -181,6 +182,7 @@ impl Core {
             | people::Ask::DecideEscalation { .. }
             | people::Ask::Stop { .. }
             | people::Ask::Cancel { .. }
+            | people::Ask::Lift { .. }
             | people::Ask::Release { .. }
             | people::Ask::Create { .. }
             | people::Ask::Propose { .. }
@@ -220,6 +222,7 @@ fn person_act(ask: &people::Ask) -> crate::acts::Act {
         | people::Ask::DecideEscalation { .. }
         | people::Ask::Stop { .. }
         | people::Ask::Cancel { .. }
+        | people::Ask::Lift { .. }
         | people::Ask::Release { .. }
         | people::Ask::Create { .. }
         | people::Ask::Propose { .. }

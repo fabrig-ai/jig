@@ -30,6 +30,7 @@ pub enum CapacityAction {
     Stop { task: u64 },
     Cancel { task: u64 },
     Release { task: u64 },
+    Lift { hold: u64 },
     MarkSeen { seen: crate::Seen },
     AccountSignIn,
     AccountSignOut,
@@ -88,6 +89,7 @@ pub(crate) fn action(ask: &Ask, person: u64) -> CapacityAction {
         Ask::AnswerPerson { task, .. } => CapacityAction::AnswerPerson { task: *task },
         Ask::Stop { task, .. } => CapacityAction::Stop { task: *task },
         Ask::Cancel { task, .. } => CapacityAction::Cancel { task: *task },
+        Ask::Lift { hold, .. } => CapacityAction::Lift { hold: *hold },
         Ask::Release { task, .. } => CapacityAction::Release { task: *task },
         Ask::MarkSeen { seen } => CapacityAction::MarkSeen { seen: *seen },
         Ask::AccountSignIn { .. } => CapacityAction::AccountSignIn,
@@ -127,9 +129,11 @@ pub(crate) fn project(ask: &Ask) -> Option<u32> {
             crate::ApplicationScope::Project(project) => Some(*project),
             crate::ApplicationScope::Deployment => Some(0),
         },
-        Ask::MarkSeen { .. } | Ask::AccountSignIn { .. } | Ask::AccountSignOut { .. } | Ask::AccountChange { .. } => {
-            None
-        }
+        Ask::Lift { .. }
+        | Ask::MarkSeen { .. }
+        | Ask::AccountSignIn { .. }
+        | Ask::AccountSignOut { .. }
+        | Ask::AccountChange { .. } => None,
     }
 }
 
@@ -148,6 +152,7 @@ pub(crate) fn permanent(outcome: &Outcome) -> Option<CapacityCause> {
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
+        | Outcome::Lifted { .. }
         | Outcome::Released { .. }
         | Outcome::PersonTaken { .. }
         | Outcome::PersonHandedBack { .. }

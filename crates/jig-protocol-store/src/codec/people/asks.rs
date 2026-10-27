@@ -387,6 +387,10 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
                 },
             },
         )?),
+        domain::Ask::Lift { hold, revision, with_tasks } => wire::Ask::Lift(wire::AskLift::new(
+            limits,
+            wire::AskLiftParts { hold: *hold, revision: *revision, with_tasks: *with_tasks },
+        )?),
         domain::Ask::Release { project, task, revision, again } => wire::Ask::Release(wire::AskRelease::new(
             limits,
             wire::AskReleaseParts { project: *project, task: *task, revision: *revision, again: *again },
@@ -581,6 +585,10 @@ pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask
                     None => None,
                 },
             }
+        }
+        wire::Ask::Lift(value) => {
+            let wire::AskLiftParts { hold, revision, with_tasks } = value.into_parts();
+            domain::Ask::Lift { hold, revision, with_tasks }
         }
         wire::Ask::Release(value) => {
             let wire::AskReleaseParts { project, task, revision, again } = value.into_parts();

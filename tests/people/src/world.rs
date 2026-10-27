@@ -493,6 +493,11 @@ impl World {
     pub fn capacity_forgotten(&self) -> u64 {
         self.domain.capacity_refusals_lost()
     }
+    pub fn finish_lift_deferred(&mut self, hold: u64, released: u32) {
+        for (request, _) in std::mem::take(&mut self.deferred) {
+            self.send(Event::Decided { request, outcome: Outcome::Lifted { hold, released } });
+        }
+    }
     pub fn finish_account_deferred(&mut self) {
         for (request, _) in std::mem::take(&mut self.deferred) {
             self.send(Event::Decided { request, outcome: Outcome::AccountChanged });
@@ -563,7 +568,8 @@ impl World {
                         project == 1
                             || matches!(
                                 ask.as_ref(),
-                                Ask::MarkSeen { .. }
+                                Ask::Lift { .. }
+                                    | Ask::MarkSeen { .. }
                                     | Ask::AccountSignIn { .. }
                                     | Ask::AccountSignOut { .. }
                                     | Ask::AccountChange { .. }
@@ -572,7 +578,6 @@ impl World {
                     let key = self.context.expect("a routed call carries the client's key");
                     assert_eq!(person, key.person);
                     let kind = match ask.as_ref() {
-                        Ask::Compound { .. } => RouteKind::Control,
                         Ask::Application { .. } => RouteKind::Application,
                         Ask::Create { .. } => RouteKind::Goal,
                         Ask::Propose { action: people::Action::Batch(_), .. } | Ask::Withdraw { .. } => {
@@ -586,9 +591,12 @@ impl World {
                         Ask::TakePerson { .. } | Ask::HandBackPerson { .. } | Ask::AnswerPerson { .. } => {
                             RouteKind::TakePerson
                         }
-                        Ask::MarkSeen { .. } | Ask::Release { .. } | Ask::Amend { .. } | Ask::Say { .. } => {
-                            RouteKind::Control
-                        }
+                        Ask::Compound { .. }
+                        | Ask::Lift { .. }
+                        | Ask::MarkSeen { .. }
+                        | Ask::Release { .. }
+                        | Ask::Amend { .. }
+                        | Ask::Say { .. } => RouteKind::Control,
                         Ask::AccountSignIn { .. } | Ask::AccountSignOut { .. } | Ask::AccountChange { .. } => {
                             RouteKind::Account
                         }
@@ -647,7 +655,7 @@ impl World {
                     }
                     if self.defer_route {
                         assert!(
-                            kind == RouteKind::Goal || kind == RouteKind::Account,
+                            kind == RouteKind::Goal || kind == RouteKind::Account || kind == RouteKind::Control,
                             "creation or account deferred script"
                         );
                         self.deferred.push((request, key));
@@ -860,6 +868,25 @@ impl World {
                                     &mut self.out,
                                 );
                             }
+                            Ask::Lift { hold, .. } => {
+                                let outcome = if self.settings.authority_refuses {
+                                    Outcome::Refused(Refusal::Authority {
+                                        proposable: None,
+                                        lacking: Lack::HoldOwner {
+                                            hold,
+                                            owner: people::HoldOwner::Party { person: 2 },
+                                        },
+                                    })
+                                } else {
+                                    Outcome::Lifted { hold, released: 2 }
+                                };
+                                people::step(
+                                    &mut self.domain,
+                                    &self.env,
+                                    Event::Decided { request, outcome },
+                                    &mut self.out,
+                                );
+                            }
                             Ask::Release { task, revision, again, .. } => {
                                 let outcome = match self.holds.get(&task) {
                                     Some(&(now, reason)) if revision != now => Outcome::Refused(Refusal::Moved {
@@ -972,6 +999,7 @@ impl World {
                                         | Ask::Withdraw { .. }
                                         | Ask::Stop { .. }
                                         | Ask::Cancel { .. }
+                                        | Ask::Lift { .. }
                                         | Ask::Release { .. }
                                         | Ask::Move { .. }
                                         | Ask::DecideProposal { .. }

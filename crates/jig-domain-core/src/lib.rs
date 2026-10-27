@@ -538,6 +538,7 @@ impl Core {
                     | CallPart::Proposed { .. }
                     | CallPart::ProposalDecided { .. }
                     | CallPart::ProposalRefused(_)
+                    | CallPart::HoldOwner { .. }
                     | CallPart::Controlled
                     | CallPart::ControlRefused(_)
                     | CallPart::ControlDenied { .. }

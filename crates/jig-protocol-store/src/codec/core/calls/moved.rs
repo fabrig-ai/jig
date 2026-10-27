@@ -138,6 +138,10 @@ pub(super) fn encode_moved(value: &domain::Moved, limits: &wire::Limits) -> Resu
         domain::Moved::Person { revision } => {
             wire::Moved::Person(wire::MovedPerson::new(limits, wire::MovedPersonParts { revision: *revision })?)
         }
+        domain::Moved::PlacedHold { revision } => wire::Moved::PlacedHold(wire::MovedPlacedHold::new(
+            limits,
+            wire::MovedPlacedHoldParts { revision: *revision },
+        )?),
         domain::Moved::Note { revision } => {
             wire::Moved::Note(wire::MovedNote::new(limits, wire::MovedNoteParts { revision: *revision })?)
         }
@@ -157,9 +161,30 @@ pub(super) fn decode_moved(value: wire::Moved) -> domain::Moved {
             let wire::MovedPersonParts { revision } = value.into_parts();
             domain::Moved::Person { revision }
         }
+        wire::Moved::PlacedHold(value) => domain::Moved::PlacedHold { revision: value.revision() },
         wire::Moved::Note(value) => {
             let wire::MovedNoteParts { revision } = value.into_parts();
             domain::Moved::Note { revision }
         }
+    }
+}
+
+pub(super) fn encode_hold_owner(
+    value: &domain::HoldOwner,
+    limits: &wire::Limits,
+) -> Result<wire::HoldOwner, wire::Problem> {
+    Ok(match value {
+        domain::HoldOwner::Party { person } => {
+            wire::HoldOwner::Party(wire::HoldOwnerParty::new(limits, wire::HoldOwnerPartyParts { person: *person })?)
+        }
+        domain::HoldOwner::Task { task } => {
+            wire::HoldOwner::Task(wire::HoldOwnerTask::new(limits, wire::HoldOwnerTaskParts { task: *task })?)
+        }
+    })
+}
+pub(super) fn decode_hold_owner(value: wire::HoldOwner) -> domain::HoldOwner {
+    match value {
+        wire::HoldOwner::Party(value) => domain::HoldOwner::Party { person: value.person() },
+        wire::HoldOwner::Task(value) => domain::HoldOwner::Task { task: value.task() },
     }
 }

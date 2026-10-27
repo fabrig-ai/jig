@@ -119,7 +119,8 @@ impl Core {
             people::Ask::Stop { task, .. } => (*task, authority::RequestKind::Cancel, 0),
             people::Ask::Cancel { task, reason, .. } => (*task, authority::RequestKind::Cancel, reason.len()),
             people::Ask::Release { task, .. } => (*task, authority::RequestKind::Release, 0),
-            people::Ask::Compound { .. }
+            people::Ask::Lift { .. }
+            | people::Ask::Compound { .. }
             | people::Ask::MarkSeen { .. }
             | people::Ask::Application { .. }
             | people::Ask::TakePerson { .. }
@@ -188,6 +189,11 @@ impl Core {
         let checked = authority::check_request_with_standing(&self.authority, &ask, standing, &mut findings);
         if checked.answer != authority::Answer::Allow {
             return Err(self.request_refusal(&ask, checked.answer, &mut findings));
+        }
+        if kind == authority::RequestKind::Release
+            && let Some(hold) = self.tasks.placed_on(task)
+        {
+            self.party_hold_admit(person, hold)?;
         }
         if reason_len > usize::try_from(limits.result_bytes).expect("u32 fits usize") {
             Err(people::Refusal::Limit { which: people::LimitKind::Words })
@@ -372,5 +378,44 @@ impl Core {
             return Err(people::Refusal::Role { held: role });
         }
         Ok(())
+    }
+}
+
+/// Project roles' precedence for placed holds (domain/tasks.md, 5.9).
+pub(crate) const fn rank(role: people::Role) -> u8 {
+    match role {
+        people::Role::Owner => 3,
+        people::Role::Maintainer => 2,
+        people::Role::Member | people::Role::Policy { .. } => 1,
+        people::Role::Observer => 0,
+    }
+}
+pub(crate) fn outranks(core: &Core, project: u32, party: u64, owner_person: u64) -> bool {
+    let Some(role) = core.people.role(party, project) else { return false };
+    match core.people.role(owner_person, project) {
+        Some(owner) => rank(role) > rank(owner),
+        None => rank(role) >= rank(people::Role::Member),
+    }
+}
+pub(crate) const fn hold_owner(owner: tasks::Owner) -> people::HoldOwner {
+    match owner {
+        tasks::Owner::Party { person } => people::HoldOwner::Party { person },
+        tasks::Owner::Task { task } => people::HoldOwner::Task { task },
+    }
+}
+impl Core {
+    pub(crate) fn party_hold_admit(&self, person: u64, hold: &tasks::PlacedHold) -> Result<(), people::Refusal> {
+        let above = match hold.owner {
+            tasks::Owner::Party { person: owner } => outranks(self, hold.project, person, owner),
+            tasks::Owner::Task { .. } => false,
+        };
+        if self.tasks.may_lift(hold.number, tasks::Party::Person(person), above) {
+            Ok(())
+        } else {
+            Err(people::Refusal::Authority {
+                lacking: people::Lack::HoldOwner { hold: hold.number, owner: hold_owner(hold.owner) },
+                proposable: None,
+            })
+        }
     }
 }

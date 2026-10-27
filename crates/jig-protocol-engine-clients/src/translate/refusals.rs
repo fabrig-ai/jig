@@ -161,7 +161,7 @@ fn lack(value: p::Lack, limits: &w::Limits) -> Result<w::Lacking, w::Problem> {
         p::Lack::Tool => w::Lacking::Tool,
         p::Lack::Scope => w::Lacking::Scope,
         p::Lack::Models => w::Lacking::Models,
-        p::Lack::Reference => w::Lacking::Reference,
+        p::Lack::HoldOwner { .. } | p::Lack::Reference => w::Lacking::Reference,
         p::Lack::ResourceAccess => w::Lacking::ResourceAccess,
         p::Lack::ResourceUnavailable => w::Lacking::ResourceUnavailable,
         p::Lack::Shape => w::Lacking::Shape,
@@ -260,7 +260,7 @@ fn moved(value: p::Moved, limits: &w::Limits) -> Result<w::Refusal, w::Problem> 
                 Some(w::CurrentHold::Reason(w::CurrentHoldReason::new(limits, w::CurrentHoldReasonParts { value })?));
             (revision, w::Moved::Hold(w::MovedHold::new(limits, w::MovedHoldParts { reason })?))
         }
-        p::Moved::Spec { revision } => (revision, w::Moved::Spec),
+        p::Moved::PlacedHold { revision } | p::Moved::Spec { revision } => (revision, w::Moved::Spec),
         p::Moved::Person { revision } => (revision, w::Moved::PersonTask),
         p::Moved::Note { revision } => (u64::from(revision), w::Moved::Note),
     };

@@ -280,7 +280,8 @@ fn request(ask: &people::Ask) -> Option<(Act, Subject)> {
         people::Ask::SetRoles { project, .. } => (Act::SetRoles, Subject::Project { project: *project }),
         people::Ask::MakeService { project, .. } => (Act::MakeService, Subject::Project { project: *project }),
         people::Ask::SetPool { project, .. } => (Act::SetPool, Subject::Project { project: *project }),
-        people::Ask::ChangeSettings { .. }
+        people::Ask::Lift { .. }
+        | people::Ask::ChangeSettings { .. }
         | people::Ask::MoveToNewest { .. }
         | people::Ask::MakeProject { .. }
         | people::Ask::Compound { .. }

@@ -45,7 +45,19 @@ pub(super) fn tag_tasks(
                 super::procedure_steps::append_problem(core, task, step, problem, &mut out);
                 continue;
             }
-            tasks::Request::Lifted { .. } => unreachable!("placed hold lifts have no party route yet"),
+            tasks::Request::Lifted { reply_to, released } => {
+                let token = reply_to.into_token();
+                let PersonTaskRoute::Lift(hold) = core.person_tasks.remove(&token).expect("lift continuation") else {
+                    unreachable!("lift reply owns a lift continuation")
+                };
+                append_people(
+                    core,
+                    env,
+                    people::Event::Decided { request: token, outcome: people::Outcome::Lifted { hold, released } },
+                    &mut out,
+                );
+                continue;
+            }
             tasks::Request::MovedToNewest { .. } => unreachable!("settings move consumes its counts"),
             tasks::Request::Released { revision } => {
                 core.release_revision(env, revision, &mut out);
@@ -350,6 +362,9 @@ pub(super) fn tag_tasks(
             }
             tasks::Request::ProposalStalled { proposer, proposal, holder } => {
                 let Some(row) = core.tasks.proposal(proposer, proposal) else { continue };
+                if crate::proposals::placed_release(&row.action) {
+                    continue;
+                }
                 let tasks::ProposalState::Pending { holder: current, .. } = row.state else { continue };
                 if current != holder {
                     continue;
@@ -373,6 +388,9 @@ pub(super) fn tag_tasks(
             }
             tasks::Request::ProposalRerouteNeeded { proposer, proposal } => {
                 let Some(row) = core.tasks.proposal(proposer, proposal) else { continue };
+                if crate::proposals::placed_release(&row.action) {
+                    continue;
+                }
                 let tasks::ProposalState::Pending { holder: current, .. } = row.state else { continue };
                 let Some(next) = core.proposal_holder(&env.limits, proposer, &row.action, None, env.wall) else {
                     continue;
@@ -576,6 +594,7 @@ pub(super) fn tag_tasks(
                         PersonTaskRoute::Answer(task) => people::Outcome::PersonAnswered { task },
                         PersonTaskRoute::Stop(task) => people::Outcome::Stopped { task },
                         PersonTaskRoute::Cancel(task) => people::Outcome::Cancelled { task },
+                        PersonTaskRoute::Lift(_) => unreachable!("lift has a counted reply"),
                         PersonTaskRoute::Release(task) => people::Outcome::Released { task },
                         PersonTaskRoute::Amended { task, released } => people::Outcome::Amended { task, released },
                     };
@@ -1267,7 +1286,20 @@ pub(super) fn tag_tasks(
                         RoutedCall::Message(key) | RoutedCall::Introduce(key) => {
                             Some((key, CallPart::MessageRefused(problem.clone())))
                         }
-                        RoutedCall::Control { key, .. } => Some((key, CallPart::ControlRefused(problem.clone()))),
+                        RoutedCall::Control { key, target, .. } => {
+                            let part = if let tasks::Refusal::HoldOwner { hold } = problem.why {
+                                let row = core.tasks.placed_hold(hold).expect("owner refusal names retained hold");
+                                CallPart::HoldOwner {
+                                    task: target,
+                                    hold,
+                                    revision: row.revision,
+                                    owner: crate::roles::hold_owner(row.owner),
+                                }
+                            } else {
+                                CallPart::ControlRefused(problem.clone())
+                            };
+                            Some((key, part))
+                        }
                         RoutedCall::Escalation { key, .. } => Some((key, CallPart::EscalationRefused(problem.clone()))),
                         RoutedCall::Propose { key, .. }
                         | RoutedCall::Decide { key, .. }

@@ -119,6 +119,13 @@ fn filled(why: Refusal) -> bool {
             Some(Role::Owner | Role::Maintainer | Role::Member | Role::Observer) | None => true,
         },
         Refusal::Authority { lacking, .. } => match lacking {
+            Lack::HoldOwner { hold, owner } => {
+                hold != 0
+                    && match owner {
+                        jig_domain_people::HoldOwner::Party { person } => person != 0,
+                        jig_domain_people::HoldOwner::Task { task } => task != 0,
+                    }
+            }
             Lack::Budget { needs, left } => needs > left,
             Lack::Approver
             | Lack::Grant { .. }
@@ -163,6 +170,7 @@ fn filled(why: Refusal) -> bool {
                 | HoldReason::Circle => true,
             },
             Moved::Spec { .. } | Moved::Person { .. } => true,
+            Moved::PlacedHold { revision } => revision != 0,
             Moved::Note { revision } => revision != 0,
         },
         Refusal::Circle { tasks, cut } => {

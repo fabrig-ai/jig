@@ -41,6 +41,7 @@ pub(crate) fn valid(ask: &Ask) -> bool {
         | Ask::TakePerson { .. }
         | Ask::HandBackPerson { .. }
         | Ask::Stop { .. }
+        | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::SetRoles { .. }
         | Ask::ChangePolicy { .. }

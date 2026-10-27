@@ -288,6 +288,7 @@ fn field_name(key: &[u8]) -> &'static [u8] {
         b"from",
         b"goal",
         b"grants",
+        b"hold",
         b"inputs",
         b"instructions",
         b"kind",

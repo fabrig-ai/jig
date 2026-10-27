@@ -109,6 +109,10 @@ pub(super) fn encode_outcome(value: &domain::Outcome, limits: &wire::Limits) -> 
         domain::Outcome::Cancelled { task } => {
             wire::Outcome::Cancelled(wire::OutcomeCancelled::new(limits, wire::OutcomeCancelledParts { task: *task })?)
         }
+        domain::Outcome::Lifted { hold, released } => wire::Outcome::Lifted(wire::OutcomeLifted::new(
+            limits,
+            wire::OutcomeLiftedParts { hold: *hold, released: *released },
+        )?),
         domain::Outcome::Released { task } => {
             wire::Outcome::Released(wire::OutcomeReleased::new(limits, wire::OutcomeReleasedParts { task: *task })?)
         }
@@ -248,6 +252,10 @@ pub(super) fn decode_outcome(value: wire::Outcome) -> domain::Outcome {
         wire::Outcome::Cancelled(value) => {
             let wire::OutcomeCancelledParts { task } = value.into_parts();
             domain::Outcome::Cancelled { task }
+        }
+        wire::Outcome::Lifted(value) => {
+            let wire::OutcomeLiftedParts { hold, released } = value.into_parts();
+            domain::Outcome::Lifted { hold, released }
         }
         wire::Outcome::Released(value) => {
             let wire::OutcomeReleasedParts { task } = value.into_parts();

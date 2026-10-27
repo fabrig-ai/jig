@@ -624,3 +624,44 @@ fn a_decided_proposal_answer_names_its_outcome() {
         assert!(!answer.error, "{outcome:?}");
     }
 }
+
+#[test]
+fn a_release_proposal_names_its_task_hold_and_revision() {
+    let decoded = crate::decode(
+        b"propose",
+        br#"{"action":"release","task":7,"hold":31,"revision":2,"reason":"resume"}"#,
+        &fixtures::LIMITS,
+    );
+    match decoded {
+        Decoded::Action(core::NamedAction::Propose {
+            action: jig_domain_tasks::ProposalAction::ReleasePlaced { task: 7, hold: 31, revision: 2 },
+            ..
+        }) => {}
+        other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::Problem(_) | Decoded::NotMine) => {
+            panic!("unexpected release proposal {other:?}")
+        }
+    }
+    for malformed in [
+        br#"{"action":"release","task":7,"revision":2,"reason":"resume"}"#.as_slice(),
+        br#"{"action":"release","task":7,"hold":31,"reason":"resume"}"#.as_slice(),
+    ] {
+        match crate::decode(b"propose", malformed, &fixtures::LIMITS) {
+            Decoded::Problem(_) => {}
+            other @ (Decoded::Action(_) | Decoded::Delegate(_) | Decoded::NotMine) => {
+                panic!("malformed release was admitted {other:?}")
+            }
+        }
+    }
+}
+
+#[test]
+fn a_hold_owner_refusal_names_the_proposal_revision_and_owner() {
+    for (owner, expected) in [
+        (jig_domain_people::HoldOwner::Party { person: 9 }, b"task 7 is held by hold 31 (revision 2), placed by person 9; only they may release it: propose the release with the hold's revision.".as_slice()),
+        (jig_domain_people::HoldOwner::Task { task: 3 }, b"task 7 is held by hold 31 (revision 2), placed by task 3; only they may release it: propose the release with the hold's revision.".as_slice()),
+    ] {
+        let rendered = crate::render(&core::CallPart::HoldOwner { task: 7, hold: 31, revision: 2, owner });
+        assert!(rendered.error);
+        assert_eq!(rendered.text.as_ref(), expected);
+    }
+}

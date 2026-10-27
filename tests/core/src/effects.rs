@@ -30,6 +30,13 @@ pub enum Cut {
     Durable(u64),
 }
 
+/// Committed turns supplied to one assignment, captured at the worker boundary.
+#[derive(Debug)]
+pub struct AssignedTranscript {
+    pub task: u64,
+    pub turns: Box<[Box<[u8]>]>,
+}
+
 /// Root, store and separate systems, with an answer channel that may disappear.
 #[derive(Debug)]
 #[expect(clippy::struct_excessive_bools, reason = "independently held peer traffic and crash cuts")]
@@ -63,6 +70,7 @@ pub struct World {
     account_generations: std::collections::BTreeMap<u32, u64>,
     move_provider: Option<u32>,
     pub assignments: Vec<(u64, u64)>,
+    pub assignment_transcripts: Vec<AssignedTranscript>,
     pub cancellations: Vec<(u64, u64)>,
     pub busy_turns: Vec<(u64, u64, u32)>,
     pub busy_calls: Vec<Box<[u8]>>,

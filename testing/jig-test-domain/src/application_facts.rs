@@ -79,7 +79,7 @@ pub(super) fn lack(value: people::Lack) -> application::Lack {
         people::Lack::Tool => application::Lack::Tool,
         people::Lack::Scope => application::Lack::Scope,
         people::Lack::Models => application::Lack::Models,
-        people::Lack::Reference => application::Lack::Reference,
+        people::Lack::HoldOwner { .. } | people::Lack::Reference => application::Lack::Reference,
         people::Lack::ResourceAccess => application::Lack::ResourceAccess,
         people::Lack::ResourceUnavailable => application::Lack::ResourceUnavailable,
         people::Lack::Shape => application::Lack::Shape,
@@ -146,7 +146,9 @@ pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
 pub(super) fn moved(value: people::Moved) -> application::Moved {
     match value {
         people::Moved::Hold { revision, reason } => application::Moved::Hold { revision, reason: hold_reason(reason) },
-        people::Moved::Spec { revision } => application::Moved::Spec { revision },
+        people::Moved::PlacedHold { revision } | people::Moved::Spec { revision } => {
+            application::Moved::Spec { revision }
+        }
         people::Moved::Person { revision } => application::Moved::Person { revision },
         people::Moved::Note { revision } => application::Moved::Note { revision },
     }

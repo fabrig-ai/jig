@@ -430,6 +430,7 @@ fn carried_kind(ask: &people::Ask) -> Option<crate::CarriedKind> {
         | people::Ask::Withdraw { .. }
         | people::Ask::Stop { .. }
         | people::Ask::Cancel { .. }
+        | people::Ask::Lift { .. }
         | people::Ask::Release { .. }
         | people::Ask::TakePerson { .. }
         | people::Ask::HandBackPerson { .. }

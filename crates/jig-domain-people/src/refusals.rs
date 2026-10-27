@@ -132,6 +132,8 @@ pub enum Malformed {
 /// Authority missing from a party's request.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Lack {
+    /// A placed hold waits for its owner (domain/tasks.md, 5.9).
+    HoldOwner { hold: u64, owner: HoldOwner },
     /// No policy role may accept this kind of party proposal.
     Approver,
     /// Requested spend exceeds what this source can supply.
@@ -314,4 +316,11 @@ pub enum DependencyStatus {
     Done,
     Failed,
     Cancelled,
+}
+
+/// Who placed a hold, independent of the tasks child (domain/tasks.md, 5.9).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum HoldOwner {
+    Party { person: u64 },
+    Task { task: u64 },
 }

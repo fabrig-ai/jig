@@ -10,6 +10,12 @@ fn moved(core: &Core, proposal: &tasks::Proposal) -> Option<(u64, people::Moved)
     {
         return Some((*task, now));
     }
+    if let tasks::ProposalAction::ReleasePlaced { task, hold, revision } = proposal.action
+        && let Some(hold) = core.tasks.placed_hold(hold)
+        && hold.revision != revision
+    {
+        return Some((task, people::Moved::PlacedHold { revision: hold.revision }));
+    }
     None
 }
 pub(super) fn call(

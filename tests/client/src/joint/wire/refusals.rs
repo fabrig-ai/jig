@@ -106,7 +106,7 @@ pub fn lack(value: people::Lack) -> client::Lacking {
         people::Lack::Tool => client::Lacking::Tool,
         people::Lack::Scope => client::Lacking::Scope,
         people::Lack::Models => client::Lacking::Models,
-        people::Lack::Reference => client::Lacking::Reference,
+        people::Lack::HoldOwner { .. } | people::Lack::Reference => client::Lacking::Reference,
         people::Lack::ResourceAccess => client::Lacking::ResourceAccess,
         people::Lack::ResourceUnavailable => client::Lacking::ResourceUnavailable,
         people::Lack::Shape => client::Lacking::Shape,
@@ -178,7 +178,7 @@ pub fn moved(value: people::Moved) -> client::Refusal {
         people::Moved::Hold { revision, reason } => {
             (revision, client::Moved::Hold { reason: Some(client::CurrentHold::Reason(hold(reason))) })
         }
-        people::Moved::Spec { revision } => (revision, client::Moved::Spec),
+        people::Moved::PlacedHold { revision } | people::Moved::Spec { revision } => (revision, client::Moved::Spec),
         people::Moved::Person { revision } => (revision, client::Moved::PersonTask),
         people::Moved::Note { revision } => (u64::from(revision), client::Moved::Note),
     };

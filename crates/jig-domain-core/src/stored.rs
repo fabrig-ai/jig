@@ -18,6 +18,8 @@ use skein_lib::Wall;
 /// answers for calls routed among its children (domain/engine.md, 7.3).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum CallPart {
+    /// A placed hold can be released only by its owner (domain/tasks.md, 5.9).
+    HoldOwner { task: u64, hold: u64, revision: u64, owner: jig_domain_people::HoldOwner },
     /// A release must name again exactly when its effect is uncertain.
     Again { task: u64, required: bool },
     /// An escalation release exceeded this holder's authority and passed up.
@@ -99,6 +101,17 @@ impl CallPart {
         authority_limits: &jig_domain_authority::Limits,
     ) -> bool {
         match self {
+            CallPart::HoldOwner { task, hold, revision, owner } => {
+                *task != 0
+                    && *task <= deployment.tasks
+                    && *hold != 0
+                    && *hold <= deployment.messages
+                    && *revision != 0
+                    && match owner {
+                        jig_domain_people::HoldOwner::Party { person } => *person != 0 && *person <= deployment.people,
+                        jig_domain_people::HoldOwner::Task { task } => *task != 0 && *task <= deployment.tasks,
+                    }
+            }
             CallPart::Again { task, .. }
             | CallPart::PassedUp { task }
             | CallPart::Revised { task, .. }

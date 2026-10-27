@@ -113,7 +113,7 @@ pub use policy_value::{
     policy_change_bytes, requirements_bytes,
 };
 pub use refusals::{
-    Accepter, Again, DependencyStatus, Ending, Lack, LimitKind, Malformed, NAMED_TASKS, Party, Refusal,
+    Accepter, Again, DependencyStatus, Ending, HoldOwner, Lack, LimitKind, Malformed, NAMED_TASKS, Party, Refusal,
 };
 
 /// The source directory's portable public grammar (accounts.md, 3.4).

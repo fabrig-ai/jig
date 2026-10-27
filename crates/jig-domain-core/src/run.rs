@@ -458,6 +458,7 @@ pub enum PersonTaskRoute {
     Cancel(u64),
     Stop(u64),
     Release(u64),
+    Lift(u64),
     Amended { task: u64, released: bool },
 }
 

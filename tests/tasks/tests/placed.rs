@@ -172,8 +172,6 @@ fn accepting_one_release_keeps_a_siblings_proposal_pending() {
     }
     let sibling = w.record(3).proposal.clone().expect("sibling proposal pending");
     let sibling_revision = w.record(3).revision;
-    // The parent applies an accepted action and records its decision together.
-    assert_eq!(release_from(&mut w, Party::Person(1), 2), Reply::Done);
     let reply_to = w.to();
     w.send(Event::DecideProposal {
         reply_to,
@@ -581,4 +579,45 @@ fn inheriting_a_procedures_resource_under_a_stop_starts_no_activation() {
     assert!(w.record(2).holds_taken);
     placed(&w, 2, 100);
     assert!(!w.activations.contains(&2));
+}
+
+#[test]
+fn accepting_a_release_proposal_of_the_root_lifts_the_hold_and_records_it_accepted() {
+    let mut w = World::new(925, LIMITS);
+    goal_tree(&mut w);
+    stop(&mut w, 1, 1, 100);
+    park(&mut w);
+    for (proposer, target) in [(2, 1), (3, 4)] {
+        let reply_to = w.to();
+        w.send(Event::Propose {
+            reply_to,
+            proposal: Proposal {
+                number: 100 + proposer,
+                proposer,
+                project: 1,
+                action: ProposalAction::ReleasePlaced { task: target, hold: 100, revision: 1 },
+                reason: Box::new([]),
+                as_holder: false,
+                state: ProposalState::Pending { holder: ProposalHolder::Person(1), since: w.env.wall },
+            },
+        });
+    }
+    let reply_to = w.to();
+    w.send(Event::DecideProposal {
+        reply_to,
+        proposer: 2,
+        proposal: 102,
+        message: Some(104),
+        by: Party::Person(1),
+        decision: tasks::ProposalDecision::Accept,
+    });
+    for number in 1..=4 {
+        due(&w, number);
+    }
+    assert!(!w.records.contains_key(&Key::PlacedHold(100)));
+    for (proposer, state) in [(2, ProposalState::Accepted { by: Party::Person(1) }), (3, ProposalState::Withdrawn)] {
+        assert!(w.record(proposer).proposal.is_none());
+        assert!(w.records.values().any(|row| matches!(row, Stored::History(history)
+            if history.proposal.as_ref().is_some_and(|p| p.number == 100 + proposer && p.state == state))));
+    }
 }

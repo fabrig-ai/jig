@@ -5,6 +5,8 @@
 /// The current revision of a changed decision subject.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Moved {
+    /// A separately numbered placed hold changed.
+    PlacedHold { revision: u64 },
     /// A hold began anew or its reason changed.
     Hold { revision: u64, reason: HoldReason },
     /// A task's words, parameters, dependencies or policy changed.

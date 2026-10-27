@@ -168,6 +168,10 @@ fn owner(value: &p::Outcome, limits: &w::Limits) -> Result<w::OwnerOutcome, w::P
             limits,
             w::OwnerOutcomeCancelledParts { task: *task },
         )?),
+        p::Outcome::Lifted { hold, .. } => w::OwnerOutcome::Released(w::OwnerOutcomeReleased::new(
+            limits,
+            w::OwnerOutcomeReleasedParts { task: *hold },
+        )?),
         p::Outcome::Released { task } => w::OwnerOutcome::Released(w::OwnerOutcomeReleased::new(
             limits,
             w::OwnerOutcomeReleasedParts { task: *task },

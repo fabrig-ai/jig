@@ -92,3 +92,19 @@ fn settings_decision_kind_round_trips_in_core_6() {
         created: None,
     }));
 }
+
+#[test]
+fn hold_owner_call_parts_and_placed_hold_revisions_round_trip_in_core_6() {
+    for owner in [p::HoldOwner::Party { person: 9 }, p::HoldOwner::Task { task: 7 }] {
+        core_round_trip(c::CoreRecord::Call(c::CallRecord {
+            key: c::CallKey { task: 3, attempt: 1, completion: 2, position: 0 },
+            part: c::CallPart::HoldOwner { task: 7, hold: 31, revision: 2, owner },
+            settled: None,
+        }));
+    }
+    core_round_trip(c::CoreRecord::Call(c::CallRecord {
+        key: c::CallKey { task: 3, attempt: 1, completion: 2, position: 0 },
+        part: c::CallPart::Moved { task: 7, now: p::Moved::PlacedHold { revision: 2 } },
+        settled: None,
+    }));
+}

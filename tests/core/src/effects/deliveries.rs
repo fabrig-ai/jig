@@ -103,6 +103,8 @@ impl World {
             root::Delivery::Assigned { assignment, .. } => {
                 self.last_read = None;
                 self.assignments.push((assignment.task, assignment.attempt));
+                self.assignment_transcripts
+                    .push(super::AssignedTranscript { task: assignment.task, turns: assignment.transcript.clone() });
                 self.assigned = Some(assignment);
             }
             root::Delivery::Core(core::Held::Grant { channel, run, attempt, grant }) => {
