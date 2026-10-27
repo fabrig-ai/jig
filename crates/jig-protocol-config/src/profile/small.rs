@@ -410,7 +410,7 @@ pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     budget: 268_435_456,
     segment: 710_617_620,
     snapshot_after: 355_308_810,
-    chunk: 1_569_946,
+    chunk: 1_569_982,
     // Accounting ceiling for applications' derived pages: the shipped largest
     // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
     // No row, chunk, decoder, queue or read-slot capacity changes with it.

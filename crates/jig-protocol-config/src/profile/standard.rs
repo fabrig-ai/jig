@@ -210,7 +210,7 @@ const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     queued_bytes: 2_705_490_846,
     segment: 1_803_660_564,
     snapshot_after: 901_830_282,
-    chunk: 10_666_874,
+    chunk: 10_666_974,
     page: skein_kv::Page { rows: 2, bytes: 10_666_954 },
     ..small::STORE_KV
 };
