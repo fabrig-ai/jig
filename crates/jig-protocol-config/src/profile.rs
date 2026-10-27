@@ -78,3 +78,33 @@ pub const fn driver_places(accounts: &jig_domain_accounts::Limits) -> Option<u32
     let Some(pending) = sources.checked_add(accounts.sign_ins) else { return None };
     pending.checked_add(1)
 }
+
+/// Reprice the profile's stores without changing their admission bounds
+/// (configuration.md, 6). A commit holds the budget, every operation's key
+/// and nine framing bytes, and the 26-byte frame. Queue three (or `queued`)
+/// commits, segment two, and snapshot after one.
+#[must_use]
+pub const fn store_budget(mut limits: skein_kv::Limits, budget: u64) -> Option<skein_kv::Limits> {
+    let Some(key) = limits.key.checked_add(9) else { return None };
+    let Some(operations) = limits.ops.checked_mul(key) else { return None };
+    // Byte conversion keeps this checked narrowing usable in profile constants;
+    // TryFrom is not const. The high four bytes must all be zero.
+    if budget > 0xffff_ffff {
+        return None;
+    }
+    let [a, b, c, d, ..] = budget.to_le_bytes();
+    let Some(commit) = u32::from_le_bytes([a, b, c, d]).checked_add(operations) else { return None };
+    let Some(commit) = commit.checked_add(26) else { return None };
+    let [a, b, c, d] = commit.to_le_bytes();
+    let bytes = u64::from_le_bytes([a, b, c, d, 0, 0, 0, 0]);
+    let [a, b, c, d] = limits.queued.to_le_bytes();
+    let queued = u64::from_le_bytes([a, b, c, d, 0, 0, 0, 0]);
+    let Some(queued_bytes) = bytes.checked_mul(queued) else { return None };
+    let Some(segment) = bytes.checked_mul(2) else { return None };
+    limits.budget = budget;
+    limits.commit = commit;
+    limits.queued_bytes = queued_bytes;
+    limits.segment = segment;
+    limits.snapshot_after = bytes;
+    Some(limits)
+}

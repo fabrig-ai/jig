@@ -196,17 +196,17 @@ const JOURNAL: skein_lib::JournalLimits =
 // Ending authority adds (batch + 1)^2 = (4 + 1)^2 = 25 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
 // Task/run settings revisions add nine bytes: u32 plus an optional u32.
-const STORE_KV: skein_kv::Limits = skein_kv::Limits {
-    value: 10_664_766,
-    ops: 285_942,
-    commit: 865_482_378,
-    queued_bytes: 2_596_447_134,
-    segment: 1_730_964_756,
-    snapshot_after: 865_482_378,
-    chunk: 10_666_865,
-    page: skein_kv::Page { rows: 2, bytes: 10_666_845 },
-    ..small::STORE_KV
-};
+const STORE_KV: skein_kv::Limits = super::store_budget(
+    skein_kv::Limits {
+        value: 10_664_766,
+        ops: 285_942,
+        chunk: 10_666_865,
+        page: skein_kv::Page { rows: 2, bytes: 10_666_845 },
+        ..small::STORE_KV
+    },
+    268_435_456,
+)
+.expect("profile store budget and framing fit");
 const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {
     core: CORE,
     store: STORE_KV,
