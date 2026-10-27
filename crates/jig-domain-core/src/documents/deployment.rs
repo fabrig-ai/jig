@@ -188,6 +188,7 @@ pub(super) fn account_state(state: accounts::State) -> AccountState {
 #[expect(clippy::manual_map, reason = "step code has no closures (programming-model.md, section 10)")]
 fn host_run(
     core: &Core,
+    party: u64,
     limits: &Limits,
     clock: Option<DocumentClock>,
     value: &fleet::AttemptView,
@@ -209,7 +210,7 @@ fn host_run(
     };
     Ok(HostRun {
         task: match core.tasks.task(value.run.raw()) {
-            Some(row) => TaskLink::Live(super::small::chip_with_core(core, limits, row)?),
+            Some(row) => TaskLink::Live(super::small::chip_with_core(core, limits, party, row)?),
             None => TaskLink::Stored { number: value.run.raw(), status: None },
         },
         attempt: value.attempt.raw(),
@@ -251,7 +252,7 @@ pub(super) fn deployment(
                     if channel == value.channel =>
                 {
                     if runs.room() > 0 {
-                        runs.push(host_run(core, limits, clock, run)?).expect("bounded host runs");
+                        runs.push(host_run(core, party, limits, clock, run)?).expect("bounded host runs");
                     } else {
                         host_cut = true;
                     }
@@ -314,7 +315,7 @@ pub(super) fn deployment(
     cut |= usize::try_from(refused.len()).expect("hello count fits") > line_bound(limits);
     let mut attempts = List::with_capacity(limits.documents.lines);
     for value in source_runs.iter().take(line_bound(limits)) {
-        attempts.push(host_run(core, limits, clock, value)?).expect("bounded attempt rows");
+        attempts.push(host_run(core, party, limits, clock, value)?).expect("bounded attempt rows");
     }
     cut |= usize::try_from(source_runs.len()).expect("attempt count fits") > line_bound(limits);
     let rows = core.tasks.view_tasks();
@@ -371,14 +372,16 @@ pub(super) fn deployment(
             };
             if running {
                 if runs.room() > 0 {
-                    runs.push(super::small::chip_with_core(core, limits, row)?).expect("bounded account runs");
+                    runs.push(super::small::chip_with_core(core, limits, party, row)?).expect("bounded account runs");
                 } else {
                     account_cut = true;
                 }
             }
             if needs {
                 if waiting.room() > 0 {
-                    waiting.push(super::small::chip_with_core(core, limits, row)?).expect("bounded waiting agents");
+                    waiting
+                        .push(super::small::chip_with_core(core, limits, party, row)?)
+                        .expect("bounded waiting agents");
                 } else {
                     account_cut = true;
                 }

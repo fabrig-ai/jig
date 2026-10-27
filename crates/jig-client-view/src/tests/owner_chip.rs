@@ -58,6 +58,7 @@ pub(super) fn details() -> OwnerChipDetails {
 }
 fn hold() -> OwnerChipHold {
     OwnerChipHold {
+        placed: None,
         circle: None,
         account: None,
         source: None,

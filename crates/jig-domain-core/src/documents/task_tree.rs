@@ -135,6 +135,7 @@ pub enum EscalationState {
 /// A hold's reason, revision and prior lifecycle, with its escalation.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct HoldLine {
+    pub placed: Option<PlacedLine>,
     pub circle: Option<tasks::Circle>,
     /// The connector's account, independently of the resource or outbox origin.
     pub account: Option<Part>,
@@ -145,6 +146,20 @@ pub struct HoldLine {
     pub escalation: Option<EscalationState>,
     pub tries: tasks::Tries,
     pub hold_wait_since: Option<Wall>,
+}
+
+/// A placed hold and the reader's ownership admission (client/domain/contract.md, 5.6).
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PlacedLine {
+    pub number: u64,
+    pub owner: jig_domain_people::HoldOwner,
+    pub mode: tasks::Mode,
+    pub scope: tasks::Scope,
+    pub reason: Box<[u8]>,
+    pub placed_at: Wall,
+    pub revision: u64,
+    pub lifted: bool,
+    pub may_lift: bool,
 }
 
 /// The lifecycle preserved by a hold.
@@ -560,6 +575,7 @@ fn hold_account(task: u64, reason: tasks::Hold, source: Option<&tasks::HoldSourc
 pub(super) fn hold(limits: &Limits, row: &tasks::TaskRecord) -> Result<Option<HoldLine>, Missing> {
     match &row.phase {
         tasks::Phase::Held { was, why, source } => Ok(Some(HoldLine {
+            placed: None,
             circle: match source.as_deref() {
                 Some(tasks::HoldSource::Circle(circle)) => {
                     let mut tasks = List::with_capacity(limits.documents.lines);
@@ -598,6 +614,37 @@ pub(super) fn hold(limits: &Limits, row: &tasks::TaskRecord) -> Result<Option<Ho
         })),
         tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Closing(_) | tasks::Phase::Ended(_) => Ok(None),
     }
+}
+
+pub(super) fn hold_for(
+    core: &Core,
+    limits: &Limits,
+    party: u64,
+    row: &tasks::TaskRecord,
+) -> Result<Option<HoldLine>, Missing> {
+    let mut line = hold(limits, row)?;
+    if let Some(line) = &mut line {
+        line.placed = placed(core, limits, party, row.number)?;
+    }
+    Ok(line)
+}
+
+fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Result<Option<PlacedLine>, Missing> {
+    let Some(hold) = core.tasks.placed_on(task) else { return Ok(None) };
+    if hold.reason.len() > usize::try_from(limits.documents.text_bytes).expect("text bound fits") {
+        return Err(Missing::TooLarge);
+    }
+    Ok(Some(PlacedLine {
+        number: hold.number,
+        owner: crate::roles::hold_owner(hold.owner),
+        mode: hold.mode,
+        scope: hold.scope,
+        reason: hold.reason.clone(),
+        placed_at: Wall::from_nanos(hold.placed_at.checked_mul(1_000_000).ok_or(Missing::TooLarge)?),
+        revision: hold.revision,
+        lifted: hold.lifted,
+        may_lift: core.party_hold_admit(party, hold).is_ok(),
+    }))
 }
 
 pub(super) fn budget(row: &tasks::TaskRecord) -> BudgetLine {
@@ -803,7 +850,7 @@ pub fn task_from_row(
         flags: row.flags,
         last_activity: row.last_activity,
         acts,
-        chip: super::small::chip_with_core(core, limits, row)?,
+        chip: super::small::chip_with_core(core, limits, party, row)?,
         project: row.project,
         goal,
         priority: row.tracked,
@@ -852,7 +899,7 @@ pub fn task_from_row(
         result,
         budget: budget(row),
         authority,
-        hold: hold(limits, row)?,
+        hold: hold_for(core, limits, party, row)?,
         proposals,
         cut,
     })
@@ -942,7 +989,7 @@ pub(super) fn overview_worst_case(limits: &super::DocumentLimits) -> Option<u64>
     let task = u64::try_from(size_of::<Task>())
         .ok()?
         .checked_add(specification)?
-        .checked_add(text.checked_mul(7)?)?
+        .checked_add(text.checked_mul(8)?)?
         .checked_add(path.checked_mul(2)?)?
         .checked_add(chip)?
         .checked_add(List::<super::LiveDelegate>::worst_case(limits.lines)?)?
@@ -1052,7 +1099,7 @@ pub(crate) fn ended_tree(core: &Core, limits: &Limits, party: u64, row: &tasks::
         }
     }
     Ok(Tree {
-        root: super::small::chip_with_core(core, limits, row)?,
+        root: super::small::chip_with_core(core, limits, party, row)?,
         rows: List::with_capacity(0),
         folded: List::with_capacity(0),
         held_below: 0,

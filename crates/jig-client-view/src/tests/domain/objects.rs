@@ -123,6 +123,7 @@ pub(super) fn escalation() -> Escalation {
     Escalation {
         task: chip(8),
         hold: Hold {
+            placed: None,
             revision: Revision { value: 3 },
             reason: HoldReason::Stopped { by: super::spine::party(7), at: Wall::EPOCH },
             before: Phase::Running,

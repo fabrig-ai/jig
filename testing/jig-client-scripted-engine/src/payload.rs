@@ -153,6 +153,7 @@ fields!(Decider { kind, role });
 impl Payload for Ask {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
+            Self::Lift { .. } => Some(0),
             Self::ChangeSettings(value) => value.heap(bounds),
             Self::Create { tasks, .. } => tasks.heap(bounds),
             Self::Propose { action, reason, .. } => sum(&[action.heap(bounds), reason.heap(bounds)]),
@@ -592,7 +593,7 @@ impl Payload for Recipient {
         }
     }
 }
-fields!(Hold { revision, reason, before, since, result, spend });
+fields!(Hold { placed, revision, reason, before, since, result, spend });
 impl Payload for HoldReason {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
@@ -1051,6 +1052,7 @@ impl Payload for Lacking {
             | Self::Funding
             | Self::Tool
             | Self::Scope
+            | Self::HoldOwner { .. }
             | Self::Models
             | Self::Reference
             | Self::ResourceAccess
@@ -1083,7 +1085,7 @@ impl Payload for Moved {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
             Self::Hold { reason } => reason.heap(bounds),
-            Self::Spec | Self::PersonTask | Self::Note | Self::Waiting => Some(0),
+            Self::PlacedHold { .. } | Self::Spec | Self::PersonTask | Self::Note | Self::Waiting => Some(0),
         }
     }
 }
@@ -1450,3 +1452,9 @@ impl Payload for jig_client_domain::contract::WaitsOn {
 }
 
 mod settings;
+
+impl Payload for jig_client_domain::contract::PlacedHold {
+    fn heap(&self, bounds: &Bounds) -> Option<u64> {
+        self.reason.heap(bounds)
+    }
+}

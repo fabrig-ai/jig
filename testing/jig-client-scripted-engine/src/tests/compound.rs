@@ -5,6 +5,7 @@ fn bounded_release() -> (Script, Ask, Answer) {
     let mut setup = live_script();
     let mut row = task();
     row.hold = Some(TaskHold::Document(Box::new(Hold {
+        placed: None,
         revision: Revision { value: 7 },
         reason: HoldReason::Stopped { by: party(1), at: Wall::EPOCH },
         before: Phase::Running,

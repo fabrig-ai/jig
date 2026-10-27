@@ -314,6 +314,7 @@ pub enum Recipient {
 /// A hold revision and the facts it decides.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Hold {
+    pub placed: Option<super::PlacedHold>,
     pub revision: Revision,
     pub reason: HoldReason,
     pub before: Phase,

@@ -117,6 +117,9 @@ fn translate(
                 decision: escalation_decision(decision)?,
             }
         }
+        client::Ask::Lift { hold, revision, with_tasks } => {
+            people::Ask::Lift { hold: *hold, revision: revision.value, with_tasks: *with_tasks }
+        }
         client::Ask::Release { project, task, revision, again } => {
             people::Ask::Release { project: *project, task: *task, revision: revision.value, again: *again }
         }

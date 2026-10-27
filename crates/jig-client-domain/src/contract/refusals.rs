@@ -6,6 +6,10 @@ use skein_lib::Wall;
 /// The authority the engine found lacking.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Lacking {
+    HoldOwner {
+        hold: u64,
+        owner: HoldOwner,
+    },
     /// No policy role may accept this kind of proposal.
     Approver,
     /// The budget needed and left.
@@ -65,6 +69,13 @@ pub enum Lacking {
         needed: Option<u32>,
         left: u32,
     },
+}
+
+/// The owner of a placed hold (client/domain/contract.md, 5.6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldOwner {
+    Party { person: u64 },
+    Task { task: u64 },
 }
 
 /// The admission limit reached.
@@ -148,8 +159,13 @@ pub enum HoldFailure {
 /// Which independently decidable facts changed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Moved {
+    PlacedHold {
+        revision: Revision,
+    },
     /// The hold or its reason.
-    Hold { reason: Option<CurrentHold> },
+    Hold {
+        reason: Option<CurrentHold>,
+    },
     /// The task specification.
     Spec,
     /// The person task question or options.

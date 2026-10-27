@@ -261,6 +261,7 @@ fn number(value: &OwnerOutcome, task: u64, place: u32) -> Option<u64> {
         | OwnerOutcome::Adopted { .. }
         | OwnerOutcome::Stopped { .. }
         | OwnerOutcome::Cancelled { .. }
+        | OwnerOutcome::Lifted { .. }
         | OwnerOutcome::Released { .. }
         | OwnerOutcome::PersonTaken { .. }
         | OwnerOutcome::PersonHandedBack { .. }

@@ -198,7 +198,12 @@ impl<A: crate::Application> Engine<A> {
                         | ReadValue::Revisions(_)
                         | ReadValue::Deployment(_)
                         | ReadValue::OwnerDeployment(_),
-                        Moved::Hold { .. } | Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting,
+                        Moved::Hold { .. }
+                        | Moved::PlacedHold { .. }
+                        | Moved::Spec
+                        | Moved::PersonTask
+                        | Moved::Note
+                        | Moved::Waiting,
                     ) => None,
                 };
                 if let Some(now) = current {
@@ -241,7 +246,11 @@ impl<A: crate::Application> Engine<A> {
                                 };
                                 Moved::Hold { reason }
                             }
-                            Moved::Spec | Moved::PersonTask | Moved::Note | Moved::Waiting => what,
+                            Moved::PlacedHold { .. }
+                            | Moved::Spec
+                            | Moved::PersonTask
+                            | Moved::Note
+                            | Moved::Waiting => what,
                         };
                         return Ok((Answer::Refused { refusal: Refusal::Moved { now, what }, at: None }, Vec::new()));
                     }
@@ -312,7 +321,8 @@ impl<A: crate::Application> Engine<A> {
             Ask::EditNote { note, .. } | Ask::DeleteNote { note, .. } => {
                 self.truth.notes.get(note).map(|note| &note.acts)
             }
-            Ask::Propose { .. }
+            Ask::Lift { .. }
+            | Ask::Propose { .. }
             | Ask::Withdraw { .. }
             | Ask::Create { .. }
             | Ask::Compound { .. }
@@ -378,6 +388,7 @@ impl<A: crate::Application> Engine<A> {
                 | Ask::Take { .. }
                 | Ask::HandBack { .. }
                 | Ask::Decide { .. }
+                | Ask::Lift { .. }
                 | Ask::Release { .. }
                 | Ask::Stop { .. }
                 | Ask::Cancel { .. }
@@ -465,7 +476,8 @@ impl<A: crate::Application> Engine<A> {
             Ask::Decide { on: DecideOn::Proposal { decision, .. }, .. }
             | Ask::Decide { on: DecideOn::Escalation { decision, .. }, .. } => Some(decision.clone()),
             Ask::Release { again, .. } => Some(Decision::Released { again: *again }),
-            Ask::Propose { .. }
+            Ask::Lift { .. }
+            | Ask::Propose { .. }
             | Ask::Withdraw { .. }
             | Ask::Create { .. }
             | Ask::Compound { .. }
@@ -738,6 +750,7 @@ fn target(ask: &Ask) -> Option<Target> {
         Ask::Cancel { project, task, .. } => (Some(*project), Some(ObjectKey::Task(*task)), ActKind::Cancel, None),
         Ask::Move { project, task, .. } => (Some(*project), Some(ObjectKey::Task(*task)), ActKind::Move, None),
         Ask::Withdraw { project, .. } => (Some(*project), None, ActKind::Withdraw, None),
+        Ask::Lift { .. } => return None,
         Ask::Seen { .. } => (None, None, ActKind::Seen, None),
         Ask::EditNote { project, .. } => (Some(*project), None, ActKind::EditNote, None),
         Ask::DeleteNote { project, .. } => (Some(*project), None, ActKind::DeleteNote, None),

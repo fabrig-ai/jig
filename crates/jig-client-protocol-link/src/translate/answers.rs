@@ -67,6 +67,7 @@ pub(crate) fn owner_outcome(value: &w::OwnerOutcome, limits: &Limits) -> Result<
         w::OwnerOutcome::Adopted(row) => c::OwnerOutcome::Adopted { project: row.project() },
         w::OwnerOutcome::Stopped(row) => c::OwnerOutcome::Stopped { task: row.task() },
         w::OwnerOutcome::Cancelled(row) => c::OwnerOutcome::Cancelled { task: row.task() },
+        w::OwnerOutcome::Lifted(row) => c::OwnerOutcome::Lifted { hold: row.hold(), released: row.released() },
         w::OwnerOutcome::Released(row) => c::OwnerOutcome::Released { task: row.task() },
         w::OwnerOutcome::PersonTaken(row) => c::OwnerOutcome::PersonTaken { task: row.task() },
         w::OwnerOutcome::PersonHandedBack(row) => c::OwnerOutcome::PersonHandedBack { task: row.task() },
@@ -274,6 +275,35 @@ pub(crate) fn executor(value: &w::Executor, _limits: &Limits) -> c::Executor {
 }
 
 #[expect(clippy::manual_map, reason = "step code matches optional fields without closures")]
+pub(crate) fn hold_owner(value: &w::HoldOwner) -> c::HoldOwner {
+    match value {
+        w::HoldOwner::Party(row) => c::HoldOwner::Party { person: row.person() },
+        w::HoldOwner::Task(row) => c::HoldOwner::Task { task: row.task() },
+    }
+}
+pub(crate) fn placed(value: &Option<w::PlacedLine>, limits: &Limits) -> Result<Option<c::PlacedHold>, w::Problem> {
+    let Some(value) = value else { return Ok(None) };
+    if value.reason().len() > usize::try_from(limits.client.text).expect("text bound fits") {
+        return Err(super::too_large());
+    }
+    Ok(Some(c::PlacedHold {
+        number: value.number(),
+        owner: hold_owner(value.owner()),
+        mode: match value.mode() {
+            w::HoldMode::Stop => c::HoldMode::Stop,
+            w::HoldMode::Drain => c::HoldMode::Drain,
+        },
+        scope: match value.scope() {
+            w::HoldScope::Subtree(row) => c::HoldScope::Subtree { task: row.task() },
+            w::HoldScope::Project => c::HoldScope::Project,
+        },
+        reason: value.reason().into(),
+        placed_at: Wall::from_nanos(value.placed_at()),
+        revision: c::Revision { value: value.revision() },
+        lifted: value.lifted(),
+        may_lift: value.may_lift(),
+    }))
+}
 pub(crate) fn lacking(value: &w::Lacking, limits: &Limits) -> c::Lacking {
     match value {
         w::Lacking::Approver => c::Lacking::Approver,
@@ -284,6 +314,7 @@ pub(crate) fn lacking(value: &w::Lacking, limits: &Limits) -> c::Lacking {
         w::Lacking::Tool => c::Lacking::Tool,
         w::Lacking::Scope => c::Lacking::Scope,
         w::Lacking::Models => c::Lacking::Models,
+        w::Lacking::HoldOwner(row) => c::Lacking::HoldOwner { hold: row.hold(), owner: hold_owner(row.owner()) },
         w::Lacking::Reference => c::Lacking::Reference,
         w::Lacking::ResourceAccess => c::Lacking::ResourceAccess,
         w::Lacking::ResourceUnavailable => c::Lacking::ResourceUnavailable,
@@ -464,6 +495,7 @@ pub(crate) fn moved(value: &w::Moved, limits: &Limits) -> Result<c::Moved, w::Pr
             };
             c::Moved::Hold { reason: opt0 }
         }
+        w::Moved::PlacedHold(row) => c::Moved::PlacedHold { revision: c::Revision { value: row.revision() } },
         w::Moved::Spec => c::Moved::Spec,
         w::Moved::PersonTask => c::Moved::PersonTask,
         w::Moved::Note => c::Moved::Note,

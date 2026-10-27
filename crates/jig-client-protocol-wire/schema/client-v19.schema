@@ -143,7 +143,14 @@ enum OwnerTaskStatus { done, failed, cancelled }
 record DependencyAdded { at: u64 by: OwnerRequester }
 record Dependency { number: u64 pending: bool added: option DependencyAdded keeps: bool status: option OwnerTaskStatus }
 record Circle { tasks: list 32 u64 cut: bool }
-record OwnerChipHold { account: option OwnerPart source: option OwnerPart reason: HoldCategory revision: u64 before: OwnerPriorPhase escalation: option OwnerHoldEscalation tries: OwnerFailureTries hold_wait_since: option u64 circle: option Circle }
+record HoldOwnerParty { person: u64 }
+record HoldOwnerTask { task: u64 }
+enum HoldOwner { party: HoldOwnerParty, task: HoldOwnerTask }
+enum HoldMode { stop, drain }
+record HoldScopeSubtree { task: u64 }
+enum HoldScope { subtree: HoldScopeSubtree, project }
+record PlacedLine { number: u64 owner: HoldOwner mode: HoldMode scope: HoldScope reason: bytes 65536 placed_at: u64 revision: u64 lifted: bool may_lift: bool }
+record OwnerChipHold { account: option OwnerPart source: option OwnerPart reason: HoldCategory revision: u64 before: OwnerPriorPhase escalation: option OwnerHoldEscalation tries: OwnerFailureTries hold_wait_since: option u64 circle: option Circle placed: option PlacedLine }
 record OwnerNumbers { budget: u64 spent: u64 spent_below: u64 reserved: u64 }
 record FunderTask { value: u64 }
 record FunderPool { project: u32 person: u64 period: u64 }
@@ -382,7 +389,8 @@ record OwnerOutcomeRenamed { project: u32 }
 record OwnerOutcomeProjectMade { project: u32 }
 record OwnerOutcomeAccountMovedIn { account: u32 renewed: bool }
 record OwnerOutcomeAccountFinishing { source: u32 }
-enum OwnerOutcome { marked_seen: OwnerOutcomeMarkedSeen, note_edited: OwnerOutcomeNoteEdited, service_made: OwnerOutcomeServiceMade, adopted: OwnerOutcomeAdopted, stopped: OwnerOutcomeStopped, cancelled: OwnerOutcomeCancelled, released: OwnerOutcomeReleased, person_taken: OwnerOutcomePersonTaken, person_handed_back: OwnerOutcomePersonHandedBack, person_answered: OwnerOutcomePersonAnswered, moved: OwnerOutcomeMoved, proposal_decided: OwnerOutcomeProposalDecided, said: OwnerOutcomeSaid, question_answered: OwnerOutcomeQuestionAnswered, amended: OwnerOutcomeAmended, proposed: OwnerOutcomeProposed, withdrawn: OwnerOutcomeWithdrawn, roles_set: OwnerOutcomeRolesSet, policy_changed: OwnerOutcomePolicyChanged, pool_set: OwnerOutcomePoolSet, escalation_decided: OwnerOutcomeEscalationDecided, compound: OwnerOutcomeCompound, created: OwnerOutcomeCreated, account_sign_in_started: OwnerOutcomeAccountSignInStarted, account_signed_out: OwnerOutcomeAccountSignedOut, account_key_kept: OwnerOutcomeAccountKeyKept, account_changed, account_removed: OwnerOutcomeAccountRemoved, account_program_declared: OwnerOutcomeAccountProgramDeclared, renamed: OwnerOutcomeRenamed, project_made: OwnerOutcomeProjectMade, account_moved_in: OwnerOutcomeAccountMovedIn, account_finishing: OwnerOutcomeAccountFinishing }
+record OwnerOutcomeLifted { hold: u64 released: u32 }
+enum OwnerOutcome { marked_seen: OwnerOutcomeMarkedSeen, note_edited: OwnerOutcomeNoteEdited, service_made: OwnerOutcomeServiceMade, adopted: OwnerOutcomeAdopted, stopped: OwnerOutcomeStopped, cancelled: OwnerOutcomeCancelled, released: OwnerOutcomeReleased, person_taken: OwnerOutcomePersonTaken, person_handed_back: OwnerOutcomePersonHandedBack, person_answered: OwnerOutcomePersonAnswered, moved: OwnerOutcomeMoved, proposal_decided: OwnerOutcomeProposalDecided, said: OwnerOutcomeSaid, question_answered: OwnerOutcomeQuestionAnswered, amended: OwnerOutcomeAmended, proposed: OwnerOutcomeProposed, withdrawn: OwnerOutcomeWithdrawn, roles_set: OwnerOutcomeRolesSet, policy_changed: OwnerOutcomePolicyChanged, pool_set: OwnerOutcomePoolSet, escalation_decided: OwnerOutcomeEscalationDecided, compound: OwnerOutcomeCompound, created: OwnerOutcomeCreated, account_sign_in_started: OwnerOutcomeAccountSignInStarted, account_signed_out: OwnerOutcomeAccountSignedOut, account_key_kept: OwnerOutcomeAccountKeyKept, account_changed, account_removed: OwnerOutcomeAccountRemoved, account_program_declared: OwnerOutcomeAccountProgramDeclared, renamed: OwnerOutcomeRenamed, project_made: OwnerOutcomeProjectMade, account_moved_in: OwnerOutcomeAccountMovedIn, account_finishing: OwnerOutcomeAccountFinishing, lifted: OwnerOutcomeLifted }
 record MadeTasks { tasks: list 32 u64 }
 record MadeService { party: u64 credential: secret 40 }
 record MadePersonResult { task: u64 }
@@ -406,7 +414,8 @@ record LackingTaskKind { executor: option Executor }
 record LackingDepth { needed: option u32 allowed: u32 }
 record LackingDeadline { asked: option u64 latest: option u64 }
 record LackingTasks { needed: option u32 left: u32 }
-enum Lacking { approver, budget: LackingBudget, grant: LackingGrant, grant_kind: LackingGrantKind, funding, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackingAgain, account, writer, required: LackingRequired, failed: LackingFailed, unguarded: LackingUnguarded, task_kind: LackingTaskKind, depth: LackingDepth, deadline: LackingDeadline, tasks: LackingTasks, models }
+record LackingHoldOwner { hold: u64 owner: HoldOwner }
+enum Lacking { approver, budget: LackingBudget, grant: LackingGrant, grant_kind: LackingGrantKind, funding, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackingAgain, account, writer, required: LackingRequired, failed: LackingFailed, unguarded: LackingUnguarded, task_kind: LackingTaskKind, depth: LackingDepth, deadline: LackingDeadline, tasks: LackingTasks, models, hold_owner: LackingHoldOwner }
 enum AdmissionLimit { goals, operations, grace, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, accounts, holder_accounts, sources, sign_ins, projects, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record LimitAdmission { which: AdmissionLimit }
 record LimitLiveTasks { project: u32 limit: u32 }
@@ -417,7 +426,8 @@ record CurrentHoldDocument { value: HoldReason }
 record CurrentHoldReason { value: HoldCategory }
 enum CurrentHold { document: CurrentHoldDocument, reason: CurrentHoldReason }
 record MovedHold { reason: option CurrentHold }
-enum Moved { hold: MovedHold, spec, person_task, note, waiting }
+record MovedPlacedHold { revision: u64 }
+enum Moved { hold: MovedHold, spec, person_task, note, waiting, placed_hold: MovedPlacedHold }
 record RefusalRole { held: option HeldRole }
 record RefusalTaken { by: u64 }
 record RefusalAuthority { lacking: Lacking proposable: option bool }
@@ -562,7 +572,7 @@ enum Activity { owner: ActivityOwner, words: ActivityWords, run_began: ActivityR
 record ActivityLine { position: u64 at: u64 event: Activity }
 record ActivityPage { cut: bool rows: bytes 16777216 before: option Cursor after: option Cursor }
 record SpendLine { task: u64 attempt: option u64 spent: u64 }
-record Hold { revision: Revision reason: HoldReason before: Phase since: u64 result: option ResultValue spend: list 32 SpendLine }
+record Hold { revision: Revision reason: HoldReason before: Phase since: u64 result: option ResultValue spend: list 32 SpendLine placed: option PlacedLine }
 record HistoryChangeMade { batch: u64 }
 record HistoryChangeAmended { before: text 65536 after: text 65536 }
 record HistoryChangeHeld { value: Hold }

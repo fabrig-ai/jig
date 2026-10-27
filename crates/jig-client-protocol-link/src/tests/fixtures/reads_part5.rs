@@ -99,6 +99,7 @@ pub fn read_value_escalation() -> c::Escalation {
 
 pub fn read_value_hold() -> c::Hold {
     c::Hold {
+        placed: None,
         revision: read_value_revision(),
         reason: c::HoldReason::Tries { failures: List::with_capacity(0) },
         before: read_value_phase(),

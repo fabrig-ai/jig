@@ -790,6 +790,7 @@ fn escalation_doc(reason: HoldReason, acts: &[ActKind]) -> Escalation {
     Escalation {
         task,
         hold: Hold {
+            placed: None,
             revision: Revision { value: 4 },
             reason,
             before: Phase::Closing,

@@ -68,3 +68,5 @@ mod turn_text;
 mod settings;
 
 mod settings_proposals;
+
+mod placed_holds;

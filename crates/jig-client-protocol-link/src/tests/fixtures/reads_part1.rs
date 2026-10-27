@@ -75,6 +75,7 @@ pub fn read_wire_hold() -> w::Hold {
     w::Hold::new(
         &lim,
         w::HoldParts {
+            placed: None,
             revision: read_wire_revision(),
             reason: read_hold_reason_record(),
             before: read_wire_phase(),

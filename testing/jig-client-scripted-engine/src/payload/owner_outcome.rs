@@ -28,6 +28,7 @@ impl Payload for OwnerOutcome {
             | Self::AccountKeyKept { .. }
             | Self::AccountFinishing { .. }
             | Self::AccountMovedIn { .. }
+            | Self::Lifted { .. }
             | Self::AccountChanged => Some(0),
             Self::AccountProgramDeclared { name, .. } => {
                 if !jig_client_domain::contract::valid_program_name(name) {

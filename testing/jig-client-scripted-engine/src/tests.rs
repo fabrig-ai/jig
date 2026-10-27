@@ -245,6 +245,7 @@ fn revision_refusals_scripts_retention_and_whole_payload_admission() {
         ending: None,
         task: chip,
         hold: Hold {
+            placed: None,
             revision: Revision { value: 2 },
             reason: HoldReason::Budget { spent: 100, limit: 100 },
             before: Phase::Running,
@@ -1165,6 +1166,7 @@ fn amendment_release_checks_the_named_hold_separately_from_the_spec() {
         let mut setup = script();
         let mut row = task();
         row.hold = Some(TaskHold::Document(Box::new(Hold {
+            placed: None,
             revision: Revision { value: 7 },
             reason: HoldReason::Stopped { by: party(1), at: Wall::EPOCH },
             before: Phase::Running,

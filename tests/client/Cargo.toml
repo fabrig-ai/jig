@@ -58,5 +58,8 @@ disallowed_types = "deny"
 disallowed_methods = "deny"
 
 [dev-dependencies]
+jig-client-protocol-wire.workspace = true
+jig-protocol-engine-clients.workspace = true
+jig-engine-clients-world = { path = "../engine-clients" }
 skein-scratch.workspace = true
 jig-client-test-records = { path = "../../testing/jig-client-test-records" }

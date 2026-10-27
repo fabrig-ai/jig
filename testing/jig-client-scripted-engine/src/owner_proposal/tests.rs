@@ -56,6 +56,7 @@ fn part() -> OwnerPart {
 }
 fn hold() -> OwnerChipHold {
     OwnerChipHold {
+        placed: None,
         circle: None,
         account: None,
         source: Some(part()),

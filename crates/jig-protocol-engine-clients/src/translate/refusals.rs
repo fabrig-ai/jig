@@ -143,6 +143,16 @@ pub(crate) fn refusal(value: p::Refusal, limits: &w::Limits) -> Result<w::Refusa
         }
     })
 }
+pub(super) fn hold_owner(value: p::HoldOwner, limits: &w::Limits) -> Result<w::HoldOwner, w::Problem> {
+    Ok(match value {
+        p::HoldOwner::Party { person } => {
+            w::HoldOwner::Party(w::HoldOwnerParty::new(limits, w::HoldOwnerPartyParts { person })?)
+        }
+        p::HoldOwner::Task { task } => {
+            w::HoldOwner::Task(w::HoldOwnerTask::new(limits, w::HoldOwnerTaskParts { task })?)
+        }
+    })
+}
 fn role(value: p::Role, limits: &w::Limits) -> Result<w::HeldRole, w::Problem> {
     Ok(match value {
         p::Role::Owner => w::HeldRole::Owner,
@@ -161,7 +171,11 @@ fn lack(value: p::Lack, limits: &w::Limits) -> Result<w::Lacking, w::Problem> {
         p::Lack::Tool => w::Lacking::Tool,
         p::Lack::Scope => w::Lacking::Scope,
         p::Lack::Models => w::Lacking::Models,
-        p::Lack::HoldOwner { .. } | p::Lack::Reference => w::Lacking::Reference,
+        p::Lack::HoldOwner { hold, owner } => w::Lacking::HoldOwner(w::LackingHoldOwner::new(
+            limits,
+            w::LackingHoldOwnerParts { hold, owner: hold_owner(owner, limits)? },
+        )?),
+        p::Lack::Reference => w::Lacking::Reference,
         p::Lack::ResourceAccess => w::Lacking::ResourceAccess,
         p::Lack::ResourceUnavailable => w::Lacking::ResourceUnavailable,
         p::Lack::Shape => w::Lacking::Shape,
@@ -260,7 +274,10 @@ fn moved(value: p::Moved, limits: &w::Limits) -> Result<w::Refusal, w::Problem> 
                 Some(w::CurrentHold::Reason(w::CurrentHoldReason::new(limits, w::CurrentHoldReasonParts { value })?));
             (revision, w::Moved::Hold(w::MovedHold::new(limits, w::MovedHoldParts { reason })?))
         }
-        p::Moved::PlacedHold { revision } | p::Moved::Spec { revision } => (revision, w::Moved::Spec),
+        p::Moved::PlacedHold { revision } => {
+            (revision, w::Moved::PlacedHold(w::MovedPlacedHold::new(limits, w::MovedPlacedHoldParts { revision })?))
+        }
+        p::Moved::Spec { revision } => (revision, w::Moved::Spec),
         p::Moved::Person { revision } => (revision, w::Moved::PersonTask),
         p::Moved::Note { revision } => (u64::from(revision), w::Moved::Note),
     };

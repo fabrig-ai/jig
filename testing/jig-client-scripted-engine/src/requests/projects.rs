@@ -24,6 +24,7 @@ impl<A: Application> Engine<A> {
             | Ask::Take { .. }
             | Ask::HandBack { .. }
             | Ask::Decide { .. }
+            | Ask::Lift { .. }
             | Ask::Release { .. }
             | Ask::Amend { .. }
             | Ask::Stop { .. }
