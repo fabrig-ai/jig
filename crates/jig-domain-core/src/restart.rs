@@ -3,9 +3,11 @@
 //! done. Only the core chooses the next step or opens decisions.
 
 mod census;
+mod cursor;
 mod joins;
 use crate::{Core, fleet};
 pub use census::{Census, ReadResults};
+pub use cursor::restore_cursor;
 
 /// Ordered live ranges of the cold start (protocol/store.md, 4.3 and 7.2).
 #[derive(Clone, PartialEq, Eq, Debug)]

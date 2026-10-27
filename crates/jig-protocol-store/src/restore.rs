@@ -51,19 +51,7 @@ fn restore_page(store: &mut Store, range: Restore, after: Option<&Cursor>, rows:
     }
     let ranges = match range {
         Restore::Application(ranges) => pages::application(&ranges, store.limits.store.key)?,
-        Restore::Jig(ranges) => {
-            let mut count = 0_u32;
-            for range in &ranges {
-                count = count.checked_add(u32::try_from(intervals::restore(range).len()).ok()?)?;
-            }
-            let mut all = List::with_capacity(count);
-            for range in &ranges {
-                for interval in intervals::restore(range) {
-                    all.push(interval).expect("counted restart intervals");
-                }
-            }
-            all.into_boxed()
-        }
+        Restore::Jig(ranges) => intervals::intervals(&ranges)?,
     };
     let walked = pages::walk(store, &ranges, after, rows)?;
     let mut found = List::with_capacity(rows);
