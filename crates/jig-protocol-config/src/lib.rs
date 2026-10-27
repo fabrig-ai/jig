@@ -30,6 +30,7 @@ pub use llm::{Endpoint, Header, Llm, Transport};
 pub mod address;
 mod document;
 mod fits;
+pub mod names;
 pub mod overrides;
 pub mod profile;
 pub use fits::{Share, fits};

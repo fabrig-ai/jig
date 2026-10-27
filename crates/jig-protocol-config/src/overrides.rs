@@ -3,70 +3,105 @@ use crate::{Limits, Path, Problem, Problems, Profile, Segment, What, profile, re
 use skein_json::{Document, document::Kind};
 use skein_lib::{Duration, bytes};
 
-/// Replace one whole scalar limit. The composed reader checks the resulting profile.
+/// Replace one whole scalar limit, named by a row of `names::NAMES`.
 pub fn apply(limits: &mut Limits, name: &[u8], value: u64) -> Result<(), What> {
+    let row = crate::names::find(name).ok_or(What::Override)?;
+    field(limits, row.name.as_bytes(), Some(value))?;
+    Ok(())
+}
+
+/// A named limit's value in `limits`, a duration's in milliseconds; none
+/// for a name with no row.
+#[must_use]
+pub fn value(limits: &Limits, name: &[u8]) -> Option<u64> {
+    let row = crate::names::find(name)?;
+    let mut copy = *limits;
+    field(&mut copy, row.name.as_bytes(), None).ok()
+}
+
+fn field(limits: &mut Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let Limits { core, hub, link, token, driver, .. } = limits;
     if name == b"accounts.token" {
-        *token = count(value)?;
-        driver.client.document.token_bytes = *token;
-        return Ok(());
+        let value = count(token, to)?;
+        if to.is_some() {
+            driver.client.document.token_bytes = *token;
+        }
+        return Ok(value);
     }
     if name == b"accounts.sign_in_deadline_ms" {
-        driver.client.sign_in_time = millis(value)?;
-        return Ok(());
+        return millis(&mut driver.client.sign_in_time, to);
     }
     let dot = bytes::find(name, b".").ok_or(What::Override)?;
     let owner = name.get(..dot).ok_or(What::Override)?;
     let field = name.get(dot.checked_add(1).ok_or(What::Override)?..).ok_or(What::Override)?;
     match owner {
-        b"tasks" => set_tasks(&mut core.tasks, field, value),
-        b"people" => set_people(&mut core.people, field, value),
-        b"fleet" => set_fleet(&mut core.fleet, field, value),
+        b"tasks" => field_tasks(&mut core.tasks, field, to),
+        b"people" => field_people(&mut core.people, field, to),
+        b"fleet" => field_fleet(&mut core.fleet, field, to),
         b"authority" => {
-            set_authority(&mut core.authority, field, value)?;
-            core.documents.roles = core.authority.roles;
-            Ok(())
+            let value = field_authority(&mut core.authority, field, to)?;
+            if to.is_some() {
+                core.documents.roles = core.authority.roles;
+            }
+            Ok(value)
         }
-        b"brief" => set_brief(&mut core.brief, field, value),
+        b"brief" => field_brief(&mut core.brief, field, to),
         b"accounts" => {
-            set_accounts(&mut core.accounts, field, value)?;
-            driver.listeners = core.accounts.sign_ins.checked_mul(2).ok_or(What::Override)?;
-            driver.accounts = profile::driver_places(&core.accounts).ok_or(What::Override)?;
-            Ok(())
-        }
-        b"views" => set_views(&mut core.views, field, value),
-        b"notes" => set_notes(&mut core.notes, field, value),
-        b"hub" => set_hub(hub, field, value),
-        b"documents" => set_documents(&mut core.documents, field, value),
-        b"core" => set_core(core, field, value),
-        b"link" => set_link(link, field, value),
-        b"clients" => {
-            let count = count(value)?;
-            if count == 0 {
-                return Err(What::Override);
+            let value = field_accounts(&mut core.accounts, field, to)?;
+            if to.is_some() {
+                driver.listeners = core.accounts.sign_ins.checked_mul(2).ok_or(What::Override)?;
+                driver.accounts = profile::driver_places(&core.accounts).ok_or(What::Override)?;
             }
-            match field {
-                b"provider_codes" => limits.clients.provider_codes = count,
-                b"provider_tokens" => limits.clients.provider_tokens = count,
-                _ => return Err(What::Override),
-            }
-            Ok(())
+            Ok(value)
         }
+        b"views" => field_views(&mut core.views, field, to),
+        b"notes" => field_notes(&mut core.notes, field, to),
+        b"hub" => field_hub(hub, field, to),
+        b"documents" => field_documents(&mut core.documents, field, to),
+        b"core" => field_core(core, field, to),
+        b"link" => field_link(link, field, to),
+        b"clients" => match field {
+            b"provider_codes" => positive_count(&mut limits.clients.provider_codes, to),
+            b"provider_tokens" => positive_count(&mut limits.clients.provider_tokens, to),
+            _ => Err(What::Override),
+        },
         _ => Err(What::Override),
     }
 }
-fn count(value: u64) -> Result<u32, What> {
-    u32::try_from(value).or(Err(What::Override))
+
+fn count(field: &mut u32, to: Option<u64>) -> Result<u64, What> {
+    if let Some(value) = to {
+        *field = u32::try_from(value).or(Err(What::Override))?;
+    }
+    Ok(u64::from(*field))
 }
-fn millis(value: u64) -> Result<Duration, What> {
-    if value.checked_mul(1_000_000).is_none() {
+
+fn positive_count(field: &mut u32, to: Option<u64>) -> Result<u64, What> {
+    if to == Some(0) {
         return Err(What::Override);
     }
-    Ok(Duration::from_millis(value))
+    count(field, to)
+}
+
+fn wide(field: &mut u64, to: Option<u64>) -> u64 {
+    if let Some(value) = to {
+        *field = value;
+    }
+    *field
+}
+
+fn millis(field: &mut Duration, to: Option<u64>) -> Result<u64, What> {
+    if let Some(value) = to {
+        if value.checked_mul(1_000_000).is_none() {
+            return Err(What::Override);
+        }
+        *field = Duration::from_millis(value);
+    }
+    Ok(field.as_nanos() / 1_000_000)
 }
 
 #[expect(clippy::too_many_lines, reason = "one exhaustive owner match names every task limit and retry member")]
-fn set_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_tasks::Limits {
         tasks,
         funders,
@@ -121,71 +156,70 @@ fn set_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], value: u64) -> 
     let jig_domain_tasks::Retry { retries: lost_retries, base: lost_base, max: lost_max } = lost;
     let jig_domain_tasks::Retry { retries: invalid_retries, base: invalid_base, max: invalid_max } = invalid;
     match name {
-        b"tasks" => *tasks = count(value)?,
-        b"funders" => *funders = count(value)?,
-        b"project_tasks" => *project_tasks = count(value)?,
-        b"project_goals" => *project_goals = count(value)?,
-        b"tree_tasks" => *tree_tasks = count(value)?,
-        b"depth" => *depth = count(value)?,
-        b"delegates" => *delegates = count(value)?,
-        b"references" => *references = count(value)?,
-        b"subscriptions" => *subscriptions = count(value)?,
-        b"batch" => *batch = count(value)?,
-        b"dependencies" => *dependencies = count(value)?,
-        b"circle" => *circle = count(value)?,
-        b"holdings" => *holdings = count(value)?,
-        b"hold_kinds" => *hold_kinds = count(value)?,
-        b"resource_reports" => *resource_reports = count(value)?,
-        b"pools" => *pools = count(value)?,
-        b"hold_segments" => *hold_segments = count(value)?,
-        b"hold_bytes" => *hold_bytes = count(value)?,
-        b"hold_waiters" => *hold_waiters = count(value)?,
-        b"hold_wait_ms" => *hold_wait = millis(value)?,
-        b"grace_ms" => *grace = millis(value)?,
-        b"inputs" => *inputs = count(value)?,
-        b"spec_bytes" => *spec_bytes = count(value)?,
-        b"parameters" => *parameters = count(value)?,
-        b"result_bytes" => *result_bytes = count(value)?,
-        b"run_inbox" => *run_inbox = count(value)?,
-        b"inbox_messages" => *inbox_messages = count(value)?,
-        b"inbox_bytes" => *inbox_bytes = count(value)?,
-        b"message_bytes" => *message_bytes = count(value)?,
-        b"person_stall_ms" => *person_stall = millis(value)?,
-        b"proposal_stall_ms" => *proposal_stall = millis(value)?,
-        b"escalation_stall_ms" => *escalation_stall = millis(value)?,
-        b"saved_resources" => *saved_resources = count(value)?,
-        b"contract_choices" => *contract_choices = count(value)?,
-        b"charters" => *charters = count(value)?,
-        b"authority_grants" => *authority_grants = count(value)?,
-        b"authority_segments" => *authority_segments = count(value)?,
-        b"authority_bytes" => *authority_bytes = count(value)?,
-        b"executor_kinds" => *executor_kinds = count(value)?,
-        b"facts" => *facts = count(value)?,
-        b"room_refusals" => *room_refusals = count(value)?,
-        b"retries.transient.retries" => *transient_retries = count(value)?,
-        b"retries.transient.base_ms" => *transient_base = millis(value)?,
-        b"retries.transient.max_ms" => *transient_max = millis(value)?,
-        b"retries.permanent.retries" => *permanent_retries = count(value)?,
-        b"retries.permanent.base_ms" => *permanent_base = millis(value)?,
-        b"retries.permanent.max_ms" => *permanent_max = millis(value)?,
-        b"retries.run.retries" => *run_retries = count(value)?,
-        b"retries.run.base_ms" => *run_base = millis(value)?,
-        b"retries.run.max_ms" => *run_max = millis(value)?,
-        b"retries.agent.retries" => *agent_retries = count(value)?,
-        b"retries.agent.base_ms" => *agent_base = millis(value)?,
-        b"retries.agent.max_ms" => *agent_max = millis(value)?,
-        b"retries.lost.retries" => *lost_retries = count(value)?,
-        b"retries.lost.base_ms" => *lost_base = millis(value)?,
-        b"retries.lost.max_ms" => *lost_max = millis(value)?,
-        b"retries.invalid.retries" => *invalid_retries = count(value)?,
-        b"retries.invalid.base_ms" => *invalid_base = millis(value)?,
-        b"retries.invalid.max_ms" => *invalid_max = millis(value)?,
-        _ => return Err(What::Override),
+        b"tasks" => count(tasks, to),
+        b"funders" => count(funders, to),
+        b"project_tasks" => count(project_tasks, to),
+        b"project_goals" => count(project_goals, to),
+        b"tree_tasks" => count(tree_tasks, to),
+        b"depth" => count(depth, to),
+        b"delegates" => count(delegates, to),
+        b"references" => count(references, to),
+        b"subscriptions" => count(subscriptions, to),
+        b"batch" => count(batch, to),
+        b"dependencies" => count(dependencies, to),
+        b"circle" => count(circle, to),
+        b"holdings" => count(holdings, to),
+        b"hold_kinds" => count(hold_kinds, to),
+        b"resource_reports" => count(resource_reports, to),
+        b"pools" => count(pools, to),
+        b"hold_segments" => count(hold_segments, to),
+        b"hold_bytes" => count(hold_bytes, to),
+        b"hold_waiters" => count(hold_waiters, to),
+        b"hold_wait_ms" => millis(hold_wait, to),
+        b"grace_ms" => millis(grace, to),
+        b"inputs" => count(inputs, to),
+        b"spec_bytes" => count(spec_bytes, to),
+        b"parameters" => count(parameters, to),
+        b"result_bytes" => count(result_bytes, to),
+        b"run_inbox" => count(run_inbox, to),
+        b"inbox_messages" => count(inbox_messages, to),
+        b"inbox_bytes" => count(inbox_bytes, to),
+        b"message_bytes" => count(message_bytes, to),
+        b"person_stall_ms" => millis(person_stall, to),
+        b"proposal_stall_ms" => millis(proposal_stall, to),
+        b"escalation_stall_ms" => millis(escalation_stall, to),
+        b"saved_resources" => count(saved_resources, to),
+        b"contract_choices" => count(contract_choices, to),
+        b"charters" => count(charters, to),
+        b"authority_grants" => count(authority_grants, to),
+        b"authority_segments" => count(authority_segments, to),
+        b"authority_bytes" => count(authority_bytes, to),
+        b"executor_kinds" => count(executor_kinds, to),
+        b"facts" => count(facts, to),
+        b"room_refusals" => count(room_refusals, to),
+        b"retries.transient.retries" => count(transient_retries, to),
+        b"retries.transient.base_ms" => millis(transient_base, to),
+        b"retries.transient.max_ms" => millis(transient_max, to),
+        b"retries.permanent.retries" => count(permanent_retries, to),
+        b"retries.permanent.base_ms" => millis(permanent_base, to),
+        b"retries.permanent.max_ms" => millis(permanent_max, to),
+        b"retries.run.retries" => count(run_retries, to),
+        b"retries.run.base_ms" => millis(run_base, to),
+        b"retries.run.max_ms" => millis(run_max, to),
+        b"retries.agent.retries" => count(agent_retries, to),
+        b"retries.agent.base_ms" => millis(agent_base, to),
+        b"retries.agent.max_ms" => millis(agent_max, to),
+        b"retries.lost.retries" => count(lost_retries, to),
+        b"retries.lost.base_ms" => millis(lost_base, to),
+        b"retries.lost.max_ms" => millis(lost_max, to),
+        b"retries.invalid.retries" => count(invalid_retries, to),
+        b"retries.invalid.base_ms" => millis(invalid_base, to),
+        b"retries.invalid.max_ms" => millis(invalid_max, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_people(limits: &mut jig_domain_people::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_people(limits: &mut jig_domain_people::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_people::Limits {
         program_hosts,
         program_host_name_bytes,
@@ -212,34 +246,33 @@ fn set_people(limits: &mut jig_domain_people::Limits, name: &[u8], value: u64) -
         facts,
     } = limits;
     match name {
-        b"program_hosts" => *program_hosts = count(value)?,
-        b"program_host_name_bytes" => *program_host_name_bytes = count(value)?,
-        b"operations" => *operations = count(value)?,
-        b"batch" => *batch = count(value)?,
-        b"people" => *people = count(value)?,
-        b"inbox_entries" => *inbox_entries = count(value)?,
-        b"inbox_tasks" => *inbox_tasks = count(value)?,
-        b"inbox_recipients" => *inbox_recipients = count(value)?,
-        b"sign_ins" => *sign_ins = count(value)?,
-        b"projects" => *projects = count(value)?,
-        b"holdings" => *holdings = count(value)?,
-        b"initial_owners" => *initial_owners = count(value)?,
-        b"requests" => *requests = count(value)?,
-        b"room_refusals" => *room_refusals = count(value)?,
-        b"pending" => *pending = count(value)?,
-        b"waiters" => *waiters = count(value)?,
-        b"identity_bytes" => *identity_bytes = count(value)?,
-        b"words" => *words = count(value)?,
-        b"amendment_bytes" => *amendment_bytes = count(value)?,
-        b"sign_in_lifetime_ms" => *sign_in_lifetime = millis(value)?,
-        b"request_retention_ms" => *request_retention = millis(value)?,
-        b"facts" => *facts = count(value)?,
-        _ => return Err(What::Override),
+        b"program_hosts" => count(program_hosts, to),
+        b"program_host_name_bytes" => count(program_host_name_bytes, to),
+        b"operations" => count(operations, to),
+        b"batch" => count(batch, to),
+        b"people" => count(people, to),
+        b"inbox_entries" => count(inbox_entries, to),
+        b"inbox_tasks" => count(inbox_tasks, to),
+        b"inbox_recipients" => count(inbox_recipients, to),
+        b"sign_ins" => count(sign_ins, to),
+        b"projects" => count(projects, to),
+        b"holdings" => count(holdings, to),
+        b"initial_owners" => count(initial_owners, to),
+        b"requests" => count(requests, to),
+        b"room_refusals" => count(room_refusals, to),
+        b"pending" => count(pending, to),
+        b"waiters" => count(waiters, to),
+        b"identity_bytes" => count(identity_bytes, to),
+        b"words" => count(words, to),
+        b"amendment_bytes" => count(amendment_bytes, to),
+        b"sign_in_lifetime_ms" => millis(sign_in_lifetime, to),
+        b"request_retention_ms" => millis(request_retention, to),
+        b"facts" => count(facts, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_fleet(limits: &mut jig_domain_fleet::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_fleet(limits: &mut jig_domain_fleet::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_fleet::Limits {
         configured_workers,
         worker_name_bytes,
@@ -262,30 +295,29 @@ fn set_fleet(limits: &mut jig_domain_fleet::Limits, name: &[u8], value: u64) -> 
         history,
     } = limits;
     match name {
-        b"configured_workers" => *configured_workers = count(value)?,
-        b"worker_name_bytes" => *worker_name_bytes = count(value)?,
-        b"program_sources" => *program_sources = count(value)?,
-        b"source_detail_bytes" => *source_detail_bytes = count(value)?,
-        b"workers" => *workers = count(value)?,
-        b"needs_bytes" => *needs_bytes = value,
-        b"engine_slots" => *engine_slots = count(value)?,
-        b"slots" => *slots = count(value)?,
-        b"workstreams" => *workstreams = count(value)?,
-        b"attempts" => *attempts = count(value)?,
-        b"grants" => *grants = count(value)?,
-        b"calls" => *calls = count(value)?,
-        b"call_name_bytes" => *call_name_bytes = value,
-        b"progress_bytes" => *progress_bytes = value,
-        b"turns" => *turns = count(value)?,
-        b"grace_ms" => *grace = millis(value)?,
-        b"facts" => *facts = count(value)?,
-        b"history" => *history = count(value)?,
-        _ => return Err(What::Override),
+        b"configured_workers" => count(configured_workers, to),
+        b"worker_name_bytes" => count(worker_name_bytes, to),
+        b"program_sources" => count(program_sources, to),
+        b"source_detail_bytes" => count(source_detail_bytes, to),
+        b"workers" => count(workers, to),
+        b"needs_bytes" => Ok(wide(needs_bytes, to)),
+        b"engine_slots" => count(engine_slots, to),
+        b"slots" => count(slots, to),
+        b"workstreams" => count(workstreams, to),
+        b"attempts" => count(attempts, to),
+        b"grants" => count(grants, to),
+        b"calls" => count(calls, to),
+        b"call_name_bytes" => Ok(wide(call_name_bytes, to)),
+        b"progress_bytes" => Ok(wide(progress_bytes, to)),
+        b"turns" => count(turns, to),
+        b"grace_ms" => millis(grace, to),
+        b"facts" => count(facts, to),
+        b"history" => count(history, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_authority(limits: &mut jig_domain_authority::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_authority(limits: &mut jig_domain_authority::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_authority::Limits {
         projects,
         roles,
@@ -301,36 +333,34 @@ fn set_authority(limits: &mut jig_domain_authority::Limits, name: &[u8], value: 
         writes,
     } = limits;
     match name {
-        b"projects" => *projects = count(value)?,
-        b"roles" => *roles = count(value)?,
-        b"requirements" => *requirements = count(value)?,
-        b"facts" => *facts = count(value)?,
-        b"grants" => *grants = count(value)?,
-        b"executors" => *executors = count(value)?,
-        b"segments" => *segments = count(value)?,
-        b"segment_bytes" => *segment_bytes = count(value)?,
-        b"implications" => *implications = count(value)?,
-        b"batch" => *batch = count(value)?,
-        b"accounts" => *accounts = count(value)?,
-        b"writes" => *writes = count(value)?,
-        _ => return Err(What::Override),
+        b"projects" => count(projects, to),
+        b"roles" => count(roles, to),
+        b"requirements" => count(requirements, to),
+        b"facts" => count(facts, to),
+        b"grants" => count(grants, to),
+        b"executors" => count(executors, to),
+        b"segments" => count(segments, to),
+        b"segment_bytes" => count(segment_bytes, to),
+        b"implications" => count(implications, to),
+        b"batch" => count(batch, to),
+        b"accounts" => count(accounts, to),
+        b"writes" => count(writes, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_brief(limits: &mut jig_domain_brief::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_brief(limits: &mut jig_domain_brief::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_brief::Limits { briefs, sections, read_bytes, brief_bytes } = limits;
     match name {
-        b"briefs" => *briefs = count(value)?,
-        b"sections" => *sections = count(value)?,
-        b"read_bytes" => *read_bytes = count(value)?,
-        b"brief_bytes" => *brief_bytes = count(value)?,
-        _ => return Err(What::Override),
+        b"briefs" => count(briefs, to),
+        b"sections" => count(sections, to),
+        b"read_bytes" => count(read_bytes, to),
+        b"brief_bytes" => count(brief_bytes, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_accounts(limits: &mut jig_domain_accounts::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_accounts(limits: &mut jig_domain_accounts::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_accounts::Limits {
         program_hosts,
         accounts,
@@ -347,40 +377,38 @@ fn set_accounts(limits: &mut jig_domain_accounts::Limits, name: &[u8], value: u6
         facts,
     } = limits;
     match name {
-        b"program_hosts" => *program_hosts = count(value)?,
-        b"accounts" => *accounts = count(value)?,
-        b"holder_accounts" => *holder_accounts = count(value)?,
-        b"program_names" => *program_names = count(value)?,
-        b"sources" => *sources = count(value)?,
-        b"sign_ins" => *sign_ins = count(value)?,
-        b"credentials" => *credentials = count(value)?,
-        b"backoff_base_ms" => *backoff_base = millis(value)?,
-        b"backoff_max_ms" => *backoff_max = millis(value)?,
-        b"retry_ms" => *retry = millis(value)?,
-        b"move_deadline_ms" => *move_deadline = millis(value)?,
-        b"spent_attention_ms" => *spent_attention = millis(value)?,
-        b"facts" => *facts = count(value)?,
-        _ => return Err(What::Override),
+        b"program_hosts" => count(program_hosts, to),
+        b"accounts" => count(accounts, to),
+        b"holder_accounts" => count(holder_accounts, to),
+        b"program_names" => count(program_names, to),
+        b"sources" => count(sources, to),
+        b"sign_ins" => count(sign_ins, to),
+        b"credentials" => count(credentials, to),
+        b"backoff_base_ms" => millis(backoff_base, to),
+        b"backoff_max_ms" => millis(backoff_max, to),
+        b"retry_ms" => millis(retry, to),
+        b"move_deadline_ms" => millis(move_deadline, to),
+        b"spent_attention_ms" => millis(spent_attention, to),
+        b"facts" => count(facts, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_views(limits: &mut jig_domain_views::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_views(limits: &mut jig_domain_views::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_views::Limits { runs, watchers, watchers_per_party, subjects_per_change, text_bytes, facts } =
         limits;
     match name {
-        b"runs" => *runs = count(value)?,
-        b"watchers" => *watchers = count(value)?,
-        b"watchers_per_party" => *watchers_per_party = count(value)?,
-        b"subjects_per_change" => *subjects_per_change = count(value)?,
-        b"text_bytes" => *text_bytes = count(value)?,
-        b"facts" => *facts = count(value)?,
-        _ => return Err(What::Override),
+        b"runs" => count(runs, to),
+        b"watchers" => count(watchers, to),
+        b"watchers_per_party" => count(watchers_per_party, to),
+        b"subjects_per_change" => count(subjects_per_change, to),
+        b"text_bytes" => count(text_bytes, to),
+        b"facts" => count(facts, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_notes(limits: &mut jig_domain_notes::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_notes(limits: &mut jig_domain_notes::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_notes::Limits {
         scopes,
         entries_per_scope,
@@ -393,21 +421,20 @@ fn set_notes(limits: &mut jig_domain_notes::Limits, name: &[u8], value: u64) -> 
         recalled,
     } = limits;
     match name {
-        b"scopes" => *scopes = count(value)?,
-        b"entries_per_scope" => *entries_per_scope = count(value)?,
-        b"pattern_bytes" => *pattern_bytes = count(value)?,
-        b"description_bytes" => *description_bytes = count(value)?,
-        b"body_bytes" => *body_bytes = count(value)?,
-        b"references" => *references = count(value)?,
-        b"load_rows" => *load_rows = count(value)?,
-        b"lines" => *lines = count(value)?,
-        b"recalled" => *recalled = count(value)?,
-        _ => return Err(What::Override),
+        b"scopes" => count(scopes, to),
+        b"entries_per_scope" => count(entries_per_scope, to),
+        b"pattern_bytes" => count(pattern_bytes, to),
+        b"description_bytes" => count(description_bytes, to),
+        b"body_bytes" => count(body_bytes, to),
+        b"references" => count(references, to),
+        b"load_rows" => count(load_rows, to),
+        b"lines" => count(lines, to),
+        b"recalled" => count(recalled, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_hub(limits: &mut jig_domain_host::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_hub(limits: &mut jig_domain_host::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_host::Limits {
         program_sources,
         source_interval: _,
@@ -431,30 +458,33 @@ fn set_hub(limits: &mut jig_domain_host::Limits, name: &[u8], value: u64) -> Res
         piece_bytes,
     } = limits;
     match name {
-        b"program_sources" => *program_sources = count(value)?,
-        b"slots" => *slots = count(value)?,
-        b"accounts" => *accounts = count(value)?,
-        b"charter_bytes" => *charter_bytes = value,
-        b"transcript_bytes" => *transcript_bytes = value,
-        b"delivery_evidence_bytes" => *delivery_evidence_bytes = value,
-        b"turn_bytes" => *turn_bytes = value,
-        b"outcome_bytes" => *outcome_bytes = value,
-        b"detail_bytes" => *detail_bytes = count(value)?,
-        b"held" => *held = count(value)?,
-        b"inbox" => *inbox = count(value)?,
-        b"event_bytes" => *event_bytes = value,
-        b"run_calls" => *run_calls = count(value)?,
-        b"facts" => *facts = count(value)?,
-        b"told" => *told = count(value)?,
-        b"turns" => *turns = count(value)?,
-        b"turn_queue_bytes" => *turn_queue_bytes = value,
-        b"piece_bytes" => *piece_bytes = count(value)?,
-        _ => return Err(What::Override),
+        b"program_sources" => count(program_sources, to),
+        b"slots" => count(slots, to),
+        b"accounts" => count(accounts, to),
+        b"charter_bytes" => Ok(wide(charter_bytes, to)),
+        b"transcript_bytes" => Ok(wide(transcript_bytes, to)),
+        b"delivery_evidence_bytes" => Ok(wide(delivery_evidence_bytes, to)),
+        b"turn_bytes" => Ok(wide(turn_bytes, to)),
+        b"outcome_bytes" => Ok(wide(outcome_bytes, to)),
+        b"detail_bytes" => count(detail_bytes, to),
+        b"held" => count(held, to),
+        b"inbox" => count(inbox, to),
+        b"event_bytes" => Ok(wide(event_bytes, to)),
+        b"run_calls" => count(run_calls, to),
+        b"facts" => count(facts, to),
+        b"told" => count(told, to),
+        b"turns" => count(turns, to),
+        b"turn_queue_bytes" => Ok(wide(turn_queue_bytes, to)),
+        b"piece_bytes" => count(piece_bytes, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_documents(limits: &mut jig_domain_core::documents::DocumentLimits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_documents(
+    limits: &mut jig_domain_core::documents::DocumentLimits,
+    name: &[u8],
+    to: Option<u64>,
+) -> Result<u64, What> {
     let jig_domain_core::documents::DocumentLimits {
         roles: _,
         rows,
@@ -469,18 +499,17 @@ fn set_documents(limits: &mut jig_domain_core::documents::DocumentLimits, name: 
     } = limits;
     let jig_domain_core::documents::Versions { minimum, maximum } = versions;
     match name {
-        b"rows" => *rows = count(value)?,
-        b"text_bytes" => *text_bytes = count(value)?,
-        b"chips" => *chips = count(value)?,
-        b"lines" => *lines = count(value)?,
-        b"versions.minimum" => *minimum = count(value)?,
-        b"versions.maximum" => *maximum = count(value)?,
-        _ => return Err(What::Override),
+        b"rows" => count(rows, to),
+        b"text_bytes" => count(text_bytes, to),
+        b"chips" => count(chips, to),
+        b"lines" => count(lines, to),
+        b"versions.minimum" => count(minimum, to),
+        b"versions.maximum" => count(maximum, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Result<(), What> {
+fn field_core(limits: &mut jig_domain_core::Limits, name: &[u8], to: Option<u64>) -> Result<u64, What> {
     let jig_domain_core::Limits {
         settings,
         templates,
@@ -508,57 +537,48 @@ fn set_core(limits: &mut jig_domain_core::Limits, name: &[u8], value: u64) -> Re
     } = limits;
     let jig_domain_core::CoreBriefBudgets { tail, task, dependencies, attempts, plan, notes } = brief_core_budgets;
     match name {
-        b"settings.proposals" => {
-            if value == 0 {
-                return Err(What::Override);
+        b"settings.proposals" => positive_count(&mut settings.proposals, to),
+        b"settings.revisions" => {
+            let value = positive_count(&mut settings.revisions, to)?;
+            if to.is_some() {
+                tasks.revisions = settings.revisions;
             }
-            settings.proposals = count(value)?;
+            Ok(value)
         }
-        b"settings.revisions" | b"settings.versions" => {
-            if value == 0 {
-                return Err(What::Override);
+        b"settings.versions" => {
+            let value = positive_count(&mut settings.versions, to)?;
+            if to.is_some() {
+                tasks.versions = settings.versions;
+                fleet.versions = settings.versions;
             }
-            if name == b"settings.revisions" {
-                settings.revisions = count(value)?;
-                tasks.revisions = count(value)?;
-            } else {
-                settings.versions = count(value)?;
-                tasks.versions = count(value)?;
-                fleet.versions = count(value)?;
-            }
+            Ok(value)
         }
-        b"settings.history" => {
-            if value == 0 {
-                return Err(What::Override);
-            }
-            settings.history = count(value)?;
-        }
-        b"settings.alternatives" => settings.alternatives = count(value)?,
-        b"settings.permissions" => settings.permissions = count(value)?,
-        b"templates" => *templates = count(value)?,
-        b"fill_mark" => *fill_mark = value,
-        b"connectors" => *connectors = count(value)?,
-        b"resume_bytes" => *resume_bytes = count(value)?,
-        b"run_bytes" => *run_bytes = count(value)?,
-        b"policy_bytes" => *policy_bytes = value,
-        b"escalation_reason_bytes" => *escalation_reason_bytes = count(value)?,
-        b"load_slots" => *load_slots = count(value)?,
-        b"load_bytes" => *load_bytes = value,
-        b"call_records" => *call_records = count(value)?,
-        b"call_answer_bytes" => *call_answer_bytes = count(value)?,
-        b"brief_parts" => *brief_parts = count(value)?,
-        b"brief_core_budgets.tail" => *tail = count(value)?,
-        b"brief_core_budgets.task" => *task = count(value)?,
-        b"brief_core_budgets.dependencies" => *dependencies = count(value)?,
-        b"brief_core_budgets.attempts" => *attempts = count(value)?,
-        b"brief_core_budgets.plan" => *plan = count(value)?,
-        b"brief_core_budgets.notes" => *notes = count(value)?,
-        _ => return Err(What::Override),
+        b"settings.history" => positive_count(&mut settings.history, to),
+        b"settings.alternatives" => count(&mut settings.alternatives, to),
+        b"settings.permissions" => count(&mut settings.permissions, to),
+        b"templates" => count(templates, to),
+        b"fill_mark" => Ok(wide(fill_mark, to)),
+        b"connectors" => count(connectors, to),
+        b"resume_bytes" => count(resume_bytes, to),
+        b"run_bytes" => count(run_bytes, to),
+        b"policy_bytes" => Ok(wide(policy_bytes, to)),
+        b"escalation_reason_bytes" => count(escalation_reason_bytes, to),
+        b"load_slots" => count(load_slots, to),
+        b"load_bytes" => Ok(wide(load_bytes, to)),
+        b"call_records" => count(call_records, to),
+        b"call_answer_bytes" => count(call_answer_bytes, to),
+        b"brief_parts" => count(brief_parts, to),
+        b"brief_core_budgets.tail" => count(tail, to),
+        b"brief_core_budgets.task" => count(task, to),
+        b"brief_core_budgets.dependencies" => count(dependencies, to),
+        b"brief_core_budgets.attempts" => count(attempts, to),
+        b"brief_core_budgets.plan" => count(plan, to),
+        b"brief_core_budgets.notes" => count(notes, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
-fn set_link(limits: &mut crate::Link, field: &[u8], value: u64) -> Result<(), What> {
+fn field_link(limits: &mut crate::Link, field: &[u8], to: Option<u64>) -> Result<u64, What> {
     let crate::Link {
         chunk,
         name,
@@ -577,24 +597,23 @@ fn set_link(limits: &mut crate::Link, field: &[u8], value: u64) -> Result<(), Wh
         facts,
     } = limits;
     match field {
-        b"chunk" => *chunk = count(value)?,
-        b"name" => *name = count(value)?,
-        b"secret" => *secret = count(value)?,
-        b"names" => *names = count(value)?,
-        b"opening" => *opening = count(value)?,
-        b"handshake_ms" => *handshake = millis(value)?,
-        b"hello_ms" => *hello = millis(value)?,
-        b"ping_ms" => *ping = millis(value)?,
-        b"silence_ms" => *silence = millis(value)?,
-        b"stall_ms" => *stall = millis(value)?,
-        b"backoff_ms" => *backoff = millis(value)?,
-        b"ceiling_ms" => *ceiling = millis(value)?,
-        b"proved_ms" => *proved = millis(value)?,
-        b"busy_ms" => *busy = millis(value)?,
-        b"facts" => *facts = count(value)?,
-        _ => return Err(What::Override),
+        b"chunk" => count(chunk, to),
+        b"name" => count(name, to),
+        b"secret" => count(secret, to),
+        b"names" => count(names, to),
+        b"opening" => count(opening, to),
+        b"handshake_ms" => millis(handshake, to),
+        b"hello_ms" => millis(hello, to),
+        b"ping_ms" => millis(ping, to),
+        b"silence_ms" => millis(silence, to),
+        b"stall_ms" => millis(stall, to),
+        b"backoff_ms" => millis(backoff, to),
+        b"ceiling_ms" => millis(ceiling, to),
+        b"proved_ms" => millis(proved, to),
+        b"busy_ms" => millis(busy, to),
+        b"facts" => count(facts, to),
+        _ => Err(What::Override),
     }
-    Ok(())
 }
 
 /// Read the limits member at its path, then check all overrides together.
