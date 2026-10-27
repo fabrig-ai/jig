@@ -1519,6 +1519,14 @@ pub(super) fn route_connector_repair(
     contract: tasks::Contract,
     holdings: Box<[tasks::Holding]>,
 ) -> Requests {
+    let mut out = Queue::with_capacity(1);
+    out.push(Request::Decided);
+    if seed.budget == 0 {
+        match executor {
+            tasks::Executor::Procedure { .. } => {}
+            tasks::Executor::Agent { .. } | tasks::Executor::Person(_) => return Requests::Out(out),
+        }
+    }
     if seed.open_period {
         work.push(Event::Tasks(tasks::Event::OpenPeriod {
             reply_to: ReplyTo::new(Token::new(u64::MAX - 2)),
@@ -1550,8 +1558,6 @@ pub(super) fn route_connector_repair(
             tracked: None,
         }]),
     }));
-    let mut out = Queue::with_capacity(1);
-    out.push(Request::Decided);
     Requests::Out(out)
 }
 
