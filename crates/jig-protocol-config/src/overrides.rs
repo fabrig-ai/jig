@@ -749,6 +749,7 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
             fits.hub.expect("hub fit checked")
         }
         Some(b"link") => true,
+        Some(b"clients") => jig_protocol_engine_clients::worst_case(&limits.clients).is_some(),
         Some(
             b"core" | b"tasks" | b"people" | b"fleet" | b"authority" | b"brief" | b"accounts" | b"notes" | b"views"
             | b"documents",
