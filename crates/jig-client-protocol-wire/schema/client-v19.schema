@@ -274,6 +274,7 @@ enum PolicyGuard { guarded, observed: PolicyGuardObserved }
 record PolicyRequirement { connector: u16 kind: u16 pattern: OwnerPattern judge: PolicyJudge guard: PolicyGuard must_be_guarded: bool }
 record PolicyPermission { connector: u16 permission: u16 role: u32 }
 record PolicyEditProjectSpend { period_spend: u64 }
+record PolicyEditRoleSpend { role: u32 period_spend: u64 }
 record PolicyEditRoleValue { value: PolicyEditRole }
 record PolicyEditRequirements { requirements: bytes 16777216 }
 record PolicyEditProjections { grants: bytes 16777216 }
@@ -287,7 +288,7 @@ record TemplateSpan { value: duration }
 enum TemplateDeadline { none, span: TemplateSpan, given }
 record TemplateOverride { template: u32 executor: option TemplateExecutor budget: option TemplateBudget deadline: option TemplateDeadline priority: option u32 }
 record PolicyEditTemplates { overrides: list 16 TemplateOverride }
-enum PolicyEdit { project_spend: PolicyEditProjectSpend, role: PolicyEditRoleValue, requirements: PolicyEditRequirements, projections: PolicyEditProjections, permissions: PolicyEditPermissions, templates: PolicyEditTemplates }
+enum PolicyEdit { project_spend: PolicyEditProjectSpend, role: PolicyEditRoleValue, requirements: PolicyEditRequirements, projections: PolicyEditProjections, permissions: PolicyEditPermissions, templates: PolicyEditTemplates, role_spend: PolicyEditRoleSpend }
 record HeldRolePolicy { role: u32 }
 enum HeldRole { owner, maintainer, member, observer, policy: HeldRolePolicy }
 record Holding { party: u64 role: HeldRole }

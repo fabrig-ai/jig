@@ -491,6 +491,7 @@ fn policy(
 ) -> Result<p::PolicyChange, Untranslatable> {
     Ok(match value {
         w::PolicyEdit::Templates(v) => super::operations::templates(v),
+        w::PolicyEdit::RoleSpend(v) => p::PolicyChange::RoleSpend { role: v.role(), period_spend: v.period_spend() },
         w::PolicyEdit::ProjectSpend(v) => p::PolicyChange::ProjectSpend { period_spend: v.period_spend() },
         w::PolicyEdit::Role(v) => {
             let v = v.into_parts().value.into_parts();

@@ -115,3 +115,43 @@ fn an_explicit_role_past_the_ceiling_refuses_the_entire_edit() {
         assert_eq!(core.authority.policy(1), Some(&policy));
     }
 }
+
+#[test]
+fn role_spend_changes_only_the_named_roles_period_spend() {
+    for period_spend in [0, 700] {
+        let (mut core, limits) = make_tree();
+        let mut expected = core.authority.policy(1).unwrap().clone();
+        let role = expected.roles[0].number;
+        expected.roles[0].period_spend = period_spend;
+        let change = people::PolicyChange::RoleSpend { role, period_spend };
+        assert_eq!(people::policy_change_bytes(&change), Some(0));
+        let answer = core.change_policy(&limits, 1, 1, change).unwrap();
+        assert_eq!(core.authority.policy(1), Some(&expected));
+        assert_eq!(
+            answer,
+            policy::snapshot(
+                &expected,
+                core.permission_roles.get(&1).unwrap(),
+                core.template_overrides.get(&1).unwrap(),
+            )
+            .unwrap()
+        );
+    }
+}
+
+#[test]
+fn role_spend_for_an_absent_role_refuses_unknown_and_keeps_the_policy() {
+    // Neither a missing reserved role nor a missing application role is created.
+    for role in [1, ROLE] {
+        let (mut core, limits) = make_tree();
+        let before = core.authority.policy(1).unwrap().clone();
+        for value in &before.roles {
+            assert_ne!(value.number, role);
+        }
+        assert_eq!(
+            core.change_policy(&limits, 1, 1, people::PolicyChange::RoleSpend { role, period_spend: 700 }),
+            Err(people::Refusal::Unknown)
+        );
+        assert_eq!(core.authority.policy(1), Some(&before));
+    }
+}

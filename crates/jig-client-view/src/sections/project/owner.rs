@@ -37,7 +37,7 @@ pub fn edit(before: &Ask, field: Field, bytes: Box<[u8]>, text: u32) -> Option<A
     let mut ask = before.clone();
     match &mut ask {
         Ask::ChangePolicy { edit, .. } => match edit {
-            PolicyEdit::ProjectSpend { period_spend } => match field {
+            PolicyEdit::ProjectSpend { period_spend } | PolicyEdit::RoleSpend { period_spend, .. } => match field {
                 Field::Spend => *period_spend = skein_ui::number(&bytes)?,
                 Field::Requests | Field::Decides | Field::Name => return None,
             },
@@ -665,7 +665,8 @@ fn policy_request(ask: &Ask) -> Option<&PolicyEdit> {
 fn role_request(ask: &Ask) -> Option<&PolicyEditRole> {
     match policy_request(ask)? {
         PolicyEdit::Role(role) => Some(role),
-        PolicyEdit::ProjectSpend { .. }
+        PolicyEdit::RoleSpend { .. }
+        | PolicyEdit::ProjectSpend { .. }
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
@@ -675,7 +676,8 @@ fn role_request(ask: &Ask) -> Option<&PolicyEditRole> {
 fn spend_request(ask: &Ask) -> Option<u64> {
     match policy_request(ask)? {
         PolicyEdit::ProjectSpend { period_spend } => Some(*period_spend),
-        PolicyEdit::Role(_)
+        PolicyEdit::RoleSpend { .. }
+        | PolicyEdit::Role(_)
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
@@ -685,7 +687,8 @@ fn spend_request(ask: &Ask) -> Option<u64> {
 fn requirements_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contract::PolicyRequirement>> {
     match policy_request(ask)? {
         PolicyEdit::Requirements { requirements } => Some(requirements),
-        PolicyEdit::ProjectSpend { .. }
+        PolicyEdit::RoleSpend { .. }
+        | PolicyEdit::ProjectSpend { .. }
         | PolicyEdit::Role(_)
         | PolicyEdit::Projections { .. }
         | PolicyEdit::Permissions { .. }
@@ -695,7 +698,8 @@ fn requirements_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contra
 fn projections_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contract::OwnerGrant>> {
     match policy_request(ask)? {
         PolicyEdit::Projections { grants } => Some(grants),
-        PolicyEdit::ProjectSpend { .. }
+        PolicyEdit::RoleSpend { .. }
+        | PolicyEdit::ProjectSpend { .. }
         | PolicyEdit::Role(_)
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Permissions { .. }
@@ -705,7 +709,8 @@ fn projections_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contrac
 fn permissions_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contract::PolicyPermission>> {
     match policy_request(ask)? {
         PolicyEdit::Permissions { mappings } => Some(mappings),
-        PolicyEdit::ProjectSpend { .. }
+        PolicyEdit::RoleSpend { .. }
+        | PolicyEdit::ProjectSpend { .. }
         | PolicyEdit::Role(_)
         | PolicyEdit::Requirements { .. }
         | PolicyEdit::Projections { .. }
