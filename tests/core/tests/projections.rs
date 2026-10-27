@@ -375,6 +375,49 @@ fn untracked_world(seed: u64) -> (World, root::Config, u64) {
 }
 
 #[test]
+fn an_untracked_projection_restores_before_its_live_task() {
+    const SEED: u64 = 916;
+    let (world, configuration, goal) = untracked_world(SEED);
+    let limits = untracked_configuration(SEED).1;
+    let env = skein_lib::Env { now: skein_lib::Time::ZERO, wall: skein_lib::Wall::EPOCH, limits };
+    let mut restored = root::Domain::new(configuration, &limits);
+    root::step(&mut restored, &env, root::Event::RestartBegin { pending: false });
+    let mut requests = skein_lib::Queue::with_capacity(limits.routes);
+    root::release(&mut restored, &env, &mut requests);
+    // A store can hand up the core's projection family before the task family.
+    // This is the order used by the consuming application's combined range.
+    let ranges = [
+        core::RestoreRange::Deployment,
+        core::RestoreRange::Settings,
+        core::RestoreRange::Accounts,
+        core::RestoreRange::People,
+        core::RestoreRange::Core,
+        core::RestoreRange::Tasks,
+    ];
+    for range in ranges {
+        for (key, row) in &world.store.rows {
+            if let root::Key::Core(key) = key
+                && range.admits(key)
+            {
+                assert!(
+                    root::restore_record(&mut restored, &env, row.clone()),
+                    "committed row refused before its live task arrives: {key:?}"
+                );
+            }
+        }
+    }
+    // Finish this same cold start, then read and settle its restored pending cohort.
+    let mut world = world;
+    world.domain = restored;
+    world.send(root::Event::RestartDone(core::RestartStep::LoadCore));
+    assert!(world.domain.ready());
+    world.send(root::Event::Core(core::Event::ProjectionSettled { goal, connector: 1 }));
+    world.send(root::Event::Core(core::Event::ProjectionSettled { goal, connector: 2 }));
+    assert_eq!(projection_rows(&world, goal), 0);
+    assert_eq!(jig_core_world::fixtures::live_row(&world, goal).tracked, None);
+}
+
+#[test]
 fn an_untracked_goal_is_fed_its_state_once_as_its_last_feed() {
     let (mut world, configuration, goal) = untracked_world(172);
     assert_eq!(jig_core_world::fixtures::live_row(&world, goal).tracked, None);
