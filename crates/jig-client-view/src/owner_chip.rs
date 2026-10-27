@@ -281,7 +281,7 @@ pub(crate) fn reason(b: &mut Builder, value: HoldCategory, words: &Words) {
         HoldCategory::Stalled => text(b, words, P::Stalled, &[]),
         HoldCategory::Dependency { task } => number(b, words, P::Dependency, task),
         HoldCategory::Stopped => text(b, words, P::Stopped, &[]),
-        HoldCategory::StoppedBy { party } => number(b, words, P::StoppedBy, party),
+        HoldCategory::Placed { hold: party } => number(b, words, P::Placed, party),
         HoldCategory::Drift => text(b, words, P::Drift, &[]),
         HoldCategory::Effects => text(b, words, P::Effects, &[]),
         HoldCategory::EffectFailed => text(b, words, P::EffectFailed, &[]),

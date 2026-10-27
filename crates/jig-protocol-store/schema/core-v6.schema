@@ -68,12 +68,12 @@ record CallPartRevised { task: u64 revision: u64 }
 enum FailureClass { transient, permanent, run, agent, lost, invalid }
 record HoldReasonFailures { class: FailureClass }
 record HoldReasonDependency { task: u64 }
-record HoldReasonStoppedBy { party: u64 }
+record HoldReasonPlaced { hold: u64 }
 record HoldReasonUncertain { entry: u64 }
 record HoldReasonPoolLost { pool: u64 }
 enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
 record Exceeded { bound: Bound value: u64 }
-enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, stopped_by: HoldReasonStoppedBy, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
+enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, placed: HoldReasonPlaced, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
 record MovedHold { revision: u64 reason: HoldReason }
 record MovedSpec { revision: u64 }
 record MovedPerson { revision: u64 }

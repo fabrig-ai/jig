@@ -267,6 +267,10 @@ pub enum LimitKind {
     Sources,
     /// As many sign-ins are under way as the deployment allows.
     SignIns,
+    PlacedHolds,
+    ProjectPlacedHolds,
+    PartyPlacedHolds,
+    Exemptions,
 }
 
 /// A party in an ending fact, independent of the tasks child's vocabulary.

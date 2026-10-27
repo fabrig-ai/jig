@@ -147,7 +147,7 @@ fn check(
                 admission,
             )?;
             crate::acts::mutable_phase(&row.phase)?;
-            Ok(tasks::Operation::Stop { task })
+            Ok(tasks::Operation::Stop { task, hold: 0 })
         }
         people::Operation::Release { revision, again, .. } => {
             core.control_admit_in(
@@ -227,10 +227,10 @@ fn issue(counters: &mut Counters, operation: &mut tasks::Operation) -> Result<u6
         | tasks::Operation::Release { message: Some(message), .. }
         | tasks::Operation::Amend { message, .. } => *message = number,
         tasks::Operation::Message { word, .. } => word.number = number,
+        tasks::Operation::Stop { hold, .. } => *hold = number,
         tasks::Operation::Cancel { message: None, .. }
         | tasks::Operation::Release { message: None, .. }
-        | tasks::Operation::Move { .. }
-        | tasks::Operation::Stop { .. } => {}
+        | tasks::Operation::Move { .. } => {}
     }
     Ok(number)
 }

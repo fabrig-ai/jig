@@ -184,7 +184,7 @@ fn naming(row: &mut tasks::TaskRecord, field: PersonField, person: u64) {
         PersonField::Stopped => {
             row.phase = tasks::Phase::Held {
                 was: tasks::Was::Active(tasks::Active::Idle),
-                why: tasks::Hold::StoppedBy { party: person },
+                why: tasks::Hold::Placed { hold: person },
                 source: None,
             }
         }

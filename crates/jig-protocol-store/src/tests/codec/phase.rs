@@ -109,7 +109,7 @@ fn each_prior_held_phase_reads_back() {
     ] {
         let source = Phase::Held {
             was,
-            why: Hold::StoppedBy { party: 31 },
+            why: Hold::Placed { hold: 31 },
             source: Some(Box::new(HoldSource::Effect { connector: 2, entry: 53 })),
         };
         assert_eq!(saved_phase(&source), Ok(source));

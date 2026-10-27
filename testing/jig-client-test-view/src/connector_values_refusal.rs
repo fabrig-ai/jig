@@ -125,7 +125,7 @@ fn hold(value: owner::HoldReason) -> client::HoldCategory {
             },
         },
         owner::HoldReason::Dependency { task } => client::HoldCategory::Dependency { task },
-        owner::HoldReason::StoppedBy { party } => client::HoldCategory::StoppedBy { party },
+        owner::HoldReason::Placed { hold: party } => client::HoldCategory::Placed { hold: party },
         owner::HoldReason::Uncertain { entry } => client::HoldCategory::Uncertain { entry },
         owner::HoldReason::PoolLost { pool } => client::HoldCategory::PoolLost { pool },
         owner::HoldReason::Stalled => client::HoldCategory::Stalled,

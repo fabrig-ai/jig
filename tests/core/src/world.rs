@@ -22,6 +22,10 @@ pub fn limits() -> root::Limits {
 fn profile() -> root::Limits {
     let retry = tasks::Retry { retries: 1, base: Duration::from_millis(10), max: Duration::from_secs(1) };
     let tasks = tasks::Limits {
+        placed_holds: 1,
+        project_placed_holds: 1,
+        party_placed_holds: 1,
+        exemptions: 1,
         circle: 8,
         tasks: 2,
         funders: 4,

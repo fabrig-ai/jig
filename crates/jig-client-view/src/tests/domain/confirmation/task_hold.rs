@@ -31,7 +31,7 @@ fn owner_task_holds_retain_whole_read_facts_and_require_repeat_only_for_uncertai
         HoldCategory::Stalled,
         HoldCategory::Dependency { task: u64::MAX },
         HoldCategory::Stopped,
-        HoldCategory::StoppedBy { party: u64::MAX },
+        HoldCategory::Placed { hold: u64::MAX },
         HoldCategory::Drift,
         HoldCategory::Effects,
         HoldCategory::EffectFailed,

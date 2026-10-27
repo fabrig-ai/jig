@@ -52,6 +52,10 @@ pub fn note_line() -> jig_domain_notes::Line {
 }
 
 pub const TASKS_LIMITS: jig_domain_tasks::Limits = jig_domain_tasks::Limits {
+    placed_holds: 1,
+    project_placed_holds: 1,
+    party_placed_holds: 1,
+    exemptions: 1,
     circle: 8,
     tasks: 2,
     funders: 2,

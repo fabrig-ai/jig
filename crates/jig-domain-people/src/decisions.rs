@@ -29,7 +29,7 @@ pub enum HoldReason {
     /// An authorized stop has no named party.
     Stopped,
     /// A named party stopped the task.
-    StoppedBy { party: u64 },
+    Placed { hold: u64 },
     /// A resource drifted away from what the task needs.
     Drift,
     /// Its effects need a decision.

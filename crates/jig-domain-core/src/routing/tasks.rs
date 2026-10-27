@@ -45,6 +45,7 @@ pub(super) fn tag_tasks(
                 super::procedure_steps::append_problem(core, task, step, problem, &mut out);
                 continue;
             }
+            tasks::Request::Lifted { .. } => unreachable!("placed hold lifts have no party route yet"),
             tasks::Request::MovedToNewest { .. } => unreachable!("settings move consumes its counts"),
             tasks::Request::Released { revision } => {
                 core.release_revision(env, revision, &mut out);
@@ -573,6 +574,7 @@ pub(super) fn tag_tasks(
                         PersonTaskRoute::PoolSet { project, person } => people::Outcome::PoolSet { project, person },
                         PersonTaskRoute::HandBack(task) => people::Outcome::PersonHandedBack { task },
                         PersonTaskRoute::Answer(task) => people::Outcome::PersonAnswered { task },
+                        PersonTaskRoute::Stop(task) => people::Outcome::Stopped { task },
                         PersonTaskRoute::Cancel(task) => people::Outcome::Cancelled { task },
                         PersonTaskRoute::Release(task) => people::Outcome::Released { task },
                         PersonTaskRoute::Amended { task, released } => people::Outcome::Amended { task, released },
@@ -866,6 +868,7 @@ pub(super) fn tag_tasks(
                                     tasks::ProposalAction::Batch(_)
                                     | tasks::ProposalAction::Amend { .. }
                                     | tasks::ProposalAction::Widen { .. }
+                                    | tasks::ProposalAction::ReleasePlaced { .. }
                                     | tasks::ProposalAction::Release { .. } => {}
                                 }
                             }
@@ -886,6 +889,7 @@ pub(super) fn tag_tasks(
                     | tasks::Stored::ClosedLedger(_)
                     | tasks::Stored::DecidedProposal(_)
                     | tasks::Stored::Ledger(_)
+                    | tasks::Stored::PlacedHold(_)
                     | tasks::Stored::Stub(_)
                     | tasks::Stored::PersonProposal(_) => record,
                 };
@@ -914,6 +918,7 @@ pub(super) fn tag_tasks(
                             | tasks::Stored::Milestone(_)
                             | tasks::Stored::PersonProposal(_)
                             | tasks::Stored::History(_)
+                            | tasks::Stored::PlacedHold(_)
                             | tasks::Stored::Stub(_)
                             | tasks::Stored::Ledger(_)
                             | tasks::Stored::Writer(_)
@@ -1031,6 +1036,7 @@ pub(super) fn tag_tasks(
                     | tasks::Stored::History(_)
                     | tasks::Stored::Milestone(_)
                     | tasks::Stored::Activity(_)
+                    | tasks::Stored::PlacedHold(_)
                     | tasks::Stored::Stub(_) => {}
                 }
                 let waiting = match &record {
@@ -1057,6 +1063,7 @@ pub(super) fn tag_tasks(
                     | tasks::Stored::History(_)
                     | tasks::Stored::Milestone(_)
                     | tasks::Stored::Activity(_)
+                    | tasks::Stored::PlacedHold(_)
                     | tasks::Stored::Stub(_) => None,
                 };
                 match &record {
@@ -1099,6 +1106,7 @@ pub(super) fn tag_tasks(
                     | tasks::Stored::Pool(_)
                     | tasks::Stored::ClosedLedger(_)
                     | tasks::Stored::DecidedProposal(_)
+                    | tasks::Stored::PlacedHold(_)
                     | tasks::Stored::Stub(_) => {}
                 }
                 out.push(Request::Write(Write::Save(Record::Tasks(record))));

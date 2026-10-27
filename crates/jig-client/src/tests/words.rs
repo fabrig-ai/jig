@@ -47,7 +47,7 @@ const HOLDS: &[(H, &[u8])] = &[
     (H::Stalled, b"The executor stopped progressing"),
     (H::Dependency { task: TASK }, b"Dependency task 7"),
     (H::Stopped, b"Task stopped"),
-    (H::StoppedBy { party: TASK }, b"Task stopped"),
+    (H::Placed { hold: TASK }, b"Held by a placed hold"),
     (H::Drift, b"Required resource drifted"),
     (H::Effects, b"Effects need a decision"),
     (H::EffectFailed, b"An effect failed permanently"),
@@ -85,7 +85,7 @@ fn each_hold_category_says_its_own_phrase() {
             | H::Failures { .. }
             | H::Stalled
             | H::Stopped
-            | H::StoppedBy { .. }
+            | H::Placed { .. }
             | H::Drift
             | H::Effects
             | H::EffectFailed

@@ -67,7 +67,7 @@ fn records_1(bytes: &[u8]) {
     check!(HoldFailure, bytes);
     check!(HoldCategoryFailures, bytes);
     check!(HoldCategoryDependency, bytes);
-    check!(HoldCategoryStoppedBy, bytes);
+    check!(HoldCategoryPlaced, bytes);
     check!(HoldCategoryUncertain, bytes);
     check!(HoldCategoryPoolLost, bytes);
     check!(HoldCategory, bytes);

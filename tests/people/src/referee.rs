@@ -144,7 +144,7 @@ fn filled(why: Refusal) -> bool {
         Refusal::Moved { now } => match now {
             Moved::Hold { reason, .. } => match reason {
                 HoldReason::Dependency { task } => task != 0,
-                HoldReason::StoppedBy { party } => party != 0,
+                HoldReason::Placed { hold: party } => party != 0,
                 HoldReason::Uncertain { entry } => entry != 0,
                 HoldReason::PoolLost { pool } => pool != 0,
                 HoldReason::Exceeded(_)

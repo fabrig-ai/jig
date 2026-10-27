@@ -42,7 +42,7 @@ impl TaskHold {
                 | HoldCategory::Stalled
                 | HoldCategory::Dependency { .. }
                 | HoldCategory::Stopped
-                | HoldCategory::StoppedBy { .. }
+                | HoldCategory::Placed { .. }
                 | HoldCategory::Drift
                 | HoldCategory::Effects
                 | HoldCategory::EffectFailed

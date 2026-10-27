@@ -28,9 +28,9 @@ pub fn holds() -> [(p::HoldReason, w::HoldCategory); 21] {
             ),
         ),
         (
-            p::HoldReason::StoppedBy { party: 9 },
-            w::HoldCategory::StoppedBy(
-                w::HoldCategoryStoppedBy::new(&limits, w::HoldCategoryStoppedByParts { party: 9 }).expect("StoppedBy"),
+            p::HoldReason::Placed { hold: 9 },
+            w::HoldCategory::Placed(
+                w::HoldCategoryPlaced::new(&limits, w::HoldCategoryPlacedParts { hold: 9 }).expect("Placed"),
             ),
         ),
         (

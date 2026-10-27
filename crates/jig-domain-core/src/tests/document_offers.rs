@@ -148,7 +148,7 @@ fn cancellation_during_closing_and_release_of_a_held_closing_task_keep_the_owner
     } else {
         panic!("cancelled by owner");
     }
-    send_task(&mut core, &limits, tasks::Event::Hold { task: 3, why: tasks::Hold::StoppedBy { party: 1 } });
+    send_task(&mut core, &limits, tasks::Event::Hold { task: 3, why: tasks::Hold::Placed { hold: 1 } });
     let Document::Task(value) = make(&core, &limits, 1, &Subject::Task { task: 3 }, &window(), Wall::EPOCH).unwrap()
     else {
         panic!("held closing task")

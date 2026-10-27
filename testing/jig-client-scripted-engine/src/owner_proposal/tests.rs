@@ -59,7 +59,7 @@ fn hold() -> OwnerChipHold {
         circle: None,
         account: None,
         source: Some(part()),
-        reason: HoldCategory::StoppedBy { party: u64::MAX },
+        reason: HoldCategory::Placed { hold: u64::MAX },
         revision: u64::MAX,
         before: OwnerPriorPhase::Closing(ClosingStage::Settled),
         escalation: Some(OwnerHoldEscalation::Rejected { by: u64::MAX, reason: doc(b"12345678") }),

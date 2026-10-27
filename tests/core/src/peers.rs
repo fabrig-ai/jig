@@ -697,7 +697,7 @@ fn party_hold(value: people::HoldReason) -> parties::HoldReason {
         people::HoldReason::Stalled => parties::HoldReason::Stalled,
         people::HoldReason::Dependency { task } => parties::HoldReason::Dependency { task },
         people::HoldReason::Stopped => parties::HoldReason::Stopped,
-        people::HoldReason::StoppedBy { party } => parties::HoldReason::StoppedBy { party },
+        people::HoldReason::Placed { hold: party } => parties::HoldReason::Placed { hold: party },
         people::HoldReason::Drift => parties::HoldReason::Drift,
         people::HoldReason::Effects => parties::HoldReason::Effects,
         people::HoldReason::EffectFailed => parties::HoldReason::EffectFailed,

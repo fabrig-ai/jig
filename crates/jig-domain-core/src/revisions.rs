@@ -132,7 +132,7 @@ fn hold_reason(why: tasks::Hold) -> people::HoldReason {
         tasks::Hold::Stalled => people::HoldReason::Stalled,
         tasks::Hold::Dependency(task) => people::HoldReason::Dependency { task },
         tasks::Hold::Stopped => people::HoldReason::Stopped,
-        tasks::Hold::StoppedBy { party } => people::HoldReason::StoppedBy { party },
+        tasks::Hold::Placed { hold: party } => people::HoldReason::Placed { hold: party },
         tasks::Hold::Drift => people::HoldReason::Drift,
         tasks::Hold::Effects => people::HoldReason::Effects,
         tasks::Hold::EffectFailed => people::HoldReason::EffectFailed,

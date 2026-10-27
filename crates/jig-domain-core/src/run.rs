@@ -456,6 +456,7 @@ pub enum PersonTaskRoute {
     HandBack(u64),
     Answer(u64),
     Cancel(u64),
+    Stop(u64),
     Release(u64),
     Amended { task: u64, released: bool },
 }

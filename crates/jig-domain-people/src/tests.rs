@@ -1472,7 +1472,7 @@ fn every_final_refusal_keeps_its_facts_under_the_key_when_roles_and_time_change(
         Refusal::Limit { which: LimitKind::ProjectLiveTasks },
         Refusal::Limit { which: LimitKind::InboxFull },
         Refusal::Limit { which: LimitKind::Words },
-        Refusal::Moved { now: Moved::Hold { revision: 8, reason: HoldReason::StoppedBy { party: 2 } } },
+        Refusal::Moved { now: Moved::Hold { revision: 8, reason: HoldReason::Placed { hold: 2 } } },
         Refusal::Moved { now: Moved::Spec { revision: 4 } },
         Refusal::Moved { now: Moved::Person { revision: 3 } },
         Refusal::Moved { now: Moved::Note { revision: 2 } },

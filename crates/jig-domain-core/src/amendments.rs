@@ -41,6 +41,7 @@ impl Core {
             tasks::ProposalAction::Widen { task, authority } => authority.models = self.kept_models(*task),
             tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
+            | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. } => {}
         }
     }

@@ -77,7 +77,7 @@ impl Word {
             Self::Hold(HoldWord::Stalled) => (15, b"The executor stopped progressing", &[]),
             Self::Hold(HoldWord::Dependency) => (16, b"Dependency task ", &[HoleKind::Number]),
             Self::Hold(HoldWord::Stopped) => (17, b"Task stopped", &[]),
-            Self::Hold(HoldWord::StoppedBy) => (18, b"Task stopped", &[]),
+            Self::Hold(HoldWord::Placed) => (18, b"Held by a placed hold", &[]),
             Self::Hold(HoldWord::Drift) => (19, b"Required resource drifted", &[]),
             Self::Hold(HoldWord::Effects) => (20, b"Effects need a decision", &[]),
             Self::Hold(HoldWord::EffectFailed) => (21, b"An effect failed permanently", &[]),

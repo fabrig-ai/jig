@@ -44,7 +44,7 @@ impl Words {
                 self.text(b, JigPhrase::Word(Word::Hold(HoldWord::Dependency)), &[Hole::Number(task)]);
             }
             HoldCategory::Stopped => self.text(b, JigPhrase::Word(Word::Hold(HoldWord::Stopped)), &[]),
-            HoldCategory::StoppedBy { party } => {
+            HoldCategory::Placed { hold: party } => {
                 self.text(b, JigPhrase::Word(Word::hold(&reason)), &[]);
                 self.actor(b, jig_client::contract::Actor::Party(party));
             }

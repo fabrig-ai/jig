@@ -154,8 +154,8 @@ pub fn hold(source: &domain::Hold, limits: &wire::Limits) -> Result<wire::Hold, 
             wire::Hold::Dependency(wire::Number::new(limits, wire::NumberParts { value: *task })?)
         }
         domain::Hold::Stopped => wire::Hold::Stopped,
-        domain::Hold::StoppedBy { party } => {
-            wire::Hold::StoppedBy(wire::Person::new(limits, wire::PersonParts { person: *party })?)
+        domain::Hold::Placed { hold: party } => {
+            wire::Hold::Placed(wire::Person::new(limits, wire::PersonParts { person: *party })?)
         }
         domain::Hold::Drift => wire::Hold::Drift,
         domain::Hold::Effects => wire::Hold::Effects,
@@ -202,9 +202,9 @@ pub fn read_hold(source: wire::Hold, _limits: &wire::Limits) -> Result<domain::H
             domain::Hold::Dependency(value)
         }
         wire::Hold::Stopped => domain::Hold::Stopped,
-        wire::Hold::StoppedBy(value) => {
+        wire::Hold::Placed(value) => {
             let wire::PersonParts { person } = value.into_parts();
-            domain::Hold::StoppedBy { party: person }
+            domain::Hold::Placed { hold: person }
         }
         wire::Hold::Drift => domain::Hold::Drift,
         wire::Hold::Effects => domain::Hold::Effects,

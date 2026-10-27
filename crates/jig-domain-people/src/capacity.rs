@@ -181,7 +181,11 @@ pub(crate) fn permanent(outcome: &Outcome) -> Option<CapacityCause> {
 fn room(refusal: &Refusal) -> Option<CapacityCause> {
     match refusal {
         Refusal::Limit { which } => match which {
-            LimitKind::SettingsProposals
+            LimitKind::PlacedHolds
+            | LimitKind::ProjectPlacedHolds
+            | LimitKind::PartyPlacedHolds
+            | LimitKind::Exemptions
+            | LimitKind::SettingsProposals
             | LimitKind::Projects
             | LimitKind::Goals
             | LimitKind::ProjectLiveTasks

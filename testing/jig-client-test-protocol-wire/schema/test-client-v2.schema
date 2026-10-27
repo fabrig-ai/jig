@@ -17,7 +17,7 @@ record LackRequired { connector: u16 kind: u16 }
 record LackFailed { connector: u16 kind: u16 }
 record LackUnguarded { connector: u16 kind: u16 }
 enum Lack { approver, again: LackAgain, budget: LackBudget, grant: LackGrant, funding, task_kind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models }
-enum LimitKind { words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service }
+enum LimitKind { words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record PartyPerson { value: u64 }
 record PartyTask { value: u64 }
 record PartyDeployment { project: u32 }
@@ -29,7 +29,7 @@ record MovedSpec { revision: u64 }
 record MovedPerson { revision: u64 }
 record MovedNote { revision: u32 }
 record HoldReasonDependency { task: u64 }
-record HoldReasonStoppedBy { party: u64 }
+record HoldReasonPlaced { hold: u64 }
 record HoldReasonUncertain { entry: u64 }
 record HoldReasonPoolLost { pool: u64 }
 enum FailureClass { transient, permanent, run, agent, lost, invalid }
@@ -45,7 +45,7 @@ record RefusalEnded { how: Ending }
 record HoldReasonFailures { class: FailureClass }
 enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
 record Exceeded { bound: Bound value: u64 }
-enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, stopped_by: HoldReasonStoppedBy, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
+enum HoldReason { failures: HoldReasonFailures, stalled, dependency: HoldReasonDependency, stopped, placed: HoldReasonPlaced, drift, effects, effect_failed, uncertain: HoldReasonUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldReasonPoolLost, procedure, circle, exceeded: Exceeded }
 record MovedHold { revision: u64 reason: HoldReason }
 enum Moved { hold: MovedHold, spec: MovedSpec, person: MovedPerson, note: MovedNote }
 record RefusalMoved { now: Moved }

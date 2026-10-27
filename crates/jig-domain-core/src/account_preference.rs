@@ -107,6 +107,7 @@ impl Core {
             }
             tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
+            | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. }
             | tasks::ProposalAction::Widen { .. } => Ok(()),
         }
@@ -132,6 +133,7 @@ impl Core {
             }
             tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
+            | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. }
             | tasks::ProposalAction::Widen { .. } => Ok(()),
         }

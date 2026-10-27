@@ -113,8 +113,8 @@ pub enum HoldCategory {
         task: u64,
     },
     Stopped,
-    StoppedBy {
-        party: u64,
+    Placed {
+        hold: u64,
     },
     Drift,
     Effects,

@@ -511,7 +511,7 @@ fn hold_reason(reason: &jig_domain_people::HoldReason) -> &'static [u8] {
         HoldReason::Stalled => b"because it stalled",
         HoldReason::Dependency { .. } => b"for its dependency",
         HoldReason::Stopped => b"because it was stopped",
-        HoldReason::StoppedBy { .. } => b"because a party stopped it",
+        HoldReason::Placed { .. } => b"Held by a placed hold",
         HoldReason::Drift => b"for drift",
         HoldReason::Effects => b"for its effects",
         HoldReason::EffectFailed => b"for a failed effect",

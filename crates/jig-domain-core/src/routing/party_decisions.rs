@@ -246,6 +246,7 @@ pub(super) fn person_proposal_accept(
         tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Effect { .. }
         | tasks::ProposalAction::ProcedureEffect { .. }
+        | tasks::ProposalAction::ReleasePlaced { .. }
         | tasks::ProposalAction::Release { .. } => {}
     }
     let result_followups = core.tasks.result_proposal(proposal.proposer, proposal.number);
@@ -266,6 +267,7 @@ pub(super) fn person_proposal_accept(
         tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
+        | tasks::ProposalAction::ReleasePlaced { .. }
         | tasks::ProposalAction::Release { .. } => {}
     }
     let event = match proposal.action {
@@ -360,12 +362,14 @@ pub(super) fn person_proposal_accept(
                 },
             }
         }
-        tasks::ProposalAction::Release { task } => tasks::Event::Control {
-            reply_to: ReplyTo::new(request),
-            by: tasks::Party::Person(person),
-            task,
-            control: tasks::Control::Release { again: None, message: None },
-        },
+        tasks::ProposalAction::ReleasePlaced { task, .. } | tasks::ProposalAction::Release { task } => {
+            tasks::Event::Control {
+                reply_to: ReplyTo::new(request),
+                by: tasks::Party::Person(person),
+                task,
+                control: tasks::Control::Release { again: None, message: None },
+            }
+        }
     };
     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
         pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });

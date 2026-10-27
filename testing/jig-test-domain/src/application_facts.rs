@@ -168,7 +168,7 @@ pub(super) fn hold_reason(value: people::HoldReason) -> application::HoldReason 
         people::HoldReason::Stalled => application::HoldReason::Stalled,
         people::HoldReason::Dependency { task } => application::HoldReason::Dependency { task },
         people::HoldReason::Stopped => application::HoldReason::Stopped,
-        people::HoldReason::StoppedBy { party } => application::HoldReason::StoppedBy { party },
+        people::HoldReason::Placed { hold: party } => application::HoldReason::Placed { hold: party },
         people::HoldReason::Drift => application::HoldReason::Drift,
         people::HoldReason::Effects => application::HoldReason::Effects,
         people::HoldReason::EffectFailed => application::HoldReason::EffectFailed,

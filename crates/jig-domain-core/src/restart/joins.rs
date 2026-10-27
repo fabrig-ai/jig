@@ -63,10 +63,16 @@ impl Core {
     }
 
     fn phase_parties_resolve(&self, row: &tasks::TaskRecord) -> bool {
-        if let tasks::Phase::Held { why: tasks::Hold::StoppedBy { party }, .. } = row.phase
-            && self.people.identity(party).is_none()
-        {
-            return false;
+        if let Some(number) = row.placed {
+            let Some(hold) = self.tasks.placed_hold(number) else { return false };
+            if self.authority.policy(hold.project).is_none() {
+                return false;
+            }
+            if let tasks::Owner::Party { person } = hold.owner
+                && self.people.identity(person).is_none()
+            {
+                return false;
+            }
         }
         let closing = match &row.phase {
             tasks::Phase::Closing(closing) | tasks::Phase::Held { was: tasks::Was::Closing(closing), .. } => {
@@ -133,6 +139,7 @@ impl Core {
             tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
             | tasks::ProposalAction::Widen { .. }
+            | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. } => {}
         }
         true

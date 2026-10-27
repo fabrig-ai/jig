@@ -29,7 +29,7 @@ pub fn hold_reason_values() -> Box<[domain::HoldReason]> {
         domain::HoldReason::Stalled,
         domain::HoldReason::Dependency { task: 2 },
         domain::HoldReason::Stopped,
-        domain::HoldReason::StoppedBy { party: 2 },
+        domain::HoldReason::Placed { hold: 2 },
         domain::HoldReason::Drift,
         domain::HoldReason::Effects,
         domain::HoldReason::EffectFailed,

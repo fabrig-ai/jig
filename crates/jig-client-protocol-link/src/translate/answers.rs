@@ -428,7 +428,7 @@ pub(crate) fn hold_category(value: &w::HoldCategory, limits: &Limits) -> c::Hold
         w::HoldCategory::Stalled => c::HoldCategory::Stalled,
         w::HoldCategory::Dependency(row) => c::HoldCategory::Dependency { task: row.task() },
         w::HoldCategory::Stopped => c::HoldCategory::Stopped,
-        w::HoldCategory::StoppedBy(row) => c::HoldCategory::StoppedBy { party: row.party() },
+        w::HoldCategory::Placed(row) => c::HoldCategory::Placed { hold: row.hold() },
         w::HoldCategory::Drift => c::HoldCategory::Drift,
         w::HoldCategory::Effects => c::HoldCategory::Effects,
         w::HoldCategory::EffectFailed => c::HoldCategory::EffectFailed,

@@ -919,6 +919,7 @@ fn complete_accept(
         tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
+        | tasks::ProposalAction::ReleasePlaced { .. }
         | tasks::ProposalAction::Release { .. } => unreachable!("accepted effect"),
     };
     let message = fresh(&mut core.counters, Family::Message).expect("acceptance message admitted");
@@ -1076,6 +1077,7 @@ fn check(
                 tasks::ProposalAction::Batch(_)
                 | tasks::ProposalAction::Amend { .. }
                 | tasks::ProposalAction::Widen { .. }
+                | tasks::ProposalAction::ReleasePlaced { .. }
                 | tasks::ProposalAction::Release { .. } => return authority::Answer::Refuse,
             };
             let actual = authority::needs(&authority::Action::Effect(description.effect.clone()));

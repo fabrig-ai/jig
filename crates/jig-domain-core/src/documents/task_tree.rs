@@ -545,7 +545,7 @@ fn hold_account(task: u64, reason: tasks::Hold, source: Option<&tasks::HoldSourc
         | tasks::Hold::Stalled
         | tasks::Hold::Dependency(_)
         | tasks::Hold::Stopped
-        | tasks::Hold::StoppedBy { .. }
+        | tasks::Hold::Placed { .. }
         | tasks::Hold::Uncertain { .. }
         | tasks::Hold::Budget
         | tasks::Hold::Deadline

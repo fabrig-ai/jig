@@ -68,6 +68,10 @@ fn millis(value: u64) -> Result<Duration, What> {
 #[expect(clippy::too_many_lines, reason = "one exhaustive owner match names every task limit and retry member")]
 fn set_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], value: u64) -> Result<(), What> {
     let jig_domain_tasks::Limits {
+        placed_holds,
+        project_placed_holds,
+        party_placed_holds,
+        exemptions,
         tasks,
         funders,
         project_tasks,
@@ -121,6 +125,10 @@ fn set_tasks(limits: &mut jig_domain_tasks::Limits, name: &[u8], value: u64) -> 
     let jig_domain_tasks::Retry { retries: lost_retries, base: lost_base, max: lost_max } = lost;
     let jig_domain_tasks::Retry { retries: invalid_retries, base: invalid_base, max: invalid_max } = invalid;
     match name {
+        b"placed_holds" => *placed_holds = count(value)?,
+        b"project_placed_holds" => *project_placed_holds = count(value)?,
+        b"party_placed_holds" => *party_placed_holds = count(value)?,
+        b"exemptions" => *exemptions = count(value)?,
         b"tasks" => *tasks = count(value)?,
         b"funders" => *funders = count(value)?,
         b"project_tasks" => *project_tasks = count(value)?,

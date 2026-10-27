@@ -368,7 +368,7 @@ fn effect(core: &Core, limits: &Limits, act: Act, subject: &Subject) -> Option<a
                 | tasks::Hold::Failures(_)
                 | tasks::Hold::Stalled
                 | tasks::Hold::Stopped
-                | tasks::Hold::StoppedBy { .. } => acts::ReleaseEffect::RunAgain,
+                | tasks::Hold::Placed { .. } => acts::ReleaseEffect::RunAgain,
                 tasks::Hold::Dependency(_)
                 | tasks::Hold::Drift
                 | tasks::Hold::Effects

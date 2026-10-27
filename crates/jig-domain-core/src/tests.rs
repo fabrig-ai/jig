@@ -35,6 +35,10 @@ fn restored_application_tokens_cannot_exceed_the_deployments_allocations() {
 pub(crate) fn limits() -> Limits {
     let retry = tasks::Retry { retries: 1, base: Duration::from_millis(10), max: Duration::from_secs(1) };
     let tasks = tasks::Limits {
+        placed_holds: 1,
+        project_placed_holds: 1,
+        party_placed_holds: 1,
+        exemptions: 1,
         circle: 8,
         tasks: 2,
         funders: 4,
@@ -1250,7 +1254,7 @@ fn documents_every_escalation_reason_keeps_the_task_story_and_independent_revisi
         tasks::Hold::Stalled,
         tasks::Hold::Dependency(2),
         tasks::Hold::Stopped,
-        tasks::Hold::StoppedBy { party: 1 },
+        tasks::Hold::Placed { hold: 1 },
         tasks::Hold::Drift,
         tasks::Hold::Effects,
         tasks::Hold::EffectFailed,

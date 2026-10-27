@@ -97,7 +97,7 @@ pub enum ChipPhrase {
     Stalled,
     Dependency,
     Stopped,
-    StoppedBy,
+    Placed,
     Drift,
     Effects,
     EffectFailed,
@@ -198,7 +198,7 @@ pub const ALL: [ChipPhrase; 99] = [
     ChipPhrase::Stalled,
     ChipPhrase::Dependency,
     ChipPhrase::Stopped,
-    ChipPhrase::StoppedBy,
+    ChipPhrase::Placed,
     ChipPhrase::Drift,
     ChipPhrase::Effects,
     ChipPhrase::EffectFailed,
@@ -303,7 +303,7 @@ impl ChipPhrase {
             Self::Stalled => 7084,
             Self::Dependency => 7085,
             Self::Stopped => 7086,
-            Self::StoppedBy => 7087,
+            Self::Placed => 7087,
             Self::Drift => 7088,
             Self::Effects => 7089,
             Self::EffectFailed => 7090,
@@ -353,7 +353,7 @@ impl ChipPhrase {
             | Self::RequesterPerson
             | Self::RequesterDeployment
             | Self::Dependency
-            | Self::StoppedBy
+            | Self::Placed
             | Self::Uncertain
             | Self::PoolLost => Some(HoleKind::Number),
             Self::PhaseSince
@@ -512,7 +512,7 @@ impl ChipPhrase {
             Self::Stalled => b"Held stalled",
             Self::Dependency => b"Held dependency task: ",
             Self::Stopped => b"Held stopped",
-            Self::StoppedBy => b"Held stopped by party: ",
+            Self::Placed => b"Held stopped by party: ",
             Self::Drift => b"Held drift",
             Self::Effects => b"Held effects",
             Self::EffectFailed => b"Held effect failed",

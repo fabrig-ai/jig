@@ -50,12 +50,12 @@ enum ClosingStage { run: ClosingStageRun, delegates, effects, releases, settled 
 enum HoldFailure { transient, permanent, run, agent, lost, invalid }
 record HoldCategoryFailures { class: HoldFailure }
 record HoldCategoryDependency { task: u64 }
-record HoldCategoryStoppedBy { party: u64 }
+record HoldCategoryPlaced { hold: u64 }
 record HoldCategoryUncertain { entry: u64 }
 record HoldCategoryPoolLost { pool: u64 }
 enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
 record Exceeded { bound: Bound value: u64 }
-enum HoldCategory { failures: HoldCategoryFailures, stalled, dependency: HoldCategoryDependency, stopped, stopped_by: HoldCategoryStoppedBy, drift, effects, effect_failed, uncertain: HoldCategoryUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldCategoryPoolLost, procedure, circle, exceeded: Exceeded }
+enum HoldCategory { failures: HoldCategoryFailures, stalled, dependency: HoldCategoryDependency, stopped, placed: HoldCategoryPlaced, drift, effects, effect_failed, uncertain: HoldCategoryUncertain, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: HoldCategoryPoolLost, procedure, circle, exceeded: Exceeded }
 record OwnerChipPhaseWaiting { dependencies: list 32 u64 more: bool holds: bool }
 record OwnerChipPhaseActive { value: RunStage }
 record OwnerChipPhasePerson { address: PersonAddress taken_by: option u64 since: option u64 }
@@ -407,7 +407,7 @@ record LackingDepth { needed: option u32 allowed: u32 }
 record LackingDeadline { asked: option u64 latest: option u64 }
 record LackingTasks { needed: option u32 left: u32 }
 enum Lacking { approver, budget: LackingBudget, grant: LackingGrant, grant_kind: LackingGrantKind, funding, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackingAgain, account, writer, required: LackingRequired, failed: LackingFailed, unguarded: LackingUnguarded, task_kind: LackingTaskKind, depth: LackingDepth, deadline: LackingDeadline, tasks: LackingTasks, models }
-enum AdmissionLimit { goals, operations, grace, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, accounts, holder_accounts, sources, sign_ins, projects, settings_proposals }
+enum AdmissionLimit { goals, operations, grace, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, accounts, holder_accounts, sources, sign_ins, projects, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record LimitAdmission { which: AdmissionLimit }
 record LimitLiveTasks { project: u32 limit: u32 }
 record LimitInbox { task: u64 limit: u32 }
@@ -874,7 +874,8 @@ record OwnerTaskCapacityActionIntroduce { left: u64 right: u64 }
 record OwnerTaskCapacityActionSubscription { number: u64 }
 record OwnerTaskCapacityActionEffect { entry: u64 }
 record OwnerTaskCapacityActionClaim { attempt: u64 }
-enum OwnerTaskCapacityAction { batch: OwnerTaskCapacityActionBatch, proposal: OwnerTaskCapacityActionProposal, person_proposal: OwnerTaskCapacityActionPersonProposal, message: OwnerTaskCapacityActionMessage, source: OwnerTaskCapacityActionSource, introduce: OwnerTaskCapacityActionIntroduce, subscription: OwnerTaskCapacityActionSubscription, effect: OwnerTaskCapacityActionEffect, claim: OwnerTaskCapacityActionClaim, release, move_task }
+record OwnerTaskCapacityActionPlace { hold: u64 }
+enum OwnerTaskCapacityAction { batch: OwnerTaskCapacityActionBatch, proposal: OwnerTaskCapacityActionProposal, person_proposal: OwnerTaskCapacityActionPersonProposal, message: OwnerTaskCapacityActionMessage, source: OwnerTaskCapacityActionSource, introduce: OwnerTaskCapacityActionIntroduce, subscription: OwnerTaskCapacityActionSubscription, effect: OwnerTaskCapacityActionEffect, claim: OwnerTaskCapacityActionClaim, release, move_task, place: OwnerTaskCapacityActionPlace }
 record OwnerTaskCapacityCauseTasks { limit: u32 }
 record OwnerTaskCapacityCauseCreationFlights { limit: u32 }
 record OwnerTaskCapacityCauseResourceReports { limit: u32 }
@@ -889,7 +890,11 @@ record OwnerTaskCapacityCauseReferences { limit: u32 }
 record OwnerTaskCapacityCauseSubscriptions { limit: u32 }
 record OwnerTaskCapacityCauseFunders { limit: u32 }
 record OwnerTaskCapacityCauseWriters { limit: u32 }
-enum OwnerTaskCapacityCause { tasks: OwnerTaskCapacityCauseTasks, creation_flights: OwnerTaskCapacityCauseCreationFlights, resource_reports: OwnerTaskCapacityCauseResourceReports, project_tasks: OwnerTaskCapacityCauseProjectTasks, tree: OwnerTaskCapacityCauseTree, delegates: OwnerTaskCapacityCauseDelegates, inbox: OwnerTaskCapacityCauseInbox, holdings: OwnerTaskCapacityCauseHoldings, hold_waiters: OwnerTaskCapacityCauseHoldWaiters, proposals: OwnerTaskCapacityCauseProposals, references: OwnerTaskCapacityCauseReferences, subscriptions: OwnerTaskCapacityCauseSubscriptions, funders: OwnerTaskCapacityCauseFunders, writers: OwnerTaskCapacityCauseWriters }
+record OwnerTaskCapacityCausePlacedHolds { limit: u32 }
+record OwnerTaskCapacityCauseProjectPlacedHolds { limit: u32 }
+record OwnerTaskCapacityCausePartyPlacedHolds { limit: u32 }
+record OwnerTaskCapacityCauseExemptions { limit: u32 }
+enum OwnerTaskCapacityCause { tasks: OwnerTaskCapacityCauseTasks, creation_flights: OwnerTaskCapacityCauseCreationFlights, resource_reports: OwnerTaskCapacityCauseResourceReports, project_tasks: OwnerTaskCapacityCauseProjectTasks, tree: OwnerTaskCapacityCauseTree, delegates: OwnerTaskCapacityCauseDelegates, inbox: OwnerTaskCapacityCauseInbox, holdings: OwnerTaskCapacityCauseHoldings, hold_waiters: OwnerTaskCapacityCauseHoldWaiters, proposals: OwnerTaskCapacityCauseProposals, references: OwnerTaskCapacityCauseReferences, subscriptions: OwnerTaskCapacityCauseSubscriptions, funders: OwnerTaskCapacityCauseFunders, writers: OwnerTaskCapacityCauseWriters, placed_holds: OwnerTaskCapacityCausePlacedHolds, project_placed_holds: OwnerTaskCapacityCauseProjectPlacedHolds, party_placed_holds: OwnerTaskCapacityCausePartyPlacedHolds, exemptions: OwnerTaskCapacityCauseExemptions }
 record OwnerTaskCapacityRequest { project: option u32 by: OwnerRequester action: OwnerTaskCapacityAction cause: OwnerTaskCapacityCause }
 record OwnerTaskCapacityRefusal { request: OwnerTaskCapacityRequest at: u64 }
 enum WatchEnd { not_served: NotServed, closed, unknown, not_allowed, busy, subject_ended, signed_out, stopping }

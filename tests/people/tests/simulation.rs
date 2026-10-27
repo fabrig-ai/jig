@@ -539,7 +539,7 @@ fn an_application_request_under_a_used_key_with_another_digest_is_a_conflict() {
 fn words_to_a_stopped_chat_release_nothing() {
     let mut world = World::new(Settings::calm(93));
     let person = member(&mut world);
-    world.held_task(STOPPED_CHAT, HOLD_REVISION, jig_domain_people::HoldReason::StoppedBy { party: person });
+    world.held_task(STOPPED_CHAT, HOLD_REVISION, jig_domain_people::HoldReason::Placed { hold: person });
     let ask = Ask::Say { project: 1, task: STOPPED_CHAT, words: b"continue".as_slice().into() };
     let call = world.request(SIGN_IN, [CONTINUE_KEY; 16], ask.clone());
     assert!(world.reply(call).is_none());

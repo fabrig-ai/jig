@@ -56,8 +56,8 @@ pub fn hold(value: t::Hold, limits: &w::Limits) -> Result<w::HoldCategory, w::Pr
             limits,
             w::HoldCategoryDependencyParts { task },
         )?),
-        t::Hold::StoppedBy { party } => {
-            w::HoldCategory::StoppedBy(w::HoldCategoryStoppedBy::new(limits, w::HoldCategoryStoppedByParts { party })?)
+        t::Hold::Placed { hold: party } => {
+            w::HoldCategory::Placed(w::HoldCategoryPlaced::new(limits, w::HoldCategoryPlacedParts { hold: party })?)
         }
         t::Hold::Uncertain { entry } => {
             w::HoldCategory::Uncertain(w::HoldCategoryUncertain::new(limits, w::HoldCategoryUncertainParts { entry })?)

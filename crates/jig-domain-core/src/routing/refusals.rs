@@ -26,7 +26,32 @@ pub(super) fn person_message_refusal(core: &Core, problem: tasks::Problem) -> pe
 }
 
 fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
-    let tasks::Problem { task, why, blocked_by, .. } = problem;
+    let tasks::Problem { task, why, blocked_by, capacity } = problem;
+    if let Some(capacity) = capacity {
+        let which = match capacity.cause {
+            tasks::CapacityCause::PlacedHolds { .. } => Some(people::LimitKind::PlacedHolds),
+            tasks::CapacityCause::ProjectPlacedHolds { .. } => Some(people::LimitKind::ProjectPlacedHolds),
+            tasks::CapacityCause::PartyPlacedHolds { .. } => Some(people::LimitKind::PartyPlacedHolds),
+            tasks::CapacityCause::Exemptions { .. } => Some(people::LimitKind::Exemptions),
+            tasks::CapacityCause::Tasks { .. }
+            | tasks::CapacityCause::CreationFlights { .. }
+            | tasks::CapacityCause::ResourceReports { .. }
+            | tasks::CapacityCause::ProjectTasks { .. }
+            | tasks::CapacityCause::Tree { .. }
+            | tasks::CapacityCause::Delegates { .. }
+            | tasks::CapacityCause::Inbox { .. }
+            | tasks::CapacityCause::Holdings { .. }
+            | tasks::CapacityCause::HoldWaiters { .. }
+            | tasks::CapacityCause::Proposals { .. }
+            | tasks::CapacityCause::References { .. }
+            | tasks::CapacityCause::Subscriptions { .. }
+            | tasks::CapacityCause::Funders { .. }
+            | tasks::CapacityCause::Writers { .. } => None,
+        };
+        if let Some(which) = which {
+            return people::Outcome::Refused(people::Refusal::Limit { which });
+        }
+    }
     let names = match blocked_by {
         Some(names) => names,
         None => Box::new([]),
@@ -35,7 +60,7 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
         tasks::Refusal::Unproposable => {
             people::Refusal::Authority { lacking: people::Lack::Approver, proposable: Some(people::Accepter::Nobody) }
         }
-        tasks::Refusal::PersonRevision { revision } => {
+        tasks::Refusal::HoldRevision { revision } | tasks::Refusal::PersonRevision { revision } => {
             people::Refusal::Moved { now: people::Moved::Person { revision } }
         }
         tasks::Refusal::Busy => return people::Outcome::Again(people::Again::Busy),
@@ -44,16 +69,18 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
             people::Refusal::Authority { proposable: None, lacking: people::Lack::ResourceUnavailable }
         }
         tasks::Refusal::Unknown => people::Refusal::Unknown,
-        tasks::Refusal::State => match current_task(core, task) {
-            Some(row) => match &row.phase {
-                tasks::Phase::Closing(closing) => ended(&closing.ending),
-                tasks::Phase::Ended(ending) => ended(ending),
-                tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Held { .. } => {
-                    people::Refusal::NotWaiting
-                }
-            },
-            None => people::Refusal::Unknown,
-        },
+        tasks::Refusal::State | tasks::Refusal::Placed { .. } | tasks::Refusal::HoldOwner { .. } => {
+            match current_task(core, task) {
+                Some(row) => match &row.phase {
+                    tasks::Phase::Closing(closing) => ended(&closing.ending),
+                    tasks::Phase::Ended(ending) => ended(ending),
+                    tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Held { .. } => {
+                        people::Refusal::NotWaiting
+                    }
+                },
+                None => people::Refusal::Unknown,
+            }
+        }
         tasks::Refusal::Executor => {
             people::Refusal::Authority { proposable: None, lacking: people::Lack::TaskKind { executor: None } }
         }

@@ -45,6 +45,7 @@ impl Census {
             Key::Tasks(
                 tasks::Key::Live(_)
                 | tasks::Key::Ended(_)
+                | tasks::Key::PlacedHold(_)
                 | tasks::Key::Stub(_)
                 | tasks::Key::Ledger(_)
                 | tasks::Key::ClosedLedger(_)

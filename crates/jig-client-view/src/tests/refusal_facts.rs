@@ -147,7 +147,7 @@ fn sparse_current_hold_facts_keep_only_supplied_categories_and_numeric_identitie
         HoldCategory::Stalled,
         HoldCategory::Dependency { task: 123 },
         HoldCategory::Stopped,
-        HoldCategory::StoppedBy { party: 123 },
+        HoldCategory::Placed { hold: 123 },
         HoldCategory::Drift,
         HoldCategory::Effects,
         HoldCategory::EffectFailed,
@@ -184,7 +184,7 @@ fn sparse_current_hold_facts_keep_only_supplied_categories_and_numeric_identitie
             HoldCategory::Exceeded(_) => unreachable!("bound phrases have their own table"),
             HoldCategory::Circle => assert!(contains(&tree, b"Held for a circle of waits")),
             HoldCategory::Dependency { .. }
-            | HoldCategory::StoppedBy { .. }
+            | HoldCategory::Placed { .. }
             | HoldCategory::Uncertain { .. }
             | HoldCategory::PoolLost { .. } => assert!(contains(&tree, b"123")),
             HoldCategory::Failures { .. }

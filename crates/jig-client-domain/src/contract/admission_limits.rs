@@ -46,4 +46,8 @@ pub enum AdmissionLimit {
     SignIns,
     SettingsProposals,
     Projects,
+    PlacedHolds,
+    ProjectPlacedHolds,
+    PartyPlacedHolds,
+    Exemptions,
 }

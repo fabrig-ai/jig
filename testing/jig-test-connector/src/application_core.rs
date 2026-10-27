@@ -148,6 +148,10 @@ pub enum LimitKind {
     Resource,
     /// The service payload exceeds its bounds.
     Service,
+    PlacedHolds,
+    ProjectPlacedHolds,
+    PartyPlacedHolds,
+    Exemptions,
 }
 
 /// A party in an ending fact, independent of the tasks child's vocabulary.
@@ -214,7 +218,7 @@ pub enum HoldReason {
     /// An authorized stop has no named party.
     Stopped,
     /// A named party stopped the task.
-    StoppedBy { party: u64 },
+    Placed { hold: u64 },
     /// A resource drifted away from what the task needs.
     Drift,
     /// Its effects need a decision.

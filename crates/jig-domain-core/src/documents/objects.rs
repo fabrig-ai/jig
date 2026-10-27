@@ -417,10 +417,12 @@ fn action(
             before: super::task_tree::authority(limits, &super::small::visible(core, party, *task)?.authority)?,
             after: super::task_tree::authority(limits, authority)?,
         },
-        tasks::ProposalAction::Release { task } => ProposalAction::Release {
-            task: super::task_tree::link(core, limits, party, *task)?,
-            hold: super::task_tree::hold(limits, super::small::visible(core, party, *task)?)?,
-        },
+        tasks::ProposalAction::ReleasePlaced { task, .. } | tasks::ProposalAction::Release { task } => {
+            ProposalAction::Release {
+                task: super::task_tree::link(core, limits, party, *task)?,
+                hold: super::task_tree::hold(limits, super::small::visible(core, party, *task)?)?,
+            }
+        }
     })
 }
 pub(super) fn left(value: tasks::Numbers) -> u64 {
@@ -917,7 +919,9 @@ pub fn retained_action(limits: &Limits, number: u64, value: &tasks::ProposalActi
         tasks::ProposalAction::Widen { task, authority } => {
             RetainedAction::Widen { task: *task, authority: super::task_tree::authority(limits, authority)? }
         }
-        tasks::ProposalAction::Release { task } => RetainedAction::Release { task: *task },
+        tasks::ProposalAction::ReleasePlaced { task, .. } | tasks::ProposalAction::Release { task } => {
+            RetainedAction::Release { task: *task }
+        }
     })
 }
 /// Convert a retained lifecycle milestone without inventing missing actor/time.

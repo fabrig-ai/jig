@@ -205,10 +205,10 @@ pub enum Path {
     HoldReasonDependencyTask,
     /// Bytes after `HoldReasonDependency`.
     HoldReasonDependencyTail,
-    /// The `party` field of `HoldReasonStoppedBy`.
-    HoldReasonStoppedByParty,
-    /// Bytes after `HoldReasonStoppedBy`.
-    HoldReasonStoppedByTail,
+    /// The `hold` field of `HoldReasonPlaced`.
+    HoldReasonPlacedHold,
+    /// Bytes after `HoldReasonPlaced`.
+    HoldReasonPlacedTail,
     /// The `entry` field of `HoldReasonUncertain`.
     HoldReasonUncertainEntry,
     /// Bytes after `HoldReasonUncertain`.
@@ -1532,6 +1532,14 @@ pub enum LimitKind {
     Resource,
     /// `service` without a payload.
     Service,
+    /// `placed_holds` without a payload.
+    PlacedHolds,
+    /// `project_placed_holds` without a payload.
+    ProjectPlacedHolds,
+    /// `party_placed_holds` without a payload.
+    PartyPlacedHolds,
+    /// `exemptions` without a payload.
+    Exemptions,
 }
 
 impl LimitKind {
@@ -1877,34 +1885,34 @@ impl HoldReasonDependency {
 
 }
 
-/// Movable fields of `HoldReasonStoppedBy`.
+/// Movable fields of `HoldReasonPlaced`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HoldReasonStoppedByParts {
-    /// The `party` field.
-    pub party: u64,
+pub struct HoldReasonPlacedParts {
+    /// The `hold` field.
+    pub hold: u64,
 }
 
-/// `HoldReasonStoppedBy` in this codec family.
+/// `HoldReasonPlaced` in this codec family.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HoldReasonStoppedBy {
-    party: u64,
+pub struct HoldReasonPlaced {
+    hold: u64,
 }
 
-impl HoldReasonStoppedBy {
+impl HoldReasonPlaced {
     /// Makes a value within the given limits.
-    pub fn new(_limits: &Limits, parts: HoldReasonStoppedByParts) -> Result<Self, Problem> {
-        let HoldReasonStoppedByParts { party } = parts;
-        let value = Self { party };
+    pub fn new(_limits: &Limits, parts: HoldReasonPlacedParts) -> Result<Self, Problem> {
+        let HoldReasonPlacedParts { hold } = parts;
+        let value = Self { hold };
         Ok(value)
     }
 
-    /// Reads the `party` field.
+    /// Reads the `hold` field.
     #[must_use]
-    pub fn party(&self) -> u64 { self.party }
+    pub fn hold(&self) -> u64 { self.hold }
 
     /// Moves the fields out without copying.
     #[must_use]
-    pub fn into_parts(self) -> HoldReasonStoppedByParts { HoldReasonStoppedByParts { party: self.party } }
+    pub fn into_parts(self) -> HoldReasonPlacedParts { HoldReasonPlacedParts { hold: self.hold } }
 
 }
 
@@ -2430,8 +2438,8 @@ pub enum HoldReason {
     Dependency(HoldReasonDependency),
     /// `stopped` without a payload.
     Stopped,
-    /// `stopped_by` carrying `HoldReasonStoppedBy`.
-    StoppedBy(HoldReasonStoppedBy),
+    /// `placed` carrying `HoldReasonPlaced`.
+    Placed(HoldReasonPlaced),
     /// `drift` without a payload.
     Drift,
     /// `effects` without a payload.
@@ -5547,7 +5555,7 @@ impl LimitKind {
     #[must_use]
     pub fn measure(&self) -> u32 {
         match self {
-            Self::Words | Self::Identity | Self::Roles | Self::Arithmetic | Self::Duplicate | Self::Empty | Self::Batch | Self::ProjectLiveTasks | Self::LiveTasks | Self::Tree | Self::Depth | Self::Delegates | Self::Subscription | Self::Dependencies | Self::Cycle | Self::Spec | Self::Contract | Self::Authority | Self::Inputs | Self::Attempts | Self::LiveDelegates | Self::Restore | Self::Read | Self::Turn | Self::HoldKind | Self::HoldTaken | Self::Holds | Self::InboxFull | Self::Notes | Self::Revision | Self::Question | Self::Priority | Self::Policy | Self::Resource | Self::Service => 1,
+            Self::Words | Self::Identity | Self::Roles | Self::Arithmetic | Self::Duplicate | Self::Empty | Self::Batch | Self::ProjectLiveTasks | Self::LiveTasks | Self::Tree | Self::Depth | Self::Delegates | Self::Subscription | Self::Dependencies | Self::Cycle | Self::Spec | Self::Contract | Self::Authority | Self::Inputs | Self::Attempts | Self::LiveDelegates | Self::Restore | Self::Read | Self::Turn | Self::HoldKind | Self::HoldTaken | Self::Holds | Self::InboxFull | Self::Notes | Self::Revision | Self::Question | Self::Priority | Self::Policy | Self::Resource | Self::Service | Self::PlacedHolds | Self::ProjectPlacedHolds | Self::PartyPlacedHolds | Self::Exemptions => 1,
         }
     }
 
@@ -5589,6 +5597,10 @@ impl LimitKind {
             Self::Policy => writer.put(&[32_u8])?,
             Self::Resource => writer.put(&[33_u8])?,
             Self::Service => writer.put(&[34_u8])?,
+            Self::PlacedHolds => writer.put(&[35_u8])?,
+            Self::ProjectPlacedHolds => writer.put(&[36_u8])?,
+            Self::PartyPlacedHolds => writer.put(&[37_u8])?,
+            Self::Exemptions => writer.put(&[38_u8])?,
         }
         Ok(())
     }
@@ -5638,6 +5650,10 @@ impl LimitKind {
             32 => Self::Policy,
             33 => Self::Resource,
             34 => Self::Service,
+            35 => Self::PlacedHolds,
+            36 => Self::ProjectPlacedHolds,
+            37 => Self::PartyPlacedHolds,
+            38 => Self::Exemptions,
             _ => return Err(Problem { path: Path::LimitKindTag, reason: skein_codec::Reason::Tag }),
         };
         Ok(value)
@@ -5998,7 +6014,7 @@ impl HoldReasonDependency {
     }
 }
 
-impl HoldReasonStoppedBy {
+impl HoldReasonPlaced {
     /// Measures this record's wire encoding.
     #[must_use]
     pub fn measure(&self) -> u32 {
@@ -6009,21 +6025,21 @@ impl HoldReasonStoppedBy {
 
     /// Writes into a writer with room for the measured bytes.
     pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
-        let field_party = &self.party;
-        writer.put(&field_party.to_be_bytes())?;
+        let field_hold = &self.hold;
+        writer.put(&field_hold.to_be_bytes())?;
         Ok(())
     }
 
     /// Reads a whole record and refuses trailing bytes.
     pub fn decode(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
         let value = Self::decode_from(limits, reader)?;
-        if !reader.is_empty() { return Err(Problem { path: Path::HoldReasonStoppedByTail, reason: skein_codec::Reason::Trailing }); }
+        if !reader.is_empty() { return Err(Problem { path: Path::HoldReasonPlacedTail, reason: skein_codec::Reason::Trailing }); }
         Ok(value)
     }
 
     fn decode_from(_limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
-        let decoded_party = reader.u64().ok_or(Problem { path: Path::HoldReasonStoppedByParty, reason: skein_codec::Reason::Short })?;
-        Ok(Self { party: decoded_party })
+        let decoded_hold = reader.u64().ok_or(Problem { path: Path::HoldReasonPlacedHold, reason: skein_codec::Reason::Short })?;
+        Ok(Self { hold: decoded_hold })
     }
 }
 
@@ -6597,7 +6613,7 @@ impl HoldReason {
         match self {
             Self::Failures(record) => 1_u32.checked_add(HoldReasonFailures::measure(record)).expect("schema ceilings fit u32"),
             Self::Dependency(record) => 1_u32.checked_add(HoldReasonDependency::measure(record)).expect("schema ceilings fit u32"),
-            Self::StoppedBy(record) => 1_u32.checked_add(HoldReasonStoppedBy::measure(record)).expect("schema ceilings fit u32"),
+            Self::Placed(record) => 1_u32.checked_add(HoldReasonPlaced::measure(record)).expect("schema ceilings fit u32"),
             Self::Uncertain(record) => 1_u32.checked_add(HoldReasonUncertain::measure(record)).expect("schema ceilings fit u32"),
             Self::PoolLost(record) => 1_u32.checked_add(HoldReasonPoolLost::measure(record)).expect("schema ceilings fit u32"),
             Self::Exceeded(record) => 1_u32.checked_add(Exceeded::measure(record)).expect("schema ceilings fit u32"),
@@ -6612,7 +6628,7 @@ impl HoldReason {
             Self::Stalled => writer.put(&[1_u8])?,
             Self::Dependency(record) => { writer.put(&[2_u8])?; record.encode(writer)?; }
             Self::Stopped => writer.put(&[3_u8])?,
-            Self::StoppedBy(record) => { writer.put(&[4_u8])?; record.encode(writer)?; }
+            Self::Placed(record) => { writer.put(&[4_u8])?; record.encode(writer)?; }
             Self::Drift => writer.put(&[5_u8])?,
             Self::Effects => writer.put(&[6_u8])?,
             Self::EffectFailed => writer.put(&[7_u8])?,
@@ -6644,7 +6660,7 @@ impl HoldReason {
             1 => Self::Stalled,
             2 => Self::Dependency(HoldReasonDependency::decode_from(limits, reader)?),
             3 => Self::Stopped,
-            4 => Self::StoppedBy(HoldReasonStoppedBy::decode_from(limits, reader)?),
+            4 => Self::Placed(HoldReasonPlaced::decode_from(limits, reader)?),
             5 => Self::Drift,
             6 => Self::Effects,
             7 => Self::EffectFailed,
@@ -10045,7 +10061,7 @@ impl HoldReasonDependency {
     }
 }
 
-impl HoldReasonStoppedBy {
+impl HoldReasonPlaced {
     /// Maximum encoded bytes under these limits.
     #[must_use]
     pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
@@ -10500,7 +10516,7 @@ impl HoldReason {
     pub(crate) fn worst_case_bytes_within(limits: &Limits) -> Option<u64> {
         let mut biggest = 0_u64;
         biggest = biggest.max(HoldReasonFailures::worst_case_bytes_within(limits)?).max(HoldReasonDependency::worst_case_bytes_within(limits)?);
-        biggest = biggest.max(HoldReasonStoppedBy::worst_case_bytes_within(limits)?).max(HoldReasonUncertain::worst_case_bytes_within(limits)?);
+        biggest = biggest.max(HoldReasonPlaced::worst_case_bytes_within(limits)?).max(HoldReasonUncertain::worst_case_bytes_within(limits)?);
         biggest = biggest.max(HoldReasonPoolLost::worst_case_bytes_within(limits)?).max(Exceeded::worst_case_bytes_within(limits)?);
         1_u64.checked_add(biggest)
     }
@@ -10515,7 +10531,7 @@ impl HoldReason {
     pub(crate) fn worst_case_heap_within(limits: &Limits) -> Option<u64> {
         let mut biggest = 0_u64;
         biggest = biggest.max(HoldReasonFailures::worst_case_heap_within(limits)?).max(HoldReasonDependency::worst_case_heap_within(limits)?);
-        biggest = biggest.max(HoldReasonStoppedBy::worst_case_heap_within(limits)?).max(HoldReasonUncertain::worst_case_heap_within(limits)?);
+        biggest = biggest.max(HoldReasonPlaced::worst_case_heap_within(limits)?).max(HoldReasonUncertain::worst_case_heap_within(limits)?);
         biggest = biggest.max(HoldReasonPoolLost::worst_case_heap_within(limits)?).max(Exceeded::worst_case_heap_within(limits)?);
         biggest.checked_add(0)
     }
@@ -12358,7 +12374,7 @@ fn worst_case_bytes_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(MovedPerson::worst_case_bytes_within(limits)?);
     biggest = biggest.max(MovedNote::worst_case_bytes_within(limits)?);
     biggest = biggest.max(HoldReasonDependency::worst_case_bytes_within(limits)?);
-    biggest = biggest.max(HoldReasonStoppedBy::worst_case_bytes_within(limits)?);
+    biggest = biggest.max(HoldReasonPlaced::worst_case_bytes_within(limits)?);
     biggest = biggest.max(HoldReasonUncertain::worst_case_bytes_within(limits)?);
     biggest = biggest.max(HoldReasonPoolLost::worst_case_bytes_within(limits)?);
     biggest = biggest.max(FailureClass::worst_case_bytes_within(limits)?);
@@ -12485,7 +12501,7 @@ fn worst_case_heap_0(limits: &Limits, mut biggest: u64) -> Option<u64> {
     biggest = biggest.max(MovedPerson::worst_case_heap_within(limits)?);
     biggest = biggest.max(MovedNote::worst_case_heap_within(limits)?);
     biggest = biggest.max(HoldReasonDependency::worst_case_heap_within(limits)?);
-    biggest = biggest.max(HoldReasonStoppedBy::worst_case_heap_within(limits)?);
+    biggest = biggest.max(HoldReasonPlaced::worst_case_heap_within(limits)?);
     biggest = biggest.max(HoldReasonUncertain::worst_case_heap_within(limits)?);
     biggest = biggest.max(HoldReasonPoolLost::worst_case_heap_within(limits)?);
     biggest = biggest.max(FailureClass::worst_case_heap_within(limits)?);
@@ -12573,7 +12589,7 @@ fn worst_case_heap_1(limits: &Limits, mut biggest: u64) -> Option<u64> {
 
 #[cfg(test)]
 mod golden_tests {
-    use super::{CEILINGS, Segment, SegmentParts, ResourcePath, ResourcePathParts, Key, KeyParts, Effect, EffectParts, Attempt, AttemptParts, ProcedureState, ProcedureStateParts, ApplicationObject, ApplicationObjectParts, RefusalRole, RefusalRoleParts, RefusalTaken, RefusalTakenParts, LackAgain, LackAgainParts, LackBudget, LackBudgetParts, LackGrant, LackGrantParts, LackDepth, LackDepthParts, LackTasks, LackTasksParts, LackRequired, LackRequiredParts, LackFailed, LackFailedParts, LackUnguarded, LackUnguardedParts, Lack, LimitKind, PartyPerson, PartyPersonParts, PartyTask, PartyTaskParts, PartyDeployment, PartyDeploymentParts, Party, EndingCancelled, EndingCancelledParts, EndingDecided, EndingDecidedParts, Ending, MovedSpec, MovedSpecParts, MovedPerson, MovedPersonParts, MovedNote, MovedNoteParts, HoldReasonDependency, HoldReasonDependencyParts, HoldReasonStoppedBy, HoldReasonStoppedByParts, HoldReasonUncertain, HoldReasonUncertainParts, HoldReasonPoolLost, HoldReasonPoolLostParts, FailureClass, EffectPhase, ResourceRole, ApplicationOutcomeChanged, ApplicationOutcomeChangedParts, ApplicationOutcomeMoved, ApplicationOutcomeMovedParts, ApplicationOutcomeRole, ApplicationOutcomeRoleParts, OutboxEntry, OutboxEntryParts, RefusalAuthority, RefusalAuthorityParts, RefusalLimit, RefusalLimitParts, RefusalEnded, RefusalEndedParts, HoldReasonFailures, HoldReasonFailuresParts, Bound, Exceeded, ExceededParts, HoldReason, MovedHold, MovedHoldParts, Moved, RefusalMoved, RefusalMovedParts, Refusal, ApplicationOutcomeCoreRefused, ApplicationOutcomeCoreRefusedParts, ApplicationOutcome, ApplicationRelease, ApplicationReleaseParts, ApplicationRequest, ApplicationRequestParts, ClientSubjectObject, ClientSubjectObjectParts, ClientSubjectPanel, ClientSubjectPanelParts, ClientSubjectResult, ClientSubjectResultParts, ClientSubjectEffect, ClientSubjectEffectParts, ClientSubjectOutbox, ClientSubjectOutboxParts, ClientSubjectHold, ClientSubjectHoldParts, ClientSubjectProject, ClientSubjectProjectParts, ClientSubject, Form, Recovery, HoldMode, HoldExclusive, HoldExclusiveParts, HoldPooled, HoldPooledParts, Hold, Fact, FactParts, Description, DescriptionParts, ClientResource, ClientResourceParts, DiagnosticAvailability, ClientDocumentObject, ClientDocumentObjectParts, ClientDocumentPanel, ClientDocumentPanelParts, ClientDocumentResult, ClientDocumentResultParts, ClientDocumentEffect, ClientDocumentEffectParts, ClientDocumentOutbox, ClientDocumentOutboxParts, ClientDocumentHold, ClientDocumentHoldParts, ClientDocumentProject, ClientDocumentProjectParts, ClientDocumentDeployment, ClientDocumentDeploymentParts, ClientDocument, Request, RequestParts, Outcome, OutcomeParts, Document, DocumentParts, ReadValue, ReadValueParts, ReadResult, ReadAnswer, ReadAnswerParts, Place, PlaceParts, FamilyNumber, FamilyNumberParts, FamilyProject, FamilyProjectParts, FamilyProposer, FamilyProposalKey, FamilyProposalKeyParts, FamilyScope, FamilyKind, FamilySubject, FamilySubjectParts, Subject, SubjectParts, Read, ReadParts, ItemState, Item, ItemParts, Parameters, ParametersParts, PartDocument, PartDocumentParts, FamilyRevision, FamilyRevisionParts, FamilyConnectorDocument, FamilyConnectorDocumentParts, FamilyDocument, FamilyDocumentRecord, FamilyDocumentRecordParts, FamilyConnectorAnswer, FamilyConnectorAnswerParts, FamilyAnswer, FamilyAnswerRecord, FamilyAnswerRecordParts, Path};
+    use super::{CEILINGS, Segment, SegmentParts, ResourcePath, ResourcePathParts, Key, KeyParts, Effect, EffectParts, Attempt, AttemptParts, ProcedureState, ProcedureStateParts, ApplicationObject, ApplicationObjectParts, RefusalRole, RefusalRoleParts, RefusalTaken, RefusalTakenParts, LackAgain, LackAgainParts, LackBudget, LackBudgetParts, LackGrant, LackGrantParts, LackDepth, LackDepthParts, LackTasks, LackTasksParts, LackRequired, LackRequiredParts, LackFailed, LackFailedParts, LackUnguarded, LackUnguardedParts, Lack, LimitKind, PartyPerson, PartyPersonParts, PartyTask, PartyTaskParts, PartyDeployment, PartyDeploymentParts, Party, EndingCancelled, EndingCancelledParts, EndingDecided, EndingDecidedParts, Ending, MovedSpec, MovedSpecParts, MovedPerson, MovedPersonParts, MovedNote, MovedNoteParts, HoldReasonDependency, HoldReasonDependencyParts, HoldReasonPlaced, HoldReasonPlacedParts, HoldReasonUncertain, HoldReasonUncertainParts, HoldReasonPoolLost, HoldReasonPoolLostParts, FailureClass, EffectPhase, ResourceRole, ApplicationOutcomeChanged, ApplicationOutcomeChangedParts, ApplicationOutcomeMoved, ApplicationOutcomeMovedParts, ApplicationOutcomeRole, ApplicationOutcomeRoleParts, OutboxEntry, OutboxEntryParts, RefusalAuthority, RefusalAuthorityParts, RefusalLimit, RefusalLimitParts, RefusalEnded, RefusalEndedParts, HoldReasonFailures, HoldReasonFailuresParts, Bound, Exceeded, ExceededParts, HoldReason, MovedHold, MovedHoldParts, Moved, RefusalMoved, RefusalMovedParts, Refusal, ApplicationOutcomeCoreRefused, ApplicationOutcomeCoreRefusedParts, ApplicationOutcome, ApplicationRelease, ApplicationReleaseParts, ApplicationRequest, ApplicationRequestParts, ClientSubjectObject, ClientSubjectObjectParts, ClientSubjectPanel, ClientSubjectPanelParts, ClientSubjectResult, ClientSubjectResultParts, ClientSubjectEffect, ClientSubjectEffectParts, ClientSubjectOutbox, ClientSubjectOutboxParts, ClientSubjectHold, ClientSubjectHoldParts, ClientSubjectProject, ClientSubjectProjectParts, ClientSubject, Form, Recovery, HoldMode, HoldExclusive, HoldExclusiveParts, HoldPooled, HoldPooledParts, Hold, Fact, FactParts, Description, DescriptionParts, ClientResource, ClientResourceParts, DiagnosticAvailability, ClientDocumentObject, ClientDocumentObjectParts, ClientDocumentPanel, ClientDocumentPanelParts, ClientDocumentResult, ClientDocumentResultParts, ClientDocumentEffect, ClientDocumentEffectParts, ClientDocumentOutbox, ClientDocumentOutboxParts, ClientDocumentHold, ClientDocumentHoldParts, ClientDocumentProject, ClientDocumentProjectParts, ClientDocumentDeployment, ClientDocumentDeploymentParts, ClientDocument, Request, RequestParts, Outcome, OutcomeParts, Document, DocumentParts, ReadValue, ReadValueParts, ReadResult, ReadAnswer, ReadAnswerParts, Place, PlaceParts, FamilyNumber, FamilyNumberParts, FamilyProject, FamilyProjectParts, FamilyProposer, FamilyProposalKey, FamilyProposalKeyParts, FamilyScope, FamilyKind, FamilySubject, FamilySubjectParts, Subject, SubjectParts, Read, ReadParts, ItemState, Item, ItemParts, Parameters, ParametersParts, PartDocument, PartDocumentParts, FamilyRevision, FamilyRevisionParts, FamilyConnectorDocument, FamilyConnectorDocumentParts, FamilyDocument, FamilyDocumentRecord, FamilyDocumentRecordParts, FamilyConnectorAnswer, FamilyConnectorAnswerParts, FamilyAnswer, FamilyAnswerRecord, FamilyAnswerRecordParts, Path};
     use super::Limits;
 
     use alloc::boxed::Box;
@@ -12626,7 +12642,7 @@ mod golden_tests {
         };
         at && past
     }
-    static GOLDEN_0: [Case; 532] = [
+    static GOLDEN_0: [Case; 540] = [
         ("record_segment_smallest", || { let value = Segment::new(&CEILINGS, SegmentParts { bytes: Box::from([].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Segment::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_segment_full", || { let value = Segment::new(&CEILINGS, SegmentParts { bytes: Box::from([0_u8, 127_u8, 255_u8].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Segment::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_resource_path_smallest", || { let value = ResourcePath::new(&CEILINGS, ResourcePathParts { segments: skein_lib::List::with_capacity(0) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ResourcePath::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -12773,6 +12789,14 @@ mod golden_tests {
         ("enum_limit_kind_resource_full", || { let value = LimitKind::Resource; let bytes: &[u8] = &[33]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_limit_kind_service_smallest", || { let value = LimitKind::Service; let bytes: &[u8] = &[34]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_limit_kind_service_full", || { let value = LimitKind::Service; let bytes: &[u8] = &[34]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_placed_holds_smallest", || { let value = LimitKind::PlacedHolds; let bytes: &[u8] = &[35]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_placed_holds_full", || { let value = LimitKind::PlacedHolds; let bytes: &[u8] = &[35]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_project_placed_holds_smallest", || { let value = LimitKind::ProjectPlacedHolds; let bytes: &[u8] = &[36]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_project_placed_holds_full", || { let value = LimitKind::ProjectPlacedHolds; let bytes: &[u8] = &[36]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_party_placed_holds_smallest", || { let value = LimitKind::PartyPlacedHolds; let bytes: &[u8] = &[37]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_party_placed_holds_full", || { let value = LimitKind::PartyPlacedHolds; let bytes: &[u8] = &[37]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_exemptions_smallest", || { let value = LimitKind::Exemptions; let bytes: &[u8] = &[38]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_limit_kind_exemptions_full", || { let value = LimitKind::Exemptions; let bytes: &[u8] = &[38]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, LimitKind::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_party_person_smallest", || { let value = PartyPerson::new(&CEILINGS, PartyPersonParts { value: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, PartyPerson::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_party_person_full", || { let value = PartyPerson::new(&CEILINGS, PartyPersonParts { value: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, PartyPerson::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_party_task_smallest", || { let value = PartyTask::new(&CEILINGS, PartyTaskParts { value: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, PartyTask::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -12807,8 +12831,8 @@ mod golden_tests {
         ("record_moved_note_full", || { let value = MovedNote::new(&CEILINGS, MovedNoteParts { revision: u32::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, MovedNote::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_hold_reason_dependency_smallest", || { let value = HoldReasonDependency::new(&CEILINGS, HoldReasonDependencyParts { task: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonDependency::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_hold_reason_dependency_full", || { let value = HoldReasonDependency::new(&CEILINGS, HoldReasonDependencyParts { task: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonDependency::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_hold_reason_stopped_by_smallest", || { let value = HoldReasonStoppedBy::new(&CEILINGS, HoldReasonStoppedByParts { party: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonStoppedBy::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("record_hold_reason_stopped_by_full", || { let value = HoldReasonStoppedBy::new(&CEILINGS, HoldReasonStoppedByParts { party: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonStoppedBy::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_hold_reason_placed_smallest", || { let value = HoldReasonPlaced::new(&CEILINGS, HoldReasonPlacedParts { hold: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonPlaced::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_hold_reason_placed_full", || { let value = HoldReasonPlaced::new(&CEILINGS, HoldReasonPlacedParts { hold: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonPlaced::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_hold_reason_uncertain_smallest", || { let value = HoldReasonUncertain::new(&CEILINGS, HoldReasonUncertainParts { entry: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonUncertain::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_hold_reason_uncertain_full", || { let value = HoldReasonUncertain::new(&CEILINGS, HoldReasonUncertainParts { entry: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonUncertain::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_hold_reason_pool_lost_smallest", || { let value = HoldReasonPoolLost::new(&CEILINGS, HoldReasonPoolLostParts { pool: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReasonPoolLost::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -12889,8 +12913,8 @@ mod golden_tests {
         ("enum_hold_reason_dependency_full", || { let value = HoldReason::Dependency(HoldReasonDependency::new(&CEILINGS, HoldReasonDependencyParts { task: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[2, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_hold_reason_stopped_smallest", || { let value = HoldReason::Stopped; let bytes: &[u8] = &[3]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_hold_reason_stopped_full", || { let value = HoldReason::Stopped; let bytes: &[u8] = &[3]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_hold_reason_stopped_by_smallest", || { let value = HoldReason::StoppedBy(HoldReasonStoppedBy::new(&CEILINGS, HoldReasonStoppedByParts { party: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[4, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
-        ("enum_hold_reason_stopped_by_full", || { let value = HoldReason::StoppedBy(HoldReasonStoppedBy::new(&CEILINGS, HoldReasonStoppedByParts { party: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[4, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_hold_reason_placed_smallest", || { let value = HoldReason::Placed(HoldReasonPlaced::new(&CEILINGS, HoldReasonPlacedParts { hold: 0_u64 }).expect("golden within ceilings")); let bytes: &[u8] = &[4, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_hold_reason_placed_full", || { let value = HoldReason::Placed(HoldReasonPlaced::new(&CEILINGS, HoldReasonPlacedParts { hold: u64::MAX }).expect("golden within ceilings")); let bytes: &[u8] = &[4, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_hold_reason_drift_smallest", || { let value = HoldReason::Drift; let bytes: &[u8] = &[5]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_hold_reason_drift_full", || { let value = HoldReason::Drift; let bytes: &[u8] = &[5]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_hold_reason_effects_smallest", || { let value = HoldReason::Effects; let bytes: &[u8] = &[6]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, HoldReason::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),

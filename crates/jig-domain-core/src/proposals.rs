@@ -17,7 +17,9 @@ fn kind(action: &tasks::ProposalAction) -> (tasks::ProposalKind, authority::Prop
         }
         tasks::ProposalAction::Amend { .. } => (tasks::ProposalKind::Amend, authority::ProposalKind::Amend),
         tasks::ProposalAction::Widen { .. } => (tasks::ProposalKind::Widen, authority::ProposalKind::Widen),
-        tasks::ProposalAction::Release { .. } => (tasks::ProposalKind::Release, authority::ProposalKind::Escalation),
+        tasks::ProposalAction::ReleasePlaced { .. } | tasks::ProposalAction::Release { .. } => {
+            (tasks::ProposalKind::Release, authority::ProposalKind::Escalation)
+        }
     }
 }
 
@@ -51,7 +53,9 @@ fn action_for_check(core: &Core, action: &tasks::ProposalAction, decision: Wall)
         tasks::ProposalAction::Amend { task, amendment, .. } => Some(authority::Action::Amend(
             translate::authority_value(amendment.authority.as_ref().unwrap_or(&core.tasks.task(*task)?.authority)),
         )),
-        tasks::ProposalAction::Release { .. } => Some(authority::Action::Escalate { release: None }),
+        tasks::ProposalAction::ReleasePlaced { .. } | tasks::ProposalAction::Release { .. } => {
+            Some(authority::Action::Escalate { release: None })
+        }
     }
 }
 
@@ -428,6 +432,7 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
         | tasks::Stored::Update(_)
         | tasks::Stored::Pool(_)
         | tasks::Stored::ClosedLedger(_)
+        | tasks::Stored::PlacedHold(_)
         | tasks::Stored::Stub(_)
         | tasks::Stored::Activity(_)
         | tasks::Stored::Milestone(_) => None,

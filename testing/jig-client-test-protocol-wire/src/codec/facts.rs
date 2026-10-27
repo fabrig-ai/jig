@@ -408,8 +408,8 @@ pub(super) fn encode_hold_reason(value: &d::application_core::HoldReason) -> w::
                 .expect("admitted fields fit schema"),
         ),
         d::application_core::HoldReason::Stopped => w::HoldReason::Stopped,
-        d::application_core::HoldReason::StoppedBy { party } => w::HoldReason::StoppedBy(
-            w::HoldReasonStoppedBy::new(&w::CEILINGS, w::HoldReasonStoppedByParts { party: *party })
+        d::application_core::HoldReason::Placed { hold: party } => w::HoldReason::Placed(
+            w::HoldReasonPlaced::new(&w::CEILINGS, w::HoldReasonPlacedParts { hold: *party })
                 .expect("admitted fields fit schema"),
         ),
         d::application_core::HoldReason::Drift => w::HoldReason::Drift,
@@ -458,9 +458,9 @@ pub(super) fn decode_hold_reason(value: w::HoldReason, limits: &d::Limits) -> d:
             d::application_core::HoldReason::Dependency { task }
         }
         w::HoldReason::Stopped => d::application_core::HoldReason::Stopped,
-        w::HoldReason::StoppedBy(value) => {
-            let w::HoldReasonStoppedByParts { party } = value.into_parts();
-            d::application_core::HoldReason::StoppedBy { party }
+        w::HoldReason::Placed(value) => {
+            let w::HoldReasonPlacedParts { hold: party } = value.into_parts();
+            d::application_core::HoldReason::Placed { hold: party }
         }
         w::HoldReason::Drift => d::application_core::HoldReason::Drift,
         w::HoldReason::Effects => d::application_core::HoldReason::Effects,

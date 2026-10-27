@@ -105,6 +105,7 @@ pub(super) fn named_proposal_accept(
         tasks::ProposalAction::Batch(_)
         | tasks::ProposalAction::Amend { .. }
         | tasks::ProposalAction::Widen { .. }
+        | tasks::ProposalAction::ReleasePlaced { .. }
         | tasks::ProposalAction::Release { .. } => {}
     }
     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
@@ -180,12 +181,14 @@ pub(super) fn named_proposal_accept(
                 },
             }
         }
-        tasks::ProposalAction::Release { task } => tasks::Event::Control {
-            reply_to: ReplyTo::new(token),
-            by: tasks::Party::Task(key.task),
-            task,
-            control: tasks::Control::Release { again: None, message: None },
-        },
+        tasks::ProposalAction::ReleasePlaced { task, .. } | tasks::ProposalAction::Release { task } => {
+            tasks::Event::Control {
+                reply_to: ReplyTo::new(token),
+                by: tasks::Party::Task(key.task),
+                task,
+                control: tasks::Control::Release { again: None, message: None },
+            }
+        }
     };
     assert!(core.pending_calls.insert(key, true).is_ok(), "proposal acceptance room reserved");
     assert!(

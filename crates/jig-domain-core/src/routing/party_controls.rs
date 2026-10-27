@@ -160,8 +160,32 @@ pub(super) fn stop_request(
 ) {
     match core.control_admit(&ask, person, project, role, &env.limits.tasks) {
         Ok(task) => {
-            work.push(Event::Tasks(tasks::Event::Hold { task, why: tasks::Hold::StoppedBy { party: person } }));
-            work.push(Event::People(people::Event::Decided { request, outcome: people::Outcome::Stopped { task } }));
+            let Some(number) = crate::fresh(&mut core.counters, crate::Family::Message) else {
+                work.push(Event::People(people::Event::Decided {
+                    request,
+                    outcome: people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+                }));
+                return;
+            };
+            assert!(
+                core.person_tasks.insert(request, PersonTaskRoute::Stop(task)) == Ok(None),
+                "one stop continuation"
+            );
+            work.push(Event::Tasks(tasks::Event::Place {
+                reply_to: ReplyTo::new(request),
+                hold: tasks::PlacedHold {
+                    number,
+                    project,
+                    owner: tasks::Owner::Party { person },
+                    mode: tasks::Mode::Stop,
+                    scope: tasks::Scope::Subtree { task },
+                    reason: Box::new([]),
+                    placed_at: env.wall.as_nanos() / 1_000_000,
+                    revision: 1,
+                    exempt: Box::new([]),
+                    lifted: false,
+                },
+            }));
         }
         Err(why) => {
             work.push(Event::People(people::Event::Decided { request, outcome: people::Outcome::Refused(why) }));

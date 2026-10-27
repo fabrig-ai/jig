@@ -370,6 +370,15 @@ impl Core {
                         }
                     }
             }
+            tasks::Stored::PlacedHold(hold) => {
+                hold.number != 0
+                    && hold.number <= deployment.messages
+                    && self.authority.policy(hold.project).is_some()
+                    && match hold.owner {
+                        tasks::Owner::Party { person } => person != 0 && self.people.identity(person).is_some(),
+                        tasks::Owner::Task { task } => task != 0 && task <= deployment.tasks,
+                    }
+            }
             tasks::Stored::Stub(stub) => stub.task <= deployment.tasks,
             tasks::Stored::Live(task) => {
                 let number = match task.executor {
@@ -569,6 +578,7 @@ fn supported_proposal(task: &jig_domain_tasks::TaskRecord, deployment: &Deployme
         }
         tasks::ProposalAction::Amend { task, .. }
         | tasks::ProposalAction::Widen { task, .. }
+        | tasks::ProposalAction::ReleasePlaced { task, .. }
         | tasks::ProposalAction::Release { task } => *task != 0 && *task <= deployment.tasks,
     }
 }

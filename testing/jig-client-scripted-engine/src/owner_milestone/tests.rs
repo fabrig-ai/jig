@@ -127,7 +127,7 @@ fn owner_milestone_verdict_followup_allocations_remain_whole_and_no_terminal_clo
     assert_eq!(value.at, None);
     let numeric = line(OwnerMilestonePhase::Held {
         before: OwnerPriorPhase::Active(RunStage::BackingOff { until: Wall::from_nanos(u64::MAX) }),
-        why: HoldCategory::StoppedBy { party: u64::MAX },
+        why: HoldCategory::Placed { hold: u64::MAX },
         source: Some(OwnerPart {
             connector: u16::MAX,
             kind: OwnerPartKind::Effect,

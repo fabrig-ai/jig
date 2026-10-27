@@ -183,6 +183,7 @@ fn proposals(
             | tasks::ProposalAction::Widen { .. } => {}
             tasks::ProposalAction::Effect { .. }
             | tasks::ProposalAction::ProcedureEffect { .. }
+            | tasks::ProposalAction::ReleasePlaced { .. }
             | tasks::ProposalAction::Release { .. } => {
                 return Err(problem(task, tasks::Refusal::Unproposable));
             }

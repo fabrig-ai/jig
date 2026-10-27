@@ -1304,7 +1304,7 @@ impl Payload for HoldCategory {
             | Self::Stalled
             | Self::Dependency { .. }
             | Self::Stopped
-            | Self::StoppedBy { .. }
+            | Self::Placed { .. }
             | Self::Drift
             | Self::Effects
             | Self::EffectFailed

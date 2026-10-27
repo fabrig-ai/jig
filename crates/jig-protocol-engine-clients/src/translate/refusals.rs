@@ -281,8 +281,8 @@ fn hold(value: p::HoldReason, limits: &w::Limits) -> Result<w::HoldCategory, w::
             limits,
             w::HoldCategoryDependencyParts { task },
         )?),
-        p::HoldReason::StoppedBy { party } => {
-            w::HoldCategory::StoppedBy(w::HoldCategoryStoppedBy::new(limits, w::HoldCategoryStoppedByParts { party })?)
+        p::HoldReason::Placed { hold: party } => {
+            w::HoldCategory::Placed(w::HoldCategoryPlaced::new(limits, w::HoldCategoryPlacedParts { hold: party })?)
         }
         p::HoldReason::Uncertain { entry } => {
             w::HoldCategory::Uncertain(w::HoldCategoryUncertain::new(limits, w::HoldCategoryUncertainParts { entry })?)

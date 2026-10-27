@@ -110,7 +110,7 @@ enum Ending { done: Done, failed: FailureResult, cancelled: Cancelled }
 record FailedClass { class: Class }
 enum Bound { reasoning, metadata, items, answer, tools, history_items, history, window, output }
 record Exceeded { bound: Bound value: u64 }
-enum Hold { failures: FailedClass, stalled, dependency: Number, stopped, stopped_by: Person, drift, effects, effect_failed, uncertain: Effect, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: Number, procedure, circle, exceeded: Exceeded }
+enum Hold { failures: FailedClass, stalled, dependency: Number, stopped, placed: Number, drift, effects, effect_failed, uncertain: Effect, budget, deadline, holds_waited, resource_unavailable, resource_access, pool_lost: Number, procedure, circle, exceeded: Exceeded }
 enum Active { idle, due, preparing, claimed: Number, running: Number, backing_off: Number }
 enum Stage { run: Number, delegates, effects, releases, settled }
 record Closing { stage: Stage ending: Ending }
@@ -143,7 +143,8 @@ record ProposedEffect { connector: u16 authority: Authority attempt: u64 complet
 record ProposedProcedureEffect { connector: u16 authority: Authority step: u64 purpose: u64 }
 record ProposedAmendment { task: u64 revision: u64 amendment: Amendment }
 record ProposedWidening { task: u64 authority: Authority }
-enum ProposalAction { batch: ProposedBatch, effect: ProposedEffect, procedure_effect: ProposedProcedureEffect, amend: boxed ProposedAmendment, widen: ProposedWidening, release: Task }
+record ReleasePlaced { task: u64 hold: u64 revision: u64 }
+enum ProposalAction { batch: ProposedBatch, effect: ProposedEffect, procedure_effect: ProposedProcedureEffect, amend: boxed ProposedAmendment, widen: ProposedWidening, release: Task, release_placed: ReleasePlaced }
 record Proposal { number: u64 proposer: u64 project: u32 action: ProposalAction reason: bytes 65536 as_holder: bool state: ProposalState }
 enum Change { cancelled, released, amended, moved, proposed, proposal_passed, proposal_accepted, proposal_rejected, proposal_withdrawn }
 record Settings { tracked: option u32 addressed: option PersonAddress taken_by: option u64 instructions: option bytes 65536 spec: Spec wake: WakePolicy dependencies: list 64 Number authority: Authority llm: option LlmChoice }
@@ -245,6 +246,7 @@ record TaskHistory {
     ended_below: Endings
     question_lines: list 64 QuestionLine
     hold: u64
+    placed: option u64
     proposal_rows: list 64 ProposalRow
     instructions: option bytes 65536
     refused: list 64 Number
@@ -327,7 +329,12 @@ record TaskOutcome {
 record TaskRecord { history: TaskHistory run: TaskRun definition: TaskDefinition interests: TaskInterests outcome: TaskOutcome }
 record EndedByParty { party: u64 label: u32 ended_at: u64 task: u64 }
 record EndedByProject { project: u32 label: u32 ended_at: u64 task: u64 }
-enum Value { ledger: FundingRecord, closed_ledger: FundingRecord, writer: WriterSlot, pool: PoolSlots, history: boxed History, milestone: Milestone, person_proposal: PersonProposal, decided_proposal: PersonProposal, activity: ActivityLine, live: TaskRecord, ended: TaskRecord, stub: Stub, update: Update, result: ResultRow, ended_delegate: Edge, delegate: Edge, ended_by_party: EndedByParty, ended_by_project: EndedByProject }
+enum HoldOwner { party: Person, task: Number }
+enum HoldMode { stop, drain }
+record SubtreeScope { task: u64 }
+enum HoldScope { subtree: SubtreeScope, project }
+record PlacedHold { number: u64 project: u32 owner: HoldOwner mode: HoldMode scope: HoldScope reason: bytes 65536 placed_at: u64 revision: u64 exempt: list 4096 u64 lifted: bool }
+enum Value { ledger: FundingRecord, closed_ledger: FundingRecord, writer: WriterSlot, pool: PoolSlots, history: boxed History, milestone: Milestone, person_proposal: PersonProposal, decided_proposal: PersonProposal, activity: ActivityLine, live: TaskRecord, ended: TaskRecord, stub: Stub, update: Update, result: ResultRow, ended_delegate: Edge, delegate: Edge, ended_by_party: EndedByParty, ended_by_project: EndedByProject, placed_hold: PlacedHold }
 record ModelName { value: text 4096 }
 versioned record Row { value: Value models: list 64 ModelName }
 record CapacityActionBatch { first: option u64 members: u32 }
@@ -339,7 +346,8 @@ record CapacityActionIntroduce { left: u64 right: u64 }
 record CapacityActionSubscription { number: u64 }
 record CapacityActionEffect { entry: u64 }
 record CapacityActionClaim { attempt: u64 }
-enum CapacityAction { batch: CapacityActionBatch, proposal: CapacityActionProposal, person_proposal: CapacityActionPersonProposal, message: CapacityActionMessage, source: CapacityActionSource, introduce: CapacityActionIntroduce, subscription: CapacityActionSubscription, effect: CapacityActionEffect, claim: CapacityActionClaim, release, move_task }
+record CapacityActionPlace { hold: u64 }
+enum CapacityAction { batch: CapacityActionBatch, proposal: CapacityActionProposal, person_proposal: CapacityActionPersonProposal, message: CapacityActionMessage, source: CapacityActionSource, introduce: CapacityActionIntroduce, subscription: CapacityActionSubscription, effect: CapacityActionEffect, claim: CapacityActionClaim, release, move_task, place: CapacityActionPlace }
 record CapacityCauseTasks { limit: u32 }
 record CapacityCauseCreationFlights { limit: u32 }
 record CapacityCauseResourceReports { limit: u32 }
@@ -354,7 +362,11 @@ record CapacityCauseReferences { limit: u32 }
 record CapacityCauseSubscriptions { limit: u32 }
 record CapacityCauseFunders { limit: u32 }
 record CapacityCauseWriters { limit: u32 }
-enum CapacityCause { tasks: CapacityCauseTasks, creation_flights: CapacityCauseCreationFlights, resource_reports: CapacityCauseResourceReports, project_tasks: CapacityCauseProjectTasks, tree: CapacityCauseTree, delegates: CapacityCauseDelegates, inbox: CapacityCauseInbox, holdings: CapacityCauseHoldings, hold_waiters: CapacityCauseHoldWaiters, proposals: CapacityCauseProposals, references: CapacityCauseReferences, subscriptions: CapacityCauseSubscriptions, funders: CapacityCauseFunders, writers: CapacityCauseWriters }
+record CapacityCausePlacedHolds { limit: u32 }
+record CapacityCauseProjectPlacedHolds { limit: u32 }
+record CapacityCausePartyPlacedHolds { limit: u32 }
+record CapacityCauseExemptions { limit: u32 }
+enum CapacityCause { tasks: CapacityCauseTasks, creation_flights: CapacityCauseCreationFlights, resource_reports: CapacityCauseResourceReports, project_tasks: CapacityCauseProjectTasks, tree: CapacityCauseTree, delegates: CapacityCauseDelegates, inbox: CapacityCauseInbox, holdings: CapacityCauseHoldings, hold_waiters: CapacityCauseHoldWaiters, proposals: CapacityCauseProposals, references: CapacityCauseReferences, subscriptions: CapacityCauseSubscriptions, funders: CapacityCauseFunders, writers: CapacityCauseWriters, placed_holds: CapacityCausePlacedHolds, project_placed_holds: CapacityCauseProjectPlacedHolds, party_placed_holds: CapacityCausePartyPlacedHolds, exemptions: CapacityCauseExemptions }
 record Capacity { project: option u32 by: Party action: CapacityAction cause: CapacityCause }
 record RefusalPersonRevision { revision: u64 }
 enum LlmFault { unconfigured, effort, charter, authority, procedure, repeated }
@@ -363,7 +375,10 @@ enum AccountWhy { unknown, provider, uses, limited }
 record RefusalAccount { account: u32 why: AccountWhy }
 record RefusalCircle { cut: bool }
 record RefusalDependencyEnded { how: Status }
-enum Refusal { goals, grace, unproposable, person_revision: RefusalPersonRevision, resource_unavailable, not_ready, unknown, busy, duplicate, empty, batch, live, project, tree, depth, delegates, reference, subscription, dependencies, circle: RefusalCircle, executor, spec, contract, authority_shape, inputs, state, attempt, live_delegates, restore, read, turn, funding, hold_kind, hold_taken, holds, llm: RefusalLlm, account: RefusalAccount, dependency_ended: RefusalDependencyEnded, kept }
+record RefusalPlaced { hold: u64 }
+record RefusalHoldOwner { hold: u64 }
+record RefusalHoldRevision { revision: u64 }
+enum Refusal { goals, grace, unproposable, person_revision: RefusalPersonRevision, resource_unavailable, not_ready, unknown, busy, duplicate, empty, batch, live, project, tree, depth, delegates, reference, subscription, dependencies, circle: RefusalCircle, executor, spec, contract, authority_shape, inputs, state, attempt, live_delegates, restore, read, turn, funding, hold_kind, hold_taken, holds, llm: RefusalLlm, account: RefusalAccount, dependency_ended: RefusalDependencyEnded, kept, placed: RefusalPlaced, hold_owner: RefusalHoldOwner, hold_revision: RefusalHoldRevision }
 versioned record TaskProblem { task: option u64 why: Refusal blocked_by: option list 8192 Number capacity: option Capacity }
 record ResultFollowupsDelegates { value: list 4 Creation }
 record ResultFollowupsProposal { value: Proposal }
