@@ -245,6 +245,8 @@ pub enum ReadValue {
 pub enum ReadNone {
     /// Original turn payload bytes, past the engine or client read bound.
     TooLarge { bytes: u64 },
+    /// The first row needs more joins than the whole read bound.
+    TooLinked { joins: u32 },
     /// The visible turn could not be read or decoded whole.
     Malformed,
     /// No object the party may see.

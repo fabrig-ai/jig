@@ -735,6 +735,7 @@ impl Scripted {
                         ReadNone::Unknown
                         | ReadNone::Refused
                         | ReadNone::Gone
+                        | ReadNone::TooLinked { .. }
                         | ReadNone::TooLarge { .. }
                         | ReadNone::Malformed,
                     ) => family::ReadResult::Unknown,

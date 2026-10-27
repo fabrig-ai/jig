@@ -508,6 +508,9 @@ pub(crate) fn read_result(
                 Source::Window { .. } | Source::Watch(_) | Source::Card(_) => {}
             }
             match why {
+                contract::ReadNone::TooLinked { joins } => {
+                    crate::notices::kept::show(domain, crate::notices::kept::Kind::TooLinked { joins });
+                }
                 contract::ReadNone::TooLarge { .. }
                 | contract::ReadNone::Malformed
                 | contract::ReadNone::Unknown

@@ -1,7 +1,7 @@
 //! Bounds and unread evidence for parties' transcript reads.
 use super::{
-    Box, CHILD, Token, assert_empty, child_store, core, corrupt_disk, fixtures, one_row, party_store, party_submit,
-    read_disk, read_result, reads, reply_range, turn_range, turn_reply, waiting_party,
+    Box, CHILD, Token, assert_empty, assert_too_linked, child_store, core, corrupt_disk, fixtures, one_row,
+    party_store, party_submit, read_disk, read_result, reads, reply_range, turn_range, turn_reply, waiting_party,
 };
 
 #[test]
@@ -33,7 +33,8 @@ fn a_reply_turn_counts_against_the_join_budget() {
     let (mut store, disk) = party_store();
     store.limits.joins = TURN_JOINS;
     let below = waiting_party(&mut store, reply_range());
-    assert_empty(&read_disk(&mut store, below, &disk));
+    let result = read_disk(&mut store, below, &disk);
+    assert_too_linked(&result, TURN_JOINS);
 }
 
 #[test]
@@ -87,13 +88,14 @@ fn an_oversized_turn_keeps_its_payload_size() {
 }
 
 #[test]
-fn a_turn_past_the_join_budget_is_busy() {
+fn a_turn_past_the_join_budget_names_its_bound() {
     // Even the owner's single join is unavailable.
     const NO_JOINS: u32 = 0;
     let (mut store, disk) = party_store();
     store.limits.joins = NO_JOINS;
     let below = waiting_party(&mut store, turn_range());
-    let reads::Loaded::Busy = read_disk(&mut store, below, &disk) else { panic!("owner evidence requires one join") };
+    let result = read_disk(&mut store, below, &disk);
+    assert_too_linked(&result, NO_JOINS);
 }
 
 #[test]

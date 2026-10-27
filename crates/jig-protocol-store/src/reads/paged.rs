@@ -95,6 +95,9 @@ pub(super) fn activity(
             && let tasks::Line::Turn { .. } = line.line
         {
             if spent.joins == 0 {
+                if found.is_empty() {
+                    return Err(Failure::Joins);
+                }
                 more = true;
                 break;
             }
@@ -109,7 +112,7 @@ pub(super) fn activity(
                 more = true;
                 break;
             }
-            Err(Failure::Corrupt) => return Err(Failure::Corrupt),
+            Err(error @ (Failure::Joins | Failure::Corrupt)) => return Err(error),
         }
     }
     Ok(reads::Loaded::Page { rows: found.into_boxed(), next: if more { last } else { None } })
@@ -161,7 +164,10 @@ fn family(
                 last = Some(position);
                 found.push(row).expect("bounded by walked rows");
             }
-            Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+            Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+            Err(Failure::Joins | Failure::Cut) => {
+                return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+            }
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         }
     }
@@ -233,7 +239,10 @@ pub(super) fn notes(store: &mut Store, range: &reads::Range, spent: &mut Spent) 
                 last = Some(position);
                 continue;
             }
-            Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+            Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+            Err(Failure::Joins | Failure::Cut) => {
+                return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+            }
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         };
         match joins::row(store, value, None, None, spent) {
@@ -241,7 +250,10 @@ pub(super) fn notes(store: &mut Store, range: &reads::Range, spent: &mut Spent) 
                 last = Some(position);
                 found.push(row).expect("bounded by walked lines");
             }
-            Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+            Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+            Err(Failure::Joins | Failure::Cut) => {
+                return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+            }
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         }
     }

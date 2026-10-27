@@ -15,8 +15,10 @@ pub(crate) struct Spent {
     pub joins: u32,
 }
 
+#[derive(Debug)]
 pub(crate) enum Failure {
     Cut,
+    Joins,
     Corrupt,
 }
 
@@ -86,6 +88,9 @@ pub(crate) fn answer(
     match result {
         Ok(Some(result)) => above.push(Event::Read { owner, result }),
         Ok(None) => {}
+        Err(Failure::Joins) => {
+            above.push(Event::Read { owner, result: Loaded::TooLinked { joins: store.limits.joins } });
+        }
         Err(Failure::Cut) => above.push(Event::Read { owner, result: empty() }),
         Err(Failure::Corrupt) => loads::corrupt(store, owner, above),
     }

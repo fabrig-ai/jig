@@ -549,6 +549,7 @@ pub(crate) fn loaded(core: &mut Core, env: &Env<Limits>, load: Token, result: Lo
             Loaded::TurnProblem { task, attempt, turn: number, owner, why } => {
                 turn::failure(core, &pending.range, task, attempt, number, &owner, why)
             }
+            Loaded::TooLinked { joins } => Answer::None(Why::TooLinked { joins }),
             Loaded::Busy => Answer::None(Why::Busy),
             Loaded::Gone => Answer::None(Why::Gone),
             Loaded::Page { rows, next } => rows::from_store(core, &env.limits, &pending.range, rows, next, env.wall),

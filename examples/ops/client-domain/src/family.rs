@@ -169,6 +169,7 @@ pub(crate) mod infrastructure {
                         }
                         jig_client::contract::ReadNone::Unknown
                         | jig_client::contract::ReadNone::Gone
+                        | jig_client::contract::ReadNone::TooLinked { .. }
                         | jig_client::contract::ReadNone::TooLarge { .. }
                         | jig_client::contract::ReadNone::Malformed => d::ReadResult::Unknown,
                     },
@@ -295,6 +296,7 @@ pub(crate) mod observability {
                         }
                         jig_client::contract::ReadNone::Unknown
                         | jig_client::contract::ReadNone::Gone
+                        | jig_client::contract::ReadNone::TooLinked { .. }
                         | jig_client::contract::ReadNone::TooLarge { .. }
                         | jig_client::contract::ReadNone::Malformed => d::ReadResult::Unknown,
                     },

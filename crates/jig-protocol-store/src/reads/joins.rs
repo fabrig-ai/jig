@@ -36,7 +36,7 @@ pub(super) fn as_task(value: &core::Record) -> Option<&tasks::TaskRecord> {
 }
 
 pub(super) fn get(store: &mut Store, key: &core::Key, spent: &mut Spent) -> Result<Option<core::Record>, Failure> {
-    spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Cut)?;
+    spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Joins)?;
     point::record(store, key)
 }
 
@@ -45,7 +45,7 @@ pub(super) fn owner(
     task: u64,
     spent: &mut Spent,
 ) -> Result<Option<Box<tasks::TaskRecord>>, Failure> {
-    spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Cut)?;
+    spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Joins)?;
     // A miss decodes nothing, so probing live then ended needs only one
     // join's decoded-record memory, even when neither key is found.
     for key in [tasks::Key::Live(task), tasks::Key::Ended(task)] {
@@ -96,22 +96,22 @@ pub(super) fn row(
                 tasks::Party::Task(number) => number,
                 tasks::Party::Person(_) | tasks::Party::Deployment { .. } => break,
             };
-            if !seen.insert(number).or(Err(Failure::Cut))? {
+            if !seen.insert(number).or(Err(Failure::Joins))? {
                 break;
             }
             let Some(parent) = owner(store, number, spent)? else { break };
             requester = parent.requester;
-            ancestors.push(number).or(Err(Failure::Cut))?;
-            linked.push(parent).or(Err(Failure::Cut))?;
+            ancestors.push(number).or(Err(Failure::Joins))?;
+            linked.push(parent).or(Err(Failure::Joins))?;
         }
         for numbers in
             [&task.dependencies, &task.spec.inputs, &task.references, &task.delegates, &task.result_followups]
         {
             for &number in numbers {
-                if seen.insert(number).or(Err(Failure::Cut))?
+                if seen.insert(number).or(Err(Failure::Joins))?
                     && let Some(record) = owner(store, number, spent)?
                 {
-                    linked.push(record).or(Err(Failure::Cut))?;
+                    linked.push(record).or(Err(Failure::Joins))?;
                 }
             }
         }

@@ -285,6 +285,8 @@ pub enum Loaded {
     Busy,
     /// This range is no longer available.
     Gone,
+    /// The first row needs more joins than the whole read bound (protocol/store.md 7.3).
+    TooLinked { joins: u32 },
 }
 
 /// A selected frame could not be supplied; visibility is checked before its reason leaves.
@@ -436,6 +438,8 @@ pub enum Why {
     Gone,
     /// The visible turn could not fit the read budget; original payload bytes.
     TooLarge { bytes: u64 },
+    /// The first row needs more joins than the whole read bound.
+    TooLinked { joins: u32 },
     /// The visible turn frame could not be read whole.
     Malformed,
     /// The read's sign-in is unknown to a ready engine, ended or expired.

@@ -238,3 +238,18 @@ fn a_single_turn_read_carries_the_same_archive_as_activity() {
     let w::TurnBytes::Carried(turn) = archive.turn() else { panic!("carried") };
     assert_eq!(turn.bytes(), record.transcript.as_ref());
 }
+
+#[test]
+fn a_client_reading_a_too_linked_task_is_told_its_join_bound() {
+    let mut exchange = f::read_exchange();
+    let limits = f::wire();
+    let task = w::Read::Task(w::ReadTask::new(&limits, w::ReadTaskParts { task: 1 }).expect("task"));
+    let (owner, reply, _) = exchange.read(&task);
+    exchange.release_read(reply, reads::Answer::None(reads::Why::TooLinked { joins: 4 }));
+    // read_answer decodes the real engine response bytes with the client codec.
+    let w::ReadAnswer::None(reason) = exchange.read_answer(owner) else { panic!("read refusal") };
+    assert_eq!(
+        jig_client_protocol_link::translate::reads::none(reason.value()),
+        jig_client_domain::contract::ReadNone::TooLinked { joins: 4 },
+    );
+}

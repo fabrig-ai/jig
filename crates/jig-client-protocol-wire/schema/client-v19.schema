@@ -467,7 +467,8 @@ enum QueryOrder { number, changed, activity, priority, ended }
 record TaskQuery { project: option u32 requester: option OwnerRequester root: option u64 parent: option u64 label: option u32 phase: option PhaseClass executor: option ExecutorKind tracked: option bool order: QueryOrder }
 record ReadTasks { query: TaskQuery live: option Cursor ended: option Cursor }
 record TurnTooLarge { bytes: u64 }
-enum ReadNone { unknown, refused, gone, busy, signed_out, too_large: TurnTooLarge, malformed }
+record ReadTooLinked { joins: u32 }
+enum ReadNone { unknown, refused, gone, busy, signed_out, too_large: TurnTooLarge, malformed, too_linked: ReadTooLinked }
 record ReadAnswerNone { value: ReadNone }
 enum ReadAnswer { not_served: NotServed, value: Owned, none: ReadAnswerNone }
 record OwnerPeriodTimes { began: u64 next: option u64 }

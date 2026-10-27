@@ -294,7 +294,10 @@ fn family(
                 }
                 last = Some(position);
             }
-            Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+            Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+            Err(Failure::Joins | Failure::Cut) => {
+                return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+            }
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         }
     }
@@ -409,7 +412,10 @@ pub(super) fn subtree_history(
         let task = member.task;
         let owner = match joins::owner(store, task, spent) {
             Ok(owner) => owner,
-            Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+            Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+            Err(Failure::Joins | Failure::Cut) => {
+                return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+            }
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         };
         let selected =
@@ -440,7 +446,10 @@ pub(super) fn subtree_history(
                     found.push(row).expect("bounded by remaining history rows");
                     last = Some(position);
                 }
-                Err(Failure::Cut) => return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last }),
+                Err(Failure::Joins) if last.is_none() => return Err(Failure::Joins),
+                Err(Failure::Joins | Failure::Cut) => {
+                    return Ok(reads::Loaded::Page { rows: found.into_boxed(), next: last });
+                }
                 Err(Failure::Corrupt) => return Err(Failure::Corrupt),
             }
         }

@@ -227,6 +227,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: Told, out: &mut Q
                     }
                     jig_client::contract::ReadNone::Unknown
                     | jig_client::contract::ReadNone::Gone
+                    | jig_client::contract::ReadNone::TooLinked { .. }
                     | jig_client::contract::ReadNone::TooLarge { .. }
                     | jig_client::contract::ReadNone::Malformed => first::ReadResult::Unknown,
                 },

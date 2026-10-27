@@ -229,3 +229,28 @@ fn an_unread_frame_ends_the_page_after_its_line() {
         assert_eq!(rows[0].unjoined, Some(reads::UnjoinedTurn::Unread { task: CHILD, attempt: 1, turn: 3 }), "{label}");
     }
 }
+
+#[test]
+fn an_activity_first_turn_past_its_joins_names_the_bound() {
+    const OWNER_JOINS: u32 = 1; // The owner fits, but the newest turn cannot join.
+    let (mut store, _) = transcript_page_with_last(WORDS[2]);
+    store.limits.joins = OWNER_JOINS;
+    for after in [None, Some(activity_position(4))] {
+        let result = load(&mut store, full_range(after));
+        assert_too_linked(&result, OWNER_JOINS);
+    }
+}
+
+#[test]
+fn an_activity_join_cut_after_words_keeps_its_retry_position() {
+    const OWNER_JOINS: u32 = 1;
+    let (mut store, _) = transcript_page_with_last(WORDS[2]);
+    store.limits.joins = OWNER_JOINS;
+    let mut range = full_range(Some(activity_position(5)));
+    let (rows, next) = page(load(&mut store, range.clone()));
+    assert_eq!(values(&rows).as_ref(), [fixtures::activity_line(CHILD, 4)]);
+    assert_eq!(next, Some(activity_position(4)));
+    range.after = next;
+    let result = load(&mut store, range);
+    assert_too_linked(&result, OWNER_JOINS);
+}

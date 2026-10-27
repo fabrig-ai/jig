@@ -1344,6 +1344,7 @@ dependencies = [
 name = "jig-store-world"
 version = "0.0.0"
 dependencies = [
+ "jig-core-world",
  "jig-domain-accounts",
  "jig-domain-authority",
  "jig-domain-brief",
@@ -1353,6 +1354,7 @@ dependencies = [
  "jig-domain-people",
  "jig-domain-tasks",
  "jig-domain-views",
+ "jig-protocol-config",
  "jig-protocol-store",
  "jig-test-patches",
  "jig-test-patches-jig",

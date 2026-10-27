@@ -56,6 +56,12 @@ fn each_wire_none_keeps_its_reason() {
     for (wire, client) in [
         (w::ReadNone::Malformed, c::ReadNone::Malformed),
         (
+            w::ReadNone::TooLinked(
+                w::ReadTooLinked::new(&fixtures::limits().wire, w::ReadTooLinkedParts { joins: 4 }).expect("bound"),
+            ),
+            c::ReadNone::TooLinked { joins: 4 },
+        ),
+        (
             w::ReadNone::TooLarge(
                 w::TurnTooLarge::new(&fixtures::limits().wire, w::TurnTooLargeParts { bytes: 8192 }).expect("size"),
             ),
@@ -116,6 +122,12 @@ fn a_lost_read_is_answered_once() {
 fn a_read_none_answer_keeps_each_wire_reason_once() {
     for (wire, client) in [
         (w::ReadNone::Malformed, c::ReadNone::Malformed),
+        (
+            w::ReadNone::TooLinked(
+                w::ReadTooLinked::new(&fixtures::limits().wire, w::ReadTooLinkedParts { joins: 4 }).expect("bound"),
+            ),
+            c::ReadNone::TooLinked { joins: 4 },
+        ),
         (
             w::ReadNone::TooLarge(
                 w::TurnTooLarge::new(&fixtures::limits().wire, w::TurnTooLargeParts { bytes: 8192 }).expect("size"),
@@ -360,4 +372,14 @@ fn the_single_turn_decoder_uses_the_archive_bound() {
         translate::turn::archive(fixtures::single_turn_record(fixtures::FULL_TURN), &archive_limits),
         Ok(fixtures::expected_single_turn())
     );
+}
+
+#[test]
+fn a_too_linked_read_keeps_its_bound_after_decoding() {
+    let (mut h, exchange) = fixtures::Harness::reading();
+    let none = w::ReadNone::TooLinked(
+        w::ReadTooLinked::new(&fixtures::limits().wire, w::ReadTooLinkedParts { joins: 4 }).expect("bound"),
+    );
+    h.answer(exchange, &fixtures::read_none_answer(none));
+    assert_eq!(h.read_answered(), Some(&Readout::Jig(c::ReadResult::None(c::ReadNone::TooLinked { joins: 4 }))));
 }

@@ -14,7 +14,7 @@ pub(crate) struct Party {
     pub bytes: u64,
     pub turn: Option<(u64, u32)>,
     pub problem: Option<domain::reads::TurnFailure>,
-    pub busy: bool,
+    pub cut: Option<reads::Failure>,
     pub frame_bytes: Option<u32>,
 }
 #[derive(Debug)]

@@ -1020,7 +1020,8 @@ impl Payload for ReadValue {
 impl Payload for ReadNone {
     fn heap(&self, _bounds: &Bounds) -> Option<u64> {
         match self {
-            Self::TooLarge { .. }
+            Self::TooLinked { .. }
+            | Self::TooLarge { .. }
             | Self::Malformed
             | Self::Unknown
             | Self::Refused

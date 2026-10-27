@@ -69,6 +69,7 @@ fn each_read_none_round_trips_unchanged() {
         ReadNone::Busy,
         ReadNone::SignedOut,
         ReadNone::Malformed,
+        ReadNone::TooLinked(ReadTooLinked::new(&limits, ReadTooLinkedParts { joins: 4 }).expect("join bound")),
         ReadNone::TooLarge(TurnTooLarge::new(&limits, TurnTooLargeParts { bytes: 8192 }).expect("size")),
     ] {
         let answer = ReadAnswer::None(fixtures::read_none(none));

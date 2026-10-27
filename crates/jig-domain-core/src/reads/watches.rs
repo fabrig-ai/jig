@@ -63,7 +63,9 @@ fn from_store(
 ) -> Result<Document, views::End> {
     let (raw, next) = match result {
         Loaded::Page { rows, next } => (rows, next),
-        Loaded::Busy | Loaded::Gone | Loaded::TurnProblem { .. } => return Err(views::End::Gone),
+        Loaded::TooLinked { .. } | Loaded::Busy | Loaded::Gone | Loaded::TurnProblem { .. } => {
+            return Err(views::End::Gone);
+        }
     };
     let Some(binding) = core.view_subjects.get(&watcher) else { return Err(views::End::Gone) };
     let subject = &core.view_names.get(binding.subject).expect("bound task subject").subject;

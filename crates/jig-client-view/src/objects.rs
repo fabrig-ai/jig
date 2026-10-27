@@ -791,6 +791,9 @@ pub(crate) fn read_card(
         ReadResult::None(why) => {
             match why {
                 ReadNone::SignedOut => crate::ui::signed_out(domain, out, lent),
+                ReadNone::TooLinked { joins } => {
+                    crate::notices::kept::show(domain, crate::notices::kept::Kind::TooLinked { joins });
+                }
                 ReadNone::TooLarge { .. }
                 | ReadNone::Malformed
                 | ReadNone::Unknown

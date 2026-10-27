@@ -1,5 +1,5 @@
 //! Index pages use their physical keys and point-joined owners.
-use super::{assert_empty, fixtures, linked_numbers, load, page, values};
+use super::{assert_empty, assert_too_linked, fixtures, linked_numbers, load, page, values};
 use crate::Store;
 use alloc::boxed::Box;
 use fixtures::{ALICE, CHILD, GOAL, GRANDCHILD, PROJECT};
@@ -423,4 +423,22 @@ fn ended_party(task: u64) -> core::Record {
         ended_at: skein_lib::Wall::from_nanos(task),
         task,
     }))
+}
+
+#[test]
+fn an_index_first_row_past_its_joins_names_the_bound() {
+    const OWNER_JOINS: u32 = 1; // A conversation needs its ended read-position join too.
+    let mut store = ended_store();
+    store.limits.joins = OWNER_JOINS;
+    let result = load(&mut store, ended_range());
+    assert_too_linked(&result, OWNER_JOINS);
+}
+
+#[test]
+fn an_inbox_first_row_past_its_joins_names_the_bound() {
+    const OWNER_JOINS: u32 = 1;
+    let mut store = inbox_store();
+    store.limits.joins = OWNER_JOINS;
+    let result = load(&mut store, inbox_range(reads::Group::Results));
+    assert_too_linked(&result, OWNER_JOINS);
 }

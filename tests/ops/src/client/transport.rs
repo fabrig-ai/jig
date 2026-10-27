@@ -668,6 +668,7 @@ fn application_read(channel: Channel, local: Token, terminal: std::result::Resul
                 ReadNone::Unknown
                 | ReadNone::Refused
                 | ReadNone::Gone
+                | ReadNone::TooLinked { .. }
                 | ReadNone::TooLarge { .. }
                 | ReadNone::Malformed => obs::ReadResult::Unknown,
             },
@@ -680,6 +681,7 @@ fn application_read(channel: Channel, local: Token, terminal: std::result::Resul
                 ReadNone::Unknown
                 | ReadNone::Refused
                 | ReadNone::Gone
+                | ReadNone::TooLinked { .. }
                 | ReadNone::TooLarge { .. }
                 | ReadNone::Malformed => infra::ReadResult::Unknown,
             },

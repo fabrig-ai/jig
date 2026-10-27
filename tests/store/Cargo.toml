@@ -29,6 +29,8 @@ skein-fake-machine.workspace = true
 skein-sim.workspace = true
 
 [dev-dependencies]
+jig-protocol-config.workspace = true
+jig-core-world = { path = "../core" }
 skein-heap.workspace = true
 
 [lints.rust]

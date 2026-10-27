@@ -147,6 +147,9 @@ pub(crate) fn none(why: reads::Why, limits: &w::Limits) -> w::ReadAnswer {
         reads::Why::TooLarge { bytes } => w::ReadNone::TooLarge(
             w::TurnTooLarge::new(limits, w::TurnTooLargeParts { bytes }).expect("no bounded field"),
         ),
+        reads::Why::TooLinked { joins } => w::ReadNone::TooLinked(
+            w::ReadTooLinked::new(limits, w::ReadTooLinkedParts { joins }).expect("no bounded field"),
+        ),
         reads::Why::Malformed => w::ReadNone::Malformed,
         reads::Why::Unknown => w::ReadNone::Unknown,
         reads::Why::Busy => w::ReadNone::Busy,

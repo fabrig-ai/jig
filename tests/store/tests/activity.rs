@@ -5,6 +5,9 @@ use jig_store_world::{World, root};
 use skein_lib::{Token, Wall};
 
 const OWNER: u64 = 3;
+// The activity fixture's existing per-read row and byte allowances.
+const PAGE_ROWS: u32 = 32;
+const PAGE_BYTES: u64 = 1_048_576;
 
 fn ended(number: u64) -> Box<tasks::TaskRecord> {
     let core::Record::Tasks(tasks::Stored::Live(mut task)) = root::live_task(number) else {
@@ -60,15 +63,10 @@ fn fixture(joins: u32, turns: [u64; 3]) -> World {
 }
 
 fn activity(world: &mut World, after: Option<reads::Position>) -> (Box<[reads::Row]>, Option<reads::Position>) {
-    bounded_activity(world, after, 32, 1_048_576)
+    bounded_activity(world, after, PAGE_ROWS, PAGE_BYTES)
 }
 
-fn bounded_activity(
-    world: &mut World,
-    after: Option<reads::Position>,
-    rows: u32,
-    bytes: u64,
-) -> (Box<[reads::Row]>, Option<reads::Position>) {
+fn loaded_activity(world: &mut World, after: Option<reads::Position>, rows: u32, bytes: u64) -> reads::Loaded {
     let events = world.request(Request::Read {
         owner: Token::new(1),
         range: reads::Range {
@@ -81,10 +79,19 @@ fn bounded_activity(
         },
     });
     let mut events = events.into_iter();
-    let Some(Event::Read { result: reads::Loaded::Page { rows, next }, .. }) = events.next() else {
-        panic!("activity page terminal")
-    };
+    let Some(Event::Read { result, .. }) = events.next() else { panic!("activity terminal") };
     assert!(events.next().is_none(), "one read terminal");
+    result
+}
+
+fn bounded_activity(
+    world: &mut World,
+    after: Option<reads::Position>,
+    rows: u32,
+    bytes: u64,
+) -> (Box<[reads::Row]>, Option<reads::Position>) {
+    let result = loaded_activity(world, after, rows, bytes);
+    let reads::Loaded::Page { rows, next } = result else { panic!("activity page: {result:?}") };
     (rows, next)
 }
 
@@ -128,22 +135,26 @@ fn ended_dependent_activity_is_not_false_eof() {
 }
 
 #[test]
-fn an_activity_page_cut_before_its_first_row_says_cut() {
+fn an_activity_first_turn_past_its_joins_is_too_linked() {
     // The owner consumes the only join, before the newest turn.
     const OWNER_JOINS: u32 = 1;
-    let mut bounded = fixture(OWNER_JOINS, [2, 5, 8]);
-    let (rows, next) = activity(&mut bounded, None);
-    assert!(rows.is_empty());
-    let next = next.expect("the owner used its join; retry the unaccepted newest turn");
-    assert_eq!(next, reads::Position::Owner(core::Key::Tasks(tasks::Key::Activity { task: OWNER, position: 9 })));
-    let (rows, repeated) = activity(&mut bounded, Some(next.clone()));
-    assert!(rows.is_empty());
-    assert_eq!(repeated, Some(next.clone()), "another cut preserves the retry position");
+    let mut world = fixture(OWNER_JOINS, [2, 5, 8]);
+    let retry = reads::Position::Owner(core::Key::Tasks(tasks::Key::Activity { task: OWNER, position: 9 }));
+    for after in [None, Some(retry)] {
+        let result = loaded_activity(&mut world, after, PAGE_ROWS, PAGE_BYTES);
+        let reads::Loaded::TooLinked { joins } = result else { panic!("join refusal: {result:?}") };
+        assert_eq!(joins, OWNER_JOINS);
+    }
+}
 
-    // The same committed records, served with enough joins to accept the turn.
-    let mut sufficient = fixture(4, [2, 5, 8]);
-    let (rows, _) = activity(&mut sufficient, Some(next));
-    assert_eq!(positions(&rows).first(), Some(&8));
+#[test]
+fn an_activity_first_turn_fits_its_whole_join_bound() {
+    // One owner and one turn fit exactly, followed by the intervening words.
+    const OWNER_AND_TURN_JOINS: u32 = 2;
+    let mut world = fixture(OWNER_AND_TURN_JOINS, [2, 5, 8]);
+    let (rows, next) = activity(&mut world, None);
+    assert_eq!(positions(&rows), [8, 7, 6]);
+    assert_eq!(next, Some(reads::Position::Owner(core::Key::Tasks(tasks::Key::Activity { task: OWNER, position: 6 }))));
 }
 
 #[test]

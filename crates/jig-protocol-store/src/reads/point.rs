@@ -145,7 +145,7 @@ pub(super) fn reply(
                 bytes: range.bytes,
                 turn: None,
                 problem: None,
-                busy: false,
+                cut: None,
                 frame_bytes: None,
             },
             above,
@@ -186,7 +186,7 @@ pub(super) fn turn(
             bytes: range.bytes,
             turn: Some((attempt, turn)),
             problem: None,
-            busy: false,
+            cut: None,
             frame_bytes: None,
         },
         above,
@@ -210,13 +210,17 @@ pub(crate) fn finish(
     turn: Option<core::TurnRecord>,
 ) -> Result<reads::Loaded, Failure> {
     let mut spent = Spent { rows: 1, bytes: u64::MAX, joins: store.limits.joins };
-    if party.busy {
-        return Ok(reads::Loaded::Busy);
+    if let Some(cut) = party.cut {
+        return match cut {
+            Failure::Cut => Ok(reads::Loaded::Busy),
+            Failure::Joins | Failure::Corrupt => Err(cut),
+        };
     }
     if let Some(why) = party.problem {
         let owner = match joins::owner(store, task, &mut spent) {
             Ok(Some(owner)) => owner,
             Ok(None) => return Ok(empty()),
+            Err(Failure::Joins) => return Err(Failure::Joins),
             Err(Failure::Cut) => return Ok(reads::Loaded::Busy),
             Err(Failure::Corrupt) => return Err(Failure::Corrupt),
         };
@@ -230,7 +234,7 @@ pub(crate) fn finish(
             if let Some(turn) = turn {
                 related = Some(core::Record::Core(core::CoreRecord::Turn(turn)));
             }
-            spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Cut)?;
+            spent.joins = spent.joins.checked_sub(1).ok_or(Failure::Joins)?;
             value
         }
         None => {

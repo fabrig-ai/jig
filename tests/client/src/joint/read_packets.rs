@@ -888,6 +888,7 @@ mod historical_tests;
 
 fn missing(why: reads::Why) -> client::ReadNone {
     match why {
+        reads::Why::TooLinked { joins } => client::ReadNone::TooLinked { joins },
         reads::Why::TooLarge { bytes } => client::ReadNone::TooLarge { bytes },
         reads::Why::Malformed => client::ReadNone::Malformed,
         reads::Why::Unknown => client::ReadNone::Unknown,

@@ -36,6 +36,11 @@ fn one_row(result: &reads::Loaded) -> &reads::Row {
     row
 }
 
+fn assert_too_linked(result: &reads::Loaded, expected: u32) {
+    let reads::Loaded::TooLinked { joins } = result else { panic!("join refusal: {result:?}") };
+    assert_eq!(*joins, expected);
+}
+
 fn assert_empty(result: &reads::Loaded) {
     let reads::Loaded::Page { rows, next: None } = result else { panic!("one page: {result:?}") };
     assert!(rows.is_empty());
@@ -122,13 +127,72 @@ fn a_page_stops_before_the_row_past_its_bytes() {
 }
 
 #[test]
-fn a_page_stops_before_the_row_past_its_joins() {
+fn a_row_past_the_whole_join_bound_is_refused_by_name() {
     // The ancestor fits, but the task's terminal needs a second join.
     const ANCESTOR_JOINS: u32 = 1;
     let mut store = child_store();
     store.limits.joins = ANCESTOR_JOINS;
     let result = load(&mut store, fixtures::read(ALICE, reads::Scope::Task { task: CHILD }));
-    assert_empty(&result);
+    assert_too_linked(&result, ANCESTOR_JOINS);
+}
+
+fn plain_ended(task: u64, requester: tasks::Party) -> core::Record {
+    let core::Record::Tasks(tasks::Stored::Ended(mut row)) = fixtures::ended_of(task, requester) else {
+        panic!("ended fixture")
+    };
+    row.flags = tasks::Flags::PLAIN;
+    core::Record::Tasks(tasks::Stored::Ended(row))
+}
+
+#[test]
+fn a_later_row_past_the_bound_cuts_the_page_before_it() {
+    // The first project-indexed owner costs one join; the child also needs its ancestor.
+    const OWNER_JOINS: u32 = 1;
+    let mut store = child_store();
+    fixtures::committed(
+        &mut store,
+        Box::new([
+            fixtures::header(2),
+            fixtures::save(plain_ended(GOAL, tasks::Party::Person(ALICE))),
+            fixtures::save(plain_ended(CHILD, tasks::Party::Task(GOAL))),
+        ]),
+    );
+    let first = core::Record::Tasks(tasks::Stored::EndedByProject(tasks::EndedByProject {
+        project: fixtures::PROJECT,
+        label: 0,
+        ended_at: skein_lib::Wall::from_nanos(2),
+        task: GOAL,
+    }));
+    let second = core::Record::Tasks(tasks::Stored::EndedByProject(tasks::EndedByProject {
+        project: fixtures::PROJECT,
+        label: 0,
+        ended_at: skein_lib::Wall::from_nanos(1),
+        task: CHILD,
+    }));
+    fixtures::committed(
+        &mut store,
+        Box::new([fixtures::header(3), fixtures::save(first.clone()), fixtures::save(second)]),
+    );
+    store.limits.joins = OWNER_JOINS;
+    let query = core::documents::TaskQuery {
+        project: Some(fixtures::PROJECT),
+        requester: None,
+        root: None,
+        parent: None,
+        label: None,
+        phase: None,
+        executor: None,
+        tracked: None,
+        order: core::documents::QueryOrder::Number,
+    };
+    let mut range = fixtures::read(ALICE, reads::Scope::Tasks { query });
+    let (rows, next) = page(load(&mut store, range.clone()));
+    let [row] = rows.as_ref() else { panic!("one prefix row: {rows:?}") };
+    assert_eq!(row.value, first);
+    assert_eq!(next, Some(reads::Position::Owner(first.key())));
+    range.after = next;
+    let result = load(&mut store, range);
+    assert_too_linked(&result, OWNER_JOINS);
 }
 
 #[test]
@@ -763,3 +827,58 @@ mod indexed;
 mod turns;
 
 mod activity;
+
+#[test]
+fn task_scopes_name_their_first_rows_join_bound() {
+    const ANCESTOR_JOINS: u32 = 1; // The ancestor fits, but the terminal does not.
+    let mut store = child_store();
+    store.limits.joins = ANCESTOR_JOINS;
+    for scope in [
+        reads::Scope::Task { task: CHILD },
+        reads::Scope::PersonTask { task: CHILD },
+        reads::Scope::Result { task: CHILD },
+    ] {
+        let result = load(&mut store, fixtures::read(ALICE, scope));
+        assert_too_linked(&result, ANCESTOR_JOINS);
+    }
+}
+
+#[test]
+fn a_history_first_row_past_its_joins_names_the_bound() {
+    const OWNER_JOINS: u32 = 1; // The owner fits; its row's ancestor does not.
+    let mut store = child_store();
+    fixtures::committed(&mut store, Box::new([fixtures::header(2), fixtures::save(fixtures::history(CHILD, 1))]));
+    store.limits.joins = OWNER_JOINS;
+    for subtree in [false, true] {
+        let result = load(&mut store, fixtures::read(ALICE, reads::Scope::History { task: CHILD, subtree }));
+        assert_too_linked(&result, OWNER_JOINS);
+    }
+}
+
+#[test]
+fn a_note_past_its_joins_names_the_bound() {
+    const NO_JOINS: u32 = 0; // Notes join their entry even without an owner.
+    let mut store = notes_store();
+    store.limits.joins = NO_JOINS;
+    for scope in [
+        reads::Scope::Notes { project: fixtures::PROJECT },
+        reads::Scope::ScopedNotes { scope: goal_scope(), description: None },
+    ] {
+        let result = load(&mut store, fixtures::read(ALICE, scope));
+        assert_too_linked(&result, NO_JOINS);
+    }
+}
+
+#[test]
+fn a_filtered_note_counts_as_examined_before_a_join_cut() {
+    const NO_JOINS: u32 = 0;
+    let mut store = notes_store();
+    store.limits.joins = NO_JOINS;
+    let mut range = filtered_notes();
+    let (rows, next) = page(load(&mut store, range.clone()));
+    assert!(rows.is_empty());
+    assert_eq!(next, Some(note_position(&goal_scope(), 1)));
+    range.after = next;
+    let result = load(&mut store, range);
+    assert_too_linked(&result, NO_JOINS);
+}

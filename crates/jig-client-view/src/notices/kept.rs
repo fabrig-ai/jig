@@ -45,6 +45,10 @@ pub enum Kind {
     },
     /// A refusal with no page or card to show it on.
     Refused(Limit),
+    /// A durable read cannot serve its first row within the join bound.
+    TooLinked {
+        joins: u32,
+    },
 }
 /// One visible notice and its monotonic life.
 #[derive(Debug)]

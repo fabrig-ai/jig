@@ -95,9 +95,13 @@ pub fn read_result(subject: d::Subject, bytes: &[u8]) -> first::ReadResult {
 pub fn read_none(value: &jig_client_domain::contract::ReadResult) -> first::ReadResult {
     use jig_client_domain::contract::{ReadNone, ReadResult};
     match value {
-        ReadResult::None(ReadNone::Unknown | ReadNone::Gone | ReadNone::TooLarge { .. } | ReadNone::Malformed) => {
-            first::ReadResult::Unknown
-        }
+        ReadResult::None(
+            ReadNone::Unknown
+            | ReadNone::Gone
+            | ReadNone::TooLinked { .. }
+            | ReadNone::TooLarge { .. }
+            | ReadNone::Malformed,
+        ) => first::ReadResult::Unknown,
         ReadResult::None(ReadNone::Refused) => first::ReadResult::NotAllowed,
         ReadResult::None(ReadNone::Busy | ReadNone::Unreachable) => first::ReadResult::Busy,
         ReadResult::None(ReadNone::SignedOut) => first::ReadResult::SignedOut,

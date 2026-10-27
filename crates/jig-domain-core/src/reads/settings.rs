@@ -110,7 +110,7 @@ pub(super) fn run_loaded(
     let range = pending.range.clone();
     core.reads.retire(name);
     let value = match result {
-        super::Loaded::Busy => Answer::None(Why::Busy),
+        super::Loaded::TooLinked { .. } | super::Loaded::Busy => Answer::None(Why::Busy),
         super::Loaded::Gone => Answer::None(Why::Gone),
         super::Loaded::Page { rows, next } => super::rows::from_store(core, &env.limits, &range, rows, next, env.wall),
         super::Loaded::TurnProblem { .. } => Answer::None(Why::Unknown),

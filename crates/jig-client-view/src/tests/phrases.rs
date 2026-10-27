@@ -120,3 +120,12 @@ fn full_answers_phrase_names_the_count_and_room_time() {
         .expect("typed full facts");
     assert_eq!(said.text.as_ref(), b"The engine's answer table is full: 3 places held; room again at 01:02");
 }
+
+#[test]
+fn a_too_linked_read_names_its_join_bound() {
+    let book = crate::phrases::english::english(CLIENT.text).expect("English words");
+    let words = book
+        .say(0, crate::phrases::jig::JigPhrase::TooLinked.id(), &[skein_ui::phrases::Hole::Number(4)])
+        .expect("join bound");
+    assert_eq!(words.text.as_ref(), b"Too linked: this needs more than 4 joins in one read.");
+}

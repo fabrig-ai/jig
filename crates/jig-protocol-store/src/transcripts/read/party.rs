@@ -38,11 +38,11 @@ pub(super) fn header(store: &mut Store, read: &mut Read, turn: &TurnRecord, size
     if turn.turn != number {
         return Ok(false);
     }
-    let probe = Party { activity: None, bytes: u64::MAX, turn: None, problem: None, busy: false, frame_bytes: None };
+    let probe = Party { activity: None, bytes: u64::MAX, turn: None, problem: None, cut: None, frame_bytes: None };
     let result = match reads::finish(store, read.task, probe, Some(turn.clone())) {
         Ok(result) => result,
-        Err(reads::Failure::Cut) => {
-            read.party.as_mut().expect("party").busy = true;
+        Err(error @ (reads::Failure::Cut | reads::Failure::Joins)) => {
+            read.party.as_mut().expect("party").cut = Some(error);
             return Ok(true);
         }
         Err(reads::Failure::Corrupt) => return Err(()),

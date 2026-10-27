@@ -67,6 +67,7 @@ pub fn facts(b: &mut Builder, kind: &Kind, words: &Words, text_limit: u32) {
             }
             words.text(b, JigPhrase::UnknownAction, &[]);
         }
+        Kind::TooLinked { joins } => words.text(b, JigPhrase::TooLinked, &[Hole::Number(u64::from(*joins))]),
         Kind::Refused(which) => words.refusal(b, &jig_client::contract::Refusal::Limit { which: *which }, text_limit),
     }
     b.close();
