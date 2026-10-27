@@ -31,6 +31,9 @@ pub struct Stats {
     pub saves: u32,
     pub releases: u32,
     pub facts: u32,
+    pub stops: u32,
+    pub agent_acks: u32,
+    pub failures: u32,
 }
 
 /// The committed conversation state received by the scripted agent.
@@ -92,6 +95,7 @@ pub struct World {
     next_relay: Option<host::Relayed>,
     received_grant: Option<host::Grant>,
     prepare_waits: bool,
+    start_waits: bool,
     last_read: Option<Token>,
     refusals: crate::refusals::Referee,
     pub reports: Vec<host::LinkUp>,
@@ -150,6 +154,7 @@ impl World {
             link_words: Vec::new(),
             reports: Vec::new(),
             prepare_waits: false,
+            start_waits: false,
             last_read: None,
             refusals: crate::refusals::Referee::default(),
         }
@@ -367,6 +372,19 @@ impl World {
             words: Box::from(&b"message"[..]),
             finish_requested: false,
         }));
+    }
+    pub fn park(&mut self) { self.park_attempt(ATTEMPT); }
+    pub fn park_attempt(&mut self, attempt: Token) {
+        self.send(Event::Down(LinkDown::Park { run: RUN, attempt }));
+    }
+    pub fn cancel(&mut self) {
+        self.send(Event::Down(LinkDown::Cancel { run: RUN, attempt: ATTEMPT }));
+    }
+    pub fn yield_run(&mut self) { self.send(Event::Yielded { owner: self.owner() }); }
+    pub fn starting(&mut self) { self.start_waits = true; self.assign(false); }
+    pub fn started(&mut self) {
+        self.start_waits = false;
+        self.send(Event::Started { owner: self.owner(), agent: AGENT });
     }
     pub fn preparing(&mut self) {
         self.prepare_waits = true;
@@ -651,6 +669,7 @@ impl World {
             }
             Request::AcknowledgeAgentTurn { agent, .. } => {
                 assert_eq!(agent, AGENT);
+                self.stats.agent_acks += 1;
                 self.reading = true;
             }
 
@@ -665,6 +684,8 @@ impl World {
 
             Request::Stop { agent } => {
                 assert_eq!(agent, AGENT);
+                self.stats.stops += 1;
+                self.reading = false;
                 self.stop_pending = true;
                 if !self.stop_waits {
                     self.stop_pending = false;
@@ -700,7 +721,12 @@ impl World {
                 self.hello = Some(hello);
             }
             Request::Grant { agent, grant } => self.receive_grant(agent, grant),
-            Request::CancelRelay { .. } | Request::Abort { .. } => {
+            Request::Abort { owner } => {
+                self.events.push_back(Event::Unprepared {
+                    owner, failure: host::Preparation::Transient, detail: Box::new([]),
+                });
+            }
+            Request::CancelRelay { .. } => {
                 panic!("unscripted request: {request:?}")
             }
         }
@@ -734,7 +760,7 @@ impl World {
         self.agent_live = true;
         self.reading = true;
         self.started_state = Some(StartedState { live, identity, messages, activation, turns, answered });
-        self.events.push_back(Event::Started { owner, agent: AGENT });
+        if !self.start_waits { self.events.push_back(Event::Started { owner, agent: AGENT }); }
     }
 
     fn receive_turn(&mut self, turn: Turn) {
@@ -781,7 +807,9 @@ impl World {
                 self.receive_report(record);
             }
         }
-        while self.host.pop_fact().is_some() {}
+        while let Some(fact) = self.host.pop_fact() {
+            if matches!(fact, host::Fact::Failed { .. }) { self.stats.failures += 1; }
+        }
     }
 }
 

@@ -560,3 +560,8 @@ fn maximum_input_pieces_in_the_shared_queue_fit_the_hosts_bound() {
     assert_eq!((pieces, activity), (limits.told / 2, limits.told / 2));
     assert_eq!((host.domain.pieces_fenced(), host.domain.pieces_lost(), host.domain.activity_lost()), (0, 0, 0));
 }
+
+#[test]
+fn park_memory_price() {
+    eprintln!("park memory price: {}", worst_case(&LIMITS).expect("bounded"));
+}

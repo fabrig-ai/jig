@@ -278,7 +278,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::Started { owner, agent } => hosted::started(domain, env, owner, agent, out),
         Event::StartRefused { owner, why, cause } => hosted::start_refused(domain, env, owner, why, cause, out),
         Event::Refused { owner, name, reason } => hosted::refused_message(domain, owner, name, reason, out),
-        Event::Yielded { owner } => hosted::yielded(domain, owner, out),
+        Event::Yielded { owner } => hosted::yielded(domain, env, owner, out),
         Event::Faulted { owner, fault } => hosted::faulted(domain, env, owner, fault, out),
         Event::Gone { owner, detail } => hosted::gone(domain, env, owner, detail, out),
         Event::Delivered { owner, delivery } => hosted::delivered(domain, owner, delivery, out),
@@ -294,6 +294,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             LinkDown::TurnKept { run, attempt, turn } => hosted::acknowledge_turn(domain, env, run, attempt, turn, out),
             LinkDown::Grant { run, attempt, grant } => hosted::grant(domain, run, attempt, grant, out),
             LinkDown::Cancel { run, attempt } => hosted::cancel(domain, env, run, attempt, out),
+            LinkDown::Park { run, attempt } => hosted::park(domain, env, run, attempt, out),
             LinkDown::Relayed { run, attempt, call, answer } => {
                 hosted::relayed(domain, run, attempt, &call, answer, out);
             }

@@ -662,3 +662,8 @@ fn retained_versions_on_every_host_stay_within_the_memory_bound() {
     }
     assert_eq!(fleet.domain.workers(), limits.workers);
 }
+
+#[test]
+fn park_memory_price() {
+    eprintln!("park memory price: {}", worst_case(&LIMITS).expect("bounded"));
+}
