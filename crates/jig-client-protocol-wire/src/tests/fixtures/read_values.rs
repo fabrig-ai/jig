@@ -22,7 +22,7 @@ pub fn read_values(limits: &Limits) -> List<(&'static str, ReadValue)> {
     value!(values, limits, Task, Task, 261);
     value!(values, limits, Proposal, Proposal, 149);
     value!(values, limits, OwnerProposal, OwnerProposal, 57);
-    value!(values, limits, Escalation, Escalation, 214);
+    value!(values, limits, Escalation, Escalation, 215);
     value!(values, limits, OwnerEscalation, OwnerEscalation, 265);
     value!(values, limits, Question, Question, 30);
     value!(values, limits, PersonTask, PersonTask, 62);
