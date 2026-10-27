@@ -357,11 +357,11 @@ pub(crate) fn check_release(
         return Err(Refusal::HoldOwner { hold: identity });
     }
     let mut hold = staged.placed_hold(domain, identity).ok_or(Refusal::State)?.clone();
-    if hold.revision >= u64::MAX.saturating_sub(1) {
-        return Err(Refusal::State);
-    }
     let whole = !hold.lifted && hold.scope == (Scope::Subtree { task: number });
     if whole {
+        if hold.revision >= u64::MAX.saturating_sub(1) {
+            return Err(Refusal::State);
+        }
         hold.lifted = true;
         hold.revision = hold.revision.checked_add(1).ok_or(Refusal::State)?;
     } else if !hold.lifted {
@@ -374,7 +374,6 @@ pub(crate) fn check_release(
         }
         exempt.push(number).expect("exemption room preflighted");
         hold.exempt = exempt.into_boxed();
-        hold.revision = hold.revision.checked_add(1).ok_or(Refusal::State)?;
     }
     let tasks = replacements(domain, staged, limits, identity, if whole { None } else { Some(number) })?;
     Ok(Some(Box::new(ReleaseChanges { hold, tasks })))

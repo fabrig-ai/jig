@@ -150,6 +150,53 @@ fn releasing_a_delegate_exempts_it_and_its_siblings_stay_held() {
 }
 
 #[test]
+fn accepting_one_release_keeps_a_siblings_proposal_pending() {
+    let mut w = World::new(924, LIMITS);
+    goal_tree(&mut w);
+    stop(&mut w, 1, 1, 100);
+    park(&mut w);
+    for proposer in [2, 3] {
+        let reply_to = w.to();
+        w.send(Event::Propose {
+            reply_to,
+            proposal: Proposal {
+                number: 100 + proposer,
+                proposer,
+                project: 1,
+                action: ProposalAction::ReleasePlaced { task: proposer, hold: 100, revision: 1 },
+                reason: Box::new([]),
+                as_holder: false,
+                state: ProposalState::Pending { holder: ProposalHolder::Person(1), since: w.env.wall },
+            },
+        });
+    }
+    let sibling = w.record(3).proposal.clone().expect("sibling proposal pending");
+    let sibling_revision = w.record(3).revision;
+    // The parent applies an accepted action and records its decision together.
+    assert_eq!(release_from(&mut w, Party::Person(1), 2), Reply::Done);
+    let reply_to = w.to();
+    w.send(Event::DecideProposal {
+        reply_to,
+        proposer: 2,
+        proposal: 102,
+        message: Some(104),
+        by: Party::Person(1),
+        decision: tasks::ProposalDecision::Accept,
+    });
+    due(&w, 2);
+    let hold = w.placed_hold(100).expect("standing hold");
+    assert_eq!(hold.exempt.as_ref(), &[2]);
+    assert_eq!(hold.revision, 1);
+    assert!(!hold.lifted);
+    assert!(w.record(2).proposal.is_none());
+    placed(&w, 3, 100);
+    assert_eq!(w.record(3).proposal.as_deref(), Some(sibling.as_ref()));
+    assert_eq!(w.record(3).revision, sibling_revision);
+    w.restart();
+    assert_eq!(w.record(3).proposal.as_deref(), Some(sibling.as_ref()));
+}
+
+#[test]
 fn a_lift_without_tasks_keeps_the_record_until_the_last_release() {
     let mut w = World::new(906, LIMITS);
     goal_tree(&mut w);
