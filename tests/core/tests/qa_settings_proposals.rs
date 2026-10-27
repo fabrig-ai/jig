@@ -831,17 +831,53 @@ fn full_acceptance_preserves_the_pending_set_and_holders() {
 }
 
 #[test]
-fn full_model_change_keeps_the_pending_set_across_restart() {
-    // engine.md, 17.2, 17.6 and 17.8. Reuse the exact model-changing
-    // path observed to return Full, without fabricating a connector reply.
-    let (mut world, owner, number) = refused_model_proposal();
-    world.restart_with(model_proposal_configuration().0);
+fn held_versions_past_the_limit_keep_the_pending_set_across_restart() {
+    // engine.md, 17.2, 17.4, 17.6 and 17.8: a model change can keep
+    // an incompatible task on its version; a second held version is full.
+    let (config, mut limits, model) = model_proposal_configuration();
+    limits.core.settings.versions = 1;
+    peers::journal(&mut limits);
+    let mut world = World::configured(SEED, false, config, limits);
+    world.reads = Some(reads::Parties::new(world.store.applied));
+    let owner = world.sign_in.expect("owner sign-in");
+    let task = world.assigned.as_ref().expect("live holder").task;
+    let task_before = fixtures::live_row(&world, task).clone();
+    let policy_before = world.assigned.as_ref().expect("live run").run.policy.clone();
+    let first = propose(&mut world, owner, 152, 1, model_proposal_items(model.clone()));
+    decide(&mut world, owner, 153, OWNER, first, people::ProposalDecision::Accept);
+    assert!(matches!(
+        world.people_answers.last(),
+        Some(people::Reply::Outcome(people::Outcome::ProposalDecided { choice: people::ProposalChoice::Accepted, .. }))
+    ));
+    assert_eq!(settings_document(&mut world, owner).newest, 2);
+    assert_eq!(fixtures::live_row(&world, task), &task_before, "acceptance keeps the old task's version");
+    assert_eq!(world.assigned.as_ref().expect("same live run").run.policy, policy_before);
+    fixtures::ask_as(&mut world, owner, 154, people::Ask::MoveToNewest { revision: 1 });
+    assert_eq!(
+        world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::MovedToNewest { newest: 2, moved: 0, stayed: 1 }))
+    );
+    assert_eq!(fixtures::live_row(&world, task), &task_before, "the newest disallows the old LLM choice");
+
+    let chat = fixtures::chat(&world, 1, b"hold revision two".as_slice().into());
+    fixtures::ask_as(&mut world, owner, 155, chat);
+    let Some(people::Reply::Outcome(people::Outcome::Created { first: second, .. })) = world.people_answers.last()
+    else {
+        panic!("second live holder: {:?}", world.people_answers.last())
+    };
+    let second = *second;
+    let second_before = fixtures::live_row(&world, second).clone();
+    assert_eq!(second_before.settings.task, 2);
+    let mut items = model_proposal_items(model);
+    let s::Edit::Set(s::Value::Template(template)) = &mut items[0].edit else { unreachable!("template item") };
+    template.name = b"third proposed chat name".as_slice().into();
+    let s::Edit::Set(s::Value::Charter(charter)) = &mut items[1].edit else { unreachable!("charter item") };
+    charter.policy.instructions = b"a third charter version".as_slice().into();
+    let number = propose(&mut world, owner, 156, 2, items);
     let proposal_before = proposal_document(&mut world, owner, OWNER, number);
     let settings_before = settings_document(&mut world, owner);
     let rows_before = durable_settings(&world);
-    let task = world.assigned.as_ref().expect("live holder").task;
-    let task_before = fixtures::live_row(&world, task).clone();
-    decide(&mut world, owner, 152, OWNER, number, people::ProposalDecision::Accept);
+    decide(&mut world, owner, 157, OWNER, number, people::ProposalDecision::Accept);
     assert_eq!(
         world.people_answers.last(),
         Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Full {
@@ -855,7 +891,11 @@ fn full_model_change_keeps_the_pending_set_across_restart() {
     assert_eq!(durable_settings(&world), rows_before, "full commits no item of the set");
     assert_eq!(fixtures::live_row(&world, task), &task_before, "full does not move a holder");
     assert!(matches!(proposal_state(&world, number), tasks::PersonProposalState::Pending { .. }));
+    assert_eq!(fixtures::live_row(&world, second), &second_before, "full keeps the second holder too");
     world.restart_with(model_proposal_configuration().0);
+    assert_eq!(fixtures::live_row(&world, task).settings.task, 1);
+    assert_eq!(fixtures::live_row(&world, second).settings.task, 2);
+    assert!(matches!(proposal_state(&world, number), tasks::PersonProposalState::Pending { .. }));
     assert_eq!(proposal_document(&mut world, owner, OWNER, number), proposal_before);
     assert_eq!(settings_document(&mut world, owner), settings_before);
 }
