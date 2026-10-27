@@ -294,7 +294,9 @@ pub(super) const LIMITS: Limits = Limits {
     driver: DRIVER,
     clients: CLIENTS,
     clients_http: jig_protocol_engine_clients_http::Limits {
-        calls: 4,
+        // One person's page overlap: a stream and three watches per page,
+        // twice while the old page's calls close.
+        calls: 8,
         streams: 2,
         body: CLIENTS.message_bytes,
         read: 16384,

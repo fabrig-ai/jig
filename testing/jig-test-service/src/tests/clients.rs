@@ -584,7 +584,7 @@ fn a_call_past_the_mounts_room_is_answered_busy() {
     let mut clients = f::server::retained_clients();
     let capacity = crate::limits::profile_limits(jig_protocol_config::Profile::Small).clients_http.calls;
     let mut peers = skein_lib::List::with_capacity(capacity.checked_add(1).expect("first refused call"));
-    // The existing Small server has eight connections for four mounted calls.
+    // Release a server connection while its mounted call still awaits its end.
     // The first socket is the server fixture's existing socket.
     for number in 0..=capacity {
         if number == capacity {
