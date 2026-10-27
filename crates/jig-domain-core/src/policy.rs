@@ -350,7 +350,7 @@ impl Core {
         person: u64,
         project: u32,
         change: people::PolicyChange,
-    ) -> Result<people::PolicyValue, people::Refusal> {
+    ) -> Result<(people::PolicyValue, crate::funding::Resize), people::Refusal> {
         self.role_allowed(person, project, limits.tasks.tree_tasks)?;
         let Some(mut policy) = self.authority.policy(project).cloned() else {
             return Err(people::Refusal::Unknown);
@@ -430,13 +430,14 @@ impl Core {
         } {
             return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
         }
+        let resize = self.resize(project, self.authority.policy(project).expect("existing policy"), &policy, limits)?;
         let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
         authority::step(&mut self.authority, authority::Event::Policy { project, policy }, &mut facts);
         match facts.pop().expect("policy update terminal") {
             authority::PolicyFact::Changed { .. } => {
                 assert!(self.permission_roles.insert(project, permissions).is_ok(), "admitted permission policy");
                 assert!(self.template_overrides.insert(project, templates).is_ok(), "admitted template policy");
-                Ok(snapshot)
+                Ok((snapshot, resize))
             }
             authority::PolicyFact::Refused { .. } => {
                 Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape })

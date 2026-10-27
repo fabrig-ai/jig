@@ -423,34 +423,23 @@ pub(super) fn change_policy_request(
     out: &mut Queue<Request>,
     change: people::PolicyChange,
 ) {
-    if work.room() < env.limits.tasks.tasks.checked_add(2).expect("task recheck and period resize bound")
+    if work.room()
+        < env
+            .limits
+            .tasks
+            .tasks
+            .checked_add(env.limits.people.holdings)
+            .expect("task recheck and pool resize bound")
+            .checked_add(2)
+            .expect("period resize and decision bound")
         || out.room() < 2
     {
         super::refusals::pool_again(work, request, people::Again::Busy);
         return;
     }
     let period = core.period(project);
-    let resize = match &change {
-        people::PolicyChange::ProjectSpend { period_spend } => {
-            match core.tasks.funding(tasks::Funder::Period { project, period }) {
-                Some(row) => match crate::funding::resized(*period_spend, row.numbers) {
-                    Some(budget) => Some(budget),
-                    None => {
-                        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
-                        return;
-                    }
-                },
-                None => None,
-            }
-        }
-        people::PolicyChange::Role(_)
-        | people::PolicyChange::Templates { .. }
-        | people::PolicyChange::Projections { .. }
-        | people::PolicyChange::Requirements { .. }
-        | people::PolicyChange::Permissions { .. } => None,
-    };
     match core.change_policy(&env.limits, person, project, change) {
-        Ok(snapshot) => {
+        Ok((snapshot, resize)) => {
             core.touch_project_parties(project);
             let name = core.names.get(&project).expect("project policy has a name").clone();
             out.push(Request::Write(Write::Save(Record::People(people::Stored::Policy {
@@ -458,13 +447,26 @@ pub(super) fn change_policy_request(
                 name,
                 value: snapshot,
             }))));
-            if let Some(budget) = resize {
+            if let Some(budget) = resize.period {
                 work.push(Event::Tasks(tasks::Event::ResizePeriod {
                     reply_to: ReplyTo::new(Token::new(u64::MAX - 2)),
                     project,
                     period,
                     budget,
                 }));
+            }
+            for cuts in [true, false] {
+                for pool in &resize.pools {
+                    if (pool.to < pool.from) == cuts {
+                        work.push(Event::Tasks(tasks::Event::ResizePool {
+                            reply_to: ReplyTo::new(Token::new(u64::MAX - 2)),
+                            project,
+                            person: pool.person,
+                            period,
+                            budget: pool.to,
+                        }));
+                    }
+                }
             }
             let mut reroutes = core.proposal_recheck_project(&env.limits, project, env.wall);
             for _ in 0..reroutes.len() {
