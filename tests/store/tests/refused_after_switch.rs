@@ -53,8 +53,8 @@ fn a_record_a_child_refuses_before_switch_keeps_the_old_generation_active() {
 
     // The old binary starts against A without any operator rewriting active.
     world.patch_sets(BASE);
-    assert_eq!(world.open_switched(), Some(1));
-    world.accept_recovery(1);
+    assert_eq!(world.open_switched(), Some(2));
+    world.accept_recovery(2);
     assert!(world.patched().is_empty());
     assert_eq!(world.active(), b"1\n");
     patches::kept(&original, &patches::source(&mut world), &"operator's way back");
