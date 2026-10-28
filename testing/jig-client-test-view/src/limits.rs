@@ -69,7 +69,9 @@ impl Limits {
             .checked_add(domain.jig.rows.checked_mul(2)?.checked_mul(jig_client::contract::ACCOUNT_MANAGE_USAGE)?)?;
         tree.drawing_bytes = drawing::BYTES;
         let limits = Self { tree, text: domain.first.text };
-        worst_case(&limits, domain, jig, first)?;
+        if !valid(&limits, domain, jig, first) {
+            return None;
+        }
         Some(limits)
     }
     #[must_use]
@@ -110,10 +112,25 @@ impl Limits {
         tree.text_per_node = tree.text_per_node.max(text);
         tree.drawing_bytes = drawing::BYTES;
         let limits = Self { tree, text: domain.first.text };
-        worst_case(&limits, domain, jig, first)?;
+        if !valid(&limits, domain, jig, first) {
+            return None;
+        }
         Some(limits)
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(
+    _limits: &Limits,
+    _domain: &jig_client_test_domain::Limits,
+    jig: &jig_client_view::words::Words,
+    first: &words::Words,
+) -> bool {
+    jig.book().capacity(jig_client_view::phrases::jig::JigPhrase::LoadingPart.id()).is_some()
+        && first.capacity().is_some()
+}
+
 #[must_use]
 pub fn worst_case(
     limits: &Limits,
@@ -121,6 +138,9 @@ pub fn worst_case(
     jig: &jig_client_view::words::Words,
     first: &words::Words,
 ) -> Option<u64> {
+    if !valid(limits, domain, jig, first) {
+        return None;
+    }
     jig_client_view::limits::jig_worst_case(&limits.tree)?
         .checked_add(jig_client_view::jig_bindings_worst_case(limits.tree.bindings, &domain.jig)?)?
         .checked_add(bindings::worst_case(limits.tree.bindings)?)?

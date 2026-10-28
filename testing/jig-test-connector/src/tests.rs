@@ -744,3 +744,23 @@ fn restored_outboxes_wait_for_the_scripted_settlement() {
     crate::outbox::activate(&mut cold);
     assert_eq!(crate::next_deadline(&cold), Some(Wall::EPOCH));
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    assert!(crate::valid(&LIMITS));
+    for (condition, invalid) in [
+        ("positive path segments", Limits { path_segments: 0, ..LIMITS }),
+        ("positive segment bytes", Limits { segment_bytes: 0, ..LIMITS }),
+        ("positive attempt count", Limits { max_attempts: 0, ..LIMITS }),
+        ("judge count", Limits { judges: 5, ..LIMITS }),
+    ] {
+        assert!(!crate::valid(&invalid), "{condition}");
+    }
+    assert!(crate::valid(&Limits { judges: 4, ..LIMITS }));
+}
+
+#[test]
+fn validity_does_not_price_retained_heap() {
+    let limits = Limits { tasks: u32::MAX, resources_per_task: u32::MAX, ..LIMITS };
+    assert!(crate::valid(&limits));
+}

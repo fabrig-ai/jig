@@ -776,13 +776,23 @@ pub fn reclaim(side: &mut Side) {
     side.watches.reclaim();
     side.pending.reclaim();
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.retry != skein_lib::Duration::ZERO
+        && limits.watches.checked_add(limits.reads).is_some()
+        && checked_max_out(limits).is_some()
+        && limits.objects.checked_mul(2).is_some()
+        && limits.rows.checked_add(1).is_some()
+        && crate::connector_bounds::document_worst_case(&limits.connector).is_some()
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    limits.watches.checked_add(limits.reads)?;
-    if limits.retry == skein_lib::Duration::ZERO {
+    if !valid(limits) {
         return None;
     }
-    checked_max_out(limits)?;
     let mut total = List::<Held>::worst_case(limits.parts)?.checked_mul(2)?.checked_add(
         u64::from(limits.parts).checked_mul(
             List::<Box<[u8]>>::worst_case(limits.segments)?

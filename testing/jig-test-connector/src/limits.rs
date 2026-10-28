@@ -59,10 +59,17 @@ pub struct Limits {
     pub segment_bytes: u32,
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.path_segments != 0 && limits.segment_bytes != 0 && limits.max_attempts != 0 && limits.judges <= 4
+}
+
 /// The maximum heap used by the connector's tables and their owned paths.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.path_segments == 0 || limits.segment_bytes == 0 || limits.max_attempts == 0 || limits.judges > 4 {
+    if !valid(limits) {
         return None;
     }
     let path_bytes = u64::from(limits.path_segments).checked_mul(u64::from(limits.segment_bytes).checked_add(16)?)?;

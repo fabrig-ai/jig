@@ -19,7 +19,7 @@ pub fn unlinked(limits: &Limits, seed: u64) -> Domain {
     build(limits, seed, true)
 }
 fn build(limits: &Limits, seed: u64, unlinked: bool) -> Domain {
-    assert!(crate::worst_case(limits).is_some(), "root capacities are checked");
+    assert!(crate::valid(limits), "root capacities are checked");
     let mut rng = Rng::new(seed);
     let client = if unlinked {
         jig_client::Client::unlinked(&limits.client, rng.next_u64())

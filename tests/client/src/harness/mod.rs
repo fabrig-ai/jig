@@ -37,7 +37,12 @@ pub trait App: Sized {
     fn max_out(limits: &Self::Limits) -> u32;
     fn view_limits(view: &Self::View) -> skein_ui::Limits;
     fn patch_limit(view: &Self::View) -> u32;
-    fn worst_case(limits: &Self::Limits) -> u64;
+    /// No bound of the application's own: the world's
+    /// `heap_bytes_per_client` binds (programming-model.md, 6.3). An
+    /// application that still states a bound overrides it.
+    fn worst_case(_limits: &Self::Limits) -> u64 {
+        u64::MAX
+    }
     fn seen(tree: &Tree) -> Vec<Seen>;
     /// Translate a keyed wire request without reading root state.
     fn sent(request: &Self::Request) -> Option<Sent>;

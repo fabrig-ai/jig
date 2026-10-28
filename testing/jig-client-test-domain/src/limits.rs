@@ -10,9 +10,9 @@ pub struct Limits {
 }
 #[must_use]
 pub fn max_out(limits: &Limits) -> u32 {
-    checked_max_out(limits).expect("root output capacities are checked")
+    output_capacity(limits).expect("root output capacities are checked")
 }
-fn checked_max_out(limits: &Limits) -> Option<u32> {
+fn output_capacity(limits: &Limits) -> Option<u32> {
     jig_client_view::max_out(&limits.jig)
         .checked_mul(5)?
         .checked_add(first::checked_max_out(&limits.first)?)?
@@ -20,9 +20,20 @@ fn checked_max_out(limits: &Limits) -> Option<u32> {
         .checked_add(16)
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.jig.kept >= limits.client.domain.requests.requests
+        && jig_client_view::valid(&limits.jig)
+        && first::valid(&limits.first)
+        && jig_client::valid(&limits.client)
+        && output_capacity(limits).is_some()
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.jig.kept < limits.client.domain.requests.requests {
+    if !valid(limits) {
         return None;
     }
     let mut total = jig_client_view::worst_case(&limits.jig)?;
@@ -32,7 +43,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     total = total.checked_add(jig_client::worst_case(&limits.client)?)?;
     // Named -> ShowPart/PartsLeft still nests first, jig, first: three child queues.
     let jig_out = jig_client_view::max_out(&limits.jig);
-    let root_out = checked_max_out(limits)?;
+    let root_out = max_out(limits);
     total = total.checked_add(Queue::<jig_client_view::Request>::worst_case(jig_out)?.checked_mul(3)?)?;
     total = total.checked_add(Queue::<first::Request>::worst_case(first::max_out(&limits.first))?.checked_mul(3)?)?;
     total = total.checked_add(u64::from(jig_out).checked_mul(limits.jig.document_bytes)?.checked_mul(3)?)?;

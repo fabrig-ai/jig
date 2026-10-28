@@ -14,7 +14,7 @@ mod proposal;
 pub mod root;
 pub mod words;
 pub use jig_client_test_domain::Action;
-pub use limits::{Limits, worst_case};
+pub use limits::{Limits, valid, worst_case};
 pub use root::{View, build, decode};
 #[cfg(test)]
 mod tests;

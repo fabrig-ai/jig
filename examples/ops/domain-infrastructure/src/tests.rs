@@ -665,3 +665,28 @@ fn restored_effect_timers_wait_for_read_afresh() {
         panic!("system lookup resumes after read afresh");
     };
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = limits();
+    assert!(valid(&base));
+    for (condition, invalid) in [
+        ("positive name bytes", Limits { name_bytes: 0, ..base }),
+        ("positive attempts", Limits { max_attempts: 0, ..base }),
+        ("positive retry", Limits { retry_after_seconds: 0, ..base }),
+        ("closing task and procedure count", Limits { tasks: u32::MAX, resources_per_task: 0, ..base }),
+        ("closing effect count", Limits { effects: u32::MAX, ..base }),
+        ("resource product", Limits { resources_per_task: u32::MAX, ..base }),
+        ("procedure refresh count", Limits { tasks: 1, resources_per_task: u32::MAX, ..base }),
+        ("environment refresh count", Limits { environments: u32::MAX, ..base }),
+        ("creation refresh and drift count", Limits { made: u32::MAX, ..base }),
+    ] {
+        assert!(!valid(&invalid), "{condition}");
+    }
+}
+
+#[test]
+fn validity_does_not_price_retained_heap() {
+    let limits = Limits { services: u32::MAX, name_bytes: u32::MAX, ..limits() };
+    assert!(valid(&limits));
+}

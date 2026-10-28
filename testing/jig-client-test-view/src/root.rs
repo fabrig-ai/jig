@@ -30,7 +30,7 @@ impl<'a> View<'a> {
         first_words: &'a words::Words,
         navigation: first::Address,
     ) -> Self {
-        assert!(crate::worst_case(limits, domain, words, first_words).is_some(), "view capacities are checked");
+        assert!(crate::valid(limits, domain, words, first_words), "view capacities are checked");
         Self {
             render: skein_ui::View::new(&limits.tree),
             jig: JigBindings::new(limits.tree.bindings, domain.jig.text),

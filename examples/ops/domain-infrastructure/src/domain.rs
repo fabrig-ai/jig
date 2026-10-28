@@ -38,7 +38,7 @@ impl Domain {
     /// Allocates the connector's tables and chooses the backend's recovery class.
     #[must_use]
     pub fn new(backend: Backend, limits: &Limits) -> Self {
-        assert!(crate::worst_case(limits).is_some(), "connector limits fit");
+        assert!(crate::valid(limits), "connector limits fit");
         assert!(
             limits.tasks <= 16
                 && limits.effects <= 16

@@ -36,28 +36,33 @@ pub struct Limits {
     pub retry_after_seconds: u64,
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.name_bytes != 0
+        && limits.max_attempts != 0
+        && limits.retry_after_seconds != 0
+        && closing_capacity(limits).is_some()
+        && refresh_capacity(limits).is_some()
+        && crate::drift_accounts::capacity(limits).is_some()
+}
+
 /// Conservative heap bound for tables and owned names.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.name_bytes == 0 || limits.max_attempts == 0 || limits.retry_after_seconds == 0 {
+    if !valid(limits) {
         return None;
     }
     let name = u64::from(limits.name_bytes);
-    let refresh = limits
-        .tasks
-        .checked_mul(limits.resources_per_task)?
-        .checked_add(limits.procedures)?
-        .checked_add(limits.environments)?
-        .checked_add(limits.made)?;
+    let refresh = refresh_capacity(limits)?;
     crate::application::worst_case(limits)?
         .checked_add(crate::drift_accounts::worst_case(limits)?)?
         .checked_add(Map::<skein_lib::Token, crate::ClientSubject>::worst_case(limits.proposals)?)?
         .checked_add(List::<skein_lib::Token>::worst_case(limits.proposals)?)?
         .checked_add(u64::from(limits.proposals).checked_mul(name.checked_mul(2)?)?)?
         .checked_add(Map::<Service, ServiceFact>::worst_case(limits.services)?)?
-        .checked_add(Map::<u64, bool>::worst_case(
-            limits.tasks.checked_add(limits.procedures)?.checked_add(limits.effects)?,
-        )?)?
+        .checked_add(Map::<u64, bool>::worst_case(closing_capacity(limits)?)?)?
         .checked_add(Map::<Resource, bool>::worst_case(refresh)?)?
         .checked_add(u64::from(refresh).checked_mul(u64::from(limits.name_bytes).checked_mul(2)?)?)?
         .checked_add(Map::<Environment, Option<EnvironmentFact>>::worst_case(limits.environments)?)?
@@ -83,4 +88,17 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(u64::from(limits.proposals).checked_mul(name.checked_mul(3)?)?)?
         .checked_add(u64::from(limits.effects).checked_mul(name.checked_mul(3)?)?)?
         .checked_add(u64::from(limits.made).checked_mul(name.checked_mul(2)?)?)
+}
+
+fn closing_capacity(limits: &Limits) -> Option<u32> {
+    limits.tasks.checked_add(limits.procedures)?.checked_add(limits.effects)
+}
+
+fn refresh_capacity(limits: &Limits) -> Option<u32> {
+    limits
+        .tasks
+        .checked_mul(limits.resources_per_task)?
+        .checked_add(limits.procedures)?
+        .checked_add(limits.environments)?
+        .checked_add(limits.made)
 }

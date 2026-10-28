@@ -43,7 +43,7 @@ impl Domain {
     /// Allocates the configured working set before a step runs.
     #[must_use]
     pub fn new(limits: &Limits) -> Self {
-        assert!(crate::worst_case(limits).is_some(), "connector limits fit");
+        assert!(crate::valid(limits), "connector limits fit");
         assert!(
             limits.judges <= 16 && limits.effects <= 16 && limits.services_per_watch <= 16,
             "one step's outputs fit MAX_OUT"

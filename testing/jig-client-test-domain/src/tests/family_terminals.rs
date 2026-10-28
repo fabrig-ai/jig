@@ -275,3 +275,25 @@ fn family_terminal_envelopes_fit_full_rows_and_object_capacity_and_signed_out_pa
         assert_eq!(object(&side).value, first::Value::Known(item()));
     }
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = limits();
+    assert!(first::valid(&base));
+    let mut connector = base.connector;
+    connector.rows = u32::MAX;
+    connector.paths = u32::MAX;
+    connector.segments = u32::MAX;
+    connector.segment_bytes = u32::MAX;
+    for (condition, invalid) in [
+        ("positive retry", first::Limits { retry: Duration::ZERO, ..base }),
+        ("watch and read count", first::Limits { reads: u32::MAX, ..base }),
+        ("output object count", first::Limits { objects: u32::MAX / 6, ..base }),
+        ("output watch count", first::Limits { watches: u32::MAX / 2 + 1, reads: 0, ..base }),
+        ("retired object count", first::Limits { objects: u32::MAX, ..base }),
+        ("row count", first::Limits { rows: u32::MAX, ..base }),
+        ("connector document edge", first::Limits { connector, ..base }),
+    ] {
+        assert!(!first::valid(&invalid), "{condition}");
+    }
+}

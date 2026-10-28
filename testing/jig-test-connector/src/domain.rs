@@ -48,7 +48,7 @@ impl Domain {
     /// Builds a connector from the world's seed-derived configuration.
     #[must_use]
     pub fn new(config: Config, limits: &Limits) -> Domain {
-        assert!(crate::worst_case(limits).is_some(), "connector limits fit");
+        assert!(crate::valid(limits), "connector limits fit");
         assert!(u32::try_from(config.pools.len()).unwrap_or(u32::MAX) <= limits.pools, "pool configuration fits");
         assert!(
             u32::try_from(config.resources.len()).unwrap_or(u32::MAX) <= limits.resources,

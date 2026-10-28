@@ -618,10 +618,10 @@ fn an_unknown_family_request_inspects_before_another_touch() {
 fn family_capacities_refuse_overflow_and_resource_words_past_the_owner_bound() {
     let mut bounds = limits();
     bounds.first.objects = u32::MAX;
-    assert!(crate::worst_case(&bounds).is_none());
+    assert!(!crate::valid(&bounds));
     bounds = limits();
     bounds.first.retry = Duration::ZERO;
-    assert!(crate::worst_case(&bounds).is_none());
+    assert!(!crate::valid(&bounds));
     let mut root = ready(27);
     let part = contract::Part::Resource { connector: crate::FIRST, path: resource_path(&[b'x'; 33]) };
     let rows = drive(
@@ -1127,4 +1127,37 @@ pub(super) fn live_first(first: first::Limits) -> (first::Side, jig_client::Clie
     let watch = start(&mut root, List::with_capacity(0));
     confirm(&mut root, watch, 7);
     (root.first, root.client)
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = limits();
+    assert!(crate::valid(&base));
+    let mut retention = base;
+    retention.jig.kept = base.client.domain.requests.requests - 1;
+    let mut jig = base;
+    jig.jig.save_delay = Duration::ZERO;
+    let mut first = base;
+    first.first.retry = Duration::ZERO;
+    let mut client = base;
+    client.client.domain.heartbeat = Duration::ZERO;
+    let mut output = base;
+    output.first.objects = (u32::MAX - 16 - 2 * output.first.watches) / 6;
+    assert!(first::valid(&output.first));
+    for (condition, invalid) in [
+        ("retained requests", retention),
+        ("jig limits", jig),
+        ("first limits", first),
+        ("client limits", client),
+        ("root output count", output),
+    ] {
+        assert!(!crate::valid(&invalid), "{condition}");
+    }
+}
+
+#[test]
+fn validity_does_not_price_retained_heap() {
+    let mut bounds = limits();
+    bounds.jig.document_bytes = u64::MAX;
+    assert!(crate::valid(&bounds));
 }

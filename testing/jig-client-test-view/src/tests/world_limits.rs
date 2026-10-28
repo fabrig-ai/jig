@@ -31,7 +31,7 @@ fn the_worlds_original_storage_counts_construct_a_finite_view() {
     assert_eq!(limits.tree.patches, 5120);
     assert!(limits.tree.text_per_node >= native.text_per_node);
     assert!(limits.tree.text_bytes < 1024 * limits.tree.text_per_node);
-    assert!(crate::worst_case(&limits, &domain, jig, first).is_some());
+    assert!(crate::valid(&limits, &domain, jig, first));
     let view =
         crate::View::new(&limits, &domain, jig, first, jig_client_test_domain::first::Address { project: 3, item: 5 });
     assert_eq!(view.limits(), &limits);
@@ -95,7 +95,7 @@ fn bounded_world_storage_survives_complete_composition_text_overflow() {
     assert_eq!(limits.tree.nodes, 1024);
     assert_eq!(limits.tree.slots, 256);
     assert!(limits.tree.text_bytes < 1024 * limits.tree.text_per_node);
-    assert!(crate::worst_case(&limits, &domain, jig, first).is_some());
+    assert!(crate::valid(&limits, &domain, jig, first));
 }
 
 #[test]
@@ -176,4 +176,30 @@ fn a_world_fixture_beyond_its_slot_bound_is_rejected() {
         },
         b"loading",
     );
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let domain = world_domain();
+    let jig = super::words();
+    let first = super::family_words();
+    let limits = Limits::for_world(&domain, jig, first, 1024, 256).unwrap();
+    assert!(crate::valid(&limits, &domain, jig, first));
+    let missing_jig = jig_client_view::words::Words::new(first.book.clone(), 0, 0);
+    let missing_first = crate::words::Words { book: jig.book().clone(), language: 0 };
+    for (condition, jig, first) in
+        [("jig loading phrase", &missing_jig, first), ("family phrase capacities", jig, &missing_first)]
+    {
+        assert!(!crate::valid(&limits, &domain, jig, first), "{condition}");
+    }
+}
+
+#[test]
+fn validity_does_not_price_retained_heap() {
+    let mut domain = world_domain();
+    let jig = super::words();
+    let first = super::family_words();
+    let limits = Limits::for_world(&domain, jig, first, 1024, 256).unwrap();
+    domain.jig.document_bytes = u64::MAX;
+    assert!(crate::valid(&limits, &domain, jig, first));
 }

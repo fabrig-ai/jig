@@ -605,3 +605,66 @@ fn restored_effect_timers_wait_for_read_afresh() {
         panic!("system lookup resumes after read afresh");
     };
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = limits();
+    assert!(valid(&base));
+    for (condition, invalid) in [
+        ("positive name bytes", Limits { name_bytes: 0, ..base }),
+        ("positive answer bytes", Limits { answer_bytes: 0, ..base }),
+        ("positive attempts", Limits { max_attempts: 0, ..base }),
+        ("positive retry", Limits { retry_after_seconds: 0, ..base }),
+        ("subscriber count", Limits { subscribers_per_alert: 9, ..base }),
+        ("closing subscriptions and watches", Limits { subscriptions: u32::MAX, ..base }),
+        ("closing effect count", Limits { effects: u32::MAX, ..base }),
+        ("watched service product", Limits { services_per_watch: u32::MAX, ..base }),
+        ("subscribed and watched service count", Limits { subscriptions: u32::MAX - 1, ..base }),
+        ("incident product", Limits { alerts_per_batch: u32::MAX, ..base }),
+        ("incident refresh count", Limits { alerts_per_batch: u32::MAX / 2 - 2, ..base }),
+        (
+            "step association count",
+            Limits {
+                watches: 2,
+                alerts_per_batch: u32::MAX / 2,
+                services_per_watch: 0,
+                subscriptions: 0,
+                subscribers_per_alert: 0,
+                effects: 0,
+                ..base
+            },
+        ),
+        (
+            "message subscription count",
+            Limits {
+                watches: 1,
+                alerts_per_batch: u32::MAX - 2,
+                services_per_watch: 0,
+                subscriptions: 2,
+                subscribers_per_alert: 0,
+                effects: 0,
+                ..base
+            },
+        ),
+        (
+            "message final slot",
+            Limits {
+                watches: 1,
+                alerts_per_batch: u32::MAX - 1,
+                services_per_watch: 0,
+                subscriptions: 0,
+                subscribers_per_alert: 0,
+                effects: 0,
+                ..base
+            },
+        ),
+    ] {
+        assert!(!valid(&invalid), "{condition}");
+    }
+}
+
+#[test]
+fn validity_does_not_price_retained_heap() {
+    let limits = Limits { services: u32::MAX, name_bytes: u32::MAX, samples_per_service: u32::MAX, ..limits() };
+    assert!(valid(&limits));
+}
