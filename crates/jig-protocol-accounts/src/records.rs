@@ -195,11 +195,3 @@ impl Records {
 fn fits(record: &oauth::SavedToken, account: u32, limits: &oauth::Limits) -> bool {
     record.key == account && oauth::encode_record(record, limits).is_ok()
 }
-
-/// The bytes the records need: their slots, and the record each may hold
-/// while the store keeps it.
-#[must_use]
-pub fn worst_case(accounts: u32, limits: &oauth::Limits) -> Option<u64> {
-    Map::<u32, Slot>::worst_case(accounts)?
-        .checked_add(u64::from(accounts).checked_mul(u64::from(limits.record_bytes))?)
-}

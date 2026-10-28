@@ -193,9 +193,3 @@ fn granted(source: u32, generation: u64, value: Secret, now: Time) -> Next {
         value: table::Value { token: value, scheme: table::Scheme::Key },
     }
 }
-#[must_use]
-pub fn worst_case(accounts: u32, token_bytes: u32) -> Option<u64> {
-    Map::<u32, Source>::worst_case(accounts)?
-        .checked_add(Map::<Token, Waiting>::worst_case(accounts)?)?
-        .checked_add(u64::from(accounts).checked_mul(u64::from(token_bytes))?)
-}

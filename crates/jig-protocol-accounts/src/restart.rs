@@ -98,7 +98,3 @@ impl Inventory {
         }
     }
 }
-#[must_use]
-pub fn worst_case(sources: u32, page_rows: u32) -> Option<u64> {
-    Set::<u64>::worst_case(sources)?.checked_add(Queue::<u64>::worst_case(page_rows)?)
-}
