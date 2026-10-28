@@ -261,9 +261,12 @@ fn the_pending_settings_bound_admits_two_and_names_the_thirds_refusal() {
     assert_eq!(inventory(&mut world, owner).pending.len(), PENDING);
     assert_eq!(
         propose(&mut world, second, 1, 1, Box::new([item])),
-        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Limit {
-            which: people::LimitKind::SettingsProposals
-        }))
+        people::Reply::Outcome(people::Outcome::Refused(people::Refusal::configured(
+            people::LimitKind::SettingsProposals,
+            2,
+            people::LimitKey::CoreSettingsProposals,
+            people::LimitUnit::Items
+        )))
     );
 }
 #[test]
@@ -843,7 +846,12 @@ fn a_runs_settings_proposal_refused_at_the_entrance_keeps_nothing() {
     let item = run_charter(&world, b"Past the limit");
     assert_eq!(
         run_propose(&mut world, 1, Box::new([item])),
-        core::CallPart::SettingsRefused(people::Refusal::Limit { which: people::LimitKind::SettingsProposals })
+        core::CallPart::SettingsRefused(people::Refusal::configured(
+            people::LimitKind::SettingsProposals,
+            2,
+            people::LimitKey::CoreSettingsProposals,
+            people::LimitUnit::Items
+        ))
     );
     assert_eq!(settings_rows(&world), before);
     assert!(fixtures::live_row(&world, task).proposal.is_none());
@@ -894,7 +902,8 @@ fn exhausted_stale_outcome_numbers_refuse_before_changing_settings() {
     assert_eq!(
         change(&mut world, signed, 106, 1, Box::new([direct])),
         people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Limit {
-            which: people::LimitKind::Arithmetic
+            which: people::LimitKind::Arithmetic,
+            bound: None
         }))
     );
     assert_eq!(settings_rows(&world), before);

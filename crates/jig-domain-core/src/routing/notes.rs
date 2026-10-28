@@ -109,7 +109,7 @@ pub(super) fn tag_notes(
                     unreachable!("brief preparation owns note index")
                 }
             },
-            notes::Request::Refused { owner, why } => match core.note_routes.remove(&owner) {
+            notes::Request::Refused { owner, why, limit } => match core.note_routes.remove(&owner) {
                 Some(NoteRoute::Call { to, key }) => match why {
                     notes::Refusal::Busy => {
                         let _pending = core.pending_calls.remove(&key);
@@ -125,7 +125,10 @@ pub(super) fn tag_notes(
                     }
                 },
                 Some(NoteRoute::Person { request }) => {
-                    work.push(Event::People(people::Event::Decided { request, outcome: note_person_refusal(why) }));
+                    work.push(Event::People(people::Event::Decided {
+                        request,
+                        outcome: note_person_refusal(why, limit),
+                    }));
                 }
                 Some(NoteRoute::Brief { task }) => match why {
                     notes::Refusal::Busy => {
@@ -150,19 +153,7 @@ pub(super) fn tag_notes(
             },
         }
     }
-    if !core.notes.busy() {
-        let mut waiting = None;
-        for (&task, state) in &core.pending_note_briefs {
-            if *state == NoteBrief::Operation {
-                waiting = Some(task);
-                break;
-            }
-        }
-        if let Some(task) = waiting {
-            let _pending = core.pending_note_briefs.remove(&task);
-            work.push(Event::StartBrief { task });
-        }
-    }
+    retry_brief(core, work);
     out.push(Request::Decided);
     Requests::Out(out)
 }
@@ -211,5 +202,21 @@ pub(super) fn edit_note_request(
         let scope = person_note_scope(project, *scope);
         let change = person_note_change(change);
         work.push(Event::Notes(notes::Event::Edit { owner, party: person, name, scope, change }));
+    }
+}
+
+fn retry_brief(core: &mut Core, work: &mut Queue<Event>) {
+    if !core.notes.busy() {
+        let mut waiting = None;
+        for (&task, state) in &core.pending_note_briefs {
+            if *state == NoteBrief::Operation {
+                waiting = Some(task);
+                break;
+            }
+        }
+        if let Some(task) = waiting {
+            let _pending = core.pending_note_briefs.remove(&task);
+            work.push(Event::StartBrief { task });
+        }
     }
 }

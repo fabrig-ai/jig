@@ -209,7 +209,10 @@ pub(crate) fn wake(value: people::WakePolicy) -> tasks::WakePolicy {
     }
 }
 
-pub(crate) fn spec(value: people::Spec, limits: &tasks::Limits) -> Option<tasks::Spec> {
+pub(crate) fn spec(value: people::Spec, limits: &tasks::Limits) -> Result<tasks::Spec, people::Refusal> {
+    if value.parameters.len() > usize::try_from(limits.parameters).expect("parameter ceiling fits usize") {
+        return Err(numeric(people::LimitKind::Spec, people::LimitKey::TasksParameters, limits.parameters));
+    }
     let mut parameters = List::with_capacity(limits.parameters);
     for parameter in value.parameters {
         let translated = match parameter {
@@ -219,9 +222,9 @@ pub(crate) fn spec(value: people::Spec, limits: &tasks::Limits) -> Option<tasks:
                 tasks::Parameter::Resource { name, connector, resource }
             }
         };
-        parameters.push(translated).ok()?;
+        parameters.push(translated).expect("parameter count admitted");
     }
-    Some(tasks::Spec { words: value.words, parameters: parameters.into_boxed(), inputs: value.inputs })
+    Ok(tasks::Spec { words: value.words, parameters: parameters.into_boxed(), inputs: value.inputs })
 }
 
 /// A party's given authority in the task vocabulary, with the models the task takes: a party names
@@ -231,12 +234,13 @@ pub(crate) fn granted(
     value: people::Authority,
     models: tasks::Models,
     limits: &tasks::Limits,
-) -> Option<tasks::Authority> {
+) -> Result<tasks::Authority, people::Refusal> {
+    authority_room(&value, limits)?;
     let mut grants = List::with_capacity(limits.authority_grants);
     for grant in value.grants {
         let mut segments = List::with_capacity(limits.authority_segments);
         for segment in grant.pattern.segments {
-            segments.push(segment).ok()?;
+            segments.push(segment).expect("authority shape admitted");
         }
         let last = match grant.pattern.last {
             people::Last::Exact(word) => tasks::Last::Exact(word),
@@ -248,13 +252,13 @@ pub(crate) fn granted(
                 kind: grant.kind,
                 pattern: tasks::Pattern { segments: segments.into_boxed(), last },
             })
-            .ok()?;
+            .expect("authority shape admitted");
     }
     let mut note_resources = List::with_capacity(limits.authority_grants);
     for scope in value.note_resources {
         let mut segments = List::with_capacity(limits.authority_segments);
         for segment in scope.pattern.segments {
-            segments.push(segment).ok()?;
+            segments.push(segment).expect("authority shape admitted");
         }
         let last = match scope.pattern.last {
             people::Last::Exact(word) => tasks::Last::Exact(word),
@@ -265,7 +269,7 @@ pub(crate) fn granted(
                 connector: scope.connector,
                 pattern: tasks::Pattern { segments: segments.into_boxed(), last },
             })
-            .ok()?;
+            .expect("authority shape admitted");
     }
     let mut kinds = List::with_capacity(limits.executor_kinds);
     for kind in value.delegation.kinds {
@@ -275,9 +279,9 @@ pub(crate) fn granted(
                 people::Executor::Procedure(number) => tasks::AuthorityExecutor::Procedure(number),
                 people::Executor::Role(number) => tasks::AuthorityExecutor::Role(number),
             })
-            .ok()?;
+            .expect("authority shape admitted");
     }
-    Some(tasks::Authority {
+    Ok(tasks::Authority {
         tools: tasks::Tools(value.tools),
         models: match value.models {
             Some(value) => tasks::Models::from_parts(value.bits(), value.is_all()),
@@ -301,8 +305,8 @@ pub(crate) fn translate(
     value: people::Amendment,
     models: tasks::Models,
     limits: &tasks::Limits,
-) -> Option<tasks::Amendment> {
-    Some(tasks::Amendment {
+) -> Result<tasks::Amendment, people::Refusal> {
+    Ok(tasks::Amendment {
         tracked: match value.tracked {
             Some(people::Tracking::Tracked { priority }) => Some(tasks::Tracking::Tracked { priority }),
             Some(people::Tracking::Untracked) => Some(tasks::Tracking::Untracked),
@@ -336,4 +340,41 @@ pub(crate) fn translate(
         llm: crate::llm::choice(value.llm.as_ref()),
         reason: value.reason,
     })
+}
+
+fn numeric(which: people::LimitKind, key: people::LimitKey, value: u32) -> people::Refusal {
+    people::Refusal::configured(which, u64::from(value), key, people::LimitUnit::Items)
+}
+fn authority_room(value: &people::Authority, limits: &tasks::Limits) -> Result<(), people::Refusal> {
+    if value.grants.len() > usize::try_from(limits.authority_grants).expect("grant ceiling fits")
+        || value.note_resources.len() > usize::try_from(limits.authority_grants).expect("grant ceiling fits")
+    {
+        return Err(numeric(
+            people::LimitKind::Authority,
+            people::LimitKey::TasksAuthorityGrants,
+            limits.authority_grants,
+        ));
+    }
+    if value.delegation.kinds.len() > usize::try_from(limits.executor_kinds).expect("executor ceiling fits") {
+        return Err(numeric(people::LimitKind::Authority, people::LimitKey::TasksExecutorKinds, limits.executor_kinds));
+    }
+    for grant in &value.grants {
+        if grant.pattern.segments.len() > usize::try_from(limits.authority_segments).expect("segment ceiling fits") {
+            return Err(numeric(
+                people::LimitKind::Authority,
+                people::LimitKey::TasksAuthoritySegments,
+                limits.authority_segments,
+            ));
+        }
+    }
+    for scope in &value.note_resources {
+        if scope.pattern.segments.len() > usize::try_from(limits.authority_segments).expect("segment ceiling fits") {
+            return Err(numeric(
+                people::LimitKind::Authority,
+                people::LimitKey::TasksAuthoritySegments,
+                limits.authority_segments,
+            ));
+        }
+    }
+    Ok(())
 }

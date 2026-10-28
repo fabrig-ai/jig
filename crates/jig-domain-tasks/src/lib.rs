@@ -61,6 +61,8 @@
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 extern crate alloc;
+mod limit;
+pub use limit::{LimitKey, NumericLimit};
 mod activity;
 mod admission;
 mod batch;
@@ -123,7 +125,7 @@ mod waits;
 mod wake;
 mod writers;
 pub use activity::{ActivityLine, EndKind, Line, Why, line_bytes_limit, lines_per_decision};
-pub use batch::{bounded_batch, valid_authority, valid_contract, valid_spec};
+pub use batch::{authority_limit, bounded_batch, valid_authority, valid_contract, valid_spec};
 pub use boundary::{
     Accepted, Active, Added, Bound, Cause, Circle, Closing, Contract, Deadline, DelegateState, DelegationContext, End,
     Ending, Event, Exceeded, Executor, FieldRule, Hold, HoldKind, HoldSource, Holding, InvalidResult, Key, Kind,

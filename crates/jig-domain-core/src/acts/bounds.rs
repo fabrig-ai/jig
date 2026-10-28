@@ -70,7 +70,7 @@ pub(crate) fn creating(
                     create_start(core, project, party, held, executor, 0, canonical_deadline, limits.tasks.tree_tasks)
                         .is_ok();
                 if supported && procedures.push(super::CreateProcedure { connector, code: *procedure }).is_err() {
-                    return Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority });
+                    return Admission::Refused(core.limit_refusal(people::LimitKind::Authority));
                 }
             }
         }
@@ -81,7 +81,7 @@ pub(crate) fn creating(
     };
     let given = crate::task_authority(&core.creating_authority(project, party, held, limits.tasks.tree_tasks));
     let Ok(authority) = crate::documents::act_authority(limits, &given) else {
-        return Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority });
+        return Admission::Refused(core.limit_refusal(people::LimitKind::Authority));
     };
     Admission::Bounded {
         within: Bounds::Create {
@@ -171,14 +171,14 @@ pub(super) fn amend(core: &Core, limits: &Limits, party: u64, task: u64, held: O
         hard = row.authority.clone();
     }
     let Ok(value) = crate::documents::act_authority(limits, &given) else {
-        return Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority });
+        return Admission::Refused(core.limit_refusal(people::LimitKind::Authority));
     };
     let Ok(ceiling) = crate::documents::act_authority(limits, &hard) else {
-        return Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority });
+        return Admission::Refused(core.limit_refusal(people::LimitKind::Authority));
     };
     let order = &core.authority.rules().implies;
     if order.len() > limits.documents.implications {
-        return Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority });
+        return Admission::Refused(core.limit_refusal(people::LimitKind::Authority));
     }
     let mut implications = List::with_capacity(limits.documents.implications);
     for pair in order.entries() {
@@ -395,6 +395,14 @@ pub(crate) fn amendment_admit_places_in(
         return Err(why);
     }
     if let Err(why) = tasks::instruction_admit(limits, row.executor, &amendment.instructions) {
+        if why == tasks::Refusal::Read {
+            return Err(people::Refusal::configured(
+                people::LimitKind::Read,
+                u64::from(limits.message_bytes),
+                people::LimitKey::TasksMessageBytes,
+                people::LimitUnit::Bytes,
+            ));
+        }
         let people::Outcome::Refused(why) = crate::routing::refusals::person_task_refusal(core, Some(task), why) else {
             unreachable!("instruction shape refusal is permanent");
         };
@@ -415,7 +423,10 @@ pub(crate) fn amendment_admit_places_in(
     }
     let Some(after) = &amendment.authority else { return Ok(false) };
     if !tasks::valid_authority(limits, after) {
-        return Err(people::Refusal::Limit { which: people::LimitKind::Authority });
+        return Err(people::Refusal::Limit {
+            which: people::LimitKind::Authority,
+            bound: authority_bound(limits, after),
+        });
     }
     let before = translate::authority_value(context.authority);
     let after = translate::authority_value(after);
@@ -434,7 +445,7 @@ pub(crate) fn amendment_admit_places_in(
         project,
         role: role.number(),
         pool: translate::authority_numbers(numbers),
-        tasks_left: context.tasks_left().ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?,
+        tasks_left: context.tasks_left().ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?,
         request: authority::PersonRequest::Amend(after),
     };
     let checked = authority::check_request_with_standing(&core.authority, &ask, standing, &mut findings);
@@ -530,4 +541,9 @@ fn amendment_dependencies(
         }
     }
     Ok(())
+}
+
+fn authority_bound(limits: &tasks::Limits, value: &tasks::Authority) -> Option<people::LimitBound> {
+    let limit = tasks::authority_limit(limits, value)?;
+    Some(crate::routing::refusals::numeric_limit(limit))
 }

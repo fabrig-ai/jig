@@ -39,7 +39,13 @@ pub(super) fn escalation_refused(
         &mut out,
         to,
         key,
-        CallPart::EscalationRefused(tasks::Problem { task: Some(task), why, blocked_by: None, capacity: None }),
+        CallPart::EscalationRefused(tasks::Problem {
+            limit: None,
+            task: Some(task),
+            why,
+            blocked_by: None,
+            capacity: None,
+        }),
     );
     out.push(Request::Decided);
     Requests::Out(out)
@@ -52,7 +58,13 @@ pub(super) fn proposal_refused(core: &mut Core, to: ReplyTo, key: CallKey, why: 
         &mut out,
         to,
         key,
-        CallPart::ProposalRefused(tasks::Problem { task: Some(key.task), why, blocked_by: None, capacity: None }),
+        CallPart::ProposalRefused(tasks::Problem {
+            limit: None,
+            task: Some(key.task),
+            why,
+            blocked_by: None,
+            capacity: None,
+        }),
     );
     out.push(Request::Decided);
     Requests::Out(out)
@@ -494,6 +506,7 @@ pub(super) fn named_action(
                     ReplyTo::new(token),
                     key,
                     CallPart::MessageRefused(tasks::Problem {
+                        limit: None,
                         task: Some(key.task),
                         why: tasks::Refusal::Unknown,
                         blocked_by: None,
@@ -511,6 +524,7 @@ pub(super) fn named_action(
                     ReplyTo::new(token),
                     key,
                     CallPart::MessageRefused(tasks::Problem {
+                        limit: None,
                         task: Some(target),
                         why: tasks::Refusal::Busy,
                         blocked_by: None,
@@ -555,6 +569,7 @@ pub(super) fn named_action(
                     ReplyTo::new(token),
                     key,
                     CallPart::SubscriptionRefused(tasks::Problem {
+                        limit: None,
                         task: Some(key.task),
                         why: tasks::Refusal::Busy,
                         blocked_by: None,
@@ -596,6 +611,7 @@ pub(super) fn named_action(
                         } => CallPart::Again { task: target, required },
                         why @ (jig_domain_people::Refusal::Unknown | jig_domain_people::Refusal::Limit { .. }) => {
                             CallPart::ControlRefused(tasks::Problem {
+                                limit: None,
                                 task: Some(target),
                                 why: if why == jig_domain_people::Refusal::Unknown {
                                     tasks::Refusal::Unknown
@@ -864,7 +880,13 @@ pub(super) fn named_amend(
                 &mut out,
                 ReplyTo::new(token),
                 key,
-                CallPart::ControlRefused(tasks::Problem { task: Some(task), why, blocked_by: None, capacity: None }),
+                CallPart::ControlRefused(tasks::Problem {
+                    limit: None,
+                    task: Some(task),
+                    why,
+                    blocked_by: None,
+                    capacity: None,
+                }),
             );
             out.push(Request::Decided);
             return Requests::Out(out);
@@ -892,6 +914,7 @@ pub(super) fn named_amend(
             ReplyTo::new(token),
             key,
             CallPart::ControlRefused(tasks::Problem {
+                limit: None,
                 task: Some(target),
                 why: tasks::Refusal::Busy,
                 blocked_by: None,

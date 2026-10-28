@@ -271,7 +271,7 @@ impl Core {
 }
 
 fn delegate_refused(task: Option<u64>, why: tasks::Refusal) -> CallPart {
-    CallPart::DelegationRefused(tasks::Problem { task, why, blocked_by: None, capacity: None })
+    CallPart::DelegationRefused(tasks::Problem { limit: None, task, why, blocked_by: None, capacity: None })
 }
 
 /// Translate open grant patterns for a delegate whose number is not yet fixed.

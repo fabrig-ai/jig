@@ -531,6 +531,8 @@ pub fn frame_at_ceilings(limits: &Limits) -> Me {
             providers_cut: false,
             key_bytes: 256,
             redirect_bytes: 4096,
+            words_bytes: 65_536,
+            amendment_bytes: 65_536,
             party: frame_party(limits),
             projects: piece_items(&repeated(project_role(limits), 2), MeProject::measure, MeProject::encode),
             needs: needs(limits),

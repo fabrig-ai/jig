@@ -47,8 +47,10 @@ pub(super) fn outcome(core: &crate::Core, answer: accounts::Answer) -> people::O
         | accounts::Refusal::NotKept { why: accounts::KeyFailure::NotStored } => {
             return people::Outcome::Again(people::Again::NotReady);
         }
-        accounts::Refusal::Limit { bound } => people::Refusal::Limit { which: limit(bound) },
-        accounts::Refusal::Numbers => people::Refusal::Limit { which: people::LimitKind::Arithmetic },
+        accounts::Refusal::Limit { bound, number } => {
+            people::Refusal::Limit { which: limit(bound), bound: numeric_bound(number) }
+        }
+        accounts::Refusal::Numbers => core.limit_refusal(people::LimitKind::Arithmetic),
         accounts::Refusal::SignInRedirect { why } => people::Refusal::SignInRedirect {
             why: match why {
                 accounts::SignInRedirectWhy::NotWaiting => people::SignInRedirectWhy::NotWaiting,
@@ -66,9 +68,7 @@ pub(super) fn outcome(core: &crate::Core, answer: accounts::Answer) -> people::O
         | accounts::Refusal::Kind { .. }
         | accounts::Refusal::NotLimited
         | accounts::Refusal::Uses => people::Refusal::NotOffered,
-        accounts::Refusal::NotKept { why: accounts::KeyFailure::TooLong } => {
-            people::Refusal::Limit { which: people::LimitKind::Words }
-        }
+        accounts::Refusal::NotKept { why: accounts::KeyFailure::TooLong } => core.limit_refusal(people::LimitKind::Key),
         accounts::Refusal::Unknown | accounts::Refusal::Subject => people::Refusal::Unknown,
     };
     people::Outcome::Refused(refusal)
@@ -184,6 +184,27 @@ fn hosts(core: &crate::Core, hosts: Box<[accounts::ProgramHost]>) -> Box<[people
             .expect("one output per admitted host failure");
     }
     rows.into_boxed()
+}
+
+fn numeric_bound(number: Option<accounts::NumericLimit>) -> Option<people::LimitBound> {
+    let number = number?;
+    Some(people::LimitBound {
+        value: u64::from(number.value),
+        unit: people::LimitUnit::Items,
+        key: numeric_key(number.key),
+    })
+}
+fn numeric_key(key: Option<accounts::LimitKey>) -> Option<people::LimitKey> {
+    let key = key?;
+    Some(match key {
+        accounts::LimitKey::Accounts => people::LimitKey::AccountsAccounts,
+        accounts::LimitKey::HolderAccounts => people::LimitKey::AccountsHolderAccounts,
+        accounts::LimitKey::Sources => people::LimitKey::AccountsSources,
+        accounts::LimitKey::SignIns => people::LimitKey::AccountsSignIns,
+        accounts::LimitKey::ProgramNames => people::LimitKey::AccountsProgramNames,
+        accounts::LimitKey::ProgramHosts => people::LimitKey::AccountsProgramHosts,
+        accounts::LimitKey::Credentials => people::LimitKey::AccountsCredentials,
+    })
 }
 
 #[cfg(test)]

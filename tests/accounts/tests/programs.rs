@@ -439,7 +439,7 @@ fn a_pending_program_sign_out_blocks_account_removal() {
         vec![Request::Answer {
             request,
             answer: jig_domain_accounts::Answer::Refused {
-                refusal: Refusal::Limit { bound: jig_domain_accounts::Bound::Sources }
+                refusal: Refusal::Limit { bound: jig_domain_accounts::Bound::Sources, number: None }
             }
         }]
     );
@@ -472,7 +472,7 @@ fn a_pending_program_sign_out_blocks_a_holder_check() {
     let mut out = Queue::with_capacity(jig_domain_accounts::max_out(&LIMITS));
     assert_eq!(
         programs::check(&mut world.domain, HOLDER, 1, &mut out),
-        Err(Refusal::Limit { bound: jig_domain_accounts::Bound::Sources })
+        Err(Refusal::Limit { bound: jig_domain_accounts::Bound::Sources, number: None })
     );
     assert!(out.is_empty());
 }

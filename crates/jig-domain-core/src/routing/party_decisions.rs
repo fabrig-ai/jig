@@ -82,7 +82,7 @@ pub(super) fn goal_decide(
                         crate::translate::authority_value(amendment.authority.as_ref().unwrap_or(&current.authority));
                     let stop_run = !authority::at_most(&before, &after, &core.authority.rules().implies);
                     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-                        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                        pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                         return;
                     };
                     tasks::Event::Amend {
@@ -106,7 +106,7 @@ pub(super) fn goal_decide(
         }
         people::ProposalDecision::Reject { reason } => {
             let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-                pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                 return;
             };
             assert!(
@@ -192,7 +192,7 @@ pub(super) fn person_proposal_decide(
         tasks::ProposalDecision::Reject { .. } => match crate::fresh(&mut core.counters, crate::Family::Message) {
             Some(message) => Some(message),
             None => {
-                pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                 return;
             }
         },
@@ -230,7 +230,7 @@ pub(super) fn person_proposal_accept(
     }
     if crate::proposals::placed_release(&proposal.action) {
         let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-            pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+            pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
             return;
         };
         assert!(
@@ -349,7 +349,7 @@ pub(super) fn person_proposal_accept(
                 return;
             };
             let Some(amend_message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-                pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                 return;
             };
             let after = crate::translate::authority_value(amendment.authority.as_ref().unwrap_or(&current.authority));
@@ -368,7 +368,7 @@ pub(super) fn person_proposal_accept(
         }
         tasks::ProposalAction::Widen { task, authority } => {
             let Some(amend_message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-                pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                 return;
             };
             tasks::Event::Amend {
@@ -403,7 +403,7 @@ pub(super) fn person_proposal_accept(
         }
     };
     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
         return;
     };
     assert!(
@@ -438,7 +438,16 @@ pub(super) fn person_escalation_decide(
     if let people::EscalationDecision::Reject { reason } = &decision
         && reason.len() > usize::try_from(env.limits.escalation_reason_bytes).expect("reason bound fits usize")
     {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Words });
+        pool_refused(
+            work,
+            request,
+            people::Refusal::configured(
+                people::LimitKind::Contract,
+                u64::from(env.limits.escalation_reason_bytes),
+                people::LimitKey::CoreEscalationReasonBytes,
+                people::LimitUnit::Bytes,
+            ),
+        );
         return;
     }
     let Some(context) = core.tasks.escalation(task) else {
@@ -483,7 +492,7 @@ pub(super) fn person_escalation_decide(
         tasks::EscalationDecision::Pass { .. } => match crate::fresh(&mut core.counters, crate::Family::Message) {
             Some(entry) => Some(entry),
             None => {
-                pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                 return;
             }
         },
@@ -646,7 +655,16 @@ pub(super) fn escalation_request(
         }
         people::EscalationDecision::Release | people::EscalationDecision::Pass => false,
     } {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Words });
+        pool_refused(
+            work,
+            request,
+            people::Refusal::configured(
+                people::LimitKind::Contract,
+                u64::from(env.limits.escalation_reason_bytes),
+                people::LimitKey::CoreEscalationReasonBytes,
+                people::LimitUnit::Bytes,
+            ),
+        );
         return;
     }
     if let Some(context) = core.tasks.escalation(task)
@@ -707,7 +725,16 @@ fn task_settings_decide(
         people::ProposalDecision::Pass => return pool_refused(work, request, people::Refusal::NoFurther),
     };
     if reason.len() > usize::try_from(env.limits.tasks.message_bytes).expect("message bound") {
-        return pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Words });
+        return pool_refused(
+            work,
+            request,
+            people::Refusal::configured(
+                people::LimitKind::Contract,
+                u64::from(env.limits.escalation_reason_bytes),
+                people::LimitKey::CoreEscalationReasonBytes,
+                people::LimitUnit::Bytes,
+            ),
+        );
     }
     let messages = u64::from(env.limits.tasks.tasks)
         .checked_mul(2)
@@ -717,7 +744,7 @@ fn task_settings_decide(
         .checked_add(1)
         .expect("outcome message");
     if core.counters.deployment().messages.checked_add(messages).is_none() {
-        return pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        return pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
     }
     let outcome = if accepts {
         let key =

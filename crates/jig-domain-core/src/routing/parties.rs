@@ -153,6 +153,7 @@ pub(super) fn begin_creation(
             holdings: List::with_capacity(env.limits.tasks.holdings),
             answered: List::with_capacity(remaining),
             failed: false,
+            failed_bound: None,
         },
     );
     match inserted {
@@ -183,6 +184,11 @@ pub(super) fn created_holdings(
             for holding in holdings {
                 if creating.holdings.push(holding).is_err() {
                     creating.failed = true;
+                    creating.failed_bound = Some(people::LimitBound::configured(
+                        u64::from(env.limits.tasks.holdings),
+                        people::LimitKey::TasksHoldings,
+                        people::LimitUnit::Items,
+                    ));
                 }
             }
         }
@@ -204,7 +210,11 @@ pub(super) fn created_holdings(
     }
     let creating = core.creating.remove(&request).expect("completed creation flight");
     if creating.failed {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Holds });
+        pool_refused(
+            work,
+            request,
+            people::Refusal::Limit { which: people::LimitKind::Holds, bound: creating.failed_bound },
+        );
         return;
     }
     finish_creation(core, env, work, request, creating);
@@ -368,7 +378,7 @@ pub(super) fn make_service_request(
                     }
                     None
                 }
-                None => Some(people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic })),
+                None => Some(people::Outcome::Refused(core.limit_refusal(people::LimitKind::Arithmetic))),
             }
         }
         Ok(()) => Some(people::Outcome::Refused(people::Refusal::Unknown)),

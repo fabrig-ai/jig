@@ -9,7 +9,7 @@ use crate::domain::{Domain, record};
 use crate::{Authority, Contract, Executor, Last, Limits, New, Parameter, Party, Phase, Problem, Refusal, Spec, Was};
 
 fn problem(task: Option<u64>, why: Refusal) -> Problem {
-    Problem { task, why, blocked_by: None, capacity: None }
+    Problem { task, why, blocked_by: None, capacity: None, limit: None }
 }
 
 pub(crate) fn check(domain: &Domain, limits: &Limits, creator: Party, batch: &[New]) -> Result<(), Problem> {
@@ -46,13 +46,7 @@ fn check_with_result_proposal(
     result_proposal: Option<u64>,
     direct_finish: Option<(u64, u64)>,
 ) -> Result<(), Problem> {
-    let size = u32::try_from(batch.len()).unwrap_or(u32::MAX);
-    if size == 0 {
-        return Err(problem(None, Refusal::Empty));
-    }
-    if size > limits.batch {
-        return Err(problem(None, Refusal::Batch));
-    }
+    let size = batch_size(limits, batch)?;
     if !live_room(domain, limits, size) {
         return Err(Problem::capacity(
             None,
@@ -117,7 +111,9 @@ fn check_with_result_proposal(
                 ));
             }
             if parent.depth.saturating_add(1) > limits.depth {
-                return Err(problem(Some(number), Refusal::Depth));
+                return Err(
+                    problem(Some(number), Refusal::Depth).bounded(crate::LimitKey::Depth, u64::from(limits.depth))
+                );
             }
             let Some(made) = crate::funders::tree_made(domain, number, parent.root) else {
                 return Err(problem(Some(number), Refusal::Funding));
@@ -279,16 +275,16 @@ fn check_members(
             return Err(problem(number, Refusal::Spec));
         }
         if !valid_spec(limits, &new.spec) {
-            return Err(problem(number, Refusal::Spec));
+            return Err(problem(number, Refusal::Spec).observed(spec_limit(limits, &new.spec)));
         }
         if !crate::wake::valid(&new.wake) {
             return Err(problem(number, Refusal::Spec));
         }
         if !valid_contract(limits, &new.contract) {
-            return Err(problem(number, Refusal::Contract));
+            return Err(problem(number, Refusal::Contract).observed(contract_limit(limits, &new.contract)));
         }
         if !valid_authority(limits, &new.authority) {
-            return Err(problem(number, Refusal::AuthorityShape));
+            return Err(problem(number, Refusal::AuthorityShape).observed(authority_limit(limits, &new.authority)));
         }
         if let Some(choice) = &new.llm
             && let Err(why) = crate::llm::check(domain, new.executor, domain.newest(), &new.authority, choice)
@@ -296,7 +292,8 @@ fn check_members(
             return Err(problem(number, why));
         }
         if new.dependencies.len() > usize::try_from(limits.dependencies).expect("u32 fits usize") {
-            return Err(problem(number, Refusal::Dependencies));
+            return Err(problem(number, Refusal::Dependencies)
+                .bounded(crate::LimitKey::Dependencies, u64::from(limits.dependencies)));
         }
         for (index, dependency) in new.dependencies.iter().enumerate() {
             for earlier in new.dependencies.iter().take(index) {
@@ -544,4 +541,123 @@ fn check_placed(domain: &Domain, creator: Party) -> Result<(), Problem> {
         return Err(problem(Some(number), Refusal::Placed { hold }));
     }
     Ok(())
+}
+
+/// The exact exceeded specification dimension; semantic invalidity has no number.
+#[must_use]
+pub fn spec_limit(limits: &Limits, spec: &Spec) -> Option<crate::NumericLimit> {
+    use crate::{LimitKey as K, NumericLimit as N};
+    if spec.parameters.len() > usize::try_from(limits.parameters).expect("parameter bound fits") {
+        return Some(N { key: K::Parameters, value: u64::from(limits.parameters) });
+    }
+    if spec.inputs.len() > usize::try_from(limits.inputs).expect("input bound fits") {
+        return Some(N { key: K::Inputs, value: u64::from(limits.inputs) });
+    }
+    let mut bytes = u64::try_from(spec.words.len()).expect("words size fits");
+    for parameter in &spec.parameters {
+        if let Parameter::Bytes { value, .. } = parameter {
+            bytes = bytes.saturating_add(u64::try_from(value.len()).expect("parameter size fits"));
+        }
+    }
+    if bytes > u64::from(limits.spec_bytes) {
+        Some(N { key: K::SpecBytes, value: u64::from(limits.spec_bytes) })
+    } else {
+        None
+    }
+}
+/// An actual contract ceiling, without calling a duplicate choice a size failure.
+#[must_use]
+pub fn contract_limit(limits: &Limits, contract: &Contract) -> Option<crate::NumericLimit> {
+    use crate::{LimitKey as K, NumericLimit as N};
+    match contract {
+        Contract::Report { words } | Contract::Change { words, .. } if *words > limits.result_bytes => {
+            Some(N { key: K::ResultBytes, value: u64::from(limits.result_bytes) })
+        }
+        Contract::Report { .. } | Contract::Change { .. } => None,
+        Contract::Approval { state, part } => {
+            if state.len() > usize::try_from(limits.result_bytes).expect("result bound fits") {
+                return Some(N { key: K::ResultBytes, value: u64::from(limits.result_bytes) });
+            }
+            if let crate::PartKey::Path(segments) = &part.key {
+                if segments.len() > limits.hold_segments || segments.capacity() > limits.hold_segments {
+                    return Some(N { key: K::HoldSegments, value: u64::from(limits.hold_segments) });
+                }
+                let mut bytes = 0_u64;
+                for segment in segments {
+                    bytes = bytes.saturating_add(u64::try_from(segment.len()).expect("segment fits"));
+                }
+                if bytes > u64::from(limits.hold_bytes) {
+                    return Some(N { key: K::HoldBytes, value: u64::from(limits.hold_bytes) });
+                }
+            }
+            None
+        }
+        Contract::Verdict { choices } => {
+            if choices.len() > usize::try_from(limits.contract_choices).expect("choice bound fits") {
+                return Some(N { key: K::ContractChoices, value: u64::from(limits.contract_choices) });
+            }
+            for choice in choices {
+                if choice.followups > limits.batch {
+                    return Some(N { key: K::Batch, value: u64::from(limits.batch) });
+                }
+            }
+            None
+        }
+    }
+}
+
+#[must_use]
+pub fn authority_limit(limits: &Limits, authority: &Authority) -> Option<crate::NumericLimit> {
+    use crate::{LimitKey as K, NumericLimit as N};
+    if authority.grants.len() > usize::try_from(limits.authority_grants).expect("grant bound fits")
+        || authority.note_resources.len() > usize::try_from(limits.authority_grants).expect("resource bound fits")
+    {
+        return Some(N { key: K::AuthorityGrants, value: u64::from(limits.authority_grants) });
+    }
+    if authority.delegation.kinds.len() > usize::try_from(limits.executor_kinds).expect("executor bound fits") {
+        return Some(N { key: K::ExecutorKinds, value: u64::from(limits.executor_kinds) });
+    }
+    let mut bytes = 0_u64;
+    for grant in &authority.grants {
+        if grant.pattern.segments.len() > usize::try_from(limits.authority_segments).expect("segment bound fits") {
+            return Some(N { key: K::AuthoritySegments, value: u64::from(limits.authority_segments) });
+        }
+        for segment in &grant.pattern.segments {
+            bytes = bytes.saturating_add(u64::try_from(segment.len()).expect("segment fits"));
+        }
+        match &grant.pattern.last {
+            Last::Exact(last) | Last::Open(last) => {
+                bytes = bytes.saturating_add(u64::try_from(last.len()).expect("last fits"));
+            }
+        }
+    }
+    for scope in &authority.note_resources {
+        if scope.pattern.segments.len() > usize::try_from(limits.authority_segments).expect("segment bound fits") {
+            return Some(N { key: K::AuthoritySegments, value: u64::from(limits.authority_segments) });
+        }
+        for segment in &scope.pattern.segments {
+            bytes = bytes.saturating_add(u64::try_from(segment.len()).expect("segment fits"));
+        }
+        match &scope.pattern.last {
+            Last::Exact(last) | Last::Open(last) => {
+                bytes = bytes.saturating_add(u64::try_from(last.len()).expect("last fits"));
+            }
+        }
+    }
+    if bytes > u64::from(limits.authority_bytes) {
+        Some(N { key: K::AuthorityBytes, value: u64::from(limits.authority_bytes) })
+    } else {
+        None
+    }
+}
+
+fn batch_size(limits: &Limits, batch: &[New]) -> Result<u32, Problem> {
+    let size = u32::try_from(batch.len()).unwrap_or(u32::MAX);
+    if size == 0 {
+        return Err(problem(None, Refusal::Empty));
+    }
+    if size > limits.batch {
+        return Err(problem(None, Refusal::Batch).bounded(crate::LimitKey::Batch, u64::from(limits.batch)));
+    }
+    Ok(size)
 }

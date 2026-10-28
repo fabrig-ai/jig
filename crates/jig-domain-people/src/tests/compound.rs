@@ -15,7 +15,15 @@ fn a_compound_past_operations_per_request_is_refused() {
     let mut test = Test::new(LIMITS);
     test.signin(1, 10, identity(0, 1));
     let refused = test.request(10, 1, compound(3));
-    assert_eq!(reply(&refused), Reply::Refused(Refusal::Limit { which: LimitKind::Operations }));
+    assert_eq!(
+        reply(&refused),
+        Reply::Refused(Refusal::configured(
+            LimitKind::Operations,
+            u64::from(LIMITS.operations),
+            LimitKey::PeopleOperations,
+            LimitUnit::Items
+        ))
+    );
 }
 
 #[test]
@@ -23,7 +31,7 @@ fn an_empty_compound_is_refused() {
     let mut test = Test::new(LIMITS);
     test.signin(1, 10, identity(0, 1));
     let refused = test.request(10, 1, compound(0));
-    assert_eq!(reply(&refused), Reply::Refused(Refusal::Limit { which: LimitKind::Operations }));
+    assert_eq!(reply(&refused), Reply::Refused(Refusal::Limit { which: LimitKind::Operations, bound: None }));
 }
 
 #[test]
@@ -62,7 +70,7 @@ fn a_made_compound_with_a_zero_first_message_cannot_restore() {
         }),
         [Request::RestoreRefused {
             key: Key::Answer(RESTORED_KEY),
-            refusal: Refusal::Limit { which: LimitKind::Restore }
+            refusal: Refusal::Limit { which: LimitKind::Restore, bound: None }
         }],
     );
     assert!(!test.d.ready());
@@ -70,8 +78,8 @@ fn a_made_compound_with_a_zero_first_message_cannot_restore() {
 
 const INVALID: &[(u64, &[u8], Refusal)] = &[
     (0, b"words", Refusal::Unknown),
-    (1, b"", Refusal::Limit { which: LimitKind::Empty }),
-    (1, b"too many words", Refusal::Limit { which: LimitKind::Words }),
+    (1, b"", Refusal::Limit { which: LimitKind::Empty, bound: None }),
+    (1, b"too many words", Refusal::configured(LimitKind::Words, 8, LimitKey::PeopleWords, LimitUnit::Bytes)),
 ];
 #[test]
 fn a_compounds_invalid_operation_keeps_its_standalone_refusal() {

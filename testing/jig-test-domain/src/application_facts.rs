@@ -34,7 +34,7 @@ pub(super) fn refusal(value: people::Refusal) -> application::Refusal {
             },
             lacking: lack(lacking),
         },
-        people::Refusal::Limit { which } => application::Refusal::Limit { which: limit_kind(which) },
+        people::Refusal::Limit { which, bound: _ } => application::Refusal::Limit { which: limit_kind(which) },
         people::Refusal::Moved { now } => application::Refusal::Moved { now: moved(now) },
         people::Refusal::Ended { how } => application::Refusal::Ended { how: ending(how) },
         people::Refusal::Taken { by } => application::Refusal::Taken { by },
@@ -93,8 +93,8 @@ pub(super) fn lack(value: people::Lack) -> application::Lack {
 
 pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
     match value {
-        people::LimitKind::Words => application::LimitKind::Words,
-        people::LimitKind::Identity => application::LimitKind::Identity,
+        people::LimitKind::Words | people::LimitKind::Key => application::LimitKind::Words,
+        people::LimitKind::Identity | people::LimitKind::Name => application::LimitKind::Identity,
         people::LimitKind::Roles => application::LimitKind::Roles,
         people::LimitKind::Arithmetic => application::LimitKind::Arithmetic,
         people::LimitKind::Duplicate => application::LimitKind::Duplicate,
@@ -108,9 +108,10 @@ pub(super) fn limit_kind(value: people::LimitKind) -> application::LimitKind {
         people::LimitKind::Subscription => application::LimitKind::Subscription,
         people::LimitKind::Dependencies => application::LimitKind::Dependencies,
         people::LimitKind::Cycle => application::LimitKind::Cycle,
-        people::LimitKind::Operations | people::LimitKind::Spec | people::LimitKind::Grace => {
-            application::LimitKind::Spec
-        }
+        people::LimitKind::Operations
+        | people::LimitKind::Spec
+        | people::LimitKind::Grace
+        | people::LimitKind::Amendment => application::LimitKind::Spec,
         people::LimitKind::Contract => application::LimitKind::Contract,
         people::LimitKind::Authority => application::LimitKind::Authority,
         people::LimitKind::Inputs => application::LimitKind::Inputs,

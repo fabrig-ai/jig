@@ -648,7 +648,10 @@ impl World {
                         people::step(
                             &mut self.domain,
                             &self.env,
-                            Event::Decided { request, outcome: Outcome::Refused(Refusal::Limit { which }) },
+                            Event::Decided {
+                                request,
+                                outcome: Outcome::Refused(Refusal::Limit { which, bound: None }),
+                            },
                             &mut self.out,
                         );
                         continue;

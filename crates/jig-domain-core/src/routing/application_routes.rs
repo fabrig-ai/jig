@@ -130,7 +130,7 @@ pub(super) fn admitted(
         }
         work.push(Event::People(people::Event::Decided {
             request,
-            outcome: people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+            outcome: people::Outcome::Refused(core.limit_refusal(people::LimitKind::Arithmetic)),
         }));
         return;
     };

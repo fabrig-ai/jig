@@ -24,9 +24,11 @@ pub(crate) fn refusal(value: p::Refusal, limits: &w::Limits) -> Result<w::Refusa
                 },
             },
         )?),
-        p::Refusal::Limit { which } => {
-            let which =
-                w::Limit::Admission(w::LimitAdmission::new(limits, w::LimitAdmissionParts { which: limit(which) })?);
+        p::Refusal::Limit { which, bound } => {
+            let which = w::Limit::Admission(w::LimitAdmission::new(
+                limits,
+                w::LimitAdmissionParts { which: limit(which), bound: limit_bound(bound, limits)? },
+            )?);
             w::Refusal::Limit(w::RefusalLimit::new(limits, w::RefusalLimitParts { which })?)
         }
         p::Refusal::Moved { now } => moved(now, limits)?,
@@ -218,6 +220,9 @@ pub(super) fn limit(value: p::LimitKind) -> w::AdmissionLimit {
     match value {
         p::LimitKind::Projects => w::AdmissionLimit::Projects,
         p::LimitKind::Words => w::AdmissionLimit::Words,
+        p::LimitKind::Name => w::AdmissionLimit::Name,
+        p::LimitKind::Key => w::AdmissionLimit::Key,
+        p::LimitKind::Amendment => w::AdmissionLimit::Amendment,
         p::LimitKind::Identity => w::AdmissionLimit::Identity,
         p::LimitKind::Roles => w::AdmissionLimit::Roles,
         p::LimitKind::Arithmetic => w::AdmissionLimit::Arithmetic,
@@ -425,4 +430,90 @@ fn encode_setting_fault(value: p::SettingFault) -> w::SettingFault {
         p::SettingFault::Grace => w::SettingFault::Grace,
         p::SettingFault::Owner => w::SettingFault::Owner,
     }
+}
+
+pub fn limit_bound(value: Option<p::LimitBound>, limits: &w::Limits) -> Result<Option<w::LimitBound>, w::Problem> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    Ok(Some(w::LimitBound::new(
+        limits,
+        w::LimitBoundParts {
+            value: value.value,
+            key: encode_limit_key(value.key),
+            unit: match value.unit {
+                p::LimitUnit::Bytes => w::LimitUnit::Bytes,
+                p::LimitUnit::Items => w::LimitUnit::Items,
+                p::LimitUnit::Milliseconds => w::LimitUnit::Milliseconds,
+            },
+        },
+    )?))
+}
+
+fn encode_limit_key(key: Option<p::LimitKey>) -> Option<w::LimitKey> {
+    let key = key?;
+    Some(match key {
+        p::LimitKey::PeopleWords => w::LimitKey::PeopleWords,
+        p::LimitKey::PeopleAmendmentBytes => w::LimitKey::PeopleAmendmentBytes,
+        p::LimitKey::PeopleHoldings => w::LimitKey::PeopleHoldings,
+        p::LimitKey::PeopleIdentityBytes => w::LimitKey::PeopleIdentityBytes,
+        p::LimitKey::PeopleBatch => w::LimitKey::PeopleBatch,
+        p::LimitKey::PeopleOperations => w::LimitKey::PeopleOperations,
+        p::LimitKey::PeopleProjects => w::LimitKey::PeopleProjects,
+        p::LimitKey::TasksTasks => w::LimitKey::TasksTasks,
+        p::LimitKey::TasksProjectTasks => w::LimitKey::TasksProjectTasks,
+        p::LimitKey::TasksProjectGoals => w::LimitKey::TasksProjectGoals,
+        p::LimitKey::TasksTreeTasks => w::LimitKey::TasksTreeTasks,
+        p::LimitKey::TasksDepth => w::LimitKey::TasksDepth,
+        p::LimitKey::TasksDelegates => w::LimitKey::TasksDelegates,
+        p::LimitKey::TasksSubscriptions => w::LimitKey::TasksSubscriptions,
+        p::LimitKey::TasksDependencies => w::LimitKey::TasksDependencies,
+        p::LimitKey::TasksSpecBytes => w::LimitKey::TasksSpecBytes,
+        p::LimitKey::TasksParameters => w::LimitKey::TasksParameters,
+        p::LimitKey::TasksContractChoices => w::LimitKey::TasksContractChoices,
+        p::LimitKey::TasksResultBytes => w::LimitKey::TasksResultBytes,
+        p::LimitKey::TasksInputs => w::LimitKey::TasksInputs,
+        p::LimitKey::TasksHoldings => w::LimitKey::TasksHoldings,
+        p::LimitKey::TasksHoldWaiters => w::LimitKey::TasksHoldWaiters,
+        p::LimitKey::TasksInboxMessages => w::LimitKey::TasksInboxMessages,
+        p::LimitKey::TasksInboxBytes => w::LimitKey::TasksInboxBytes,
+        p::LimitKey::TasksMessageBytes => w::LimitKey::TasksMessageBytes,
+        p::LimitKey::TasksGrace => w::LimitKey::TasksGrace,
+        p::LimitKey::TasksPlacedHolds => w::LimitKey::TasksPlacedHolds,
+        p::LimitKey::TasksProjectPlacedHolds => w::LimitKey::TasksProjectPlacedHolds,
+        p::LimitKey::TasksPartyPlacedHolds => w::LimitKey::TasksPartyPlacedHolds,
+        p::LimitKey::TasksExemptions => w::LimitKey::TasksExemptions,
+        p::LimitKey::TasksAuthorityGrants => w::LimitKey::TasksAuthorityGrants,
+        p::LimitKey::TasksAuthorityBytes => w::LimitKey::TasksAuthorityBytes,
+        p::LimitKey::TasksAuthoritySegments => w::LimitKey::TasksAuthoritySegments,
+        p::LimitKey::CoreTemplates => w::LimitKey::CoreTemplates,
+        p::LimitKey::CorePolicyBytes => w::LimitKey::CorePolicyBytes,
+        p::LimitKey::CoreSettingsProposals => w::LimitKey::CoreSettingsProposals,
+        p::LimitKey::NotesScopes => w::LimitKey::NotesScopes,
+        p::LimitKey::NotesEntriesPerScope => w::LimitKey::NotesEntriesPerScope,
+        p::LimitKey::NotesPatternBytes => w::LimitKey::NotesPatternBytes,
+        p::LimitKey::NotesDescriptionBytes => w::LimitKey::NotesDescriptionBytes,
+        p::LimitKey::NotesBodyBytes => w::LimitKey::NotesBodyBytes,
+        p::LimitKey::NotesReferences => w::LimitKey::NotesReferences,
+        p::LimitKey::AccountsAccounts => w::LimitKey::AccountsAccounts,
+        p::LimitKey::AccountsHolderAccounts => w::LimitKey::AccountsHolderAccounts,
+        p::LimitKey::AccountsSources => w::LimitKey::AccountsSources,
+        p::LimitKey::AccountsSignIns => w::LimitKey::AccountsSignIns,
+        p::LimitKey::AccountsProgramHosts => w::LimitKey::AccountsProgramHosts,
+        p::LimitKey::TasksBatch => w::LimitKey::TasksBatch,
+        p::LimitKey::CoreEscalationReasonBytes => w::LimitKey::CoreEscalationReasonBytes,
+        p::LimitKey::AccountsProgramNames => w::LimitKey::AccountsProgramNames,
+        p::LimitKey::AccountsCredentials => w::LimitKey::AccountsCredentials,
+        p::LimitKey::TasksReferences => w::LimitKey::TasksReferences,
+        p::LimitKey::TasksHoldSegments => w::LimitKey::TasksHoldSegments,
+        p::LimitKey::TasksHoldBytes => w::LimitKey::TasksHoldBytes,
+        p::LimitKey::TasksFunders => w::LimitKey::TasksFunders,
+        p::LimitKey::TasksExecutorKinds => w::LimitKey::TasksExecutorKinds,
+        p::LimitKey::TasksResourceReports => w::LimitKey::TasksResourceReports,
+        p::LimitKey::PeoplePending => w::LimitKey::PeoplePending,
+        p::LimitKey::AuthorityProjects => w::LimitKey::AuthorityProjects,
+        p::LimitKey::AuthorityGrants => w::LimitKey::AuthorityGrants,
+        p::LimitKey::AuthoritySegments => w::LimitKey::AuthoritySegments,
+        p::LimitKey::AuthoritySegmentBytes => w::LimitKey::AuthoritySegmentBytes,
+    })
 }

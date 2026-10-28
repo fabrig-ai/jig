@@ -24,8 +24,26 @@ pub(crate) fn invalid(limits: &crate::Limits, batch: &[Member]) -> crate::LimitK
     } else if batch.len() > usize::try_from(limits.batch).expect("u32 fits usize") {
         crate::LimitKind::Batch
     } else {
+        for member in batch {
+            if member.words.len() > usize::try_from(limits.words).expect("word bound fits usize") {
+                return crate::LimitKind::Words;
+            }
+            match member_bytes(member) {
+                Some(bytes) if bytes <= u64::from(limits.amendment_bytes) => {}
+                Some(_) | None => return crate::LimitKind::Amendment,
+            }
+        }
         crate::LimitKind::Words
     }
+}
+
+pub(crate) fn words_past(limits: &crate::Limits, batch: &[Member]) -> bool {
+    for member in batch {
+        if member.words.len() > usize::try_from(limits.words).expect("word ceiling fits usize") {
+            return true;
+        }
+    }
+    false
 }
 
 /// One root requested by a party, mirroring the tasks child's New.

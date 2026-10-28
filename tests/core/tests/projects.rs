@@ -179,7 +179,12 @@ fn a_full_deployment_checks_room_before_name_taken() {
     let (mut world, signed) = start(config, limits);
     assert_eq!(
         request(&mut world, signed, KEY, make("Project 1", POLICY)),
-        refused(people::Refusal::Limit { which: people::LimitKind::Projects })
+        refused(people::Refusal::configured(
+            people::LimitKind::Projects,
+            1,
+            people::LimitKey::AuthorityProjects,
+            people::LimitUnit::Items
+        ))
     );
 }
 #[test]
@@ -189,7 +194,12 @@ fn a_full_roster_refuses_a_make_even_with_authority_room() {
     let (mut world, signed) = start(config, limits);
     assert_eq!(
         request(&mut world, signed, KEY, make("Tally", POLICY)),
-        refused(people::Refusal::Limit { which: people::LimitKind::Projects })
+        refused(people::Refusal::configured(
+            people::LimitKind::Projects,
+            2,
+            people::LimitKey::PeopleProjects,
+            people::LimitUnit::Items
+        ))
     );
 }
 #[test]

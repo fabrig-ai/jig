@@ -21,6 +21,7 @@ pub(super) fn control(
                 to,
                 key,
                 CallPart::ControlRefused(tasks::Problem {
+                    limit: None,
                     task: Some(target),
                     why: tasks::Refusal::Busy,
                     blocked_by: None,

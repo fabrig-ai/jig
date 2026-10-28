@@ -243,6 +243,38 @@ pub(crate) fn invalid_result(contract: &Contract, result: &TaskResult, limits: &
     }
 }
 
+/// The exact numeric check in result admission; malformed result shapes have no bound.
+pub(crate) fn result_limit(contract: &Contract, result: &TaskResult, limits: &Limits) -> Option<crate::NumericLimit> {
+    if invalid_result(contract, result, limits) != Some(InvalidResult::Words) {
+        return None;
+    }
+    let words = match contract {
+        Contract::Report { words } | Contract::Change { words, .. } => match result {
+            TaskResult::Report { .. } | TaskResult::Change { .. } => Some(*words),
+            TaskResult::Failure { .. } | TaskResult::Verdict { .. } | TaskResult::Approved { .. } => None,
+        },
+        Contract::Verdict { choices } => {
+            let mut ceiling = None;
+            if let TaskResult::Verdict { code, words, .. } = result {
+                for choice in choices {
+                    if choice.code == *code
+                        && words.len() > usize::try_from(choice.words).expect("contract ceiling fits")
+                    {
+                        ceiling = Some(choice.words);
+                        break;
+                    }
+                }
+            }
+            ceiling
+        }
+        Contract::Approval { .. } => None,
+    };
+    if let Some(value) = words {
+        return Some(crate::NumericLimit { key: crate::LimitKey::ContractWords, value: u64::from(value) });
+    }
+    Some(crate::NumericLimit { key: crate::LimitKey::ResultBytes, value: u64::from(limits.result_bytes) })
+}
+
 /// Check the admitted verdict's follow-up allowance as well as its result words.
 pub(crate) fn invalid_followups(
     contract: &Contract,

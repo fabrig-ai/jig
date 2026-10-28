@@ -604,7 +604,7 @@ fn settings_refused(why: &jig_domain_people::Refusal) -> Rendered {
     }
     let words: &[u8] = if let Refusal::NotWellFormed { .. } = why {
         b"malformed set"
-    } else if let Refusal::Limit { which: LimitKind::SettingsProposals } = why {
+    } else if let Refusal::Limit { which: LimitKind::SettingsProposals, .. } = why {
         b"pending settings proposals limit"
     } else if let Refusal::Authority { lacking: Lack::Approver, .. } = why {
         b"no owner to accept"

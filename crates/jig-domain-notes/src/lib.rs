@@ -20,7 +20,8 @@ mod read;
 mod tests;
 
 pub use boundary::{
-    Author, Change, Entry, Event, Key, Last, Line, New, Pattern, Range, Recall, Record, Refusal, Request, Rows, Scope,
+    Author, Change, Entry, Event, Key, Last, LimitKey, Line, New, NumericLimit, Pattern, Range, Recall, Record,
+    Refusal, Request, Rows, Scope,
 };
 pub use domain::{Domain, MAX_OUT, max_out, step, valid_entry, valid_line, valid_new, valid_scope};
 pub use limits::{Limits, worst_case};

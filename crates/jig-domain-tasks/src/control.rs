@@ -274,9 +274,10 @@ pub(crate) fn check_amend(
     let number = amendment.number;
     let mut amendment = amendment;
     let places = core::mem::replace(&mut amendment.places, Box::new([]));
-    let mut plan = match check_amend_fields(domain, staged, env, by, amendment) {
+    let mut limit = None;
+    let mut plan = match check_amend_fields(domain, staged, env, by, amendment, &mut limit) {
         Ok(plan) => plan,
-        Err(why) => return Err(Box::new(crate::Problem::new(Some(number), why))),
+        Err(why) => return Err(Box::new(crate::Problem::new(Some(number), why).observed(limit))),
     };
     let old = staged.record(domain, number).expect("amendment task checked");
     let dependencies = match &plan.amendment.dependencies {
@@ -420,6 +421,7 @@ fn check_amend_fields(
     env: &Env<Limits>,
     by: Party,
     amendment: Amend,
+    limit: &mut Option<crate::NumericLimit>,
 ) -> Result<AmendPlan, Refusal> {
     let Amend { number, message, stop_run, funder, amendment, places: _ } = amendment;
     if !domain.ready() {
@@ -464,13 +466,28 @@ fn check_amend_fields(
         return Err(Refusal::Read);
     }
     if amendment.reason.len() > usize::try_from(env.limits.message_bytes).expect("u32 fits usize") {
+        *limit = Some(crate::NumericLimit {
+            key: crate::LimitKey::MessageBytes,
+            value: u64::from(env.limits.message_bytes),
+        });
         return Err(Refusal::Read);
     }
     crate::compound::Staged::address(&old, amendment.addressed.as_ref())?;
-    instruction_admit(&env.limits, old.executor, &amendment.instructions)?;
+    if let Err(why) = instruction_admit(&env.limits, old.executor, &amendment.instructions) {
+        if let Some(instructions) = &amendment.instructions
+            && instructions.len() > usize::try_from(env.limits.message_bytes).expect("instruction bound fits")
+        {
+            *limit = Some(crate::NumericLimit {
+                key: crate::LimitKey::MessageBytes,
+                value: u64::from(env.limits.message_bytes),
+            });
+        }
+        return Err(why);
+    }
     if let Some(spec) = &amendment.spec
         && (!crate::batch::valid_spec(&env.limits, spec) || !spec.inputs.is_empty())
     {
+        *limit = crate::batch::spec_limit(&env.limits, spec);
         return Err(Refusal::Spec);
     }
     if let Some(wake) = &amendment.wake
@@ -480,6 +497,10 @@ fn check_amend_fields(
     }
     if let Some(dependencies) = &amendment.dependencies {
         if dependencies.len() > usize::try_from(env.limits.dependencies).expect("u32 fits usize") {
+            *limit = Some(crate::NumericLimit {
+                key: crate::LimitKey::Dependencies,
+                value: u64::from(env.limits.dependencies),
+            });
             return Err(Refusal::Dependencies);
         }
         for (at, dependency) in dependencies.iter().enumerate() {
@@ -492,6 +513,7 @@ fn check_amend_fields(
     }
     if let Some(authority) = &amendment.authority {
         if !crate::batch::valid_authority(&env.limits, authority) {
+            *limit = crate::batch::authority_limit(&env.limits, authority);
             return Err(Refusal::AuthorityShape);
         }
         if funder.unwrap_or(old.funder) == old.funder && !staged.can_resize(domain, number, authority.budget.spend) {
@@ -1066,8 +1088,13 @@ pub(crate) fn check_cancel(
     cancel: Cancel,
 ) -> Result<CancelPlan, Box<crate::Problem>> {
     let Cancel { number, reason, grace, message } = cancel;
-    let mut problem =
-        Box::new(crate::Problem { task: Some(number), why: Refusal::Read, blocked_by: None, capacity: None });
+    let mut problem = Box::new(crate::Problem {
+        task: Some(number),
+        why: Refusal::Read,
+        blocked_by: None,
+        capacity: None,
+        limit: None,
+    });
     if grace.is_some() != message.is_some() {
         return Err(problem);
     }
@@ -1075,9 +1102,13 @@ pub(crate) fn check_cancel(
         && span > env.limits.grace
     {
         problem.why = Refusal::Grace;
+        problem.limit =
+            Some(crate::NumericLimit { key: crate::LimitKey::Grace, value: env.limits.grace.as_nanos() / 1_000_000 });
         return Err(problem);
     }
     if reason.len() > usize::try_from(env.limits.result_bytes).expect("u32 fits usize") {
+        problem.limit =
+            Some(crate::NumericLimit { key: crate::LimitKey::ResultBytes, value: u64::from(env.limits.result_bytes) });
         return Err(problem);
     }
     let mut selected = skein_lib::List::with_capacity(env.limits.tasks);

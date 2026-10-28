@@ -157,7 +157,7 @@ fn the_account_bounds_are_admission_limits() {
         (p::LimitKind::SignIns, w::AdmissionLimit::SignIns),
     ] {
         assert_eq!(
-            crate::translate::refusals::refusal(p::Refusal::Limit { which: source }, &f::wire()).unwrap(),
+            crate::translate::refusals::refusal(p::Refusal::Limit { which: source, bound: None }, &f::wire()).unwrap(),
             f::admission_refusal(expected)
         );
     }
@@ -246,10 +246,46 @@ fn admission_refusals_keep_the_category_without_a_guessed_bound() {
     for cases in [f::admission_0().as_slice(), f::admission_1().as_slice()] {
         for (source, expected) in cases {
             assert_eq!(
-                crate::translate::refusals::refusal(p::Refusal::Limit { which: *source }, &limits).expect("limit fits"),
+                crate::translate::refusals::refusal(p::Refusal::Limit { which: *source, bound: None }, &limits)
+                    .expect("limit fits"),
                 f::admission_refusal(expected.clone())
             );
         }
+    }
+}
+#[test]
+fn admission_bounds_keep_configured_fixed_and_absent_facts() {
+    let limits = f::wire();
+    for (which, bound, expected, expected_bound) in [
+        (
+            p::LimitKind::Amendment,
+            Some(p::LimitBound::configured(17, p::LimitKey::PeopleAmendmentBytes, p::LimitUnit::Bytes)),
+            w::AdmissionLimit::Amendment,
+            Some(w::LimitBoundParts {
+                value: 17,
+                key: Some(w::LimitKey::PeopleAmendmentBytes),
+                unit: w::LimitUnit::Bytes,
+            }),
+        ),
+        (
+            p::LimitKind::Name,
+            Some(p::LimitBound::fixed(64, p::LimitUnit::Bytes)),
+            w::AdmissionLimit::Name,
+            Some(w::LimitBoundParts { value: 64, key: None, unit: w::LimitUnit::Bytes }),
+        ),
+        (p::LimitKind::Empty, None, w::AdmissionLimit::Empty, None),
+    ] {
+        let actual =
+            crate::translate::refusals::refusal(p::Refusal::Limit { which, bound }, &limits).expect("bound fits");
+        let expected_bound = bound_fixture(expected_bound, &limits);
+        let admission =
+            w::LimitAdmission::new(&limits, w::LimitAdmissionParts { which: expected, bound: expected_bound })
+                .expect("admission fits");
+        let expected = w::Refusal::Limit(
+            w::RefusalLimit::new(&limits, w::RefusalLimitParts { which: w::Limit::Admission(admission) })
+                .expect("refusal fits"),
+        );
+        assert_eq!(actual, expected);
     }
 }
 #[test]
@@ -413,7 +449,7 @@ fn project_refusals_keep_their_facts() {
     let mut cases = vec![
         (p::Refusal::NameTaken, w::Refusal::NameTaken),
         (
-            p::Refusal::Limit { which: p::LimitKind::Projects },
+            p::Refusal::Limit { which: p::LimitKind::Projects, bound: None },
             w::Refusal::Limit(
                 w::RefusalLimit::new(
                     &limits,
@@ -421,7 +457,7 @@ fn project_refusals_keep_their_facts() {
                         which: w::Limit::Admission(
                             w::LimitAdmission::new(
                                 &limits,
-                                w::LimitAdmissionParts { which: w::AdmissionLimit::Projects },
+                                w::LimitAdmissionParts { which: w::AdmissionLimit::Projects, bound: None },
                             )
                             .expect("admission limit"),
                         ),
@@ -483,4 +519,9 @@ fn older_client_versions_receive_plain_busy_for_full_answers() {
         assert_eq!(exchange.answer(owner), w::KeyedAnswer::Busy);
         assert_eq!(exchange.response(owner).1, &[2], "legacy busy tag is unchanged");
     }
+}
+
+fn bound_fixture(parts: Option<w::LimitBoundParts>, limits: &w::Limits) -> Option<w::LimitBound> {
+    let parts = parts?;
+    Some(w::LimitBound::new(limits, parts).expect("bound fits"))
 }

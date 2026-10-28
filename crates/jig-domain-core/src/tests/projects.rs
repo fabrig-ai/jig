@@ -41,7 +41,7 @@ fn the_last_u32_project_number_fits_and_the_next_make_changes_nothing() {
     let header = core.counters.deployment();
     assert_eq!(
         core.make_project(&limits, MAKER, "Beyond".into(), POLICY).err(),
-        Some(people::Refusal::Limit { which: people::LimitKind::Projects })
+        Some(people::Refusal::Limit { which: people::LimitKind::Arithmetic, bound: None })
     );
     assert_eq!(core.counters.deployment(), header);
     assert_eq!(core.projects.as_slice(), [1, u32::MAX]);

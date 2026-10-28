@@ -60,12 +60,8 @@ pub(super) fn checked(
     let allowed = if proposing { None } else { budget(core, creation)? };
     let Creation { person, project, role, batch, .. } = &*creation;
     well_formed(batch)?;
-    let first = core
-        .counters
-        .deployment()
-        .tasks
-        .checked_add(1)
-        .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+    let first =
+        core.counters.deployment().tasks.checked_add(1).ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
     check_circle(core, env, batch, first)?;
     if !proposing && !core.authority.escalations_held(*project, role.number()) {
         return Err(people::Refusal::NoEscalationHolder);
@@ -85,7 +81,7 @@ pub(super) fn checked(
                     env.wall,
                 ),
                 symbolic: crate::symbolic_grants(&named(member, env)?, core.authority.limits().grants)
-                    .ok_or(people::Refusal::Limit { which: people::LimitKind::Authority })?,
+                    .ok_or(core.limit_refusal(people::LimitKind::Authority))?,
             })
             .expect("admitted batch");
         members.push(new).expect("admitted batch");
@@ -145,7 +141,7 @@ pub(super) fn checked(
     }
     for _ in &members {
         crate::fresh(&mut core.counters, crate::Family::Task)
-            .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+            .ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
     }
     let mut given = None;
     if let Some((at, amount)) = allowed {
@@ -164,9 +160,7 @@ fn new_task(
     let Creation { person, project, role, batch, .. } = creation;
     let executor = executor(core, member.executor)?;
     let models = given_models(core, *project, *role);
-    let Some(given) = crate::amendments::granted(member.authority.clone(), models, &env.limits.tasks) else {
-        return Err(people::Refusal::Limit { which: people::LimitKind::Authority });
-    };
+    let given = crate::amendments::granted(member.authority.clone(), models, &env.limits.tasks)?;
     let spec = crate::amendments::spec(
         people::Spec {
             words: member.words.clone(),
@@ -174,8 +168,7 @@ fn new_task(
             inputs: member.inputs.clone(),
         },
         &env.limits.tasks,
-    )
-    .ok_or(people::Refusal::Limit { which: people::LimitKind::Spec })?;
+    )?;
     let mut dependencies = List::with_capacity(env.limits.tasks.dependencies);
     for dependency in &member.dependencies {
         let number = match *dependency {
@@ -183,9 +176,7 @@ fn new_task(
                 if usize::try_from(at).expect("u32 fits usize") >= batch.len() {
                     return Err(people::Refusal::Unknown);
                 }
-                first
-                    .checked_add(u64::from(at))
-                    .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?
+                first.checked_add(u64::from(at)).ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?
             }
             people::Dependency::Existing(task) => {
                 if !core.reaches(*person, creation.role, *project, task, env.limits.tasks.depth) {
@@ -195,13 +186,20 @@ fn new_task(
             }
         };
         if dependencies.push(number).is_err() {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Dependencies });
+            return Err(people::Refusal::configured(
+                people::LimitKind::Dependencies,
+                u64::from(env.limits.tasks.dependencies),
+                people::LimitKey::TasksDependencies,
+                people::LimitUnit::Items,
+            ));
         }
     }
-    let number =
-        first.checked_add(u64::from(at)).ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
-    let given = crate::resolved_delegate_authority(&given, &named(member, env)?, number, core.authority.limits())
-        .ok_or(people::Refusal::Limit { which: people::LimitKind::Authority })?;
+    let number = first.checked_add(u64::from(at)).ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
+    let named = named(member, env)?;
+    let given = match crate::resolved_delegate_authority(&given, &named, number, core.authority.limits()) {
+        Some(value) => value,
+        None => return Err(resolved_refusal(&given, &named, number, core.authority.limits())),
+    };
     Ok(tasks::New {
         deadline: match member.deadline {
             people::Deadline::Named => tasks::Deadline::Named,
@@ -272,7 +270,7 @@ fn check_circle(
         // A refused batch's named tasks must never be reused by later work.
         for _ in batch {
             crate::fresh(&mut core.counters, crate::Family::Task)
-                .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+                .ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
         }
         return Err(people::Refusal::Circle { tasks: circle.tasks, cut: circle.cut });
     }
@@ -316,9 +314,10 @@ fn cycle(batch: &[people::Member], first: u64, bound: u32) -> Result<Option<task
                         }
                         names
                             .push(
-                                first
-                                    .checked_add(u64::from(*number))
-                                    .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?,
+                                first.checked_add(u64::from(*number)).ok_or(people::Refusal::Limit {
+                                    which: people::LimitKind::Arithmetic,
+                                    bound: None,
+                                })?,
                             )
                             .expect("bounded circle names");
                     }
@@ -399,8 +398,8 @@ fn named(member: &people::Member, env: &Env<Limits>) -> Result<Box<[tasks::Grant
     let mut authority = member.authority.clone();
     authority.grants.clone_from(&member.named);
     match crate::amendments::granted(authority, tasks::Models::NONE, &env.limits.tasks) {
-        Some(value) => Ok(value.grants),
-        None => Err(people::Refusal::Limit { which: people::LimitKind::Authority }),
+        Ok(value) => Ok(value.grants),
+        Err(why) => Err(why),
     }
 }
 fn delegates_for(ask: &authority::PersonAsk) -> &[authority::Delegate] {
@@ -413,9 +412,8 @@ fn budget(core: &Core, creation: &mut Creation) -> Result<Option<(u32, u64)>, pe
     let mut named = 0_u64;
     for member in &creation.batch {
         if let people::Budget::Named = member.budget {
-            named = named
-                .checked_add(member.authority.spend)
-                .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+            named =
+                named.checked_add(member.authority.spend).ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
         }
     }
     let (_, pool) = core.person_pool(creation.project, creation.person);
@@ -443,4 +441,64 @@ fn budget(core: &Core, creation: &mut Creation) -> Result<Option<(u32, u64)>, pe
         }
     }
     Ok(None)
+}
+
+fn resolved_refusal(
+    base: &tasks::Authority,
+    symbolic: &[tasks::Grant],
+    task: u64,
+    limits: &authority::Limits,
+) -> people::Refusal {
+    if base.grants.len().saturating_add(symbolic.len()) > usize::try_from(limits.grants).expect("grant ceiling fits") {
+        return people::Refusal::configured(
+            people::LimitKind::Authority,
+            u64::from(limits.grants),
+            people::LimitKey::AuthorityGrants,
+            people::LimitUnit::Items,
+        );
+    }
+    let mut number = task;
+    let mut digits = 1_usize;
+    for _ in 0..19 {
+        if number < 10 {
+            break;
+        }
+        number /= 10;
+        digits = digits.checked_add(1).expect("u64 has at most twenty digits");
+    }
+    for (grants, added) in [(base.grants.as_ref(), 0_usize), (symbolic, digits)] {
+        for grant in grants {
+            if grant.pattern.segments.len() > usize::try_from(limits.segments).expect("segment ceiling fits") {
+                return people::Refusal::configured(
+                    people::LimitKind::Authority,
+                    u64::from(limits.segments),
+                    people::LimitKey::AuthoritySegments,
+                    people::LimitUnit::Items,
+                );
+            }
+            let size = match &grant.pattern.last {
+                tasks::Last::Exact(bytes) => bytes.len(),
+                tasks::Last::Open(bytes) => bytes.len().saturating_add(added),
+            };
+            if size > usize::try_from(limits.segment_bytes).expect("segment byte ceiling fits") {
+                return people::Refusal::configured(
+                    people::LimitKind::Authority,
+                    u64::from(limits.segment_bytes),
+                    people::LimitKey::AuthoritySegmentBytes,
+                    people::LimitUnit::Bytes,
+                );
+            }
+            for segment in &grant.pattern.segments {
+                if segment.len() > usize::try_from(limits.segment_bytes).expect("segment byte ceiling fits") {
+                    return people::Refusal::configured(
+                        people::LimitKind::Authority,
+                        u64::from(limits.segment_bytes),
+                        people::LimitKey::AuthoritySegmentBytes,
+                        people::LimitUnit::Bytes,
+                    );
+                }
+            }
+        }
+    }
+    people::Refusal::Limit { which: people::LimitKind::Authority, bound: None }
 }

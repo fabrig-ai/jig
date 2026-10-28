@@ -383,7 +383,9 @@ record RefusalPlaced { hold: u64 }
 record RefusalHoldOwner { hold: u64 }
 record RefusalHoldRevision { revision: u64 }
 enum Refusal { goals, grace, unproposable, person_revision: RefusalPersonRevision, resource_unavailable, not_ready, unknown, busy, duplicate, empty, batch, live, project, tree, depth, delegates, reference, subscription, dependencies, circle: RefusalCircle, executor, spec, contract, authority_shape, inputs, state, attempt, live_delegates, restore, read, turn, funding, hold_kind, hold_taken, holds, llm: RefusalLlm, account: RefusalAccount, dependency_ended: RefusalDependencyEnded, kept, placed: RefusalPlaced, hold_owner: RefusalHoldOwner, hold_revision: RefusalHoldRevision }
-versioned record TaskProblem { task: option u64 why: Refusal blocked_by: option list 8192 Number capacity: option Capacity }
+enum TaskLimitKey { batch, tasks, project_tasks, project_goals, tree_tasks, depth, delegates, references, subscriptions, dependencies, spec_bytes, parameters, contract_choices, result_bytes, inputs, holdings, hold_waiters, inbox_messages, inbox_bytes, message_bytes, grace, placed_holds, project_placed_holds, party_placed_holds, exemptions, authority_grants, authority_bytes, authority_segments, hold_segments, hold_bytes, funders, executor_kinds, resource_reports, contract_words }
+record NumericTaskLimit { key: TaskLimitKey value: u64 }
+versioned record TaskProblem { task: option u64 why: Refusal blocked_by: option list 8192 Number capacity: option Capacity limit: option NumericTaskLimit }
 record ResultFollowupsDelegates { value: list 4 Creation }
 record ResultFollowupsProposal { value: Proposal }
 enum ResultFollowups { delegates: ResultFollowupsDelegates, proposal: boxed ResultFollowupsProposal }

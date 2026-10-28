@@ -418,7 +418,7 @@ impl Core {
         parties: Box<[AdoptedParty]>,
     ) -> Result<Box<[people::Seed]>, people::Outcome> {
         let Ok(capacity) = u32::try_from(parties.len()) else {
-            return Err(people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Roles }));
+            return Err(people::Outcome::Refused(self.limit_refusal(people::LimitKind::Roles)));
         };
         let mut seeds = List::with_capacity(capacity);
         let mut exhausted = false;

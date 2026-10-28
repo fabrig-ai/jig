@@ -470,13 +470,30 @@ fn a_move_in_counts_against_the_sign_ins_bound() {
         change(3, ALICE, Change::AddKey { provider: 1, join: None, carried: CARRIED }),
         Event::SignIn { request: Token::new(3), holder: ALICE, by: 9, provider: 1 },
     ] {
-        assert_eq!(world.step(event), refused(3, Refusal::Limit { bound: Bound::SignIns }));
+        assert_eq!(
+            world.step(event),
+            refused(
+                3,
+                Refusal::limited(
+                    Bound::SignIns,
+                    jig_domain_accounts::LimitKey::SignIns,
+                    jig_accounts_world::LIMITS.sign_ins
+                )
+            )
+        );
     }
     world.step(Event::NotOurs { source });
     let number = start_out(&mut world);
     assert_eq!(
         world.step(change(3, ALICE, Change::MoveIn { carried: CARRIED })),
-        refused(3, Refusal::Limit { bound: Bound::SignIns })
+        refused(
+            3,
+            Refusal::limited(
+                Bound::SignIns,
+                jig_domain_accounts::LimitKey::SignIns,
+                jig_accounts_world::LIMITS.sign_ins
+            )
+        )
     );
     withdrawn(&mut world, number);
     world.fire_at(60);
@@ -543,7 +560,7 @@ fn a_move_out_waits_for_a_key_keep_joining_its_account() {
     let next = world.domain.next_number();
     assert_eq!(
         world.step(change(1, ALICE, Change::MoveOut { account: 5 })),
-        refused(1, Refusal::Limit { bound: Bound::SignIns })
+        refused(1, Refusal::Limit { bound: Bound::SignIns, number: None })
     );
     assert_eq!(world.domain.next_number(), next);
     assert_eq!(world.domain.next_deadline(), None);

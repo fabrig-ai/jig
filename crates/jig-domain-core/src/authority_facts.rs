@@ -26,8 +26,8 @@ impl Core {
             authority::Finding::UnknownRole | authority::Finding::Unpermitted | authority::Finding::Undecidable => {
                 people::Refusal::Role { held }
             }
-            authority::Finding::Oversized => people::Refusal::Limit { which: people::LimitKind::Authority },
-            authority::Finding::Arithmetic => people::Refusal::Limit { which: people::LimitKind::Arithmetic },
+            authority::Finding::Oversized => self.limit_refusal(people::LimitKind::Authority),
+            authority::Finding::Arithmetic => self.limit_refusal(people::LimitKind::Arithmetic),
             authority::Finding::ResourceUnavailable => {
                 people::Refusal::Authority { proposable, lacking: people::Lack::ResourceUnavailable }
             }

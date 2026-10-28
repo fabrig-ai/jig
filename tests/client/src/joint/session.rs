@@ -1169,7 +1169,10 @@ mod tests {
         assert!(captured.iter().any(|(_, value)| matches!(
             value,
             root::Delivery::Core(core::Held::PeopleReply {
-                reply: people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Identity }),
+                reply: people::Reply::Refused(people::Refusal::Limit {
+                    which: people::LimitKind::Identity,
+                    bound: None
+                }),
                 ..
             })
         )));
@@ -1177,7 +1180,7 @@ mod tests {
         assert!(matches!(
             session.sign_in_failure(ClientId(0)),
             Some(packets::SignInFailure::Refused(client::Refusal::Limit {
-                which: client::Limit::Admission { which: client::AdmissionLimit::Identity }
+                which: client::Limit::Admission { which: client::AdmissionLimit::Identity, bound: None }
             }))
         ));
         assert_eq!(session.driver.transport.sign_in(ClientId(0)), None);

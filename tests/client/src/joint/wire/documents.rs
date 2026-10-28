@@ -766,6 +766,8 @@ pub(crate) mod tests {
             providers_cut: false,
             key_bytes: 256,
             redirect_bytes: 4096,
+            words_bytes: 65_536,
+            amendment_bytes: 65_536,
             party: u64::MAX,
             kind: jig_domain_people::Kind::Person,
             login: documents::Text { bytes: Box::from(UTF8_TEXTS[0]), cut: true },

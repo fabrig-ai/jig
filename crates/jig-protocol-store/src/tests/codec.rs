@@ -1378,7 +1378,7 @@ fn project_asks_answers_and_name_refusals_round_trip() {
             at: skein_lib::Wall::from_nanos(19),
         });
     }
-    for why in [Refusal::NameTaken, Refusal::Limit { which: LimitKind::Projects }] {
+    for why in [Refusal::NameTaken, Refusal::Limit { which: LimitKind::Projects, bound: None }] {
         people_round_trip(fixtures::people_outcomes::answered(Outcome::Refused(why)));
     }
     for rule in [NameRule::Empty, NameRule::Long, NameRule::Control, NameRule::Space, NameRule::Digits] {

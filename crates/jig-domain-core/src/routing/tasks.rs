@@ -120,9 +120,12 @@ pub(super) fn tag_tasks(
                             env,
                             people::Event::Decided {
                                 request: flight.request,
-                                outcome: people::Outcome::Refused(people::Refusal::Limit {
-                                    which: people::LimitKind::Words,
-                                }),
+                                outcome: people::Outcome::Refused(people::Refusal::configured(
+                                    people::LimitKind::Contract,
+                                    u64::from(env.limits.escalation_reason_bytes),
+                                    people::LimitKey::CoreEscalationReasonBytes,
+                                    people::LimitUnit::Bytes,
+                                )),
                             },
                             &mut out,
                         );

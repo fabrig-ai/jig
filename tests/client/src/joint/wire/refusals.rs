@@ -20,9 +20,9 @@ pub fn refusal(value: people::Refusal) -> Result<client::Refusal, super::owner::
                 None => None,
             },
         },
-        people::Refusal::Limit { which } => {
-            client::Refusal::Limit { which: client::Limit::Admission { which: limit(which) } }
-        }
+        people::Refusal::Limit { which, bound } => client::Refusal::Limit {
+            which: client::Limit::Admission { which: limit(which), bound: limit_bound(bound) },
+        },
         people::Refusal::Moved { now } => moved(now),
         people::Refusal::Ended { how } => client::Refusal::Ended { how: ending(how) },
         people::Refusal::Taken { by } => client::Refusal::Taken { by },
@@ -125,6 +125,9 @@ pub fn limit(value: people::LimitKind) -> client::AdmissionLimit {
     match value {
         people::LimitKind::Projects => client::AdmissionLimit::Projects,
         people::LimitKind::Words => client::AdmissionLimit::Words,
+        people::LimitKind::Amendment => client::AdmissionLimit::Amendment,
+        people::LimitKind::Key => client::AdmissionLimit::Key,
+        people::LimitKind::Name => client::AdmissionLimit::Name,
         people::LimitKind::Identity => client::AdmissionLimit::Identity,
         people::LimitKind::Roles => client::AdmissionLimit::Roles,
         people::LimitKind::Arithmetic => client::AdmissionLimit::Arithmetic,
@@ -300,6 +303,86 @@ pub fn hold_owner(value: people::HoldOwner) -> client::HoldOwner {
         people::HoldOwner::Party { person } => client::HoldOwner::Party { person },
         people::HoldOwner::Task { task } => client::HoldOwner::Task { task },
     }
+}
+
+fn limit_bound(value: Option<people::LimitBound>) -> Option<client::LimitBound> {
+    let value = value?;
+    Some(client::LimitBound {
+        value: value.value,
+        key: limit_key(value.key),
+        unit: match value.unit {
+            people::LimitUnit::Bytes => client::LimitUnit::Bytes,
+            people::LimitUnit::Items => client::LimitUnit::Items,
+            people::LimitUnit::Milliseconds => client::LimitUnit::Milliseconds,
+        },
+    })
+}
+fn limit_key(key: Option<people::LimitKey>) -> Option<client::LimitKey> {
+    let key = key?;
+    Some(match key {
+        people::LimitKey::PeopleWords => client::LimitKey::PeopleWords,
+        people::LimitKey::PeopleAmendmentBytes => client::LimitKey::PeopleAmendmentBytes,
+        people::LimitKey::PeopleHoldings => client::LimitKey::PeopleHoldings,
+        people::LimitKey::PeopleIdentityBytes => client::LimitKey::PeopleIdentityBytes,
+        people::LimitKey::PeopleBatch => client::LimitKey::PeopleBatch,
+        people::LimitKey::PeopleOperations => client::LimitKey::PeopleOperations,
+        people::LimitKey::PeopleProjects => client::LimitKey::PeopleProjects,
+        people::LimitKey::TasksTasks => client::LimitKey::TasksTasks,
+        people::LimitKey::TasksProjectTasks => client::LimitKey::TasksProjectTasks,
+        people::LimitKey::TasksProjectGoals => client::LimitKey::TasksProjectGoals,
+        people::LimitKey::TasksTreeTasks => client::LimitKey::TasksTreeTasks,
+        people::LimitKey::TasksDepth => client::LimitKey::TasksDepth,
+        people::LimitKey::TasksDelegates => client::LimitKey::TasksDelegates,
+        people::LimitKey::TasksSubscriptions => client::LimitKey::TasksSubscriptions,
+        people::LimitKey::TasksDependencies => client::LimitKey::TasksDependencies,
+        people::LimitKey::TasksSpecBytes => client::LimitKey::TasksSpecBytes,
+        people::LimitKey::TasksParameters => client::LimitKey::TasksParameters,
+        people::LimitKey::TasksContractChoices => client::LimitKey::TasksContractChoices,
+        people::LimitKey::TasksResultBytes => client::LimitKey::TasksResultBytes,
+        people::LimitKey::TasksInputs => client::LimitKey::TasksInputs,
+        people::LimitKey::TasksHoldings => client::LimitKey::TasksHoldings,
+        people::LimitKey::TasksHoldWaiters => client::LimitKey::TasksHoldWaiters,
+        people::LimitKey::TasksInboxMessages => client::LimitKey::TasksInboxMessages,
+        people::LimitKey::TasksInboxBytes => client::LimitKey::TasksInboxBytes,
+        people::LimitKey::TasksMessageBytes => client::LimitKey::TasksMessageBytes,
+        people::LimitKey::TasksGrace => client::LimitKey::TasksGrace,
+        people::LimitKey::TasksPlacedHolds => client::LimitKey::TasksPlacedHolds,
+        people::LimitKey::TasksProjectPlacedHolds => client::LimitKey::TasksProjectPlacedHolds,
+        people::LimitKey::TasksPartyPlacedHolds => client::LimitKey::TasksPartyPlacedHolds,
+        people::LimitKey::TasksExemptions => client::LimitKey::TasksExemptions,
+        people::LimitKey::TasksAuthorityGrants => client::LimitKey::TasksAuthorityGrants,
+        people::LimitKey::TasksAuthorityBytes => client::LimitKey::TasksAuthorityBytes,
+        people::LimitKey::TasksAuthoritySegments => client::LimitKey::TasksAuthoritySegments,
+        people::LimitKey::CoreTemplates => client::LimitKey::CoreTemplates,
+        people::LimitKey::CorePolicyBytes => client::LimitKey::CorePolicyBytes,
+        people::LimitKey::CoreSettingsProposals => client::LimitKey::CoreSettingsProposals,
+        people::LimitKey::NotesScopes => client::LimitKey::NotesScopes,
+        people::LimitKey::NotesEntriesPerScope => client::LimitKey::NotesEntriesPerScope,
+        people::LimitKey::NotesPatternBytes => client::LimitKey::NotesPatternBytes,
+        people::LimitKey::NotesDescriptionBytes => client::LimitKey::NotesDescriptionBytes,
+        people::LimitKey::NotesBodyBytes => client::LimitKey::NotesBodyBytes,
+        people::LimitKey::NotesReferences => client::LimitKey::NotesReferences,
+        people::LimitKey::AccountsAccounts => client::LimitKey::AccountsAccounts,
+        people::LimitKey::AccountsHolderAccounts => client::LimitKey::AccountsHolderAccounts,
+        people::LimitKey::AccountsSources => client::LimitKey::AccountsSources,
+        people::LimitKey::AccountsSignIns => client::LimitKey::AccountsSignIns,
+        people::LimitKey::AccountsProgramHosts => client::LimitKey::AccountsProgramHosts,
+        people::LimitKey::TasksBatch => client::LimitKey::TasksBatch,
+        people::LimitKey::CoreEscalationReasonBytes => client::LimitKey::CoreEscalationReasonBytes,
+        people::LimitKey::AccountsProgramNames => client::LimitKey::AccountsProgramNames,
+        people::LimitKey::AccountsCredentials => client::LimitKey::AccountsCredentials,
+        people::LimitKey::TasksReferences => client::LimitKey::TasksReferences,
+        people::LimitKey::TasksHoldSegments => client::LimitKey::TasksHoldSegments,
+        people::LimitKey::TasksHoldBytes => client::LimitKey::TasksHoldBytes,
+        people::LimitKey::TasksFunders => client::LimitKey::TasksFunders,
+        people::LimitKey::TasksExecutorKinds => client::LimitKey::TasksExecutorKinds,
+        people::LimitKey::TasksResourceReports => client::LimitKey::TasksResourceReports,
+        people::LimitKey::PeoplePending => client::LimitKey::PeoplePending,
+        people::LimitKey::AuthorityProjects => client::LimitKey::AuthorityProjects,
+        people::LimitKey::AuthorityGrants => client::LimitKey::AuthorityGrants,
+        people::LimitKey::AuthoritySegments => client::LimitKey::AuthoritySegments,
+        people::LimitKey::AuthoritySegmentBytes => client::LimitKey::AuthoritySegmentBytes,
+    })
 }
 
 #[cfg(test)]
@@ -479,8 +562,12 @@ mod tests {
         ];
         assert_eq!(cases.len(), 35);
         for (source, expected) in cases {
-            let actual = refusal(people::Refusal::Limit { which: source }).expect("representable owner value");
-            assert_eq!(actual, client::Refusal::Limit { which: client::Limit::Admission { which: expected } });
+            let actual =
+                refusal(people::Refusal::Limit { which: source, bound: None }).expect("representable owner value");
+            assert_eq!(
+                actual,
+                client::Refusal::Limit { which: client::Limit::Admission { which: expected, bound: None } }
+            );
             assert!(client::EntranceRefusal::new(actual).is_ok());
         }
     }

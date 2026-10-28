@@ -898,7 +898,10 @@ pub(crate) fn fact(domain: &mut Domain, observation: Fact) {
 }
 
 pub(crate) fn refused(to: ReplyTo, task: Option<u64>, why: Refusal, out: &mut Queue<Request>) {
-    out.push(Request::Refused { reply_to: to, problem: Problem { task, why, blocked_by: None, capacity: None } });
+    out.push(Request::Refused {
+        reply_to: to,
+        problem: Problem { task, why, blocked_by: None, capacity: None, limit: None },
+    });
 }
 
 pub(crate) fn entrance(domain: &Domain, to: ReplyTo, number: u64) -> Result<ReplyTo, (ReplyTo, Refusal)> {

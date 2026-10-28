@@ -82,7 +82,7 @@ pub enum HoldOwner {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Limit {
     /// An engine structural admission category, without an invented numerical bound.
-    Admission { which: AdmissionLimit },
+    Admission { which: AdmissionLimit, bound: Option<super::LimitBound> },
     /// A project live task limit.
     LiveTasks { project: u32, limit: u32 },
     /// A task inbox limit.

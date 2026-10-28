@@ -179,7 +179,8 @@ fn one_past_the_proposal_limit_is_refused() {
     assert_eq!(
         world.people_answers.last(),
         Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Limit {
-            which: people::LimitKind::SettingsProposals
+            which: people::LimitKind::SettingsProposals,
+            bound: None
         })))
     );
     assert_eq!(settings_document(&mut world, owner).pending.len(), PROPOSAL_LIMIT);

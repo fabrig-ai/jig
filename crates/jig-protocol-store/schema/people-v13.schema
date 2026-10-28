@@ -228,12 +228,15 @@ record LackFailed { connector: u16 kind: u16 }
 record LackUnguarded { connector: u16 kind: u16 }
 record LackTaskKind { executor: option TaskExecutor }
 enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: LackTaskKind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackAgain, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models, hold_owner: LackHoldOwner }
-enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
+enum LimitUnit { bytes, items, milliseconds }
+enum LimitKey { people_words, people_amendment_bytes, people_holdings, people_identity_bytes, people_batch, people_operations, people_projects, tasks_tasks, tasks_project_tasks, tasks_project_goals, tasks_tree_tasks, tasks_depth, tasks_delegates, tasks_subscriptions, tasks_dependencies, tasks_spec_bytes, tasks_parameters, tasks_contract_choices, tasks_result_bytes, tasks_inputs, tasks_holdings, tasks_hold_waiters, tasks_inbox_messages, tasks_inbox_bytes, tasks_message_bytes, tasks_grace, tasks_placed_holds, tasks_project_placed_holds, tasks_party_placed_holds, tasks_exemptions, tasks_authority_grants, tasks_authority_bytes, tasks_authority_segments, core_templates, core_policy_bytes, core_settings_proposals, notes_scopes, notes_entries_per_scope, notes_pattern_bytes, notes_description_bytes, notes_body_bytes, notes_references, accounts_accounts, accounts_holder_accounts, accounts_sources, accounts_sign_ins, accounts_program_hosts, tasks_batch, core_escalation_reason_bytes, accounts_program_names, accounts_credentials, tasks_references, tasks_hold_segments, tasks_hold_bytes, tasks_funders, tasks_executor_kinds, tasks_resource_reports, people_pending, authority_projects, authority_grants, authority_segments, authority_segment_bytes }
+record LimitBound { value: u64 key: option LimitKey unit: LimitUnit }
+enum LimitKind { projects, operations, words, amendment, key, name, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record RefusalRole { held: option Role }
 record AccepterRole { role: u32 }
 enum Accepter { nobody, role: AccepterRole }
 record RefusalAuthority { lacking: Lack proposable: option Accepter }
-record RefusalLimit { which: LimitKind }
+record RefusalLimit { which: LimitKind bound: option LimitBound }
 record RefusalMoved { now: Moved }
 record RefusalEnded { how: Ending }
 record RefusalTaken { by: u64 }

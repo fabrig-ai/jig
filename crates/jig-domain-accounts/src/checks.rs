@@ -35,6 +35,7 @@ pub enum Refusal {
     /// A bound of the deployment's (accounts.md, 3.6) would be passed.
     Limit {
         bound: Bound,
+        number: Option<NumericLimit>,
     },
     /// Another holder holds this provider's account of the subject: the provider's rule that a
     /// subscription serves one person.
@@ -69,6 +70,32 @@ pub enum Bound {
     HolderAccounts,
     Sources,
     SignIns,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum LimitKey {
+    Accounts,
+    HolderAccounts,
+    Sources,
+    SignIns,
+    ProgramNames,
+    ProgramHosts,
+    Credentials,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct NumericLimit {
+    pub key: Option<LimitKey>,
+    pub value: u32,
+}
+impl Refusal {
+    #[must_use]
+    pub const fn limited(bound: Bound, key: LimitKey, value: u32) -> Self {
+        Self::Limit { bound, number: Some(NumericLimit { key: Some(key), value }) }
+    }
+    #[must_use]
+    pub const fn fixed(bound: Bound, value: u32) -> Self {
+        Self::Limit { bound, number: Some(NumericLimit { key: None, value }) }
+    }
 }
 
 impl Domain {
@@ -124,7 +151,7 @@ impl Domain {
             }
         }
         if self.accounts.len().saturating_add(making) >= limits.accounts.min(self.accounts.capacity()) {
-            return Err(Refusal::Limit { bound: Bound::Accounts });
+            return Err(Refusal::limited(Bound::Accounts, LimitKey::Accounts, limits.accounts));
         }
         let mut held: u32 = 0;
         for (_, account) in &self.accounts {
@@ -133,7 +160,7 @@ impl Domain {
             }
         }
         if held.saturating_add(holders) >= limits.holder_accounts {
-            return Err(Refusal::Limit { bound: Bound::HolderAccounts });
+            return Err(Refusal::limited(Bound::HolderAccounts, LimitKey::HolderAccounts, limits.holder_accounts));
         }
         self.room_for_live_source()?;
         if self.numbers_left() < making.saturating_add(2) {
@@ -149,7 +176,7 @@ impl Domain {
             }
         }
         if self.sources.len().saturating_add(keeping) >= self.sources.capacity() {
-            return Err(Refusal::Limit { bound: Bound::Sources });
+            return Err(Refusal::fixed(Bound::Sources, self.sources.capacity()));
         }
         Ok(())
     }
@@ -171,7 +198,7 @@ impl Domain {
             }
         }
         if entry.sources.len().saturating_add(joining) >= limits.sources.min(entry.sources.capacity()) {
-            return Err(Refusal::Limit { bound: Bound::Sources });
+            return Err(Refusal::limited(Bound::Sources, LimitKey::Sources, limits.sources));
         }
         self.room_for_live_source()?;
         if self.numbers_left() <= making {
@@ -188,7 +215,7 @@ impl Domain {
 /// The sign-ins' bound.
 pub const fn room_for_sign_in(limits: &Limits, under_way: u32) -> Result<(), Refusal> {
     if under_way >= limits.sign_ins {
-        return Err(Refusal::Limit { bound: Bound::SignIns });
+        return Err(Refusal::limited(Bound::SignIns, LimitKey::SignIns, limits.sign_ins));
     }
     Ok(())
 }

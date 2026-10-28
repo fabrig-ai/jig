@@ -12,7 +12,7 @@ pub(super) fn refusal(value: owner::Refusal) -> Option<client::Refusal> {
             client::Refusal::Authority { lacking: lack(lacking), proposable }
         }
         owner::Refusal::Limit { which } => {
-            client::Refusal::Limit { which: client::Limit::Admission { which: limit(which) } }
+            client::Refusal::Limit { which: client::Limit::Admission { which: limit(which), bound: None } }
         }
         owner::Refusal::Moved { now } => {
             let (revision, what) = match now {

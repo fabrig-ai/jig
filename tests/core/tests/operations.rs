@@ -89,9 +89,12 @@ fn a_grace_past_the_limit_is_refused_naming_it() {
     );
     assert_eq!(
         world.people_answers.last(),
-        Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Limit {
-            which: people::LimitKind::Grace
-        })))
+        Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::configured(
+            people::LimitKind::Grace,
+            600_000,
+            people::LimitKey::TasksGrace,
+            people::LimitUnit::Milliseconds
+        ))))
     );
     assert_eq!(live_row(&world, task).grace, None);
 }
@@ -163,7 +166,12 @@ fn a_compound_refused_at_its_second_operation_makes_nothing() {
         world.people_answers.last(),
         Some(&people::Reply::Outcome(people::Outcome::CompoundRefused {
             at: 1,
-            why: people::Refusal::Limit { which: people::LimitKind::Grace }
+            why: people::Refusal::configured(
+                people::LimitKind::Grace,
+                600_000,
+                people::LimitKey::TasksGrace,
+                people::LimitUnit::Milliseconds
+            )
         }))
     );
     assert_eq!(live_row(&world, chat).revision, revision);

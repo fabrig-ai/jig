@@ -29,7 +29,7 @@ impl Core {
         if again == Some(false) {
             match crate::fresh(&mut self.counters, crate::Family::Message) {
                 Some(message) => Ok(Some(message)),
-                None => Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+                None => Err(self.limit_refusal(people::LimitKind::Arithmetic)),
             }
         } else {
             Ok(None)
@@ -58,7 +58,7 @@ impl Core {
         } else {
             source.revision.checked_add(1).is_some() && target.revision.checked_add(changes).is_some()
         };
-        if room { Ok(()) } else { Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic }) }
+        if room { Ok(()) } else { Err(self.limit_refusal(people::LimitKind::Arithmetic)) }
     }
 
     /// Refuse an old hold revision with the current reason before release.

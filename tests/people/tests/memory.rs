@@ -175,7 +175,10 @@ fn full_people_roles_signins_pending_waiters_answers_and_expiry_fit() {
         {
             let token = test.ask(key).expect("test values are admitted and fit");
             let outcome = if key == 1 {
-                Outcome::Refused(jig_domain_people::Refusal::Limit { which: jig_domain_people::LimitKind::LiveTasks })
+                Outcome::Refused(jig_domain_people::Refusal::Limit {
+                    which: jig_domain_people::LimitKind::LiveTasks,
+                    bound: None,
+                })
             } else {
                 Outcome::Created { first: u64::from(key), last: u64::from(key), given: None }
             };

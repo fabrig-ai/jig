@@ -26,6 +26,8 @@ pub fn frame(party: u64) -> Me {
         providers_cut: false,
         key_bytes: 256,
         redirect_bytes: 4096,
+        words_bytes: 65_536,
+        amendment_bytes: 65_536,
         party: MeParty {
             number: party,
             kind: PartyKind::Person,

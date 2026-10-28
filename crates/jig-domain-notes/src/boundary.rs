@@ -195,5 +195,20 @@ pub enum Request {
     /// The deletion committed by this decision will remove the entry.
     Deleted { owner: Token, name: u64 },
     /// A call changed nothing.
-    Refused { owner: Token, why: Refusal },
+    Refused { owner: Token, why: Refusal, limit: Option<NumericLimit> },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum LimitKey {
+    PatternBytes,
+    DescriptionBytes,
+    BodyBytes,
+    References,
+    EntriesPerScope,
+    Scopes,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct NumericLimit {
+    pub key: LimitKey,
+    pub value: u32,
 }

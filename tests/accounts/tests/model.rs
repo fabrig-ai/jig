@@ -30,7 +30,13 @@ fn fresh() -> World {
     World::with(providers(vec![provider(1, true, true), provider(2, true, false), provider(3, false, false)]), &[])
 }
 fn limit<T>(bound: Bound) -> Result<T, Refusal> {
-    Err(Refusal::Limit { bound })
+    let (key, value) = match bound {
+        Bound::Accounts => (jig_domain_accounts::LimitKey::Accounts, LIMITS.accounts),
+        Bound::HolderAccounts => (jig_domain_accounts::LimitKey::HolderAccounts, LIMITS.holder_accounts),
+        Bound::Sources => (jig_domain_accounts::LimitKey::Sources, LIMITS.sources),
+        Bound::SignIns => (jig_domain_accounts::LimitKey::SignIns, LIMITS.sign_ins),
+    };
+    Err(Refusal::limited(bound, key, value))
 }
 fn signed_in(number: u32, provider: u32, holder: Holder, subject: &[u8]) -> Vec<Stored> {
     vec![account(number, provider, holder, subject), source(number, number + 1, 0, Kind::SignIn)]

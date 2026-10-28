@@ -869,7 +869,10 @@ fn every_admission_point_refuses_without_partial_state() {
     assert_eq!(reply(&test.signin(2, 11, identity(0, 2))), Reply::Again(Again::Busy));
     assert_eq!(signed_person(reply(&test.signin(3, 11, identity(0, 1)))), Some(1));
     let big = create_request(1, Box::new([1, 2]));
-    assert_eq!(reply(&test.request(11, 1, big)), Reply::Refused(Refusal::Limit { which: LimitKind::Words }));
+    assert_eq!(
+        reply(&test.request(11, 1, big)),
+        Reply::Refused(Refusal::configured(LimitKind::Words, 1, LimitKey::PeopleWords, LimitUnit::Bytes))
+    );
     let roles = test.send(Event::Roles { project: 2, holdings: Box::new([]) });
     assert_eq!(roles, [Request::RolesRefused { project: 2, outcome: Outcome::Again(Again::Busy) }]);
     let roles = test.send(Event::Roles {
@@ -878,7 +881,15 @@ fn every_admission_point_refuses_without_partial_state() {
     });
     assert_eq!(
         roles,
-        [Request::RolesRefused { project: 1, outcome: Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }) }]
+        [Request::RolesRefused {
+            project: 1,
+            outcome: Outcome::Refused(Refusal::configured(
+                LimitKind::Roles,
+                1,
+                LimitKey::PeopleHoldings,
+                LimitUnit::Items
+            ))
+        }]
     );
 }
 
@@ -927,7 +938,10 @@ fn restore_order_is_independent_and_bad_or_oversized_records_refuse_start() {
     test.d = Domain::new(&test.env.limits, Box::new([]), 2, Box::new([]));
     assert_eq!(
         test.send(Event::Restore { record: Stored::Person { number: 1, identity: identity(0, 1) } }),
-        [Request::RestoreRefused { key: Key::Person(1), refusal: Refusal::Limit { which: LimitKind::Restore } }]
+        [Request::RestoreRefused {
+            key: Key::Person(1),
+            refusal: Refusal::Limit { which: LimitKind::Restore, bound: None }
+        }]
     );
 }
 
@@ -1020,7 +1034,10 @@ fn restored_role_success_requires_matching_ask_kind_and_project() {
                 record: Stored::Answer { models: Box::new([]), key, ask: Box::new(ask), outcome, at: Wall::EPOCH }
             })
             .as_slice(),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }]
+            [Request::RestoreRefused {
+                key: Key::Answer(key),
+                refusal: Refusal::Limit { which: LimitKind::Restore, bound: None }
+            }]
         );
         assert!(test.send_bounded(Event::Restored).is_empty());
         assert!(!test.d.ready());
@@ -1047,7 +1064,10 @@ fn restored_successful_role_rosters_require_positive_unique_people() {
                 }
             })
             .as_slice(),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }]
+            [Request::RestoreRefused {
+                key: Key::Answer(key),
+                refusal: Refusal::Limit { which: LimitKind::Restore, bound: None }
+            }]
         );
         assert!(test.send_bounded(Event::Restored).is_empty());
         assert!(!test.d.ready());
@@ -1099,13 +1119,13 @@ fn refused_role_requests_restore_invalid_rosters_and_unknown_targets_for_replay(
             Role::Owner,
             1,
             Box::from([Holding { person: 0, role: Role::Member }]),
-            Refusal::Limit { which: LimitKind::Roles },
+            Refusal::Limit { which: LimitKind::Roles, bound: None },
         ),
         (
             Role::Owner,
             1,
             Box::from([Holding { person: 1, role: Role::Owner }, Holding { person: 1, role: Role::Member }]),
-            Refusal::Limit { which: LimitKind::Roles },
+            Refusal::Limit { which: LimitKind::Roles, bound: None },
         ),
         (Role::Owner, 1, Box::from([Holding { person: 99, role: Role::Member }]), Refusal::Unknown),
     ] {
@@ -1329,7 +1349,7 @@ fn identity_limits_clock_overflow_and_duplicate_holdings_leave_no_records() {
     let mut test = Test::new(Limits { identity_bytes: 1, ..LIMITS });
     assert_eq!(
         reply(&test.signin(1, 10, identity(0, 1))),
-        Reply::Refused(Refusal::Limit { which: LimitKind::Identity })
+        Reply::Refused(Refusal::configured(LimitKind::Identity, 1, LimitKey::PeopleIdentityBytes, LimitUnit::Bytes))
     );
     test.env.limits = LIMITS;
     test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
@@ -1337,7 +1357,7 @@ fn identity_limits_clock_overflow_and_duplicate_holdings_leave_no_records() {
     test.env.wall = Wall::from_nanos(u64::MAX);
     assert_eq!(
         reply(&test.signin(1, 10, identity(0, 1))),
-        Reply::Refused(Refusal::Limit { which: LimitKind::Arithmetic })
+        Reply::Refused(Refusal::Limit { which: LimitKind::Arithmetic, bound: None })
     );
     test.env.wall = Wall::EPOCH;
     test.member();
@@ -1347,7 +1367,10 @@ fn identity_limits_clock_overflow_and_duplicate_holdings_leave_no_records() {
     });
     assert_eq!(
         rows,
-        [Request::RolesRefused { project: 1, outcome: Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }) }]
+        [Request::RolesRefused {
+            project: 1,
+            outcome: Outcome::Refused(Refusal::Limit { which: LimitKind::Roles, bound: None })
+        }]
     );
     route(&test.request(10, 1, ask(1)));
 }
@@ -1485,9 +1508,9 @@ fn every_final_refusal_keeps_its_facts_under_the_key_when_roles_and_time_change(
         Refusal::Authority { proposable: None, lacking: Lack::Depth { most: 2 } },
         Refusal::Authority { proposable: None, lacking: Lack::Deadline },
         Refusal::Authority { proposable: None, lacking: Lack::Tasks { left: 3 } },
-        Refusal::Limit { which: LimitKind::ProjectLiveTasks },
-        Refusal::Limit { which: LimitKind::InboxFull },
-        Refusal::Limit { which: LimitKind::Words },
+        Refusal::Limit { which: LimitKind::ProjectLiveTasks, bound: None },
+        Refusal::Limit { which: LimitKind::InboxFull, bound: None },
+        Refusal::Limit { which: LimitKind::Words, bound: None },
         Refusal::Moved { now: Moved::Hold { revision: 8, reason: HoldReason::Placed { hold: 2 } } },
         Refusal::Moved { now: Moved::Spec { revision: 4 } },
         Refusal::Moved { now: Moved::Person { revision: 3 } },
@@ -1529,7 +1552,10 @@ fn retry_and_signed_out_answers_cannot_restore_as_completed_keys() {
             test.send(Event::Restore {
                 record: Stored::Answer { models: Box::new([]), key, ask: Box::new(ask(1)), outcome, at: Wall::EPOCH }
             }),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }],
+            [Request::RestoreRefused {
+                key: Key::Answer(key),
+                refusal: Refusal::Limit { which: LimitKind::Restore, bound: None }
+            }],
         );
         assert!(!test.d.ready());
     }
@@ -1746,7 +1772,7 @@ fn capacity_facts_keep_actual_times_replay_and_diagnostics_independent() {
     assert_eq!(test.d.pop_fact(), None);
     assert_eq!(test.d.capacity_refusals(), entrance);
     test.env.wall = Wall::from_nanos(9);
-    let refusal = Outcome::Refused(Refusal::Limit { which: LimitKind::LiveTasks });
+    let refusal = Outcome::Refused(Refusal::Limit { which: LimitKind::LiveTasks, bound: None });
     let completed = test.send(Event::Decided { request, outcome: refusal.clone() });
     assert_eq!(reply(&completed), Reply::Outcome(refusal.clone()));
     let permanent = test.d.capacity_refusals();
@@ -1784,7 +1810,7 @@ fn zero_room_history_counts_omissions_without_changing_busy_or_key_admission() {
     assert_eq!(reply(&test.request(10, 1, ask(1))), Reply::Again(Again::Busy));
     assert_eq!(test.d.capacity_refusals_lost(), 2);
     assert_eq!(worst_case(&Limits { requests: u32::MAX, room_refusals: 1, ..LIMITS }), None);
-    assert_eq!(capacity::permanent(&Outcome::Refused(Refusal::Limit { which: LimitKind::Words })), None);
+    assert_eq!(capacity::permanent(&Outcome::Refused(Refusal::Limit { which: LimitKind::Words, bound: None })), None);
     assert_eq!(capacity::permanent(&Outcome::Refused(Refusal::Role { held: Some(Role::Observer) })), None);
     assert_eq!(
         capacity::permanent(&Outcome::Again(Again::Busy)),

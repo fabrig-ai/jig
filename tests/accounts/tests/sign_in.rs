@@ -205,7 +205,17 @@ fn each_sign_in_refusal_names_its_bound_or_rule() {
     assert_eq!(world.step(sign_in(2, ALICE, 3)), refused(2, Refusal::Provider { provider: 3 }));
     assert_eq!(world.step(sign_in(3, ALICE, 9)), refused(3, Refusal::Provider { provider: 9 }));
     assert_eq!(world.step(sign_in(4, ALICE, 1)), starts(4, 1, 0));
-    assert_eq!(world.step(sign_in(5, BOB, 2)), refused(5, Refusal::Limit { bound: Bound::SignIns }));
+    assert_eq!(
+        world.step(sign_in(5, BOB, 2)),
+        refused(
+            5,
+            Refusal::limited(
+                Bound::SignIns,
+                jig_domain_accounts::LimitKey::SignIns,
+                jig_accounts_world::LIMITS.sign_ins
+            )
+        )
+    );
     assert_eq!(
         world.step(Event::SignInFailed { source: 0, failure: Failure::Cancelled }),
         refused(4, Refusal::NotStarted)

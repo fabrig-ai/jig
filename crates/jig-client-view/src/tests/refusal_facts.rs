@@ -57,7 +57,7 @@ fn engine_refusals_keep_categories_supplied_hold_reasons_and_absent_ending_detai
         AdmissionLimit::Resource,
         AdmissionLimit::Service,
     ] {
-        let tree = render(Refusal::Limit { which: Limit::Admission { which } });
+        let tree = render(Refusal::Limit { which: Limit::Admission { which, bound: None } });
         assert!(
             tree.nodes()
                 .iter()
@@ -246,7 +246,7 @@ fn the_account_sign_in_limits_name_each_refusal() {
         (AdmissionLimit::Sources, b"Engine admission limit: sources".as_slice()),
         (AdmissionLimit::SignIns, b"Engine admission limit: account sign-ins".as_slice()),
     ] {
-        let tree = render(Refusal::Limit { which: Limit::Admission { which } });
+        let tree = render(Refusal::Limit { which: Limit::Admission { which, bound: None } });
         assert!(contains(&tree, words));
     }
 }
@@ -286,7 +286,7 @@ fn each_configured_bound_names_its_allowance_in_the_reference_view() {
 fn project_name_refusals_say_the_failed_rule_and_projects_limit() {
     assert!(contains(&render(Refusal::NameTaken), b"Another project has that name"));
     assert!(contains(
-        &render(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects } }),
+        &render(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects, bound: None } }),
         b"The deployment has no room for another project"
     ));
     for (rule, words) in [

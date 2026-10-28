@@ -102,7 +102,7 @@ fn refusals_keep_every_engine_fact_and_moved_reads_the_current_object_without_lo
         Refusal::NotWaiting,
         Refusal::NoFurther,
         Refusal::Authority { lacking: Lacking::Deadline { asked: None, latest: None }, proposable: None },
-        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::InboxFull } },
+        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::InboxFull, bound: None } },
         Refusal::Moved {
             now: Revision { value: 12 },
             what: Moved::Hold { reason: Some(CurrentHold::Reason(HoldCategory::Uncertain { entry: 123 })) },

@@ -161,17 +161,29 @@ fn keys_being_kept_are_bounded_with_the_sign_ins() {
     let source = add(&mut world, None);
     assert_eq!(
         change(&mut world, Change::AddKey { provider: PROVIDER, join: None, carried: CARRIED }),
-        vec![refused(Refusal::Limit { bound: Bound::SignIns })]
+        vec![refused(Refusal::limited(
+            Bound::SignIns,
+            jig_domain_accounts::LimitKey::SignIns,
+            jig_accounts_world::LIMITS.sign_ins
+        ))]
     );
     assert_eq!(
         world.step(Event::SignIn { request: REQUEST, holder: HOLDER, by: 7, provider: PROVIDER }),
-        vec![refused(Refusal::Limit { bound: Bound::SignIns })]
+        vec![refused(Refusal::limited(
+            Bound::SignIns,
+            jig_domain_accounts::LimitKey::SignIns,
+            jig_accounts_world::LIMITS.sign_ins
+        ))]
     );
     world.step(Event::Component(FromComponent::KeepFailed { account: source, why: KeyFailure::NotStored }));
     world.step(Event::SignIn { request: REQUEST, holder: HOLDER, by: 7, provider: PROVIDER });
     assert_eq!(
         change(&mut world, Change::AddKey { provider: PROVIDER, join: None, carried: CARRIED }),
-        vec![refused(Refusal::Limit { bound: Bound::SignIns })]
+        vec![refused(Refusal::limited(
+            Bound::SignIns,
+            jig_domain_accounts::LimitKey::SignIns,
+            jig_accounts_world::LIMITS.sign_ins
+        ))]
     );
 }
 #[test]

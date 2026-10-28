@@ -425,7 +425,7 @@ fn a_refused_key_ask_returns_its_carried_value_unused() {
         (
             1,
             accounts::KeyFailure::TooLong,
-            people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Words }),
+            people::Outcome::Refused(people::Refusal::fixed(people::LimitKind::Key, 256, people::LimitUnit::Bytes)),
         ),
     ] {
         world.fail_llm_key_keep = Some(failure);

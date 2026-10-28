@@ -904,7 +904,7 @@ fn restore_person_proposal(
 
 fn failed(domain: &mut Domain, task: Option<u64>, why: Refusal, out: &mut Queue<Request>) {
     domain.startup = Startup::Failed;
-    out.push(Request::RestoreRefused { problem: Problem { task, why, blocked_by: None, capacity: None } });
+    out.push(Request::RestoreRefused { problem: Problem { task, why, blocked_by: None, capacity: None, limit: None } });
 }
 
 #[expect(clippy::too_many_lines, reason = "restore validates complete task topology and period allotments together")]

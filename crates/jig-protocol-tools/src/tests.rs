@@ -315,6 +315,7 @@ fn a_denied_part_renders_as_an_error_naming_what_it_lacked() {
 #[test]
 fn an_unproposable_part_renders_as_an_error_saying_no_proposal_could_be_accepted() {
     let part = core::CallPart::ProposalRefused(jig_domain_tasks::Problem {
+        limit: None,
         task: Some(1),
         why: jig_domain_tasks::Refusal::Unproposable,
         blocked_by: None,

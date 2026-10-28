@@ -15,6 +15,7 @@ pub fn problem() -> tasks::Problem {
     tasks::Problem {
         task: Some(1),
         why: tasks::Refusal::LiveDelegates,
+        limit: Some(tasks::NumericLimit { key: tasks::LimitKey::Depth, value: 4 }),
         blocked_by: Some(Box::new([2, 3])),
         capacity: Some(tasks::Capacity {
             project: Some(1),
@@ -60,6 +61,7 @@ pub fn call_parts() -> Box<[core::CallPart]> {
         C::SettingsRefused(jig_domain_people::Refusal::Stale { newest: 3 }),
         C::SettingsRefused(jig_domain_people::Refusal::Limit {
             which: jig_domain_people::LimitKind::SettingsProposals,
+            bound: None,
         }),
         C::Controlled,
         C::ControlRefused(problem()),

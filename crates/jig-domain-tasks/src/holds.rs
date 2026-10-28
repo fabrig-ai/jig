@@ -339,6 +339,7 @@ pub(crate) fn check_batch(domain: &Domain, limits: &Limits, creator: Party, batc
                 match taken {
                     Taken::Refuses => {
                         return Err(Problem {
+                            limit: None,
                             task: Some(new.number),
                             why: Refusal::HoldTaken,
                             capacity: None,

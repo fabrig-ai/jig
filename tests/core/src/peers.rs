@@ -560,7 +560,7 @@ fn party_refusal(why: people::Refusal) -> parties::Refusal {
             },
             lacking: party_lack(lacking),
         },
-        people::Refusal::Limit { which } => parties::Refusal::Limit { which: party_limit(which) },
+        people::Refusal::Limit { which, bound: _ } => parties::Refusal::Limit { which: party_limit(which) },
         people::Refusal::Moved { now } => parties::Refusal::Moved { now: party_moved(now) },
         people::Refusal::Ended { how } => parties::Refusal::Ended { how: party_ending(how) },
         people::Refusal::Taken { by } => parties::Refusal::Taken { by },
@@ -628,8 +628,8 @@ fn party_lack(value: people::Lack) -> parties::Lack {
 fn party_limit(value: people::LimitKind) -> parties::LimitKind {
     match value {
         people::LimitKind::Operations => parties::LimitKind::Operations,
-        people::LimitKind::Words => parties::LimitKind::Words,
-        people::LimitKind::Identity => parties::LimitKind::Identity,
+        people::LimitKind::Words | people::LimitKind::Key => parties::LimitKind::Words,
+        people::LimitKind::Identity | people::LimitKind::Name => parties::LimitKind::Identity,
         people::LimitKind::Roles => parties::LimitKind::Roles,
         people::LimitKind::Arithmetic => parties::LimitKind::Arithmetic,
         people::LimitKind::Duplicate => parties::LimitKind::Duplicate,
@@ -644,7 +644,7 @@ fn party_limit(value: people::LimitKind) -> parties::LimitKind {
         people::LimitKind::Subscription => parties::LimitKind::Subscription,
         people::LimitKind::Dependencies => parties::LimitKind::Dependencies,
         people::LimitKind::Cycle => parties::LimitKind::Cycle,
-        people::LimitKind::Spec => parties::LimitKind::Spec,
+        people::LimitKind::Spec | people::LimitKind::Amendment => parties::LimitKind::Spec,
         people::LimitKind::Contract => parties::LimitKind::Contract,
         people::LimitKind::Authority => parties::LimitKind::Authority,
         people::LimitKind::Inputs => parties::LimitKind::Inputs,

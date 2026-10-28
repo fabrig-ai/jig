@@ -62,7 +62,7 @@ pub fn refusal(value: a::Refusal, limits: &w::Limits) -> Result<w::OwnerAccountR
             limits,
             w::OwnerAccountRefusalNotKeptParts { why: key_failure(why) },
         )?),
-        a::Refusal::Limit { bound } => w::OwnerAccountRefusal::Limit(w::OwnerAccountRefusalLimit::new(
+        a::Refusal::Limit { bound, .. } => w::OwnerAccountRefusal::Limit(w::OwnerAccountRefusalLimit::new(
             limits,
             w::OwnerAccountRefusalLimitParts { bound: self::bound(bound) },
         )?),

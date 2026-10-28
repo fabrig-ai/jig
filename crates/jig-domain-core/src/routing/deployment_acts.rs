@@ -118,7 +118,12 @@ fn close(
         tasks::Party::Task(_) | tasks::Party::Deployment { .. } => return Err(people::Refusal::NotOffered),
     }
     if core.person_tasks.len() == core.person_tasks.capacity() {
-        return Err(people::Refusal::Limit { which: people::LimitKind::LiveTasks });
+        return Err(people::Refusal::configured(
+            people::LimitKind::LiveTasks,
+            u64::from(core.person_tasks.capacity()),
+            people::LimitKey::PeoplePending,
+            people::LimitUnit::Items,
+        ));
     }
     let mut operations = List::with_capacity(
         u32::try_from(row.delegates.len()).expect("bounded delegates").checked_add(1).expect("bounded delegates"),
@@ -135,7 +140,7 @@ fn close(
     for at in 0..operations.len() {
         let operation = operations.get_mut(at).expect("bounded operation position");
         let number = crate::fresh(&mut core.counters, crate::Family::Message)
-            .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+            .ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
         if first_message == 0 {
             first_message = number;
         }

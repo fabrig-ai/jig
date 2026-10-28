@@ -143,7 +143,7 @@ fn a_revision_must_name_the_entry_the_writer_recalled() {
         changed: Wall::from_nanos(100),
     };
     let got = h.step(Event::Loaded { owner: *owner, rows: rows(&[Record::Entry(old)]), more: false });
-    assert_eq!(&*got, &[Request::Refused { owner: Token::new(5), why: Refusal::Moved { revision: 2 } }]);
+    assert_eq!(&*got, &[Request::Refused { limit: None, owner: Token::new(5), why: Refusal::Moved { revision: 2 } }]);
 }
 
 #[test]
@@ -192,7 +192,14 @@ fn a_full_scope_refuses_a_new_entry() {
     let line =
         Line { scope: Scope::Project { project: 7 }, name: 20, description: Box::from(&b"old"[..]), revision: 1 };
     let got = h.step(Event::Loaded { owner, rows: rows(&[Record::Line(line)]), more: false });
-    assert_eq!(&*got, &[Request::Refused { owner: Token::new(7), why: Refusal::Full }]);
+    assert_eq!(
+        &*got,
+        &[Request::Refused {
+            limit: Some(crate::NumericLimit { key: crate::LimitKey::EntriesPerScope, value: 1 }),
+            owner: Token::new(7),
+            why: Refusal::Full
+        }]
+    );
 }
 
 #[test]

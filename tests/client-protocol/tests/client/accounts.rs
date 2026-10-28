@@ -54,7 +54,12 @@ fn a_sign_in_beyond_the_sign_ins_bound_is_refused_naming_it() {
     assert_eq!(
         answered(&mut story, SECOND),
         vec![Outcome::Answered(Answered::Jig(c::Answer::Refused {
-            refusal: c::Refusal::Limit { which: c::Limit::Admission { which: c::AdmissionLimit::SignIns } },
+            refusal: c::Refusal::Limit {
+                which: c::Limit::Admission {
+                    which: c::AdmissionLimit::SignIns,
+                    bound: Some(c::LimitBound::configured(1, c::LimitKey::AccountsSignIns, c::LimitUnit::Items))
+                }
+            },
             at: None,
         }))]
     );

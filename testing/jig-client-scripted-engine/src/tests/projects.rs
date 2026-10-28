@@ -107,6 +107,6 @@ fn making_a_project_without_room_is_refused_with_the_deployments_limit() {
         &mut engine,
         1,
         &make(b"Tally", 1),
-        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects } },
+        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects, bound: None } },
     );
 }

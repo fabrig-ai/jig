@@ -226,11 +226,7 @@ pub(crate) fn person(
                 }
                 tasks::Executor::Person(_) | tasks::Executor::Agent { .. } | tasks::Executor::Procedure { .. } => {}
             }
-            if row.delegates.is_empty() {
-                Ok(())
-            } else {
-                Err(people::Refusal::Limit { which: people::LimitKind::LiveDelegates })
-            }
+            if row.delegates.is_empty() { Ok(()) } else { Err(core.limit_refusal(people::LimitKind::LiveDelegates)) }
         }
         Act::Message
         | Act::Withdraw

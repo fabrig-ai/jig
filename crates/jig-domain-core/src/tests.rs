@@ -885,7 +885,7 @@ fn amendment_acceptance_reserves_its_terminal_proposal_revision() {
     core.tasks = fixtures::fresh_tasks(&core, &limits);
     send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Live(Box::new(source)) });
     send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Live(Box::new(target.clone())) });
-    let arithmetic = Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+    let arithmetic = Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic, bound: None });
     assert_eq!(core.amendment_accept_revision(3, 3, Some(target.revisions.hold)), arithmetic);
     assert_eq!(core.amendment_accept_revision(3, 3, None), Ok(()));
     assert_eq!(core.amendment_accept_revision(1, 3, Some(target.revisions.hold)), arithmetic);
@@ -3155,7 +3155,10 @@ fn deployment_capacity_carries_keyed_refusal_identity_time_and_bounded_omissions
             &env,
             people::Event::Decided {
                 request: routed.expect("one keyed route"),
-                outcome: people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::LiveTasks }),
+                outcome: people::Outcome::Refused(people::Refusal::Limit {
+                    which: people::LimitKind::LiveTasks,
+                    bound: None,
+                }),
             },
             &mut out,
         );
@@ -3808,3 +3811,5 @@ fn placed(task: u64, person: u64, number: u64) -> tasks::Event {
 mod funding;
 
 mod retained_lineage;
+
+mod limit_bounds;

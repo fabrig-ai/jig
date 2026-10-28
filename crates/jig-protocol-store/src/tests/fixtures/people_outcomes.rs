@@ -93,6 +93,9 @@ pub fn limit_kind_values() -> Box<[domain::LimitKind]> {
     Box::new([
         domain::LimitKind::Operations,
         domain::LimitKind::Words,
+        domain::LimitKind::Amendment,
+        domain::LimitKind::Key,
+        domain::LimitKind::Name,
         domain::LimitKind::Identity,
         domain::LimitKind::Roles,
         domain::LimitKind::Arithmetic,
@@ -138,6 +141,13 @@ pub fn limit_kind_values() -> Box<[domain::LimitKind]> {
 }
 pub fn refusal_values() -> Box<[domain::Refusal]> {
     Box::new([
+        domain::Refusal::configured(
+            domain::LimitKind::Amendment,
+            8192,
+            domain::LimitKey::PeopleAmendmentBytes,
+            domain::LimitUnit::Bytes,
+        ),
+        domain::Refusal::fixed(domain::LimitKind::Name, 64, domain::LimitUnit::Bytes),
         domain::Refusal::NotWellFormed { at: 0, why: domain::Malformed::Cycle },
         domain::Refusal::NotWellFormed { at: 1, why: domain::Malformed::AsAllowedTwice },
         domain::Refusal::NotWellFormed { at: 0, why: domain::Malformed::Conversation },
@@ -147,7 +157,7 @@ pub fn refusal_values() -> Box<[domain::Refusal]> {
             lacking: domain::Lack::Budget { needs: 17, left: 11 },
             proposable: Some(domain::Accepter::Role(0)),
         },
-        domain::Refusal::Limit { which: domain::LimitKind::LiveTasks },
+        domain::Refusal::Limit { which: domain::LimitKind::LiveTasks, bound: None },
         domain::Refusal::Moved { now: domain::Moved::Hold { revision: 3, reason: domain::HoldReason::Budget } },
         domain::Refusal::Ended {
             how: domain::Ending::Cancelled { by: domain::Party::Person(2), at: Wall::from_nanos(19) },

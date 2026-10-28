@@ -84,7 +84,7 @@ fn ends() -> Box<[a::End]> {
         a::End::Refused { refusal: a::Refusal::NotLimited },
         a::End::Refused { refusal: a::Refusal::Uses },
         a::End::Refused { refusal: a::Refusal::NotKept { why: a::KeyFailure::NotStored } },
-        a::End::Refused { refusal: a::Refusal::Limit { bound: a::Bound::HolderAccounts } },
+        a::End::Refused { refusal: a::Refusal::Limit { bound: a::Bound::HolderAccounts, number: None } },
         a::End::Refused { refusal: a::Refusal::Held { provider: 3 } },
         a::End::Refused { refusal: a::Refusal::Provider { provider: 3 } },
         a::End::Refused { refusal: a::Refusal::Subject },

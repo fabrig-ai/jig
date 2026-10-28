@@ -36,7 +36,12 @@ fn a_policy_change_past_the_templates_limit_is_refused() {
     let overrides = overrides.into_boxed();
     assert_eq!(
         core.change_policy(&limits(), OWNER, PROJECT, people::PolicyChange::Templates { overrides }),
-        Err(people::Refusal::Limit { which: people::LimitKind::Policy })
+        Err(people::Refusal::configured(
+            people::LimitKind::Policy,
+            8,
+            people::LimitKey::CoreTemplates,
+            people::LimitUnit::Items
+        ))
     );
 }
 
@@ -58,7 +63,7 @@ fn a_policy_change_overriding_a_template_twice_is_refused_as_a_repeated_identity
     };
     assert_eq!(
         core.change_policy(&limits(), OWNER, PROJECT, twice),
-        Err(people::Refusal::Limit { which: people::LimitKind::Duplicate })
+        Err(people::Refusal::Limit { which: people::LimitKind::Duplicate, bound: None })
     );
     assert_eq!(core.template_overrides.get(&PROJECT), Some(&Box::from([first])));
 }

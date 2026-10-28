@@ -5,7 +5,7 @@ use jig_domain_tasks as tasks;
 use skein_lib::{Env, List, Queue};
 
 pub(super) fn problem(task: u64, why: tasks::Refusal) -> StepRefusal {
-    StepRefusal::Refused(tasks::Problem { task: Some(task), why, blocked_by: None, capacity: None })
+    StepRefusal::Refused(tasks::Problem { limit: None, task: Some(task), why, blocked_by: None, capacity: None })
 }
 
 pub(super) fn refused(core: &Core, task: u64, step: u64, why: StepRefusal) -> Requests {

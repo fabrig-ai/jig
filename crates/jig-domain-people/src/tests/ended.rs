@@ -57,7 +57,7 @@ fn an_ended_read_position_is_refused_at_restore() {
         out.pop(),
         Some(Request::RestoreRefused {
             key: Key::EndedRead { task: TASK, party: PARTY },
-            refusal: Refusal::Limit { which: LimitKind::Restore },
+            refusal: Refusal::Limit { which: LimitKind::Restore, bound: None },
         })
     );
     assert!(out.is_empty());

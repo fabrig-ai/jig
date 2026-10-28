@@ -86,7 +86,10 @@ fn each_lack_reads_back() {
 }
 fn each_limit_kind_reads_back() {
     for value in values::limit_kind_values() {
-        people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Limit { which: value })));
+        people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Limit {
+            which: value,
+            bound: None,
+        })));
     }
 }
 fn each_refusal_reads_back() {

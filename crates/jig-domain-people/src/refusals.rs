@@ -75,6 +75,7 @@ pub enum Refusal {
     /// The stated admission bound was reached.
     Limit {
         which: LimitKind,
+        bound: Option<crate::LimitBound>,
     },
     /// The decided subject changed since it was observed.
     Moved {
@@ -189,6 +190,9 @@ pub enum LimitKind {
     Operations,
     /// The words or other byte payload exceed their bound.
     Words,
+    Amendment,
+    Key,
+    Name,
     /// The identity payload exceeds its bound.
     Identity,
     /// The roster exceeds its bound or repeats a party.
@@ -325,4 +329,15 @@ pub enum DependencyStatus {
 pub enum HoldOwner {
     Party { person: u64 },
     Task { task: u64 },
+}
+
+impl Refusal {
+    #[must_use]
+    pub const fn configured(which: LimitKind, value: u64, key: crate::LimitKey, unit: crate::LimitUnit) -> Self {
+        Self::Limit { which, bound: Some(crate::LimitBound::configured(value, key, unit)) }
+    }
+    #[must_use]
+    pub const fn fixed(which: LimitKind, value: u64, unit: crate::LimitUnit) -> Self {
+        Self::Limit { which, bound: Some(crate::LimitBound::fixed(value, unit)) }
+    }
 }

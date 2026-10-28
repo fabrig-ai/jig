@@ -79,7 +79,7 @@ pub(super) fn allowed(core: &Core, project: u32, batch: Box<[authority::Delegate
     allowed_action(core, project, &authority::Action::Batch(batch))
 }
 fn allowed_action(core: &Core, project: u32, action: &authority::Action) -> Result<(), people::Refusal> {
-    let needs = authority::needs(action).ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+    let needs = authority::needs(action).ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
     let policy = core.authority.policy(project).ok_or(people::Refusal::Unknown)?;
     let rules = core.authority.rules();
     let cap = policy.period_spend.min(rules.period_spend);
@@ -108,7 +108,7 @@ pub(super) struct Proposal {
 pub(super) fn keep(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, value: Proposal) {
     let Proposal { request, person, reason, to, batch, stubs } = value;
     let Some(number) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
         return;
     };
     let project = batch.first().expect("nonempty proposed batch").project;
@@ -186,8 +186,7 @@ fn offer_amendment(
     value: Edit,
 ) -> Result<(), people::Refusal> {
     let Edit { request, person, project, role, task, revision, amendment, reason } = value;
-    let amendment = crate::amendments::translate(amendment, core.kept_models(task), &env.limits.tasks)
-        .ok_or(people::Refusal::Limit { which: people::LimitKind::Words })?;
+    let amendment = crate::amendments::translate(amendment, core.kept_models(task), &env.limits.tasks)?;
     match core.amend_admit(person, role, project, task, &amendment, env.limits.tasks.depth, &env.limits.tasks) {
         Ok(_) | Err(people::Refusal::Authority { proposable: Some(people::Accepter::Role(_)), .. }) => {}
         Err(why) => return Err(why),
@@ -205,7 +204,7 @@ fn offer_amendment(
     };
     let to = *roles.iter().min().expect("nonempty recipient roles");
     let number = crate::fresh(&mut core.counters, crate::Family::Message)
-        .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+        .ok_or(core.limit_refusal(people::LimitKind::Arithmetic))?;
     assert!(
         core.goal_routes.insert(request, GoalRoute::Offering { proposal: number, to, stubs: Box::new([]) }).is_ok(),
         "one amendment proposal"

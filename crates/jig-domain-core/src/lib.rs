@@ -46,6 +46,7 @@ mod coverage;
 mod historical;
 mod inbox;
 mod indexes;
+mod limit_refusals;
 mod llm;
 mod memory;
 
@@ -283,6 +284,8 @@ pub type Delegating = (CallKey, Box<[tasks::Stub]>, Option<people::Given>);
     reason = "pending generation, worker placement, stopping and role-table fullness are independent facts"
 )]
 pub struct Core {
+    /// Immutable startup numbers for refusal facts; no policy or admission is recomputed.
+    pub(crate) refusal_limits: Limits,
     room_max: skein_lib::JournalRoom,
     run_inbox: u32,
     pub(crate) run_now: skein_lib::Time,
@@ -637,6 +640,7 @@ impl Core {
         let authority = authority::Domain::new(current.rules().clone(), limits.authority).expect("configured rules");
         let room_max = room_max(limits).expect("validated immutable core limits");
         Ok(Core {
+            refusal_limits: *limits,
             room_max,
             run_inbox: limits.tasks.run_inbox,
             fill: 0,

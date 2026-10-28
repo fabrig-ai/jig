@@ -68,7 +68,11 @@ pub(crate) fn change(
                     refuse(request, Refusal::Uses, out);
                 }
                 Err(crate::programs::DeclarationRefusal::Names) => {
-                    refuse(request, Refusal::Limit { bound: Bound::Sources }, out);
+                    refuse(
+                        request,
+                        Refusal::limited(Bound::Sources, crate::LimitKey::ProgramNames, env.limits.program_names),
+                        out,
+                    );
                 }
             }
             return;
@@ -190,11 +194,11 @@ fn removable(domain: &Domain, holder: Holder, number: u32) -> Result<u32, Refusa
         }
     }
     if domain.removing.len() == domain.removing.capacity() {
-        return Err(Refusal::Limit { bound: Bound::Accounts });
+        return Err(Refusal::limited(Bound::Accounts, crate::LimitKey::Accounts, domain.removing.capacity()));
     }
     for (_, keeping) in &domain.keeping {
         if keeping.join == Some(number) {
-            return Err(Refusal::Limit { bound: Bound::SignIns });
+            return Err(Refusal::Limit { bound: Bound::SignIns, number: None });
         }
     }
     let mut leaving: u32 = 0;
@@ -203,13 +207,13 @@ fn removable(domain: &Domain, holder: Holder, number: u32) -> Result<u32, Refusa
         match domain.sources.get(source).expect("a kept source").kind {
             Kind::Program => {
                 if domain.programs.contains_key(source) {
-                    return Err(Refusal::Limit { bound: Bound::Sources });
+                    return Err(Refusal::Limit { bound: Bound::Sources, number: None });
                 }
                 programs = programs.saturating_add(1);
             }
             Kind::SignIn => {
                 if domain.signing_out.contains_key(source) {
-                    return Err(Refusal::Limit { bound: Bound::Sources });
+                    return Err(Refusal::Limit { bound: Bound::Sources, number: None });
                 }
                 leaving = leaving.saturating_add(1);
             }
@@ -220,10 +224,10 @@ fn removable(domain: &Domain, holder: Holder, number: u32) -> Result<u32, Refusa
         }
     }
     if leaving > domain.signing_out.capacity().saturating_sub(domain.signing_out.len()) {
-        return Err(Refusal::Limit { bound: Bound::Sources });
+        return Err(Refusal::fixed(Bound::Sources, domain.signing_out.capacity()));
     }
     if programs > domain.programs.capacity().saturating_sub(domain.programs.len()) {
-        return Err(Refusal::Limit { bound: Bound::Sources });
+        return Err(Refusal::limited(Bound::Sources, crate::LimitKey::ProgramNames, domain.programs.capacity()));
     }
     Ok(leaving.saturating_add(programs))
 }

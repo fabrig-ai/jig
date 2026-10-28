@@ -63,6 +63,7 @@ pub(super) fn described(
                 to,
                 key,
                 part: core::CallPart::SubscriptionRefused(tasks::Problem {
+                    limit: None,
                     task: Some(key.task),
                     why: tasks::Refusal::Subscription,
                     blocked_by: None,

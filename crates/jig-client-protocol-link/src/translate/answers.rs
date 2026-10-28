@@ -367,6 +367,9 @@ pub(crate) fn admission_limit(value: &w::AdmissionLimit, _limits: &Limits) -> c:
         w::AdmissionLimit::Operations => c::AdmissionLimit::Operations,
         w::AdmissionLimit::Grace => c::AdmissionLimit::Grace,
         w::AdmissionLimit::Words => c::AdmissionLimit::Words,
+        w::AdmissionLimit::Name => c::AdmissionLimit::Name,
+        w::AdmissionLimit::Key => c::AdmissionLimit::Key,
+        w::AdmissionLimit::Amendment => c::AdmissionLimit::Amendment,
         w::AdmissionLimit::Identity => c::AdmissionLimit::Identity,
         w::AdmissionLimit::Roles => c::AdmissionLimit::Roles,
         w::AdmissionLimit::Arithmetic => c::AdmissionLimit::Arithmetic,
@@ -416,7 +419,10 @@ pub(crate) fn admission_limit(value: &w::AdmissionLimit, _limits: &Limits) -> c:
 
 pub(crate) fn limit(value: &w::Limit, limits: &Limits) -> c::Limit {
     match value {
-        w::Limit::Admission(row) => c::Limit::Admission { which: admission_limit(row.which(), limits) },
+        w::Limit::Admission(row) => c::Limit::Admission {
+            which: admission_limit(row.which(), limits),
+            bound: decode_limit_bound(row.bound().as_ref()),
+        },
         w::Limit::LiveTasks(row) => c::Limit::LiveTasks { project: row.project(), limit: row.limit() },
         w::Limit::Inbox(row) => c::Limit::Inbox { task: row.task(), limit: row.limit() },
         w::Limit::Words(row) => c::Limit::Words { limit: row.limit() },
@@ -665,6 +671,87 @@ fn classify(problem: w::Problem) -> super::Undecodable {
         | skein_codec::Reason::Version
         | skein_codec::Reason::Trailing => super::Undecodable::Malformed,
     }
+}
+
+fn decode_limit_bound(value: Option<&w::LimitBound>) -> Option<c::LimitBound> {
+    let value = value?;
+    Some(c::LimitBound {
+        value: value.value(),
+        key: decode_limit_key(value.key().as_ref()),
+        unit: match value.unit() {
+            w::LimitUnit::Bytes => c::LimitUnit::Bytes,
+            w::LimitUnit::Items => c::LimitUnit::Items,
+            w::LimitUnit::Milliseconds => c::LimitUnit::Milliseconds,
+        },
+    })
+}
+
+fn decode_limit_key(key: Option<&w::LimitKey>) -> Option<c::LimitKey> {
+    let key = key?;
+    Some(match key {
+        w::LimitKey::PeopleWords => c::LimitKey::PeopleWords,
+        w::LimitKey::PeopleAmendmentBytes => c::LimitKey::PeopleAmendmentBytes,
+        w::LimitKey::PeopleHoldings => c::LimitKey::PeopleHoldings,
+        w::LimitKey::PeopleIdentityBytes => c::LimitKey::PeopleIdentityBytes,
+        w::LimitKey::PeopleBatch => c::LimitKey::PeopleBatch,
+        w::LimitKey::PeopleOperations => c::LimitKey::PeopleOperations,
+        w::LimitKey::PeopleProjects => c::LimitKey::PeopleProjects,
+        w::LimitKey::TasksTasks => c::LimitKey::TasksTasks,
+        w::LimitKey::TasksProjectTasks => c::LimitKey::TasksProjectTasks,
+        w::LimitKey::TasksProjectGoals => c::LimitKey::TasksProjectGoals,
+        w::LimitKey::TasksTreeTasks => c::LimitKey::TasksTreeTasks,
+        w::LimitKey::TasksDepth => c::LimitKey::TasksDepth,
+        w::LimitKey::TasksDelegates => c::LimitKey::TasksDelegates,
+        w::LimitKey::TasksSubscriptions => c::LimitKey::TasksSubscriptions,
+        w::LimitKey::TasksDependencies => c::LimitKey::TasksDependencies,
+        w::LimitKey::TasksSpecBytes => c::LimitKey::TasksSpecBytes,
+        w::LimitKey::TasksParameters => c::LimitKey::TasksParameters,
+        w::LimitKey::TasksContractChoices => c::LimitKey::TasksContractChoices,
+        w::LimitKey::TasksResultBytes => c::LimitKey::TasksResultBytes,
+        w::LimitKey::TasksInputs => c::LimitKey::TasksInputs,
+        w::LimitKey::TasksHoldings => c::LimitKey::TasksHoldings,
+        w::LimitKey::TasksHoldWaiters => c::LimitKey::TasksHoldWaiters,
+        w::LimitKey::TasksInboxMessages => c::LimitKey::TasksInboxMessages,
+        w::LimitKey::TasksInboxBytes => c::LimitKey::TasksInboxBytes,
+        w::LimitKey::TasksMessageBytes => c::LimitKey::TasksMessageBytes,
+        w::LimitKey::TasksGrace => c::LimitKey::TasksGrace,
+        w::LimitKey::TasksPlacedHolds => c::LimitKey::TasksPlacedHolds,
+        w::LimitKey::TasksProjectPlacedHolds => c::LimitKey::TasksProjectPlacedHolds,
+        w::LimitKey::TasksPartyPlacedHolds => c::LimitKey::TasksPartyPlacedHolds,
+        w::LimitKey::TasksExemptions => c::LimitKey::TasksExemptions,
+        w::LimitKey::TasksAuthorityGrants => c::LimitKey::TasksAuthorityGrants,
+        w::LimitKey::TasksAuthorityBytes => c::LimitKey::TasksAuthorityBytes,
+        w::LimitKey::TasksAuthoritySegments => c::LimitKey::TasksAuthoritySegments,
+        w::LimitKey::CoreTemplates => c::LimitKey::CoreTemplates,
+        w::LimitKey::CorePolicyBytes => c::LimitKey::CorePolicyBytes,
+        w::LimitKey::CoreSettingsProposals => c::LimitKey::CoreSettingsProposals,
+        w::LimitKey::NotesScopes => c::LimitKey::NotesScopes,
+        w::LimitKey::NotesEntriesPerScope => c::LimitKey::NotesEntriesPerScope,
+        w::LimitKey::NotesPatternBytes => c::LimitKey::NotesPatternBytes,
+        w::LimitKey::NotesDescriptionBytes => c::LimitKey::NotesDescriptionBytes,
+        w::LimitKey::NotesBodyBytes => c::LimitKey::NotesBodyBytes,
+        w::LimitKey::NotesReferences => c::LimitKey::NotesReferences,
+        w::LimitKey::AccountsAccounts => c::LimitKey::AccountsAccounts,
+        w::LimitKey::AccountsHolderAccounts => c::LimitKey::AccountsHolderAccounts,
+        w::LimitKey::AccountsSources => c::LimitKey::AccountsSources,
+        w::LimitKey::AccountsSignIns => c::LimitKey::AccountsSignIns,
+        w::LimitKey::AccountsProgramHosts => c::LimitKey::AccountsProgramHosts,
+        w::LimitKey::TasksBatch => c::LimitKey::TasksBatch,
+        w::LimitKey::CoreEscalationReasonBytes => c::LimitKey::CoreEscalationReasonBytes,
+        w::LimitKey::AccountsProgramNames => c::LimitKey::AccountsProgramNames,
+        w::LimitKey::AccountsCredentials => c::LimitKey::AccountsCredentials,
+        w::LimitKey::TasksReferences => c::LimitKey::TasksReferences,
+        w::LimitKey::TasksHoldSegments => c::LimitKey::TasksHoldSegments,
+        w::LimitKey::TasksHoldBytes => c::LimitKey::TasksHoldBytes,
+        w::LimitKey::TasksFunders => c::LimitKey::TasksFunders,
+        w::LimitKey::TasksExecutorKinds => c::LimitKey::TasksExecutorKinds,
+        w::LimitKey::TasksResourceReports => c::LimitKey::TasksResourceReports,
+        w::LimitKey::PeoplePending => c::LimitKey::PeoplePending,
+        w::LimitKey::AuthorityProjects => c::LimitKey::AuthorityProjects,
+        w::LimitKey::AuthorityGrants => c::LimitKey::AuthorityGrants,
+        w::LimitKey::AuthoritySegments => c::LimitKey::AuthoritySegments,
+        w::LimitKey::AuthoritySegmentBytes => c::LimitKey::AuthoritySegmentBytes,
+    })
 }
 
 #[cfg(test)]

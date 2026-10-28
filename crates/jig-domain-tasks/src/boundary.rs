@@ -1327,19 +1327,32 @@ pub struct Problem {
     pub blocked_by: Option<Box<[u64]>>,
     /// Exact room check metadata; absent for shape, state and other refusals.
     pub capacity: Option<crate::Capacity>,
+    /// The exact numeric check, absent for semantic failures.
+    pub limit: Option<crate::NumericLimit>,
 }
 
 impl Problem {
+    #[must_use]
+    pub const fn bounded(mut self, key: crate::LimitKey, value: u64) -> Self {
+        self.limit = Some(crate::NumericLimit { key, value });
+        self
+    }
+    #[must_use]
+    pub const fn observed(mut self, limit: Option<crate::NumericLimit>) -> Self {
+        self.limit = limit;
+        self
+    }
+
     /// A refusal with no live-delegate blockers.
     #[must_use]
     pub const fn new(task: Option<u64>, why: Refusal) -> Self {
-        Self { task, why, blocked_by: None, capacity: None }
+        Self { task, why, blocked_by: None, capacity: None, limit: None }
     }
 
     /// An unchanged refusal carrying owner-proven capacity metadata.
     #[must_use]
     pub const fn capacity(task: Option<u64>, why: Refusal, capacity: crate::Capacity) -> Self {
-        Self { task, why, blocked_by: None, capacity: Some(capacity) }
+        Self { task, why, blocked_by: None, capacity: Some(capacity), limit: None }
     }
 
     /// A finish refused until these named delegates end or are cancelled.
@@ -1351,7 +1364,7 @@ impl Problem {
     /// A refusal naming these tasks.
     #[must_use]
     pub fn naming(task: Option<u64>, why: Refusal, tasks: &[u64]) -> Self {
-        Self { task, why, blocked_by: Some(Box::from(tasks)), capacity: None }
+        Self { task, why, blocked_by: Some(Box::from(tasks)), capacity: None, limit: None }
     }
 }
 

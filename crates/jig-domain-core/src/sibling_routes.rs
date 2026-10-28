@@ -71,7 +71,7 @@ impl Core {
             None => crate::acts::write(self, limits, person, task)?,
         }
         let Some(message) = fresh(&mut self.counters, Family::Message) else {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+            return Err(self.limit_refusal(people::LimitKind::Arithmetic));
         };
         let kind = match question {
             Some(number) => tasks::MessageKind::Answer { question: number },

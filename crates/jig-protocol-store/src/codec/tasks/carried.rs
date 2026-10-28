@@ -413,10 +413,11 @@ fn decode_llm_fault(value: wire::LlmFault) -> tasks::LlmFault {
 }
 
 pub(super) fn encode_problem(value: &tasks::Problem, limits: &Limits) -> Result<wire::TaskProblem, wire::Problem> {
-    let tasks::Problem { task, why, blocked_by, capacity } = value;
+    let tasks::Problem { task, why, blocked_by, capacity, limit } = value;
     wire::TaskProblem::new(
         limits,
         wire::TaskProblemParts {
+            limit: encode_numeric_limit(limit.as_ref(), limits)?,
             task: *task,
             why: encode_refusal(why, limits)?,
             blocked_by: match blocked_by {
@@ -432,8 +433,9 @@ pub(super) fn encode_problem(value: &tasks::Problem, limits: &Limits) -> Result<
 }
 #[expect(clippy::manual_map, reason = "step code uses concrete matches (programming-model.md, 10)")]
 pub(super) fn decode_problem(value: wire::TaskProblem, limits: &Limits) -> tasks::Problem {
-    let wire::TaskProblemParts { task, why, blocked_by, capacity } = value.into_parts();
+    let wire::TaskProblemParts { task, why, blocked_by, capacity, limit } = value.into_parts();
     tasks::Problem {
+        limit: decode_numeric_limit(limit),
         task,
         why: decode_refusal(why, limits),
         blocked_by: match blocked_by {
@@ -665,4 +667,97 @@ fn decode_account_why(value: wire::AccountWhy) -> tasks::AccountWhy {
         wire::AccountWhy::Uses => tasks::AccountWhy::Uses,
         wire::AccountWhy::Limited => tasks::AccountWhy::Limited,
     }
+}
+
+fn encode_numeric_limit(
+    value: Option<&tasks::NumericLimit>,
+    limits: &Limits,
+) -> Result<Option<wire::NumericTaskLimit>, wire::Problem> {
+    Ok(match value {
+        None => None,
+        Some(value) => Some(wire::NumericTaskLimit::new(
+            limits,
+            wire::NumericTaskLimitParts {
+                value: value.value,
+                key: match value.key {
+                    tasks::LimitKey::Batch => wire::TaskLimitKey::Batch,
+                    tasks::LimitKey::Tasks => wire::TaskLimitKey::Tasks,
+                    tasks::LimitKey::ProjectTasks => wire::TaskLimitKey::ProjectTasks,
+                    tasks::LimitKey::ProjectGoals => wire::TaskLimitKey::ProjectGoals,
+                    tasks::LimitKey::TreeTasks => wire::TaskLimitKey::TreeTasks,
+                    tasks::LimitKey::Depth => wire::TaskLimitKey::Depth,
+                    tasks::LimitKey::Delegates => wire::TaskLimitKey::Delegates,
+                    tasks::LimitKey::References => wire::TaskLimitKey::References,
+                    tasks::LimitKey::Subscriptions => wire::TaskLimitKey::Subscriptions,
+                    tasks::LimitKey::Dependencies => wire::TaskLimitKey::Dependencies,
+                    tasks::LimitKey::SpecBytes => wire::TaskLimitKey::SpecBytes,
+                    tasks::LimitKey::Parameters => wire::TaskLimitKey::Parameters,
+                    tasks::LimitKey::ContractChoices => wire::TaskLimitKey::ContractChoices,
+                    tasks::LimitKey::ResultBytes => wire::TaskLimitKey::ResultBytes,
+                    tasks::LimitKey::Inputs => wire::TaskLimitKey::Inputs,
+                    tasks::LimitKey::Holdings => wire::TaskLimitKey::Holdings,
+                    tasks::LimitKey::HoldWaiters => wire::TaskLimitKey::HoldWaiters,
+                    tasks::LimitKey::InboxMessages => wire::TaskLimitKey::InboxMessages,
+                    tasks::LimitKey::InboxBytes => wire::TaskLimitKey::InboxBytes,
+                    tasks::LimitKey::MessageBytes => wire::TaskLimitKey::MessageBytes,
+                    tasks::LimitKey::Grace => wire::TaskLimitKey::Grace,
+                    tasks::LimitKey::PlacedHolds => wire::TaskLimitKey::PlacedHolds,
+                    tasks::LimitKey::ProjectPlacedHolds => wire::TaskLimitKey::ProjectPlacedHolds,
+                    tasks::LimitKey::PartyPlacedHolds => wire::TaskLimitKey::PartyPlacedHolds,
+                    tasks::LimitKey::Exemptions => wire::TaskLimitKey::Exemptions,
+                    tasks::LimitKey::AuthorityGrants => wire::TaskLimitKey::AuthorityGrants,
+                    tasks::LimitKey::AuthorityBytes => wire::TaskLimitKey::AuthorityBytes,
+                    tasks::LimitKey::AuthoritySegments => wire::TaskLimitKey::AuthoritySegments,
+                    tasks::LimitKey::HoldSegments => wire::TaskLimitKey::HoldSegments,
+                    tasks::LimitKey::HoldBytes => wire::TaskLimitKey::HoldBytes,
+                    tasks::LimitKey::Funders => wire::TaskLimitKey::Funders,
+                    tasks::LimitKey::ExecutorKinds => wire::TaskLimitKey::ExecutorKinds,
+                    tasks::LimitKey::ResourceReports => wire::TaskLimitKey::ResourceReports,
+                    tasks::LimitKey::ContractWords => wire::TaskLimitKey::ContractWords,
+                },
+            },
+        )?),
+    })
+}
+fn decode_numeric_limit(value: Option<wire::NumericTaskLimit>) -> Option<tasks::NumericLimit> {
+    let value = value?;
+    Some(tasks::NumericLimit {
+        value: value.value(),
+        key: match value.key() {
+            wire::TaskLimitKey::Batch => tasks::LimitKey::Batch,
+            wire::TaskLimitKey::Tasks => tasks::LimitKey::Tasks,
+            wire::TaskLimitKey::ProjectTasks => tasks::LimitKey::ProjectTasks,
+            wire::TaskLimitKey::ProjectGoals => tasks::LimitKey::ProjectGoals,
+            wire::TaskLimitKey::TreeTasks => tasks::LimitKey::TreeTasks,
+            wire::TaskLimitKey::Depth => tasks::LimitKey::Depth,
+            wire::TaskLimitKey::Delegates => tasks::LimitKey::Delegates,
+            wire::TaskLimitKey::References => tasks::LimitKey::References,
+            wire::TaskLimitKey::Subscriptions => tasks::LimitKey::Subscriptions,
+            wire::TaskLimitKey::Dependencies => tasks::LimitKey::Dependencies,
+            wire::TaskLimitKey::SpecBytes => tasks::LimitKey::SpecBytes,
+            wire::TaskLimitKey::Parameters => tasks::LimitKey::Parameters,
+            wire::TaskLimitKey::ContractChoices => tasks::LimitKey::ContractChoices,
+            wire::TaskLimitKey::ResultBytes => tasks::LimitKey::ResultBytes,
+            wire::TaskLimitKey::Inputs => tasks::LimitKey::Inputs,
+            wire::TaskLimitKey::Holdings => tasks::LimitKey::Holdings,
+            wire::TaskLimitKey::HoldWaiters => tasks::LimitKey::HoldWaiters,
+            wire::TaskLimitKey::InboxMessages => tasks::LimitKey::InboxMessages,
+            wire::TaskLimitKey::InboxBytes => tasks::LimitKey::InboxBytes,
+            wire::TaskLimitKey::MessageBytes => tasks::LimitKey::MessageBytes,
+            wire::TaskLimitKey::Grace => tasks::LimitKey::Grace,
+            wire::TaskLimitKey::PlacedHolds => tasks::LimitKey::PlacedHolds,
+            wire::TaskLimitKey::ProjectPlacedHolds => tasks::LimitKey::ProjectPlacedHolds,
+            wire::TaskLimitKey::PartyPlacedHolds => tasks::LimitKey::PartyPlacedHolds,
+            wire::TaskLimitKey::Exemptions => tasks::LimitKey::Exemptions,
+            wire::TaskLimitKey::AuthorityGrants => tasks::LimitKey::AuthorityGrants,
+            wire::TaskLimitKey::AuthorityBytes => tasks::LimitKey::AuthorityBytes,
+            wire::TaskLimitKey::AuthoritySegments => tasks::LimitKey::AuthoritySegments,
+            wire::TaskLimitKey::HoldSegments => tasks::LimitKey::HoldSegments,
+            wire::TaskLimitKey::HoldBytes => tasks::LimitKey::HoldBytes,
+            wire::TaskLimitKey::Funders => tasks::LimitKey::Funders,
+            wire::TaskLimitKey::ExecutorKinds => tasks::LimitKey::ExecutorKinds,
+            wire::TaskLimitKey::ResourceReports => tasks::LimitKey::ResourceReports,
+            wire::TaskLimitKey::ContractWords => tasks::LimitKey::ContractWords,
+        },
+    })
 }

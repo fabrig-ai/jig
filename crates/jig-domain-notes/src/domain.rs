@@ -100,18 +100,29 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::Recall { owner, by, page } => read::recall(domain, &env.limits, owner, by, page, out),
         Event::Write { owner, entry, recalled } => {
             if domain.busy() {
-                push(out, Request::Refused { owner, why: Refusal::Busy });
+                push(out, Request::Refused { limit: None, owner, why: Refusal::Busy });
             } else if !valid_new(&entry, &env.limits) {
-                push(out, Request::Refused { owner, why: Refusal::Oversized });
+                push(out, Request::Refused { limit: new_limit(&entry, &env.limits), owner, why: Refusal::Oversized });
             } else {
                 begin(domain, owner, Action::Write { entry, recalled }, out);
             }
         }
         Event::Edit { owner, party, name, scope, change } => {
             if domain.busy() {
-                push(out, Request::Refused { owner, why: Refusal::Busy });
+                push(out, Request::Refused { limit: None, owner, why: Refusal::Busy });
             } else if !valid_scope(&scope, &env.limits) || !valid_change(&change, &env.limits) {
-                push(out, Request::Refused { owner, why: Refusal::Oversized });
+                push(
+                    out,
+                    Request::Refused {
+                        limit: if valid_scope(&scope, &env.limits) {
+                            change_limit(&change, &env.limits)
+                        } else {
+                            scope_limit(&scope, &env.limits)
+                        },
+                        owner,
+                        why: Refusal::Oversized,
+                    },
+                );
             } else {
                 begin(domain, owner, Action::Edit { party, name, scope, change }, out);
             }
@@ -120,7 +131,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             let pending = domain.pending.take();
             match pending {
                 Some(pending) if pending.load_owner == owner => {
-                    push(out, Request::Refused { owner: pending.owner, why: Refusal::Busy });
+                    push(out, Request::Refused { limit: None, owner: pending.owner, why: Refusal::Busy });
                 }
                 Some(pending) => domain.pending = Some(pending),
                 None => read::failed(domain, owner, out),
@@ -191,7 +202,17 @@ fn loaded(domain: &mut Domain, env: &Env<Limits>, owner: Token, rows: Rows, more
                 push(out, Request::Load { owner: pending.load_owner, range: Range::Lines { scope, after } });
                 domain.pending = Some(pending);
             } else if count >= env.limits.entries_per_scope {
-                push(out, Request::Refused { owner: pending.owner, why: Refusal::Full });
+                push(
+                    out,
+                    Request::Refused {
+                        limit: Some(crate::NumericLimit {
+                            key: crate::LimitKey::EntriesPerScope,
+                            value: env.limits.entries_per_scope,
+                        }),
+                        owner: pending.owner,
+                        why: Refusal::Full,
+                    },
+                );
             } else {
                 match pending.action {
                     Action::Write { entry, recalled: None } => {
@@ -219,35 +240,46 @@ fn entry_loaded(domain: &mut Domain, mut pending: Pending, found: Option<Entry>,
                     push(out, Request::Load { owner: pending.load_owner, range: Range::Lines { scope, after: None } });
                     domain.pending = Some(pending);
                 }
-                Some(_) => push(out, Request::Refused { owner: pending.owner, why: Refusal::Missing }),
+                Some(_) => push(out, Request::Refused { limit: None, owner: pending.owner, why: Refusal::Missing }),
             },
             Some(old) => match recalled {
-                None => push(out, Request::Refused { owner: pending.owner, why: Refusal::Exists }),
+                None => push(out, Request::Refused { limit: None, owner: pending.owner, why: Refusal::Exists }),
                 Some(recalled) => {
                     assert!(old.name == entry.name, "entry lookup returns the named entry");
                     if old.revision != recalled || old.scope != entry.scope {
                         push(
                             out,
-                            Request::Refused { owner: pending.owner, why: Refusal::Moved { revision: old.revision } },
+                            Request::Refused {
+                                limit: None,
+                                owner: pending.owner,
+                                why: Refusal::Moved { revision: old.revision },
+                            },
                         );
                     } else if let Some(revision) = old.revision.checked_add(1) {
                         domain.invalidate(&entry.scope);
                         save_new(pending.owner, entry, revision, wall, out);
                     } else {
-                        push(out, Request::Refused { owner: pending.owner, why: Refusal::RevisionExhausted });
+                        push(
+                            out,
+                            Request::Refused { limit: None, owner: pending.owner, why: Refusal::RevisionExhausted },
+                        );
                     }
                 }
             },
         },
         Action::Edit { party, name, scope, change } => match found {
-            None => push(out, Request::Refused { owner: pending.owner, why: Refusal::Missing }),
+            None => push(out, Request::Refused { limit: None, owner: pending.owner, why: Refusal::Missing }),
             Some(mut old) => match change {
                 Change::Correct { description, body, references, recalled } => {
                     assert!(old.name == name, "entry lookup returns the named entry");
                     if old.revision != recalled || old.scope != scope {
                         push(
                             out,
-                            Request::Refused { owner: pending.owner, why: Refusal::Moved { revision: old.revision } },
+                            Request::Refused {
+                                limit: None,
+                                owner: pending.owner,
+                                why: Refusal::Moved { revision: old.revision },
+                            },
                         );
                     } else if let Some(revision) = old.revision.checked_add(1) {
                         old.description = description;
@@ -259,7 +291,10 @@ fn entry_loaded(domain: &mut Domain, mut pending: Pending, found: Option<Entry>,
                         domain.invalidate(&old.scope);
                         save_entry(pending.owner, old, out);
                     } else {
-                        push(out, Request::Refused { owner: pending.owner, why: Refusal::RevisionExhausted });
+                        push(
+                            out,
+                            Request::Refused { limit: None, owner: pending.owner, why: Refusal::RevisionExhausted },
+                        );
                     }
                 }
                 Change::Delete { recalled } => {
@@ -272,7 +307,11 @@ fn entry_loaded(domain: &mut Domain, mut pending: Pending, found: Option<Entry>,
                     } else {
                         push(
                             out,
-                            Request::Refused { owner: pending.owner, why: Refusal::Moved { revision: old.revision } },
+                            Request::Refused {
+                                limit: None,
+                                owner: pending.owner,
+                                why: Refusal::Moved { revision: old.revision },
+                            },
                         );
                     }
                 }
@@ -409,4 +448,54 @@ fn valid_text(bytes: &[u8], bound: u32, one_line: bool) -> bool {
 
 pub(crate) fn push(out: &mut Queue<Request>, request: Request) {
     out.try_push(request).expect("parent reserved max_out before stepping notes");
+}
+
+pub(crate) fn scope_limit(scope: &Scope, limits: &Limits) -> Option<crate::NumericLimit> {
+    if let Scope::Resources { pattern, .. } = scope
+        && (pattern.segments.len() > usize::try_from(limits.pattern_bytes).expect("pattern bound fits")
+            || pattern_bytes(pattern) > usize::try_from(limits.pattern_bytes).expect("pattern bound fits"))
+    {
+        return Some(crate::NumericLimit { key: crate::LimitKey::PatternBytes, value: limits.pattern_bytes });
+    }
+    None
+}
+fn new_limit(entry: &New, limits: &Limits) -> Option<crate::NumericLimit> {
+    if !valid_scope(&entry.scope, limits) {
+        return scope_limit(&entry.scope, limits);
+    }
+    if !valid_text(&entry.description, limits.description_bytes, true) {
+        return text_limit(&entry.description, limits.description_bytes, crate::LimitKey::DescriptionBytes);
+    }
+    if !valid_text(&entry.body, limits.body_bytes, false) {
+        return text_limit(&entry.body, limits.body_bytes, crate::LimitKey::BodyBytes);
+    }
+    if entry.references.capacity() > limits.references {
+        return Some(crate::NumericLimit { key: crate::LimitKey::References, value: limits.references });
+    }
+    None
+}
+fn change_limit(change: &Change, limits: &Limits) -> Option<crate::NumericLimit> {
+    match change {
+        Change::Correct { description, body, references, .. } => {
+            if !valid_text(description, limits.description_bytes, true) {
+                return text_limit(description, limits.description_bytes, crate::LimitKey::DescriptionBytes);
+            }
+            if !valid_text(body, limits.body_bytes, false) {
+                return text_limit(body, limits.body_bytes, crate::LimitKey::BodyBytes);
+            }
+            if references.capacity() > limits.references {
+                Some(crate::NumericLimit { key: crate::LimitKey::References, value: limits.references })
+            } else {
+                None
+            }
+        }
+        Change::Delete { .. } => None,
+    }
+}
+fn text_limit(bytes: &[u8], value: u32, key: crate::LimitKey) -> Option<crate::NumericLimit> {
+    if bytes.len() > usize::try_from(value).expect("text bound fits") {
+        Some(crate::NumericLimit { key, value })
+    } else {
+        None
+    }
 }

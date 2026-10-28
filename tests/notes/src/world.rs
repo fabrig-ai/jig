@@ -113,7 +113,7 @@ impl World {
                         assert_eq!(owner, caller, "delete answer echoes caller");
                         assert!(answer.replace(Answer::Deleted { name }).is_none(), "one answer per call");
                     }
-                    Request::Refused { owner, why } => {
+                    Request::Refused { owner, why, limit: _ } => {
                         assert_eq!(owner, caller, "refusal echoes caller");
                         assert!(answer.replace(Answer::Refused { why }).is_none(), "one answer per call");
                     }

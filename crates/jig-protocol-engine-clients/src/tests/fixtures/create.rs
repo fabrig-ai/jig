@@ -224,14 +224,17 @@ pub fn create_refusals() -> [(&'static str, p::Refusal, w::Refusal); 5] {
         ),
         (
             "goals",
-            p::Refusal::Limit { which: p::LimitKind::Goals },
+            p::Refusal::Limit { which: p::LimitKind::Goals, bound: None },
             w::Refusal::Limit(
                 w::RefusalLimit::new(
                     &l,
                     w::RefusalLimitParts {
                         which: w::Limit::Admission(
-                            w::LimitAdmission::new(&l, w::LimitAdmissionParts { which: w::AdmissionLimit::Goals })
-                                .unwrap(),
+                            w::LimitAdmission::new(
+                                &l,
+                                w::LimitAdmissionParts { which: w::AdmissionLimit::Goals, bound: None },
+                            )
+                            .unwrap(),
                         ),
                     },
                 )

@@ -24,7 +24,7 @@ pub use boundary::{
     KeyFailure, Pending, Place, Program, ProgramFailure, ProgramHost, ProgramResult, Request, Scheme, Signing, State,
     ToComponent, Turned, Unread,
 };
-pub use checks::{Bound, Refusal, SignIn, SignInRedirectWhy, room_for_sign_in};
+pub use checks::{Bound, LimitKey, NumericLimit, Refusal, SignIn, SignInRedirectWhy, room_for_sign_in};
 pub use domain::{Account, Domain, fire, max_out, step};
 pub use keys::{KEY_VALID, PROGRAM_VALID};
 pub use limits::{Limits, worst_case};

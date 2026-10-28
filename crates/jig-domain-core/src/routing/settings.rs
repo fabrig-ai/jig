@@ -93,7 +93,7 @@ pub(super) fn decide(
 ) -> Result<u32, people::Refusal> {
     let previous = core.current.newest();
     if !withdrawal_room(core, proposal) {
-        return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        return Err(core.limit_refusal(people::LimitKind::Arithmetic));
     }
     if change.against != previous {
         return Err(people::Refusal::Stale { newest: previous });
@@ -109,7 +109,7 @@ pub(super) fn decide(
     }
     let charters = s::check::changed_charters(&core.current, &change.items, &core.settings, &env.limits);
     let Some(number) = previous.checked_add(1) else {
-        return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        return Err(core.limit_refusal(people::LimitKind::Arithmetic));
     };
     let mut after = Map::with_capacity(env.limits.settings.revisions.checked_add(1).expect("held names"));
     let moves = change.running == s::Running::Moves;
@@ -247,18 +247,10 @@ pub(super) fn propose_admitted(
         }
     };
     let Some(next) = core.counters.deployment().messages.checked_add(1) else {
-        return super::refusals::pool_refused(
-            work,
-            request,
-            people::Refusal::Limit { which: people::LimitKind::Arithmetic },
-        );
+        return super::refusals::pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
     };
     let Ok(number) = u32::try_from(next) else {
-        return super::refusals::pool_refused(
-            work,
-            request,
-            people::Refusal::Limit { which: people::LimitKind::Arithmetic },
-        );
+        return super::refusals::pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
     };
     let fresh = crate::fresh(&mut core.counters, crate::Family::Message).expect("proposal number preflighted");
     assert!(fresh == u64::from(number), "same proposal sequence");
@@ -309,7 +301,7 @@ fn proposal_check(core: &mut Core, env: &Env<Limits>, against: u32) -> Result<Bo
         });
     }
     if core.settings_proposals.len() >= env.limits.settings.proposals {
-        return Err(people::Refusal::Limit { which: people::LimitKind::SettingsProposals });
+        return Err(core.limit_refusal(people::LimitKind::SettingsProposals));
     }
     Ok(change)
 }
@@ -519,7 +511,7 @@ pub(super) fn propose_run(
             core,
             to,
             key,
-            crate::CallPart::SettingsRefused(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+            crate::CallPart::SettingsRefused(core.limit_refusal(people::LimitKind::Arithmetic)),
         );
     };
     let Ok(number) = u32::try_from(next) else {
@@ -527,7 +519,7 @@ pub(super) fn propose_run(
             core,
             to,
             key,
-            crate::CallPart::SettingsRefused(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+            crate::CallPart::SettingsRefused(core.limit_refusal(people::LimitKind::Arithmetic)),
         );
     };
     let proposal = tasks::Proposal {

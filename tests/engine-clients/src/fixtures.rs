@@ -82,6 +82,8 @@ pub fn me_document(needs: u32) -> jig_domain_core::documents::Document {
         providers_cut: false,
         key_bytes: 256,
         redirect_bytes: 4096,
+        words_bytes: 65_536,
+        amendment_bytes: 65_536,
         party: 7,
         kind: jig_domain_people::Kind::Person,
         login: d::Text { bytes: Box::new([]), cut: false },

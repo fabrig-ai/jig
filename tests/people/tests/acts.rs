@@ -233,7 +233,12 @@ fn out_of_bounds_acts_are_unsaved_with_the_partys_refusal() {
                 ]
                 .into(),
             },
-            Refusal::Limit { which: LimitKind::Words },
+            Refusal::configured(
+                LimitKind::Words,
+                u64::from(jig_people_world::LIMITS.words),
+                jig_domain_people::LimitKey::PeopleWords,
+                jig_domain_people::LimitUnit::Bytes,
+            ),
         ),
     ] {
         let call = world.act(CONNECTOR, KEY, act);
@@ -270,7 +275,16 @@ fn adoption_bounds_refuse_before_retaining_a_key() {
         },
     };
     let call = world.act(CONNECTOR, KEY, adoption(path_bytes + 1));
-    answer(&world, call, Outcome::Refused(Refusal::Limit { which: LimitKind::Resource }));
+    answer(
+        &world,
+        call,
+        Outcome::Refused(Refusal::configured(
+            LimitKind::Amendment,
+            u64::from(jig_people_world::LIMITS.amendment_bytes),
+            jig_domain_people::LimitKey::PeopleAmendmentBytes,
+            jig_domain_people::LimitUnit::Bytes,
+        )),
+    );
     let call = world.act(CONNECTOR, KEY, adoption(path_bytes));
     world.decide_acts(&Outcome::Adopted { project: PROJECT });
     world.commit_all();

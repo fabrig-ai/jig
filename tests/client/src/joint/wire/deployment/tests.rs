@@ -656,6 +656,8 @@ fn me_deployment_role_is_independent_of_project_rows() {
             providers_cut: false,
             key_bytes: 256,
             redirect_bytes: 4096,
+            words_bytes: 65_536,
+            amendment_bytes: 65_536,
             party: 17,
             kind: people::Kind::Person,
             login: documents::Text { bytes: Box::new([]), cut: false },

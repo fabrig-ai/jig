@@ -202,7 +202,11 @@ impl Component {
                     if u64::try_from(carried.len()).expect("value size fits u64") > bound
                         && account_key_digest(&value).is_some()
                     {
-                        let reply = people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Words });
+                        let reply = people::Reply::Refused(people::Refusal::fixed(
+                            people::LimitKind::Key,
+                            bound,
+                            people::LimitUnit::Bytes,
+                        ));
                         let answer = crate::translate::answers::answer(&reply, &self.settings.models, &env.limits.wire);
                         self.answer(env, exchange, answer, out);
                         return;

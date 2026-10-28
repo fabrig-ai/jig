@@ -61,7 +61,7 @@ impl Core {
             });
         }
         let Some(left) = context.takeover_budget() else {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+            return Err(self.limit_refusal(people::LimitKind::Arithmetic));
         };
         let (source, fallback) = self.person_pool(project, person);
         let pool_numbers = match admission.funding(source) {
@@ -152,7 +152,7 @@ impl Core {
         if let people::Ask::Cancel { grace: Some(span), .. } = ask
             && *span > limits.grace
         {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Grace });
+            return Err(self.limit_refusal(people::LimitKind::Grace));
         }
         let Some(context) = admission.task(task) else { return Err(people::Refusal::Unknown) };
         if let people::Ask::Release { again, .. } = ask {
@@ -186,7 +186,7 @@ impl Core {
             project,
             role: holding.number(),
             pool: translate::authority_numbers(numbers),
-            tasks_left: context.tasks_left().ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?,
+            tasks_left: context.tasks_left().ok_or(self.limit_refusal(people::LimitKind::Arithmetic))?,
             request: action,
         };
         let checked = authority::check_request_with_standing(&self.authority, &ask, standing, &mut findings);
@@ -199,7 +199,12 @@ impl Core {
             self.party_hold_admit(person, hold)?;
         }
         if reason_len > usize::try_from(limits.result_bytes).expect("u32 fits usize") {
-            Err(people::Refusal::Limit { which: people::LimitKind::Words })
+            Err(people::Refusal::configured(
+                people::LimitKind::Contract,
+                u64::from(limits.result_bytes),
+                people::LimitKey::TasksResultBytes,
+                people::LimitUnit::Bytes,
+            ))
         } else {
             Ok(task)
         }

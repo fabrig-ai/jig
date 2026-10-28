@@ -53,7 +53,7 @@ pub(crate) fn route(
                 work,
                 route.request,
                 at,
-                people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Goals }),
+                people::Outcome::Refused(core.limit_refusal(people::LimitKind::Goals)),
             );
         }
         match issue(&mut core.counters, &mut operation) {
@@ -129,7 +129,12 @@ fn check(
                 admission,
             )?;
             if reason.len() > usize::try_from(env.limits.tasks.result_bytes).expect("u32 fits usize") {
-                return Err(people::Refusal::Limit { which: people::LimitKind::Words });
+                return Err(people::Refusal::configured(
+                    people::LimitKind::Contract,
+                    u64::from(env.limits.tasks.result_bytes),
+                    people::LimitKey::TasksResultBytes,
+                    people::LimitUnit::Bytes,
+                ));
             }
             if let tasks::Phase::Ended(ending) = &row.phase {
                 return Err(crate::routing::refusals::ended(ending));
@@ -177,8 +182,7 @@ fn check(
         people::Operation::Amend { revision, amendment, release, .. } => {
             crate::acts::bounds::amend_preflight_in(core, &env.limits, route.person, task, route.role, admission)?;
             crate::acts::mutable_phase(&row.phase)?;
-            let mut amendment = crate::amendments::translate(*amendment, row.authority.models, &env.limits.tasks)
-                .ok_or(people::Refusal::Limit { which: people::LimitKind::Words })?;
+            let mut amendment = crate::amendments::translate(*amendment, row.authority.models, &env.limits.tasks)?;
             let stop_run = crate::acts::bounds::amendment_admit_in(
                 core,
                 route.task(task),
@@ -225,8 +229,8 @@ fn check(
 }
 
 fn issue(counters: &mut Counters, operation: &mut tasks::Operation) -> Result<u64, people::Refusal> {
-    let number =
-        fresh(counters, Family::Message).ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?;
+    let number = fresh(counters, Family::Message)
+        .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic, bound: None })?;
     match operation {
         tasks::Operation::Cancel { message: Some(message), .. }
         | tasks::Operation::Release { message: Some(message), .. }

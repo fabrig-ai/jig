@@ -420,6 +420,7 @@ fn withdrawing_an_unknown_proposal_is_refused_unknown() {
     assert_eq!(
         world.answers.last().expect("withdraw answer").2,
         core::CallPart::ProposalRefused(jig_domain_tasks::Problem {
+            limit: None,
             task: Some(REQUESTER),
             why: jig_domain_tasks::Refusal::Unknown,
             blocked_by: None,

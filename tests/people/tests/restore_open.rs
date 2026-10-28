@@ -65,7 +65,7 @@ fn restoring_an_answer_refuses_malformed_open_members() {
                 out.pop(),
                 Some(Request::RestoreRefused {
                     key: Key::Answer(KEY),
-                    refusal: Refusal::Limit { which: LimitKind::Restore },
+                    refusal: Refusal::Limit { which: LimitKind::Restore, bound: None },
                 }),
                 "{name}"
             );

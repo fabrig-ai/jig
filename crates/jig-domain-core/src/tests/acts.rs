@@ -799,7 +799,7 @@ fn procedure_goal_bounds_refuse_an_incomplete_executor_list() {
     limits.documents.lines = 1;
     assert_eq!(
         fixtures::creating(&core, &limits, 1, 1),
-        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority })
+        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority, bound: None })
     );
     let executor = tasks::Executor::Procedure { connector: 2, code: 1 };
     assert!(

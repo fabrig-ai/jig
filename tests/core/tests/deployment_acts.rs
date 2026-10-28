@@ -109,8 +109,15 @@ fn a_close_refuses_what_is_no_persons_live_conversation() {
     }
     let over = close(chat, PROJECT, Some(Duration::from_secs(601)));
     act(&mut world, KEY + 3, over.clone());
-    let refused =
-        people::Outcome::CompoundRefused { at: 2, why: people::Refusal::Limit { which: people::LimitKind::Grace } };
+    let refused = people::Outcome::CompoundRefused {
+        at: 2,
+        why: people::Refusal::configured(
+            people::LimitKind::Grace,
+            600_000,
+            people::LimitKey::TasksGrace,
+            people::LimitUnit::Milliseconds,
+        ),
+    };
     assert_eq!(answered(&world), &refused);
     assert_eq!(live_row(&world, chat), &before);
     let commits = world.commits.len();

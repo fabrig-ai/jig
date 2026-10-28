@@ -11,6 +11,8 @@ mod ended;
 mod inbox;
 pub use ended::EndedMark;
 pub(crate) mod acts;
+mod refusals;
+pub(crate) use refusals::invalid_ask;
 mod parties;
 use inbox::{conversation_seen_decision, mark_seen, prune_unheld_roles, replace_waiting};
 
@@ -729,6 +731,18 @@ fn valid_identity(limits: &Limits, identity: &Identity) -> bool {
     }
 }
 
+fn identity_refusal(limits: &Limits, identity: &Identity) -> Refusal {
+    if identity.key.subject.is_empty() {
+        return Refusal::Limit { which: LimitKind::Identity, bound: None };
+    }
+    Refusal::configured(
+        LimitKind::Identity,
+        u64::from(limits.identity_bytes),
+        crate::LimitKey::PeopleIdentityBytes,
+        crate::LimitUnit::Bytes,
+    )
+}
+
 fn apply_roles(
     domain: &mut Domain,
     env: &Env<Limits>,
@@ -786,7 +800,7 @@ fn apply_roles(
             valid_roles(domain, &env.limits, project, holdings)?;
             for holding in holdings {
                 if holding.person == 0 {
-                    return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }));
+                    return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles, bound: None }));
                 }
                 if !domain.people.contains_key(&holding.person) {
                     return Err(Outcome::Refused(Refusal::Unknown));
@@ -837,7 +851,12 @@ fn apply_roles(
 
 fn valid_roles(domain: &Domain, limits: &Limits, project: u32, holdings: &[Holding]) -> Result<(), Outcome> {
     if holdings.len() > usize::try_from(limits.holdings).expect("u32 fits usize") {
-        return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }));
+        return Err(Outcome::Refused(Refusal::configured(
+            LimitKind::Roles,
+            u64::from(limits.holdings),
+            crate::LimitKey::PeopleHoldings,
+            crate::LimitUnit::Items,
+        )));
     }
     if !domain.roles.contains_key(&project) && domain.roles.len() >= limits.projects {
         return Err(Outcome::Again(Again::Busy));
@@ -845,13 +864,13 @@ fn valid_roles(domain: &Domain, limits: &Limits, project: u32, holdings: &[Holdi
     for (at, holding) in holdings.iter().enumerate() {
         match holding.role {
             Role::Policy { role } if role <= 3 => {
-                return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }));
+                return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles, bound: None }));
             }
             Role::Owner | Role::Maintainer | Role::Member | Role::Observer | Role::Policy { .. } => {}
         }
         for earlier in holdings.iter().take(at) {
             if earlier.person == holding.person {
-                return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles }));
+                return Err(Outcome::Refused(Refusal::Limit { which: LimitKind::Roles, bound: None }));
             }
         }
     }
@@ -950,7 +969,7 @@ fn make_service(domain: &mut Domain, env: &Env<Limits>, request: Token, person: 
     } else if person == 0 || domain.people.contains_key(&person) || domain.identities.contains_key(&identity.key) {
         Outcome::Refused(Refusal::Unknown)
     } else if !valid_identity(&env.limits, &identity) {
-        Outcome::Refused(Refusal::Limit { which: LimitKind::Identity })
+        Outcome::Refused(identity_refusal(&env.limits, &identity))
     } else if domain.people.len() >= env.limits.people
         || match holdings {
             Some(rows) => rows.len() >= usize::try_from(env.limits.holdings).expect("u32 fits usize"),
@@ -1004,7 +1023,7 @@ fn signin(
         return again(to, Again::NotReady, out);
     }
     if !valid_identity(&env.limits, &identity) {
-        return refused(to, Refusal::Limit { which: LimitKind::Identity }, out);
+        return refused(to, identity_refusal(&env.limits, &identity), out);
     }
     match kind {
         Kind::Person if identity.key.provider == domain.deployment_provider => {
@@ -1077,7 +1096,7 @@ fn signin(
         }
     }
     let Some(expires_nanos) = env.wall.as_nanos().checked_add(env.limits.sign_in_lifetime.as_nanos()) else {
-        return refused(to, Refusal::Limit { which: LimitKind::Arithmetic }, out);
+        return refused(to, Refusal::Limit { which: LimitKind::Arithmetic, bound: None }, out);
     };
     let expires = Wall::from_nanos(expires_nanos);
     if known.is_none() {
@@ -1205,48 +1224,47 @@ fn note_pattern_bytes(pattern: &crate::Pattern) -> Option<usize> {
 }
 
 fn valid_note(limits: &Limits, name: u64, scope: &crate::NoteScope, change: &crate::NoteChange) -> bool {
+    match note_bytes(name, scope, change) {
+        Some(bytes) => bytes <= usize::try_from(limits.amendment_bytes).expect("amendment ceiling fits usize"),
+        None => false,
+    }
+}
+fn note_bytes(name: u64, scope: &crate::NoteScope, change: &crate::NoteChange) -> Option<usize> {
     if name == 0 {
-        return false;
+        return None;
     }
     let scope_bytes = match scope {
         crate::NoteScope::Deployment | crate::NoteScope::Project => 0,
         crate::NoteScope::Goal { goal } => {
             if *goal == 0 {
-                return false;
+                return None;
             }
             0
         }
-        crate::NoteScope::Resources { pattern, .. } => {
-            let Some(bytes) = note_pattern_bytes(pattern) else { return false };
-            bytes
-        }
+        crate::NoteScope::Resources { pattern, .. } => note_pattern_bytes(pattern)?,
     };
     let change_bytes = match change {
         crate::NoteChange::Correct { description, body, references, recalled } => {
             if *recalled == 0 {
-                return false;
+                return None;
             }
             for number in references {
                 if *number == 0 {
-                    return false;
+                    return None;
                 }
             }
-            let Some(bytes) = description.len().checked_add(body.len()) else { return false };
-            let Some(ref_bytes) = references.len().checked_mul(size_of::<u64>()) else { return false };
-            let Some(total) = bytes.checked_add(ref_bytes) else { return false };
-            total
+            let bytes = description.len().checked_add(body.len())?;
+            let ref_bytes = references.len().checked_mul(size_of::<u64>())?;
+            bytes.checked_add(ref_bytes)?
         }
         crate::NoteChange::Delete { recalled } => {
             if *recalled == 0 {
-                return false;
+                return None;
             }
             0
         }
     };
-    match scope_bytes.checked_add(change_bytes) {
-        Some(bytes) => bytes <= usize::try_from(limits.amendment_bytes).expect("u32 fits usize"),
-        None => false,
-    }
+    scope_bytes.checked_add(change_bytes)
 }
 
 fn valid_person_result(limits: &Limits, result: &crate::PersonResult) -> bool {
@@ -1364,91 +1382,6 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
                 }
         }
     }
-}
-
-// Admission identifies the bounded payload before any keyed flight is made.
-pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
-    let which = match ask {
-        Ask::Compound { operations, .. } => {
-            return crate::compound::refusal(limits, operations).expect("invalid compound");
-        }
-        Ask::EditNote { name, .. } => {
-            if *name == 0 {
-                return Refusal::Unknown;
-            }
-            LimitKind::Notes
-        }
-        Ask::MakeService { name, .. } => {
-            if name.is_empty() {
-                LimitKind::Empty
-            } else {
-                LimitKind::Identity
-            }
-        }
-        Ask::Move { task, .. } | Ask::Cancel { task, .. } | Ask::AnswerPerson { task, .. } => {
-            if *task == 0 {
-                return Refusal::Unknown;
-            }
-            LimitKind::Words
-        }
-        Ask::MarkSeen { .. }
-        | Ask::Application { .. }
-        | Ask::TakePerson { .. }
-        | Ask::HandBackPerson { .. }
-        | Ask::Stop { .. }
-        | Ask::Lift { .. }
-        | Ask::Release { .. }
-        | Ask::SetPool { .. }
-        | Ask::Withdraw { .. }
-        | Ask::AccountSignIn { .. }
-        | Ask::AccountSignOut { .. } => return Refusal::Unknown,
-        Ask::Adopt { .. } => LimitKind::Resource,
-        Ask::SetRoles { .. } => LimitKind::Roles,
-        Ask::ChangePolicy { .. } => LimitKind::Policy,
-        Ask::Create { batch, .. } | Ask::Propose { action: crate::Action::Batch(batch), .. } => {
-            crate::batch::invalid(limits, batch)
-        }
-        Ask::Rename { .. }
-        | Ask::MakeProject { .. }
-        | Ask::ChangeSettings { .. }
-        | Ask::MoveToNewest { .. }
-        | Ask::AccountChange { .. }
-        | Ask::Propose { action: crate::Action::Amend { .. } | crate::Action::Settings { .. }, .. } => LimitKind::Words,
-        Ask::Say { task, words, .. } => {
-            if *task == 0 {
-                return Refusal::Unknown;
-            }
-            if words.is_empty() { LimitKind::Empty } else { LimitKind::Words }
-        }
-        Ask::AnswerQuestion { task, question, words, .. } => {
-            if *task == 0 || *question == 0 {
-                return Refusal::Unknown;
-            }
-            if words.is_empty() { LimitKind::Empty } else { LimitKind::Words }
-        }
-        Ask::Amend { task, .. } => {
-            if *task == 0 {
-                return Refusal::Unknown;
-            }
-            LimitKind::Spec
-        }
-        Ask::DecideEscalation { task, revision, .. } => {
-            if *task == 0 {
-                return Refusal::Unknown;
-            }
-            if *revision == 0 { LimitKind::Revision } else { LimitKind::Words }
-        }
-        Ask::DecideProposal { proposer, proposal, decision, running, .. } => {
-            if running.is_some() && *decision != crate::ProposalDecision::Accept {
-                return Refusal::NotWellFormed { at: 0, why: crate::Malformed::Running };
-            }
-            if proposer.number() == 0 || *proposal == 0 {
-                return Refusal::Unknown;
-            }
-            LimitKind::Words
-        }
-    };
-    Refusal::Limit { which }
 }
 
 #[expect(clippy::too_many_lines, reason = "one exhaustive keyed request-to-answer shape table")]
@@ -1968,7 +1901,8 @@ pub(super) fn answer_decided(
 fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Queue<Request>) {
     match domain.phase {
         Phase::Ready => {
-            return restore_failed(domain, record.key(), Refusal::Limit { which: LimitKind::Restore }, out);
+            let why = Refusal::Limit { which: LimitKind::Restore, bound: None };
+            return restore_failed(domain, record.key(), why, out);
         }
         Phase::Failed => return,
         Phase::Restoring => {}
@@ -2021,7 +1955,7 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
         }
     };
     if !valid {
-        return restore_failed(domain, key, Refusal::Limit { which: LimitKind::Restore }, out);
+        return restore_failed(domain, key, Refusal::Limit { which: LimitKind::Restore, bound: None }, out);
     }
     match record {
         Stored::Acted { key, act, outcome, at } => acts::restore(domain, env, key, act, outcome, at, out),
@@ -2188,7 +2122,12 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
             | Outcome::AccountSignedOut { .. }
             | Outcome::Refused(_) => {}
             Outcome::Again(_) | Outcome::SignedOut => {
-                return restore_failed(domain, Key::Answer(*key), Refusal::Limit { which: LimitKind::Restore }, out);
+                return restore_failed(
+                    domain,
+                    Key::Answer(*key),
+                    Refusal::Limit { which: LimitKind::Restore, bound: None },
+                    out,
+                );
             }
         }
     }

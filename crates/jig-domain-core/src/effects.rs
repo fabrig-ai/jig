@@ -1187,6 +1187,7 @@ fn accept_refused(
                     to,
                     key,
                     CallPart::ProposalRefused(tasks::Problem {
+                        limit: None,
                         task: Some(key.task),
                         why: tasks::Refusal::AuthorityShape,
                         blocked_by: None,

@@ -416,7 +416,9 @@ fields!(Me {
     providers,
     providers_cut,
     key_bytes,
-    redirect_bytes
+    redirect_bytes,
+    words_bytes,
+    amendment_bytes
 });
 fields!(MeParty { number, kind, login, name });
 fields!(Needs { questions, proposals, escalations, person_tasks });
@@ -1077,7 +1079,8 @@ impl Payload for Lacking {
 impl Payload for Limit {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {
-            Self::Admission { which } => which.heap(bounds),
+            // Bound metadata is entirely inline and owns no payload bytes.
+            Self::Admission { which, bound: _ } => which.heap(bounds),
             Self::LiveTasks { project, limit } => sum(&[project.heap(bounds), limit.heap(bounds)]),
             Self::Inbox { task, limit } => sum(&[task.heap(bounds), limit.heap(bounds)]),
             Self::Words { limit } => sum(&[limit.heap(bounds)]),
@@ -1242,6 +1245,9 @@ impl Payload for AdmissionLimit {
             | Self::Operations
             | Self::Grace
             | Self::Words
+            | Self::Amendment
+            | Self::Key
+            | Self::Name
             | Self::Identity
             | Self::Roles
             | Self::Arithmetic

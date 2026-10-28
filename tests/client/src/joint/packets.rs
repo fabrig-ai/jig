@@ -491,7 +491,7 @@ mod tests {
     fn provider_failures_keep_whole_refusal_or_signed_out_and_never_authenticate_or_become_keyed_answers() {
         for failure in [
             SignInFailure::Refused(client::Refusal::Limit {
-                which: client::Limit::Admission { which: client::AdmissionLimit::Identity },
+                which: client::Limit::Admission { which: client::AdmissionLimit::Identity, bound: None },
             }),
             SignInFailure::SignedOut,
         ] {
@@ -499,7 +499,7 @@ mod tests {
             let to = transport.reply_to(Reply::SignIn { client: ClientId(1) }).into_token();
             let source = match failure {
                 SignInFailure::Refused(_) => {
-                    people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Identity })
+                    people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Identity, bound: None })
                 }
                 SignInFailure::SignedOut => people::Reply::SignedOut,
                 SignInFailure::Capacity => unreachable!("immediate source terminal"),
@@ -523,7 +523,8 @@ mod tests {
             turn_text: crate::test::limits().client.domain.turn_text,
             ..crate::test::limits().client.domain
         };
-        let source = people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        let source =
+            people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic, bound: None });
         assert!(matches!(people_reply(&mut transport, to, source.clone(), &limits), Err(Invalid::Payload)));
         assert!(transport.reply(to).is_some(), "failed whole admission leaves the original exchange intact");
         let Incoming::SignInFailed { failure, .. } =
@@ -534,7 +535,7 @@ mod tests {
         assert_eq!(
             failure,
             SignInFailure::Refused(client::Refusal::Limit {
-                which: client::Limit::Admission { which: client::AdmissionLimit::Arithmetic }
+                which: client::Limit::Admission { which: client::AdmissionLimit::Arithmetic, bound: None }
             })
         );
         assert_eq!(transport.sign_in(ClientId(1)), Some(u64::MAX), "the older actual session was not ended");

@@ -1658,7 +1658,12 @@ fn approval_state_and_explanation_share_the_person_answer_byte_bound() {
     );
     assert_eq!(
         world.people_answers.last(),
-        Some(&people::Reply::Refused(people::Refusal::Limit { which: people::LimitKind::Words }))
+        Some(&people::Reply::Refused(people::Refusal::configured(
+            people::LimitKind::Words,
+            64,
+            people::LimitKey::PeopleWords,
+            people::LimitUnit::Bytes
+        )))
     );
     assert_eq!(live_row(&world, task).person_answer, None);
     assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::Tasks(tasks::Key::Ended(task)))));

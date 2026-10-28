@@ -101,3 +101,27 @@ fn an_instruction_amendment_releases_only_the_displayed_hold_and_keeps_the_new_i
     ));
     assert_eq!(story::row(&w, task).instructions.as_deref(), Some(b"".as_slice()));
 }
+
+#[test]
+fn an_instruction_past_its_message_ceiling_names_the_bound_without_changing_the_task() {
+    let mut w = story::world(182);
+    let task = w.assigned.as_ref().expect("agent run").task;
+    let before = story::row(&w, task).clone();
+    let bound = fixture(182, false).1.core.tasks.message_bytes;
+    let words = vec![b'x'; usize::try_from(bound.checked_add(1).expect("one past")).expect("fixture size")];
+    request(
+        &mut w,
+        185,
+        people::Ask::Amend { project: 1, task, revision: 0, release: None, amendment: story::change(&words) },
+    );
+    assert_eq!(
+        w.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::configured(
+            people::LimitKind::Read,
+            u64::from(bound),
+            people::LimitKey::TasksMessageBytes,
+            people::LimitUnit::Bytes,
+        ))))
+    );
+    assert_eq!(story::row(&w, task), &before);
+}

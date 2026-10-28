@@ -149,7 +149,7 @@ fn apply(domain: &mut Domain, env: &Env<Limits>, fence: Fence, decision: Procedu
 }
 
 fn problem(task: u64, why: Refusal) -> crate::Problem {
-    crate::Problem { task: Some(task), why, blocked_by: None, capacity: None }
+    crate::Problem { task: Some(task), why, blocked_by: None, capacity: None, limit: None }
 }
 
 fn check(
@@ -175,7 +175,11 @@ fn check(
             return Err(crate::Problem::live_delegates(number, &task.delegates));
         }
         if !crate::run::valid_result(&task.contract, result, &env.limits) {
-            return Err(problem(number, Refusal::Contract));
+            return Err(problem(number, Refusal::Contract).observed(crate::run::result_limit(
+                &task.contract,
+                result,
+                &env.limits,
+            )));
         }
     }
     if !decision.batch.is_empty() {

@@ -155,7 +155,7 @@ fn an_amendment_relation_at_its_receiving_boundary_fits_and_one_under_refuses_th
     limits.documents.implications = 3;
     assert_eq!(
         offers::admit(&core, &limits, 1, Act::Amend, &Subject::Task { task: 1 }, Wall::EPOCH),
-        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority })
+        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::Authority, bound: None })
     );
     make(&core, &limits, 1, &Subject::Task { task: 1 }, &window(), Wall::EPOCH).unwrap();
 }

@@ -141,10 +141,10 @@ impl<A: Application> Engine<A> {
             .max()
             .unwrap_or(0);
         let Some(project) = highest.checked_add(1) else {
-            return Err(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects } });
+            return Err(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects, bound: None } });
         };
         if me.projects.len() >= self.bounds.rows {
-            return Err(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects } });
+            return Err(Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Projects, bound: None } });
         }
         let mut frame = me.clone();
         let mut projects = List::with_capacity(frame.projects.len().checked_add(1).expect("bounded projects"));

@@ -378,7 +378,7 @@ impl Core {
         };
         if let people::PolicyChange::Templates { overrides } = &change {
             if overrides.len() > usize::try_from(limits.templates).expect("template bound") {
-                return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
+                return Err(template_limit(limits.templates));
             }
             for (index, entry) in overrides.iter().enumerate() {
                 let mut known = false;
@@ -397,7 +397,7 @@ impl Core {
                 }
                 for previous in overrides.iter().take(index) {
                     if previous.template == entry.template {
-                        return Err(people::Refusal::Limit { which: people::LimitKind::Duplicate });
+                        return Err(self.limit_refusal(people::LimitKind::Duplicate));
                     }
                 }
             }
@@ -422,13 +422,18 @@ impl Core {
             return Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape });
         }
         let Some(snapshot) = snapshot(&policy, &permissions, &templates) else {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
+            return Err(self.limit_refusal(people::LimitKind::Policy));
         };
         if match people::policy_bytes(&snapshot) {
             Some(bytes) => bytes > limits.policy_bytes,
             None => true,
         } {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
+            return Err(people::Refusal::configured(
+                people::LimitKind::Policy,
+                limits.policy_bytes,
+                people::LimitKey::CorePolicyBytes,
+                people::LimitUnit::Bytes,
+            ));
         }
         let resize = self.resize(project, self.authority.policy(project).expect("existing policy"), &policy, limits)?;
         let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
@@ -543,4 +548,13 @@ fn grants_to_people(grants: &[authority::Grant]) -> Option<Box<[people::Grant]>>
             .ok()?;
     }
     Some(result.into_boxed())
+}
+
+fn template_limit(value: u32) -> people::Refusal {
+    people::Refusal::configured(
+        people::LimitKind::Policy,
+        u64::from(value),
+        people::LimitKey::CoreTemplates,
+        people::LimitUnit::Items,
+    )
 }

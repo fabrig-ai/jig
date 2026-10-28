@@ -230,7 +230,7 @@ pub(crate) fn publish(domain: &Domain, out: &mut Queue<Request>) {
 pub fn check(domain: &mut Domain, holder: Holder, source: u32, out: &mut Queue<Request>) -> Result<(), Refusal> {
     crate::changes::source(domain, holder, source)?;
     if domain.programs.contains_key(&source) {
-        return Err(Refusal::Limit { bound: crate::Bound::Sources });
+        return Err(Refusal::Limit { bound: crate::Bound::Sources, number: None });
     }
     if domain.numbers_left() == 0 {
         return Err(Refusal::Numbers);
@@ -371,11 +371,15 @@ pub fn sign_out(
     if name(domain, source, holder).is_none() {
         return Err(Refusal::Unknown);
     }
-    if domain.programs.contains_key(&source)
-        || domain.programs.len() >= env.limits.program_names
-        || domain.programs.len() == domain.programs.capacity()
-    {
-        return Err(Refusal::Limit { bound: crate::Bound::Sources });
+    if domain.programs.contains_key(&source) {
+        return Err(Refusal::Limit { bound: crate::Bound::Sources, number: None });
+    }
+    if domain.programs.len() >= env.limits.program_names || domain.programs.len() == domain.programs.capacity() {
+        return Err(Refusal::limited(
+            crate::Bound::Sources,
+            crate::LimitKey::ProgramNames,
+            env.limits.program_names.min(domain.programs.capacity()),
+        ));
     }
     begin(domain, &env.limits, source, crate::changes::Leaving::Source(request), out);
     Ok(())

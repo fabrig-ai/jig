@@ -26,7 +26,7 @@ pub(super) fn delegate_refused(
         &mut out,
         to,
         key,
-        CallPart::DelegationRefused(tasks::Problem { task, why, blocked_by: None, capacity: None }),
+        CallPart::DelegationRefused(tasks::Problem { limit: None, task, why, blocked_by: None, capacity: None }),
     );
     out.push(Request::Decided);
     Requests::Out(out)
@@ -725,6 +725,7 @@ pub(super) fn delegate_input_failed(work: &mut Queue<Event>, to: ReplyTo, key: C
         to,
         key,
         part: CallPart::DelegationRefused(tasks::Problem {
+            limit: None,
             task: Some(key.task),
             why: tasks::Refusal::Inputs,
             blocked_by: None,

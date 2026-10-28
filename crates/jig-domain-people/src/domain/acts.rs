@@ -31,17 +31,34 @@ pub(super) fn valid(limits: &Limits, act: &Act) -> Result<(), Refusal> {
                 return Err(Refusal::Unknown);
             }
             if reason.len() > usize::try_from(limits.words).expect("u32 fits usize") {
-                return Err(Refusal::Limit { which: LimitKind::Words });
+                return Err(Refusal::configured(
+                    LimitKind::Words,
+                    u64::from(limits.words),
+                    crate::LimitKey::PeopleWords,
+                    crate::LimitUnit::Bytes,
+                ));
             }
         }
         Act::Adopt { adoption, .. } => {
+            if adoption.resource.path.is_empty() {
+                return Err(Refusal::Limit { which: LimitKind::Empty, bound: None });
+            }
             if !super::valid_adoption(limits, adoption) {
-                return Err(Refusal::Limit { which: LimitKind::Resource });
+                return Err(Refusal::configured(
+                    LimitKind::Amendment,
+                    u64::from(limits.amendment_bytes),
+                    crate::LimitKey::PeopleAmendmentBytes,
+                    crate::LimitUnit::Bytes,
+                ));
             }
         }
         Act::MakeProject { name, .. } => {
             if name.len() > crate::NAME_BYTES {
-                return Err(Refusal::Limit { which: LimitKind::Words });
+                return Err(Refusal::fixed(
+                    LimitKind::Name,
+                    u64::try_from(crate::NAME_BYTES).expect("name bound fits u64"),
+                    crate::LimitUnit::Bytes,
+                ));
             }
         }
         Act::AddKey { .. } | Act::RemoveAccount { .. } => {}

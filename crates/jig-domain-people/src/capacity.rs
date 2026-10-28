@@ -185,7 +185,7 @@ pub(crate) fn permanent(outcome: &Outcome) -> Option<CapacityCause> {
 
 fn room(refusal: &Refusal) -> Option<CapacityCause> {
     match refusal {
-        Refusal::Limit { which } => match which {
+        Refusal::Limit { which, .. } => match which {
             LimitKind::PlacedHolds
             | LimitKind::ProjectPlacedHolds
             | LimitKind::PartyPlacedHolds
@@ -206,6 +206,9 @@ fn room(refusal: &Refusal) -> Option<CapacityCause> {
             | LimitKind::SignIns
             | LimitKind::Notes => Some(CapacityCause::Limit { which: *which }),
             LimitKind::Operations
+            | LimitKind::Amendment
+            | LimitKind::Key
+            | LimitKind::Name
             | LimitKind::Words
             | LimitKind::Identity
             | LimitKind::Roles

@@ -1,7 +1,10 @@
 use super::*;
-pub fn admission_0() -> [(p::LimitKind, w::AdmissionLimit); 18] {
+pub fn admission_0() -> [(p::LimitKind, w::AdmissionLimit); 21] {
     [
         (p::LimitKind::Words, w::AdmissionLimit::Words),
+        (p::LimitKind::Amendment, w::AdmissionLimit::Amendment),
+        (p::LimitKind::Key, w::AdmissionLimit::Key),
+        (p::LimitKind::Name, w::AdmissionLimit::Name),
         (p::LimitKind::Identity, w::AdmissionLimit::Identity),
         (p::LimitKind::Roles, w::AdmissionLimit::Roles),
         (p::LimitKind::Arithmetic, w::AdmissionLimit::Arithmetic),
@@ -50,6 +53,8 @@ pub fn admission_1() -> [(p::LimitKind, w::AdmissionLimit); 23] {
 }
 pub fn admission_refusal(which: w::AdmissionLimit) -> w::Refusal {
     let limits = wire();
-    let which = w::Limit::Admission(w::LimitAdmission::new(&limits, w::LimitAdmissionParts { which }).expect("limit"));
+    let which = w::Limit::Admission(
+        w::LimitAdmission::new(&limits, w::LimitAdmissionParts { which, bound: None }).expect("limit"),
+    );
     w::Refusal::Limit(w::RefusalLimit::new(&limits, w::RefusalLimitParts { which }).expect("refusal"))
 }

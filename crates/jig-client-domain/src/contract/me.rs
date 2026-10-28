@@ -25,6 +25,8 @@ pub struct Me {
     pub key_bytes: u32,
     /// The driver's redirect bound: the most bytes a pasted sign-in address may have.
     pub redirect_bytes: u32,
+    pub words_bytes: u32,
+    pub amendment_bytes: u32,
 }
 
 /// The authenticated identity, with independently supplied local text loss.

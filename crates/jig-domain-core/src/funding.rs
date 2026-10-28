@@ -37,7 +37,7 @@ impl Core {
         after: &authority::Policy,
         limits: &Limits,
     ) -> Result<Resize, people::Refusal> {
-        let arithmetic = people::Refusal::Limit { which: people::LimitKind::Arithmetic };
+        let arithmetic = self.limit_refusal(people::LimitKind::Arithmetic);
         let mut plan = Resize { period: None, pools: List::with_capacity(limits.people.holdings) };
         let period = self.period(project);
         let Some(row) = self.tasks.funding(tasks::Funder::Period { project, period }) else {

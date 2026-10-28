@@ -159,7 +159,7 @@ impl Words {
     }
     fn limit(&self, b: &mut Builder, which: Limit) {
         match which {
-            Limit::Admission { which } => self.engine_limit(b, which),
+            Limit::Admission { which, .. } => self.engine_limit(b, which),
             Limit::LiveTasks { project, limit } => {
                 self.text(b, JigPhrase::LimitLive, &[Hole::Number(u64::from(project)), Hole::Number(u64::from(limit))]);
             }
@@ -180,8 +180,8 @@ impl Words {
             AdmissionLimit::Goals => JigPhrase::EngineLimitGoals,
             AdmissionLimit::Operations => JigPhrase::EngineLimitOperations,
             AdmissionLimit::Grace => JigPhrase::EngineLimitGrace,
-            AdmissionLimit::Words => JigPhrase::EngineLimitWords,
-            AdmissionLimit::Identity => JigPhrase::EngineLimitIdentity,
+            AdmissionLimit::Words | AdmissionLimit::Key => JigPhrase::EngineLimitWords,
+            AdmissionLimit::Identity | AdmissionLimit::Name => JigPhrase::EngineLimitIdentity,
             AdmissionLimit::Roles => JigPhrase::EngineLimitRoles,
             AdmissionLimit::Arithmetic => JigPhrase::EngineLimitArithmetic,
             AdmissionLimit::Duplicate => JigPhrase::EngineLimitDuplicate,
@@ -195,7 +195,7 @@ impl Words {
             AdmissionLimit::Subscription => JigPhrase::EngineLimitSubscription,
             AdmissionLimit::Dependencies => JigPhrase::EngineLimitDependencies,
             AdmissionLimit::Cycle => JigPhrase::EngineLimitCycle,
-            AdmissionLimit::Spec => JigPhrase::EngineLimitSpec,
+            AdmissionLimit::Spec | AdmissionLimit::Amendment => JigPhrase::EngineLimitSpec,
             AdmissionLimit::Contract => JigPhrase::EngineLimitContract,
             AdmissionLimit::Authority => JigPhrase::EngineLimitAuthority,
             AdmissionLimit::Inputs => JigPhrase::EngineLimitInputs,

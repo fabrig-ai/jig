@@ -27,6 +27,7 @@ pub mod task;
 mod task_wait;
 pub(crate) mod watches;
 pub use objects::document;
+pub use refusals::limit_bound;
 
 fn problem(reason: skein_codec::Reason) -> w::Problem {
     w::Problem { path: w::Path::OwnedRecord, reason }

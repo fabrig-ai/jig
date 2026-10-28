@@ -104,7 +104,14 @@ pub(crate) fn answer(
             .push(Request::Refused { reply_to: to, problem: crate::Problem::live_delegates(number, &row.delegates) });
     }
     if !crate::run::valid_result(&row.contract, &result, &env.limits) {
-        return refused(to, Some(number), Refusal::Contract, out);
+        return out.push(Request::Refused {
+            reply_to: to,
+            problem: crate::Problem::new(Some(number), Refusal::Contract).observed(crate::run::result_limit(
+                &row.contract,
+                &result,
+                &env.limits,
+            )),
+        });
     }
     let ending = match result {
         TaskResult::Failure { reason } => Ending::Failed { reason },

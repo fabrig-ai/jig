@@ -50,9 +50,9 @@ pub(crate) fn index(
     out: &mut Queue<Request>,
 ) {
     if domain.busy() {
-        push(out, Request::Refused { owner, why: Refusal::Busy });
+        push(out, Request::Refused { limit: None, owner, why: Refusal::Busy });
     } else if !valid_scopes(&scopes, limits) {
-        push(out, Request::Refused { owner, why: Refusal::Oversized });
+        push(out, Request::Refused { limit: scopes_limit(&scopes, limits), owner, why: Refusal::Oversized });
     } else {
         domain.read = Some(ReadPending {
             owner,
@@ -73,7 +73,7 @@ pub(crate) fn recall(
     out: &mut Queue<Request>,
 ) {
     if domain.busy() {
-        push(out, Request::Refused { owner, why: Refusal::Busy });
+        push(out, Request::Refused { limit: None, owner, why: Refusal::Busy });
         return;
     }
     match by {
@@ -92,7 +92,21 @@ pub(crate) fn recall(
                 Err(_) => false,
             };
             if !valid_scopes(&scopes, limits) || !query_fits {
-                push(out, Request::Refused { owner, why: Refusal::Oversized });
+                push(
+                    out,
+                    Request::Refused {
+                        limit: if valid_scopes(&scopes, limits) {
+                            Some(crate::NumericLimit {
+                                key: crate::LimitKey::DescriptionBytes,
+                                value: limits.description_bytes,
+                            })
+                        } else {
+                            scopes_limit(&scopes, limits)
+                        },
+                        owner,
+                        why: Refusal::Oversized,
+                    },
+                );
             } else {
                 let load_owner = domain.next_load_token();
                 domain.read = Some(ReadPending {
@@ -332,7 +346,9 @@ pub(crate) fn loaded(
 pub(crate) fn failed(domain: &mut Domain, owner: Token, out: &mut Queue<Request>) {
     let pending = domain.read.take();
     match pending {
-        Some(read) if read.load_owner == owner => push(out, Request::Refused { owner: read.owner, why: Refusal::Busy }),
+        Some(read) if read.load_owner == owner => {
+            push(out, Request::Refused { limit: None, owner: read.owner, why: Refusal::Busy });
+        }
         Some(read) => domain.read = Some(read),
         None => {}
     }
@@ -362,4 +378,16 @@ fn is_required(required: &List<Scope>, scope: &Scope) -> bool {
         }
     }
     false
+}
+
+fn scopes_limit(scopes: &List<Scope>, limits: &Limits) -> Option<crate::NumericLimit> {
+    if scopes.capacity() > limits.scopes {
+        return Some(crate::NumericLimit { key: crate::LimitKey::Scopes, value: limits.scopes });
+    }
+    for scope in scopes {
+        if !valid_scope(scope, limits) {
+            return crate::domain::scope_limit(scope, limits);
+        }
+    }
+    None
 }

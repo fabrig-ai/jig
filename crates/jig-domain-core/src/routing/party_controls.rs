@@ -52,9 +52,12 @@ pub(super) fn amend_route(
         );
         return;
     }
-    let Some(mut amendment) = crate::amendments::translate(amendment, core.kept_models(task), &env.limits.tasks) else {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Words });
-        return;
+    let mut amendment = match crate::amendments::translate(amendment, core.kept_models(task), &env.limits.tasks) {
+        Ok(amendment) => amendment,
+        Err(why) => {
+            pool_refused(work, request, why);
+            return;
+        }
     };
     let stop_run = match crate::acts::bounds::amendment_admit_with_places(
         core,
@@ -83,7 +86,7 @@ pub(super) fn amend_route(
     }
     amendment.release = release;
     let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-        pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+        pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
         return;
     };
     let released = match core.tasks.task(task).expect("amend admission found task").phase {
@@ -146,7 +149,7 @@ pub(super) fn stop_request(
             let Some(number) = crate::fresh(&mut core.counters, crate::Family::Message) else {
                 work.push(Event::People(people::Event::Decided {
                     request,
-                    outcome: people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::Arithmetic }),
+                    outcome: people::Outcome::Refused(core.limit_refusal(people::LimitKind::Arithmetic)),
                 }));
                 return;
             };
@@ -226,7 +229,7 @@ pub(super) fn cancel_request(
         Ok(task) => {
             let message = if grace.is_some() {
                 let Some(message) = crate::fresh(&mut core.counters, crate::Family::Message) else {
-                    pool_refused(work, request, people::Refusal::Limit { which: people::LimitKind::Arithmetic });
+                    pool_refused(work, request, core.limit_refusal(people::LimitKind::Arithmetic));
                     return;
                 };
                 Some(message)

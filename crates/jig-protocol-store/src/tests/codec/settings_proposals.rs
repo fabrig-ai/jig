@@ -31,7 +31,7 @@ fn settings_asks_running_choices_and_refusals_round_trip_in_people_13() {
         });
     }
     for why in [
-        p::Refusal::Limit { which: p::LimitKind::SettingsProposals },
+        p::Refusal::Limit { which: p::LimitKind::SettingsProposals, bound: None },
         p::Refusal::NotWellFormed { at: 0, why: p::Malformed::Running },
     ] {
         people_round_trip(p::Stored::Answer {

@@ -109,7 +109,7 @@ fn replaceable(domain: &Domain, limits: &Limits, holder: Holder, source: u32) ->
     }
     ready(domain, limits)?;
     if domain.keeping.contains_key(&source) {
-        return Err(Refusal::Limit { bound: Bound::SignIns });
+        return Err(Refusal::Limit { bound: Bound::SignIns, number: None });
     }
     Ok(account)
 }
@@ -180,7 +180,7 @@ pub(crate) fn remove(
     }
     for (_, keeping) in &domain.keeping {
         if keeping.join == Some(account) {
-            answer(request, Refusal::Limit { bound: Bound::SignIns }, out);
+            answer(request, Refusal::Limit { bound: Bound::SignIns, number: None }, out);
             return;
         }
     }

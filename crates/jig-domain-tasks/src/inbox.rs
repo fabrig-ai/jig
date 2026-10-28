@@ -282,6 +282,7 @@ pub(crate) fn check_message(
     let Message { project, number, word, authorized } = message;
     if !domain.ready() {
         return Err(Box::new(crate::Problem {
+            limit: None,
             task: Some(number),
             why: Refusal::NotReady,
             blocked_by: None,
@@ -290,6 +291,7 @@ pub(crate) fn check_message(
     }
     let Some(task) = staged.record(domain, number) else {
         return Err(Box::new(crate::Problem {
+            limit: None,
             task: Some(number),
             why: Refusal::Unknown,
             blocked_by: None,
@@ -319,6 +321,7 @@ pub(crate) fn check_message(
     };
     if task.project != project || !requester || !sendable {
         return Err(Box::new(crate::Problem {
+            limit: None,
             task: Some(number),
             why: Refusal::State,
             blocked_by: None,
@@ -343,6 +346,7 @@ pub(crate) fn check_message(
     };
     if !available || person_waiting {
         return Err(Box::new(crate::Problem {
+            limit: None,
             task: Some(number),
             why: Refusal::State,
             blocked_by: None,
@@ -355,6 +359,14 @@ pub(crate) fn check_message(
         || word.words.len() > usize::try_from(env.limits.message_bytes).expect("u32 fits usize")
     {
         return Err(Box::new(crate::Problem {
+            limit: if word.words.len() > usize::try_from(env.limits.message_bytes).expect("message bound fits") {
+                Some(crate::NumericLimit {
+                    key: crate::LimitKey::MessageBytes,
+                    value: u64::from(env.limits.message_bytes),
+                })
+            } else {
+                None
+            },
             task: Some(number),
             why: Refusal::Read,
             blocked_by: None,
@@ -392,6 +404,7 @@ pub(crate) fn check_message(
             };
             if !valid {
                 return Err(Box::new(crate::Problem {
+                    limit: None,
                     task: Some(number),
                     why: Refusal::Reference,
                     blocked_by: None,
@@ -431,6 +444,7 @@ pub(crate) fn check_message(
     };
     let Some(prepared) = prepare_staged(domain, staged, &env.limits, number, word, admission) else {
         return Err(Box::new(crate::Problem {
+            limit: None,
             task: Some(number),
             why: Refusal::Busy,
             blocked_by: None,
@@ -442,6 +456,7 @@ pub(crate) fn check_message(
             Party::Task(source) => source,
             Party::Person(_) | Party::Deployment { .. } => {
                 return Err(Box::new(crate::Problem {
+                    limit: None,
                     task: Some(number),
                     why: Refusal::Reference,
                     blocked_by: None,
@@ -451,6 +466,7 @@ pub(crate) fn check_message(
         };
         if !room(domain, &env.limits, source, 1, usize::try_from(env.limits.message_bytes).expect("u32 fits usize")) {
             return Err(Box::new(crate::Problem {
+                limit: None,
                 task: Some(source),
                 why: Refusal::Busy,
                 blocked_by: None,

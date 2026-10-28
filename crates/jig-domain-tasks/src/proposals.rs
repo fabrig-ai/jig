@@ -704,7 +704,7 @@ pub(crate) fn admission_problem(domain: &Domain, limits: &Limits, proposal: &Pro
 }
 
 fn proposal_problem(task: u64, why: Refusal) -> crate::Problem {
-    crate::Problem { task: Some(task), why, blocked_by: None, capacity: None }
+    crate::Problem { task: Some(task), why, blocked_by: None, capacity: None, limit: None }
 }
 
 /// Check the one proposal a verdict creates before any result expense is posted.

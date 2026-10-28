@@ -207,7 +207,7 @@ pub(crate) fn request(
         Admission::Allowed | Admission::Proposed { .. } | Admission::Bounded { .. } => Ok(()),
         // The child emits the same refusal with its exact observed delegate
         // identities. Preserve that capacity observation at its owner.
-        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::LiveDelegates })
+        Admission::Refused(people::Refusal::Limit { which: people::LimitKind::LiveDelegates, .. })
             if act == Act::Answer =>
         {
             Ok(())

@@ -112,6 +112,7 @@ pub(super) fn route_turn_payload(
         out.push(Request::Now(Box::new(crate::Now::RefusedPayload {
             request: body,
             problem: tasks::Problem {
+                limit: None,
                 task: Some(run.raw()),
                 why: tasks::Refusal::Read,
                 blocked_by: None,

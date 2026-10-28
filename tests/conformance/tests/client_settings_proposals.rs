@@ -344,8 +344,10 @@ fn engine_running_and_pending_settings_limit_refusals_keep_their_client_names() 
             c::Refusal::Malformed { at: 0, why: c::Malformed::Running },
         ),
         (
-            p::Refusal::Limit { which: p::LimitKind::SettingsProposals },
-            c::Refusal::Limit { which: c::Limit::Admission { which: c::AdmissionLimit::SettingsProposals } },
+            p::Refusal::Limit { which: p::LimitKind::SettingsProposals, bound: None },
+            c::Refusal::Limit {
+                which: c::Limit::Admission { which: c::AdmissionLimit::SettingsProposals, bound: None },
+            },
         ),
     ] {
         let wire = w::Ask::Message(

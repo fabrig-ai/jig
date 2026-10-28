@@ -124,6 +124,7 @@ fn withdrawing_another_partys_proposal_is_unknown() {
     assert_eq!(
         world.replies.last_key_value().expect("withdrawal reply").1.clone(),
         Reply::Refused(jig_domain_tasks::Problem {
+            limit: None,
             task: None,
             why: jig_domain_tasks::Refusal::Unknown,
             blocked_by: None,

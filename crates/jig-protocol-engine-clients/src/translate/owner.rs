@@ -178,6 +178,8 @@ pub fn frame(value: &d::Frame, models: &[crate::Model], limits: &w::Limits) -> R
             providers_cut: value.providers_cut,
             key_bytes: value.key_bytes,
             redirect_bytes: value.redirect_bytes,
+            words_bytes: value.words_bytes,
+            amendment_bytes: value.amendment_bytes,
             party: w::MeParty::new(
                 limits,
                 w::MePartyParts {

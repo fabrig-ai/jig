@@ -184,7 +184,7 @@ pub(crate) fn signed_in(
         Ok(SignIn::New) => Ok(None),
         Ok(SignIn::Renew { account }) => match place(domain, account) {
             Some(place) => Ok(Some((account, place))),
-            None => Err(Refusal::Limit { bound: Bound::Sources }),
+            None => Err(Refusal::limited(Bound::Sources, crate::LimitKey::Sources, env.limits.sources)),
         },
         Err(refusal) => Err(refusal),
     };
@@ -361,7 +361,7 @@ fn removable(domain: &Domain, holder: Holder, source: u32) -> Result<u32, Refusa
     }
     for (_, keeping) in &domain.keeping {
         if keeping.join == Some(account) {
-            return Err(Refusal::Limit { bound: Bound::SignIns });
+            return Err(Refusal::Limit { bound: Bound::SignIns, number: None });
         }
     }
     let entry = domain.sources.get(&source).expect("checked source");
@@ -370,10 +370,10 @@ fn removable(domain: &Domain, holder: Holder, source: u32) -> Result<u32, Refusa
         Kind::Key | Kind::None => return Err(Refusal::Kind { kind: entry.kind }),
     }
     if domain.signing_out.contains_key(&source) {
-        return Err(Refusal::Limit { bound: Bound::Sources });
+        return Err(Refusal::Limit { bound: Bound::Sources, number: None });
     }
     if domain.signing_out.len() >= domain.signing_out.capacity() {
-        return Err(Refusal::Limit { bound: Bound::Sources });
+        return Err(Refusal::fixed(Bound::Sources, domain.signing_out.capacity()));
     }
     Ok(entry.account)
 }
@@ -466,7 +466,7 @@ fn movable(domain: &Domain, limits: &Limits, holder: Holder, account: u32) -> Re
     }
     for (_, keeping) in &domain.keeping {
         if keeping.join == Some(account) {
-            return Err(Refusal::Limit { bound: Bound::SignIns });
+            return Err(Refusal::Limit { bound: Bound::SignIns, number: None });
         }
     }
     room_for_sign_in(limits, domain.sign_ins())?;
@@ -593,7 +593,7 @@ fn arriving_at(
         SignIn::New => Ok(None),
         SignIn::Renew { account } => match place(domain, account) {
             Some(place) => Ok(Some((account, place))),
-            None => Err(Refusal::Limit { bound: Bound::Sources }),
+            None => Err(Refusal::limited(Bound::Sources, crate::LimitKey::Sources, limits.sources)),
         },
     }
 }

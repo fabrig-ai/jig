@@ -43,12 +43,27 @@ impl Core {
         }
         name_shape(&name)?;
         let configured = self.current.policy(number).ok_or(people::Refusal::Unknown)?;
-        if self.projects.len() >= limits.authority.projects
-            || !self.people.project_room()
-            || limits.people.holdings == 0
-            || self.counters.deployment.projects >= u64::from(u32::MAX)
-        {
-            return Err(people::Refusal::Limit { which: people::LimitKind::Projects });
+        if self.projects.len() >= limits.authority.projects {
+            return Err(people::Refusal::configured(
+                people::LimitKind::Projects,
+                u64::from(limits.authority.projects),
+                people::LimitKey::AuthorityProjects,
+                people::LimitUnit::Items,
+            ));
+        }
+        if !self.people.project_room() {
+            return Err(self.limit_refusal(people::LimitKind::Projects));
+        }
+        if limits.people.holdings == 0 {
+            return Err(people::Refusal::configured(
+                people::LimitKind::Roles,
+                0,
+                people::LimitKey::PeopleHoldings,
+                people::LimitUnit::Items,
+            ));
+        }
+        if self.counters.deployment.projects >= u64::from(u32::MAX) {
+            return Err(self.limit_refusal(people::LimitKind::Arithmetic));
         }
         for (_, held) in &self.names {
             if people::same_name(held, &name) {

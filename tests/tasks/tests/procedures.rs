@@ -153,6 +153,7 @@ fn a_step_with_one_refused_part_changes_nothing() {
     assert_eq!(
         step(&mut world, PROCEDURE, 2, decision),
         Reply::Refused(tasks::Problem {
+            limit: None,
             task: Some(CHILD),
             why: tasks::Refusal::Read,
             blocked_by: None,
@@ -182,6 +183,7 @@ fn a_step_counts_its_batch_before_admitting_a_tracking_amendment() {
     assert_eq!(
         step(&mut world, PROCEDURE, 2, decision),
         Reply::Refused(tasks::Problem {
+            limit: None,
             task: Some(CHILD),
             why: tasks::Refusal::Goals,
             blocked_by: None,

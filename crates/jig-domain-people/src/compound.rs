@@ -31,7 +31,16 @@ impl Operation {
 }
 pub(crate) fn refusal(limits: &Limits, operations: &List<Operation>) -> Option<Refusal> {
     if operations.is_empty() || operations.len() > limits.operations {
-        return Some(Refusal::Limit { which: LimitKind::Operations });
+        return Some(if operations.is_empty() {
+            Refusal::Limit { which: LimitKind::Operations, bound: None }
+        } else {
+            Refusal::configured(
+                LimitKind::Operations,
+                u64::from(limits.operations),
+                crate::LimitKey::PeopleOperations,
+                crate::LimitUnit::Items,
+            )
+        });
     }
     for operation in operations {
         // Bound the temporary standalone ask before copying any of its owned payload.
@@ -41,13 +50,33 @@ pub(crate) fn refusal(limits: &Limits, operations: &List<Operation>) -> Option<R
             }
             Operation::Message { words, .. } => (u64::try_from(words.len()).ok(), limits.words, LimitKind::Words),
             Operation::Amend { amendment, .. } => {
-                (crate::amendment_bytes(amendment), limits.amendment_bytes, LimitKind::Spec)
+                (crate::amendment_bytes(amendment), limits.amendment_bytes, LimitKind::Amendment)
             }
             Operation::Release { .. } | Operation::Stop { .. } => (Some(0), 0, LimitKind::Words),
         };
-        let Some(bytes) = bytes else { return Some(Refusal::Limit { which }) };
+        let Some(bytes) = bytes else {
+            return Some(Refusal::configured(
+                which,
+                u64::from(maximum),
+                if which == LimitKind::Amendment {
+                    crate::LimitKey::PeopleAmendmentBytes
+                } else {
+                    crate::LimitKey::PeopleWords
+                },
+                crate::LimitUnit::Bytes,
+            ));
+        };
         if bytes > u64::from(maximum) {
-            return Some(Refusal::Limit { which });
+            return Some(Refusal::configured(
+                which,
+                u64::from(maximum),
+                if which == LimitKind::Amendment {
+                    crate::LimitKey::PeopleAmendmentBytes
+                } else {
+                    crate::LimitKey::PeopleWords
+                },
+                crate::LimitUnit::Bytes,
+            ));
         }
         let ask = operation.clone().into_ask(1);
         if !crate::domain::valid_ask(limits, &ask) {

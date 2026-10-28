@@ -361,6 +361,9 @@ pub(super) fn encode_limit_kind(value: domain::LimitKind, _limits: &wire::Limits
     match value {
         domain::LimitKind::Projects => wire::LimitKind::Projects,
         domain::LimitKind::Words => wire::LimitKind::Words,
+        domain::LimitKind::Name => wire::LimitKind::Name,
+        domain::LimitKind::Key => wire::LimitKind::Key,
+        domain::LimitKind::Amendment => wire::LimitKind::Amendment,
         domain::LimitKind::Identity => wire::LimitKind::Identity,
         domain::LimitKind::Roles => wire::LimitKind::Roles,
         domain::LimitKind::Arithmetic => wire::LimitKind::Arithmetic,
@@ -413,6 +416,9 @@ pub(super) fn decode_limit_kind(value: wire::LimitKind) -> domain::LimitKind {
     match value {
         wire::LimitKind::Projects => domain::LimitKind::Projects,
         wire::LimitKind::Words => domain::LimitKind::Words,
+        wire::LimitKind::Name => domain::LimitKind::Name,
+        wire::LimitKind::Key => domain::LimitKind::Key,
+        wire::LimitKind::Amendment => domain::LimitKind::Amendment,
         wire::LimitKind::Identity => domain::LimitKind::Identity,
         wire::LimitKind::Roles => domain::LimitKind::Roles,
         wire::LimitKind::Arithmetic => domain::LimitKind::Arithmetic,
@@ -527,9 +533,12 @@ pub(crate) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> 
                 },
             },
         )?),
-        domain::Refusal::Limit { which } => wire::Refusal::Limit(wire::RefusalLimit::new(
+        domain::Refusal::Limit { which, bound } => wire::Refusal::Limit(wire::RefusalLimit::new(
             limits,
-            wire::RefusalLimitParts { which: encode_limit_kind(*which, limits) },
+            wire::RefusalLimitParts {
+                which: encode_limit_kind(*which, limits),
+                bound: encode_limit_bound(*bound, limits)?,
+            },
         )?),
         domain::Refusal::Moved { now } => wire::Refusal::Moved(wire::RefusalMoved::new(
             limits,
@@ -652,8 +661,8 @@ pub(crate) fn decode_refusal(value: wire::Refusal) -> domain::Refusal {
             }
         }
         wire::Refusal::Limit(value) => {
-            let wire::RefusalLimitParts { which } = value.into_parts();
-            domain::Refusal::Limit { which: decode_limit_kind(which) }
+            let wire::RefusalLimitParts { which, bound } = value.into_parts();
+            domain::Refusal::Limit { which: decode_limit_kind(which), bound: decode_limit_bound(bound.as_ref()) }
         }
         wire::Refusal::Moved(value) => {
             let wire::RefusalMovedParts { now } = value.into_parts();
@@ -884,4 +893,173 @@ pub(super) fn decode_hold_owner(value: wire::HoldOwner) -> domain::HoldOwner {
         wire::HoldOwner::Party(value) => domain::HoldOwner::Party { person: value.person() },
         wire::HoldOwner::Task(value) => domain::HoldOwner::Task { task: value.task() },
     }
+}
+
+fn encode_limit_bound(
+    value: Option<domain::LimitBound>,
+    limits: &wire::Limits,
+) -> Result<Option<wire::LimitBound>, wire::Problem> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    Ok(Some(wire::LimitBound::new(
+        limits,
+        wire::LimitBoundParts {
+            value: value.value,
+            key: encode_limit_key(value.key),
+            unit: match value.unit {
+                domain::LimitUnit::Bytes => wire::LimitUnit::Bytes,
+                domain::LimitUnit::Items => wire::LimitUnit::Items,
+                domain::LimitUnit::Milliseconds => wire::LimitUnit::Milliseconds,
+            },
+        },
+    )?))
+}
+fn decode_limit_bound(value: Option<&wire::LimitBound>) -> Option<domain::LimitBound> {
+    let value = value?;
+    Some(domain::LimitBound {
+        value: value.value(),
+        key: decode_limit_key(value.key().as_ref()),
+        unit: match value.unit() {
+            wire::LimitUnit::Bytes => domain::LimitUnit::Bytes,
+            wire::LimitUnit::Items => domain::LimitUnit::Items,
+            wire::LimitUnit::Milliseconds => domain::LimitUnit::Milliseconds,
+        },
+    })
+}
+
+fn decode_limit_key(key: Option<&wire::LimitKey>) -> Option<domain::LimitKey> {
+    let key = key?;
+    Some(match key {
+        wire::LimitKey::PeopleWords => domain::LimitKey::PeopleWords,
+        wire::LimitKey::PeopleAmendmentBytes => domain::LimitKey::PeopleAmendmentBytes,
+        wire::LimitKey::PeopleHoldings => domain::LimitKey::PeopleHoldings,
+        wire::LimitKey::PeopleIdentityBytes => domain::LimitKey::PeopleIdentityBytes,
+        wire::LimitKey::PeopleBatch => domain::LimitKey::PeopleBatch,
+        wire::LimitKey::PeopleOperations => domain::LimitKey::PeopleOperations,
+        wire::LimitKey::PeopleProjects => domain::LimitKey::PeopleProjects,
+        wire::LimitKey::TasksTasks => domain::LimitKey::TasksTasks,
+        wire::LimitKey::TasksProjectTasks => domain::LimitKey::TasksProjectTasks,
+        wire::LimitKey::TasksProjectGoals => domain::LimitKey::TasksProjectGoals,
+        wire::LimitKey::TasksTreeTasks => domain::LimitKey::TasksTreeTasks,
+        wire::LimitKey::TasksDepth => domain::LimitKey::TasksDepth,
+        wire::LimitKey::TasksDelegates => domain::LimitKey::TasksDelegates,
+        wire::LimitKey::TasksSubscriptions => domain::LimitKey::TasksSubscriptions,
+        wire::LimitKey::TasksDependencies => domain::LimitKey::TasksDependencies,
+        wire::LimitKey::TasksSpecBytes => domain::LimitKey::TasksSpecBytes,
+        wire::LimitKey::TasksParameters => domain::LimitKey::TasksParameters,
+        wire::LimitKey::TasksContractChoices => domain::LimitKey::TasksContractChoices,
+        wire::LimitKey::TasksResultBytes => domain::LimitKey::TasksResultBytes,
+        wire::LimitKey::TasksInputs => domain::LimitKey::TasksInputs,
+        wire::LimitKey::TasksHoldings => domain::LimitKey::TasksHoldings,
+        wire::LimitKey::TasksHoldWaiters => domain::LimitKey::TasksHoldWaiters,
+        wire::LimitKey::TasksInboxMessages => domain::LimitKey::TasksInboxMessages,
+        wire::LimitKey::TasksInboxBytes => domain::LimitKey::TasksInboxBytes,
+        wire::LimitKey::TasksMessageBytes => domain::LimitKey::TasksMessageBytes,
+        wire::LimitKey::TasksGrace => domain::LimitKey::TasksGrace,
+        wire::LimitKey::TasksPlacedHolds => domain::LimitKey::TasksPlacedHolds,
+        wire::LimitKey::TasksProjectPlacedHolds => domain::LimitKey::TasksProjectPlacedHolds,
+        wire::LimitKey::TasksPartyPlacedHolds => domain::LimitKey::TasksPartyPlacedHolds,
+        wire::LimitKey::TasksExemptions => domain::LimitKey::TasksExemptions,
+        wire::LimitKey::TasksAuthorityGrants => domain::LimitKey::TasksAuthorityGrants,
+        wire::LimitKey::TasksAuthorityBytes => domain::LimitKey::TasksAuthorityBytes,
+        wire::LimitKey::TasksAuthoritySegments => domain::LimitKey::TasksAuthoritySegments,
+        wire::LimitKey::CoreTemplates => domain::LimitKey::CoreTemplates,
+        wire::LimitKey::CorePolicyBytes => domain::LimitKey::CorePolicyBytes,
+        wire::LimitKey::CoreSettingsProposals => domain::LimitKey::CoreSettingsProposals,
+        wire::LimitKey::NotesScopes => domain::LimitKey::NotesScopes,
+        wire::LimitKey::NotesEntriesPerScope => domain::LimitKey::NotesEntriesPerScope,
+        wire::LimitKey::NotesPatternBytes => domain::LimitKey::NotesPatternBytes,
+        wire::LimitKey::NotesDescriptionBytes => domain::LimitKey::NotesDescriptionBytes,
+        wire::LimitKey::NotesBodyBytes => domain::LimitKey::NotesBodyBytes,
+        wire::LimitKey::NotesReferences => domain::LimitKey::NotesReferences,
+        wire::LimitKey::AccountsAccounts => domain::LimitKey::AccountsAccounts,
+        wire::LimitKey::AccountsHolderAccounts => domain::LimitKey::AccountsHolderAccounts,
+        wire::LimitKey::AccountsSources => domain::LimitKey::AccountsSources,
+        wire::LimitKey::AccountsSignIns => domain::LimitKey::AccountsSignIns,
+        wire::LimitKey::AccountsProgramHosts => domain::LimitKey::AccountsProgramHosts,
+        wire::LimitKey::TasksBatch => domain::LimitKey::TasksBatch,
+        wire::LimitKey::CoreEscalationReasonBytes => domain::LimitKey::CoreEscalationReasonBytes,
+        wire::LimitKey::AccountsProgramNames => domain::LimitKey::AccountsProgramNames,
+        wire::LimitKey::AccountsCredentials => domain::LimitKey::AccountsCredentials,
+        wire::LimitKey::TasksReferences => domain::LimitKey::TasksReferences,
+        wire::LimitKey::TasksHoldSegments => domain::LimitKey::TasksHoldSegments,
+        wire::LimitKey::TasksHoldBytes => domain::LimitKey::TasksHoldBytes,
+        wire::LimitKey::TasksFunders => domain::LimitKey::TasksFunders,
+        wire::LimitKey::TasksExecutorKinds => domain::LimitKey::TasksExecutorKinds,
+        wire::LimitKey::TasksResourceReports => domain::LimitKey::TasksResourceReports,
+        wire::LimitKey::PeoplePending => domain::LimitKey::PeoplePending,
+        wire::LimitKey::AuthorityProjects => domain::LimitKey::AuthorityProjects,
+        wire::LimitKey::AuthorityGrants => domain::LimitKey::AuthorityGrants,
+        wire::LimitKey::AuthoritySegments => domain::LimitKey::AuthoritySegments,
+        wire::LimitKey::AuthoritySegmentBytes => domain::LimitKey::AuthoritySegmentBytes,
+    })
+}
+
+fn encode_limit_key(key: Option<domain::LimitKey>) -> Option<wire::LimitKey> {
+    let key = key?;
+    Some(match key {
+        domain::LimitKey::PeopleWords => wire::LimitKey::PeopleWords,
+        domain::LimitKey::PeopleAmendmentBytes => wire::LimitKey::PeopleAmendmentBytes,
+        domain::LimitKey::PeopleHoldings => wire::LimitKey::PeopleHoldings,
+        domain::LimitKey::PeopleIdentityBytes => wire::LimitKey::PeopleIdentityBytes,
+        domain::LimitKey::PeopleBatch => wire::LimitKey::PeopleBatch,
+        domain::LimitKey::PeopleOperations => wire::LimitKey::PeopleOperations,
+        domain::LimitKey::PeopleProjects => wire::LimitKey::PeopleProjects,
+        domain::LimitKey::TasksTasks => wire::LimitKey::TasksTasks,
+        domain::LimitKey::TasksProjectTasks => wire::LimitKey::TasksProjectTasks,
+        domain::LimitKey::TasksProjectGoals => wire::LimitKey::TasksProjectGoals,
+        domain::LimitKey::TasksTreeTasks => wire::LimitKey::TasksTreeTasks,
+        domain::LimitKey::TasksDepth => wire::LimitKey::TasksDepth,
+        domain::LimitKey::TasksDelegates => wire::LimitKey::TasksDelegates,
+        domain::LimitKey::TasksSubscriptions => wire::LimitKey::TasksSubscriptions,
+        domain::LimitKey::TasksDependencies => wire::LimitKey::TasksDependencies,
+        domain::LimitKey::TasksSpecBytes => wire::LimitKey::TasksSpecBytes,
+        domain::LimitKey::TasksParameters => wire::LimitKey::TasksParameters,
+        domain::LimitKey::TasksContractChoices => wire::LimitKey::TasksContractChoices,
+        domain::LimitKey::TasksResultBytes => wire::LimitKey::TasksResultBytes,
+        domain::LimitKey::TasksInputs => wire::LimitKey::TasksInputs,
+        domain::LimitKey::TasksHoldings => wire::LimitKey::TasksHoldings,
+        domain::LimitKey::TasksHoldWaiters => wire::LimitKey::TasksHoldWaiters,
+        domain::LimitKey::TasksInboxMessages => wire::LimitKey::TasksInboxMessages,
+        domain::LimitKey::TasksInboxBytes => wire::LimitKey::TasksInboxBytes,
+        domain::LimitKey::TasksMessageBytes => wire::LimitKey::TasksMessageBytes,
+        domain::LimitKey::TasksGrace => wire::LimitKey::TasksGrace,
+        domain::LimitKey::TasksPlacedHolds => wire::LimitKey::TasksPlacedHolds,
+        domain::LimitKey::TasksProjectPlacedHolds => wire::LimitKey::TasksProjectPlacedHolds,
+        domain::LimitKey::TasksPartyPlacedHolds => wire::LimitKey::TasksPartyPlacedHolds,
+        domain::LimitKey::TasksExemptions => wire::LimitKey::TasksExemptions,
+        domain::LimitKey::TasksAuthorityGrants => wire::LimitKey::TasksAuthorityGrants,
+        domain::LimitKey::TasksAuthorityBytes => wire::LimitKey::TasksAuthorityBytes,
+        domain::LimitKey::TasksAuthoritySegments => wire::LimitKey::TasksAuthoritySegments,
+        domain::LimitKey::CoreTemplates => wire::LimitKey::CoreTemplates,
+        domain::LimitKey::CorePolicyBytes => wire::LimitKey::CorePolicyBytes,
+        domain::LimitKey::CoreSettingsProposals => wire::LimitKey::CoreSettingsProposals,
+        domain::LimitKey::NotesScopes => wire::LimitKey::NotesScopes,
+        domain::LimitKey::NotesEntriesPerScope => wire::LimitKey::NotesEntriesPerScope,
+        domain::LimitKey::NotesPatternBytes => wire::LimitKey::NotesPatternBytes,
+        domain::LimitKey::NotesDescriptionBytes => wire::LimitKey::NotesDescriptionBytes,
+        domain::LimitKey::NotesBodyBytes => wire::LimitKey::NotesBodyBytes,
+        domain::LimitKey::NotesReferences => wire::LimitKey::NotesReferences,
+        domain::LimitKey::AccountsAccounts => wire::LimitKey::AccountsAccounts,
+        domain::LimitKey::AccountsHolderAccounts => wire::LimitKey::AccountsHolderAccounts,
+        domain::LimitKey::AccountsSources => wire::LimitKey::AccountsSources,
+        domain::LimitKey::AccountsSignIns => wire::LimitKey::AccountsSignIns,
+        domain::LimitKey::AccountsProgramHosts => wire::LimitKey::AccountsProgramHosts,
+        domain::LimitKey::TasksBatch => wire::LimitKey::TasksBatch,
+        domain::LimitKey::CoreEscalationReasonBytes => wire::LimitKey::CoreEscalationReasonBytes,
+        domain::LimitKey::AccountsProgramNames => wire::LimitKey::AccountsProgramNames,
+        domain::LimitKey::AccountsCredentials => wire::LimitKey::AccountsCredentials,
+        domain::LimitKey::TasksReferences => wire::LimitKey::TasksReferences,
+        domain::LimitKey::TasksHoldSegments => wire::LimitKey::TasksHoldSegments,
+        domain::LimitKey::TasksHoldBytes => wire::LimitKey::TasksHoldBytes,
+        domain::LimitKey::TasksFunders => wire::LimitKey::TasksFunders,
+        domain::LimitKey::TasksExecutorKinds => wire::LimitKey::TasksExecutorKinds,
+        domain::LimitKey::TasksResourceReports => wire::LimitKey::TasksResourceReports,
+        domain::LimitKey::PeoplePending => wire::LimitKey::PeoplePending,
+        domain::LimitKey::AuthorityProjects => wire::LimitKey::AuthorityProjects,
+        domain::LimitKey::AuthorityGrants => wire::LimitKey::AuthorityGrants,
+        domain::LimitKey::AuthoritySegments => wire::LimitKey::AuthoritySegments,
+        domain::LimitKey::AuthoritySegmentBytes => wire::LimitKey::AuthoritySegmentBytes,
+    })
 }

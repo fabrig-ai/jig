@@ -131,7 +131,7 @@ impl Core {
         match crate::acts::person(self, person, act, task, revision) {
             Ok(()) => {}
             // The task owner supplies its exact capacity observation.
-            Err(people::Refusal::Limit { which: people::LimitKind::LiveDelegates })
+            Err(people::Refusal::Limit { which: people::LimitKind::LiveDelegates, .. })
                 if act == crate::acts::Act::Answer => {}
             Err(why) => return Err(why),
         }

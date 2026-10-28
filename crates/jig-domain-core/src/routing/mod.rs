@@ -136,6 +136,7 @@ pub(crate) struct Creation {
     holdings: List<tasks::Holding>,
     answered: List<u16>,
     failed: bool,
+    failed_bound: Option<people::LimitBound>,
 }
 
 #[derive(Debug)]

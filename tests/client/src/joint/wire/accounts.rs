@@ -51,7 +51,7 @@ pub(super) fn refusal(value: a::Refusal) -> c::OwnerAccountRefusal {
         a::Refusal::NotLimited => c::OwnerAccountRefusal::NotLimited,
         a::Refusal::Uses => c::OwnerAccountRefusal::Uses,
         a::Refusal::NotKept { why } => c::OwnerAccountRefusal::NotKept { why: self::key_failure(why) },
-        a::Refusal::Limit { bound } => c::OwnerAccountRefusal::Limit { bound: self::bound(bound) },
+        a::Refusal::Limit { bound, .. } => c::OwnerAccountRefusal::Limit { bound: self::bound(bound) },
         a::Refusal::Held { provider } => c::OwnerAccountRefusal::Held { provider },
         a::Refusal::Provider { provider } => c::OwnerAccountRefusal::Provider { provider },
         a::Refusal::Subject => c::OwnerAccountRefusal::Subject,

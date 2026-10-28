@@ -55,6 +55,8 @@
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 extern crate alloc;
+mod limit_bound;
+pub use limit_bound::{LimitBound, LimitKey, LimitUnit};
 mod settings;
 pub use settings::{Running, Setting, SettingFault};
 mod scope;

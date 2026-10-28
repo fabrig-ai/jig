@@ -21,7 +21,7 @@ fn application_entrance_refusals_keep_sparse_facts_and_reject_variable_allocatio
                 at: Wall::EPOCH,
             },
         },
-        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Policy } },
+        Refusal::Limit { which: Limit::Admission { which: AdmissionLimit::Policy, bound: None } },
         Refusal::NotWaiting,
     ] {
         let kept = EntranceRefusal::new(refusal.clone()).unwrap();
