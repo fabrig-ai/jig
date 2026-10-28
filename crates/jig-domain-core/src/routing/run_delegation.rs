@@ -655,7 +655,12 @@ pub(super) fn start_recurring(
             project,
             executor: tasks::Executor::Procedure { connector: crate::RECURRING, code: 1 },
             llm: None,
-            spec: tasks::Spec { words: b"recurring".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) },
+            spec: tasks::Spec {
+                asks: false,
+                words: b"recurring".as_slice().into(),
+                parameters: Box::new([]),
+                inputs: Box::new([]),
+            },
             contract: tasks::Contract::Report { words: 0 },
             numbers: tasks::Numbers { budget: 0, spent: 0, spent_below: 0, reserved: 0 },
             authority,

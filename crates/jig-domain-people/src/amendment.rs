@@ -54,6 +54,7 @@ pub struct Spec {
     pub words: Box<[u8]>,
     pub parameters: Box<[Parameter]>,
     pub inputs: Box<[u64]>,
+    pub asks: bool,
 }
 
 /// One human supplied specification parameter.

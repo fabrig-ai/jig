@@ -242,6 +242,7 @@ pub fn wire_specification_document() -> w::SpecificationDocument {
             specification: w::DocumentSpecification::new(
                 &lim,
                 w::DocumentSpecificationParts {
+                    asks: false,
                     words: w::DocumentText::new(&lim, w::DocumentTextParts { bytes: Box::from([]), cut: false })
                         .expect("literal fixture fits"),
                     parameters: List::with_capacity(0),

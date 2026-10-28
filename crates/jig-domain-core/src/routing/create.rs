@@ -169,6 +169,7 @@ fn new_task(
     };
     let spec = crate::amendments::spec(
         people::Spec {
+            asks: false,
             words: member.words.clone(),
             parameters: member.parameters.clone(),
             inputs: member.inputs.clone(),

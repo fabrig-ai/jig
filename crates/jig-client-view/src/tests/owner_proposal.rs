@@ -75,7 +75,12 @@ fn state(words: &[u8], cut: bool) -> OwnerAmendmentState {
         taken_by: Some(u64::MAX),
         instructions: Some(doc(words, cut)),
         spec: SpecificationDocument {
-            specification: DocumentSpecification { words: doc(b"# supplied spec", true), parameters, inputs },
+            specification: DocumentSpecification {
+                asks: false,
+                words: doc(b"# supplied spec", true),
+                parameters,
+                inputs,
+            },
             cut: true,
         },
         authority: authority(),

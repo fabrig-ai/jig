@@ -25,7 +25,7 @@ fn goal() -> OwnerPersonProposalGoal {
         number: u64::MAX,
         project: u32::MAX,
         executor: OwnerExecutor::Agent { charter: u32::MAX },
-        spec: Specification { words: super::text(UTF8_TEXTS[0]), parameters, inputs },
+        spec: Specification { asks: false, words: super::text(UTF8_TEXTS[0]), parameters, inputs },
         contract: TaskContractDocument::Report { words: u32::MAX },
         authority: super::owner_authority().authority,
         numbers: OwnerNumbers { budget: 1, spent: 7, spent_below: 11, reserved: u64::MAX },

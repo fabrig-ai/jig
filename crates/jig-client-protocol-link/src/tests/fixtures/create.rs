@@ -20,6 +20,7 @@ pub fn new_task(executor: c::OwnerExecutor, contract: c::NewContract) -> c::NewT
         deadline: jig_client_domain::contract::NewDeadline::Named,
         executor,
         spec: c::Specification {
+            asks: false,
             words: store_text(),
             parameters: list([c::Parameter::Number { name: 5, value: 6 }]),
             inputs: list([u64::MAX]),

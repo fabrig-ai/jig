@@ -11,6 +11,8 @@ pub(crate) struct Kept {
     pub(crate) question: Option<u64>,
     /// Its requester ends it: no run's result may (5.8).
     pub(crate) open: bool,
+    /// Its immutable spec requires a requester question it has not sent.
+    pub(crate) owes: bool,
 }
 
 impl Domain {
@@ -41,9 +43,9 @@ pub(crate) fn kept(domain: &Domain, task: u64) -> Kept {
 /// Publication borrows its row mutably; closing keeps cancellation's partial result.
 pub(crate) fn for_record(row: &crate::TaskRecord) -> Kept {
     match row.phase {
-        Phase::Active(_) | Phase::Held { was: Was::Active(_), .. } => {
-            pending(&row.waiting_on, row.flags.ended_by).with_question(question(&row.questions, row.requester))
-        }
+        Phase::Active(_) | Phase::Held { was: Was::Active(_), .. } => pending(&row.waiting_on, row.flags.ended_by)
+            .with_question(question(&row.questions, row.requester))
+            .with_owing(row.spec.asks && !row.asked_requester),
         Phase::Waiting
         | Phase::Closing(_)
         | Phase::Held { was: Was::Waiting | Was::Closing(_), .. }
@@ -53,7 +55,12 @@ pub(crate) fn for_record(row: &crate::TaskRecord) -> Kept {
 
 /// The same facts for a compound request's projected dependency list.
 pub(crate) fn pending(dependencies: &[u64], ended_by: crate::EndedBy) -> Kept {
-    Kept { dependencies: !dependencies.is_empty(), question: None, open: ended_by == crate::EndedBy::Requester }
+    Kept {
+        dependencies: !dependencies.is_empty(),
+        question: None,
+        open: ended_by == crate::EndedBy::Requester,
+        owes: false,
+    }
 }
 
 pub(crate) fn question(credits: &[crate::QuestionCredit], requester: crate::Party) -> Option<u64> {
@@ -75,6 +82,10 @@ impl Kept {
         self.question = question;
         self
     }
+    pub(crate) fn with_owing(mut self, owes: bool) -> Self {
+        self.owes = owes;
+        self
+    }
     /// The task starts no run: an agent is never prepared, claimed or Due (5.7).
     pub(crate) fn blocks_claims(self) -> bool {
         self.dependencies || self.question.is_some()
@@ -82,12 +93,12 @@ impl Kept {
 
     /// A done end waits until every dependency is met: a person's answer is refused, a run's parks.
     pub(crate) fn refuses_done(self) -> bool {
-        self.blocks_claims()
+        self.blocks_claims() || self.owes
     }
 
     /// No run of it may end it, so a finish grace without a live run cancels it at once.
     pub(crate) fn finishes_alone(self) -> bool {
-        !self.blocks_claims() && !self.open
+        !self.refuses_done() && !self.open
     }
 
     /// Whether a wake may make this executor Due; a person or a procedure is never kept from its step.
@@ -126,7 +137,7 @@ impl Kept {
 
     /// A judged done end waits until every dependency is met; a failure still ends (5.7).
     pub(crate) fn parks(self, end: &End) -> bool {
-        self.blocks_claims()
+        self.refuses_done()
             && match end {
                 End::Finished { result, .. } | End::FinishedWithFollowups { result, .. } => done(result),
                 End::Exceeded(_) | End::Parked | End::Failed(_) | End::Refused | End::Recheck => false,

@@ -19,12 +19,17 @@ const NOTICE: u64 = 3;
 const ATTEMPT: u64 = 1;
 
 fn pair() -> Harness {
+    pair_with_asks(false)
+}
+
+fn pair_with_asks(asks: bool) -> Harness {
     let mut h = Harness::new();
     let mut parent = task(REQUESTER, &[]);
     parent.numbers.budget = 1000;
     parent.authority.budget.spend = 1000;
     h.make(vec![parent]);
     let mut child = task(ASKER, &[]);
+    child.spec.asks = asks;
     child.funder = Funder::Task(REQUESTER);
     child.wake.answers = false;
     h.send(Event::Make { reply_to: to(), creator: Party::Task(REQUESTER), batch: Box::new([child]) });
@@ -562,5 +567,98 @@ fn retiring_a_full_question_set_routes_one_numbered_batch_per_asker() {
     assert_eq!(row.inbox.len(), count);
     for question in questions {
         assert_eq!(row.inbox.iter().filter(|word| word.kind == MessageKind::QuestionEnded { question }).count(), 1);
+    }
+}
+
+#[test]
+fn a_task_owing_a_question_parks_on_finish_and_wakes_with_a_notice() {
+    let mut h = pair_with_asks(true);
+    park(&mut h);
+    h.restart();
+    let out = h.send(Event::QuestionOwedNotice { task: ASKER, message: NOTICE });
+    let row = h.domain.task(ASKER).unwrap();
+    assert_eq!(row.phase, Phase::Active(Active::Due));
+    assert_eq!(row.tries.run, 1);
+    assert!(row.inbox.iter().any(|word| word.kind == MessageKind::QuestionOwed));
+    assert!(out.iter().any(|request| match request {
+        Request::Activate { .. } => true,
+        _ => false,
+    }));
+}
+
+#[test]
+fn once_asked_the_owing_task_is_kept_by_its_question() {
+    let mut h = pair_with_asks(true);
+    let word = word(&h, QUESTION, Party::Task(ASKER), MessageKind::Question);
+    h.send(Event::Message { reply_to: to(), project: 1, task: REQUESTER, word });
+    h.restart();
+    park(&mut h);
+    assert!(h.domain.task(ASKER).unwrap().asked_requester);
+    assert_eq!(h.domain.task(ASKER).unwrap().phase, Phase::Active(Active::Idle));
+    assert_eq!(h.domain.task(ASKER).unwrap().questions[0].number, QUESTION);
+    assert!(!h.domain.task(ASKER).unwrap().inbox.iter().any(|word| word.kind == MessageKind::QuestionOwed));
+}
+
+#[test]
+fn an_owing_task_that_never_asks_ends_by_its_tries() {
+    let mut h = pair_with_asks(true);
+    let attempts = u64::from(h.env.limits.retries.run.retries) + 1;
+    for attempt in 1..=attempts {
+        if attempt > ATTEMPT {
+            h.send(Event::Prepare { reply_to: to(), task: ASKER });
+            h.send(Event::Claim {
+                reply_to: to(),
+                task: ASKER,
+                attempt,
+                resumed: true,
+                budget: 10,
+                account: None,
+                writes: Box::new([]),
+            });
+        }
+        h.send(Event::Activation {
+            reply_to: to(),
+            task: ASKER,
+            attempt,
+            end: End::Finished {
+                result: TaskResult::Report { words: b"plan".as_slice().into() },
+                cancel_delegates: false,
+            },
+            saved: None,
+            cause: Cause::Unpriced,
+        });
+        h.send(Event::QuestionOwedNotice { task: ASKER, message: NOTICE + attempt });
+    }
+    assert!(match h.domain.task(ASKER).unwrap().phase {
+        Phase::Closing(Closing { ending: Ending::Failed { .. }, .. }) => true,
+        _ => false,
+    });
+    assert_eq!(u64::from(h.domain.task(ASKER).unwrap().tries.run), attempts);
+}
+
+#[test]
+fn asks_cannot_be_amended() {
+    use super::revisions::amendment;
+    for (old, replacement) in [(false, true), (true, false)] {
+        let mut h = pair_with_asks(old);
+        let mut change = amendment();
+        let mut spec = h.domain.task(ASKER).unwrap().spec.clone();
+        spec.asks = replacement;
+        change.spec = Some(spec);
+        let out = h.send(Event::Amend {
+            reply_to: to(),
+            by: Party::Task(REQUESTER),
+            task: ASKER,
+            places: Box::new([]),
+            funder: None,
+            stop_run: false,
+            amendment: change,
+            message: NOTICE,
+        });
+        assert!(out.iter().any(|request| match request {
+            Request::Refused { problem, .. } => problem.why == Refusal::Spec,
+            _ => false,
+        }));
+        assert_eq!(h.domain.task(ASKER).unwrap().spec.asks, old);
     }
 }

@@ -268,6 +268,7 @@ impl Continuation {
                             release: None,
                             amendment: people::Amendment {
                                 spec: Some(people::Spec {
+                                    asks: false,
                                     words: b"party choice".as_slice().into(),
                                     parameters: Box::new([]),
                                     inputs: Box::new([]),
@@ -336,6 +337,7 @@ impl Continuation {
                                 budget: jig_domain_people::Budget::Named,
                                 executor: tasks::Executor::Agent { charter: 1 },
                                 spec: tasks::Spec {
+                                    asks: false,
                                     words: b"pool work".as_slice().into(),
                                     parameters: Box::new([tasks::Parameter::Resource {
                                         name: 1,
@@ -473,6 +475,7 @@ impl Continuation {
                                 executor: tasks::Executor::Agent { charter: 1 },
                                 llm: None,
                                 spec: tasks::Spec {
+                                    asks: false,
                                     words: b"period work".as_slice().into(),
                                     parameters: Box::new([]),
                                     inputs: Box::new([]),

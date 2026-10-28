@@ -383,6 +383,7 @@ pub fn specification(value: &d::SpecLine, limits: &w::Limits) -> Result<w::Speci
             specification: w::DocumentSpecification::new(
                 limits,
                 w::DocumentSpecificationParts {
+                    asks: value.asks,
                     words: text(&value.words, limits)?,
                     parameters,
                     inputs: value.inputs.clone(),

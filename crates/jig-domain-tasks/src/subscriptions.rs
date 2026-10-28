@@ -24,6 +24,7 @@ fn hint_of(kind: &MessageKind) -> Option<u64> {
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::Question
         | MessageKind::Answer { .. }
@@ -205,6 +206,39 @@ pub(crate) fn unsubscribe(
     out.push(Request::Done { reply_to: to });
 }
 
+fn matches_kind(kind: &MessageKind, subscription: &SubscriptionKind) -> bool {
+    match kind {
+        MessageKind::Notice { target, .. } => match subscription {
+            SubscriptionKind::Task { target: watched, .. } => target == watched,
+            SubscriptionKind::Timer { .. } | SubscriptionKind::Topic { .. } => false,
+        },
+        MessageKind::Timer { .. } => match subscription {
+            SubscriptionKind::Timer { .. } => true,
+            SubscriptionKind::Task { .. } | SubscriptionKind::Topic { .. } => false,
+        },
+        MessageKind::News { class, .. } => match subscription {
+            SubscriptionKind::Topic { .. } => *class != NewsClass::Dropped,
+            SubscriptionKind::Task { .. } | SubscriptionKind::Timer { .. } => false,
+        },
+        MessageKind::EffectNotMade { .. }
+        | MessageKind::Words
+        | MessageKind::Proposal { .. }
+        | MessageKind::Escalation { .. }
+        | MessageKind::SettingsDecision { .. }
+        | MessageKind::ProposalDecision { .. }
+        | MessageKind::FinishRequested { .. }
+        | MessageKind::Amendment { .. }
+        | MessageKind::Met { .. }
+        | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
+        | MessageKind::QuestionEnded { .. }
+        | MessageKind::Question
+        | MessageKind::Answer { .. }
+        | MessageKind::PersonStalled { .. }
+        | MessageKind::Result(_) => false,
+    }
+}
+
 pub(crate) fn notice(domain: &mut Domain, env: &Env<Limits>, number: u64, word: Word, out: &mut Queue<Request>) {
     let Some(task) = record(domain, number) else { return };
     let Some(subscription_number) = hint_of(&word.kind) else { return };
@@ -221,35 +255,7 @@ pub(crate) fn notice(domain: &mut Domain, env: &Env<Limits>, number: u64, word: 
             Subscription { number: 0, kind: SubscriptionKind::Topic { connector: 0, topic: 0 } }
         }
     };
-    let matching = match word.kind {
-        MessageKind::Notice { target, .. } => match subscription.kind {
-            SubscriptionKind::Task { target: watched, .. } => target == watched,
-            SubscriptionKind::Timer { .. } | SubscriptionKind::Topic { .. } => false,
-        },
-        MessageKind::Timer { .. } => match subscription.kind {
-            SubscriptionKind::Timer { .. } => true,
-            SubscriptionKind::Task { .. } | SubscriptionKind::Topic { .. } => false,
-        },
-        MessageKind::News { class, .. } => match subscription.kind {
-            SubscriptionKind::Topic { .. } => class != NewsClass::Dropped,
-            SubscriptionKind::Task { .. } | SubscriptionKind::Timer { .. } => false,
-        },
-        MessageKind::EffectNotMade { .. }
-        | MessageKind::Words
-        | MessageKind::Proposal { .. }
-        | MessageKind::Escalation { .. }
-        | MessageKind::SettingsDecision { .. }
-        | MessageKind::ProposalDecision { .. }
-        | MessageKind::FinishRequested { .. }
-        | MessageKind::Amendment { .. }
-        | MessageKind::Met { .. }
-        | MessageKind::QuestionAnswered { .. }
-        | MessageKind::QuestionEnded { .. }
-        | MessageKind::Question
-        | MessageKind::Answer { .. }
-        | MessageKind::PersonStalled { .. }
-        | MessageKind::Result(_) => false,
-    };
+    let matching = matches_kind(&word.kind, &subscription.kind);
     if !matching
         || word.number == 0
         || word.number <= task.last_message

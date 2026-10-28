@@ -202,7 +202,12 @@ fn append_notice(
         hits: 1,
         eligible: true,
     };
-    let prepared = crate::inbox::prepare(domain, &env.limits, task, word, crate::inbox::Admission::RoomKept)
+    let admission = if word.kind == MessageKind::QuestionOwed {
+        crate::inbox::Admission::Merged
+    } else {
+        crate::inbox::Admission::RoomKept
+    };
+    let prepared = crate::inbox::prepare(domain, &env.limits, task, word, admission)
         .expect("question reserved its terminal notice");
     let row = task_mut(domain, task).expect("notice owner live");
     row.record.last_message = message;
@@ -282,4 +287,13 @@ pub(crate) fn flush(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Requ
             out.push(Request::QuestionEndedDue { task, questions: questions.into_boxed() });
         }
     }
+}
+
+/// A root-numbered obligation reminder wakes a prematurely done run without losing its tries.
+pub(crate) fn owed(domain: &mut Domain, env: &Env<Limits>, task: u64, message: u64, out: &mut Queue<Request>) {
+    let Some(row) = record(domain, task) else { return };
+    if !row.spec.asks || row.asked_requester || row.phase != crate::Phase::Active(crate::Active::Idle) {
+        return;
+    }
+    notice_word(domain, env, task, message, MessageKind::QuestionOwed, out);
 }

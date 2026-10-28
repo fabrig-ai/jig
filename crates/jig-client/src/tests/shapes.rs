@@ -28,7 +28,12 @@ fn chat_fills_the_chat_template_into_one_as_allowed_task() {
     assert_eq!(task.executor, OwnerExecutor::Agent { charter: 1 });
     assert_eq!(
         task.spec,
-        Specification { words: words(), parameters: List::with_capacity(0), inputs: List::with_capacity(0) }
+        Specification {
+            asks: false,
+            words: words(),
+            parameters: List::with_capacity(0),
+            inputs: List::with_capacity(0)
+        }
     );
     assert_eq!(task.contract, NewContract::Report { words: 32 });
     assert_eq!(task.budget, NewBudget::AsAllowed { cap: None });

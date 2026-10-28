@@ -44,6 +44,7 @@ pub(crate) fn value() -> OwnerPersonTask {
         requester: OwnerRequester::Deployment { project: u32::MAX },
         spec: SpecificationDocument {
             specification: DocumentSpecification {
+                asks: false,
                 words: doc(b"spec"),
                 parameters: List::with_capacity(2),
                 inputs: List::with_capacity(3),

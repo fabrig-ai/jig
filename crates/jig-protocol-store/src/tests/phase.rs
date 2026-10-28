@@ -1963,5 +1963,12 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // page byte and join; removing the codec limit returns eight inline bytes.
     let limits = fixtures::store_limits();
     let packed_saving = 64 * (u64::from(limits.store.page.bytes) + u64::from(limits.joins)) + 8;
-    assert_eq!(crate::worst_case(&limits), Some(581_545_605_062_293 + settings_refusal_limit - packed_saving));
+    // Spec::asks and TaskRecord::asked_requester add two stored bytes and
+    // widen the aligned generated/native row carriers in the reserved page
+    // and join copies: another 4,563,689,984 at these same limits.
+    let owing_question = 4_563_689_984;
+    assert_eq!(
+        crate::worst_case(&limits),
+        Some(581_545_605_062_293 + settings_refusal_limit - packed_saving + owing_question)
+    );
 }

@@ -17,7 +17,7 @@ record NumericParameter { name: u32 value: u64 }
 record BytesParameter { name: u32 value: bytes 65536 }
 record ResourceParameter { name: u32 connector: u16 resource: u64 }
 enum Parameter { number: NumericParameter, bytes: BytesParameter, resource: ResourceParameter }
-record Spec { words: bytes 65536 parameters: list 64 Parameter inputs: list 64 Number }
+record Spec { words: bytes 65536 parameters: list 64 Parameter inputs: list 64 Number asks: bool }
 enum PartKind { resource, pool, result, procedure, effect, outbox, hold }
 record PartSegment { bytes: bytes 4096 }
 record PartPath { segments: list 64 PartSegment }
@@ -195,7 +195,7 @@ record TimerMessage { subscription: u64 }
 record NewsMessage { subscription: u64 class: NewsClass }
 record ResultMessage { kind: ResultKind }
 record MetMessage { dependency: u64 removed: bool }
-enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage, settings_decision: SettingsDecisionMessage, question_answered: AnswerMessage, question_ended: AnswerMessage }
+enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage, settings_decision: SettingsDecisionMessage, question_answered: AnswerMessage, question_ended: AnswerMessage, question_owed }
 record Word { number: u64 from: Party kind: MessageKind words: bytes 65536 at: u64 hits: u32 eligible: bool }
 record FailedEnd { class: Class }
 enum EndKind { parked, finished, cancelled, failed: FailedEnd, refused }
@@ -330,7 +330,7 @@ record TaskOutcome {
     refusals: u32
     phase: Phase
 }
-record TaskRecord { history: TaskHistory run: TaskRun definition: TaskDefinition interests: TaskInterests outcome: TaskOutcome }
+record TaskRecord { history: TaskHistory run: TaskRun definition: TaskDefinition interests: TaskInterests outcome: TaskOutcome asked_requester: bool }
 record EndedByParty { party: u64 label: u32 ended_at: u64 task: u64 }
 record EndedByProject { project: u32 label: u32 ended_at: u64 task: u64 }
 enum HoldOwner { party: Person, task: Number }

@@ -155,6 +155,7 @@ pub fn specification(value: &documents::SpecLine, limits: &Limits) -> Result<cli
     })?;
     Ok(client::SpecificationDocument {
         specification: client::DocumentSpecification {
+            asks: false,
             words: text(&value.words, limits)?,
             parameters,
             inputs: list(&value.inputs, limits, |number| Ok(*number))?,
@@ -613,6 +614,7 @@ pub(super) mod tests {
         inputs.push(u64::MAX).expect("the complete supplied fixture is admitted");
         inputs.push(0).expect("the complete supplied fixture is admitted");
         let value = documents::SpecLine {
+            asks: false,
             words: documents::Text { bytes: b"a/b".as_slice().into(), cut: false },
             parameters,
             inputs,
@@ -639,6 +641,7 @@ pub(super) mod tests {
 
     fn value_source() -> documents::SpecLine {
         documents::SpecLine {
+            asks: false,
             words: documents::Text { bytes: b"a/b".as_slice().into(), cut: true },
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

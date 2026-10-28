@@ -229,6 +229,7 @@ pub fn refused(value: &client::Ask, models: &[jig_domain_core::Model]) -> Result
 
 fn specification(value: &client::Specification) -> people::Spec {
     people::Spec {
+        asks: false,
         words: Box::from(value.words.bytes()),
         parameters: value
             .parameters
@@ -474,6 +475,7 @@ mod tests {
         client::NewTask {
             executor: client::OwnerExecutor::Agent { charter: 1 },
             spec: client::Specification {
+                asks: false,
                 words: text(b"task"),
                 parameters: List::with_capacity(0),
                 inputs: List::with_capacity(0),
@@ -666,7 +668,7 @@ mod tests {
         let mut inputs = List::with_capacity(5);
         inputs.push(u64::MAX).expect("room");
         inputs.push(0).expect("room");
-        let selected = client::Specification { words: text(b""), parameters, inputs: inputs.clone() };
+        let selected = client::Specification { asks: false, words: text(b""), parameters, inputs: inputs.clone() };
         let source = super::super::owner::tests::amendment_source();
         let limits =
             jig_client::DomainLimits { rows: 4, text: 128, turn_text: 128, ..crate::test::limits().client.domain };

@@ -184,7 +184,15 @@ fn spec(value: &Value) -> Result<tasks::Spec, Problem> {
         Some(items) => numbers(items)?,
         None => Box::new([]),
     };
-    Ok(tasks::Spec { words, parameters, inputs })
+    Ok(tasks::Spec {
+        asks: match value.field(b"asks")? {
+            Some(value) => value.boolean()?,
+            None => false,
+        },
+        words,
+        parameters,
+        inputs,
+    })
 }
 
 fn contract(value: &Value) -> Result<tasks::Contract, Problem> {

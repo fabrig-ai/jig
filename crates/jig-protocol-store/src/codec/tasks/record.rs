@@ -307,6 +307,7 @@ pub fn task_record(
     wire::TaskRecord::new(
         limits,
         wire::TaskRecordParts {
+            asked_requester: source.asked_requester,
             history: task_history(source, limits)?,
             run: task_run(source, limits, moved)?,
             definition: task_definition(source, limits, moved)?,
@@ -445,7 +446,7 @@ fn task_outcome(source: &domain::TaskRecord, limits: &wire::Limits) -> Result<wi
 }
 /// Read every retained task field.
 pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Result<domain::TaskRecord, wire::Problem> {
-    let wire::TaskRecordParts { history, run, definition, interests, outcome } = source.into_parts();
+    let wire::TaskRecordParts { history, run, definition, interests, outcome, asked_requester } = source.into_parts();
     let history = history.into_parts();
     let run = run.into_parts();
     let definition = definition.into_parts();
@@ -453,6 +454,7 @@ pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Resu
     let outcome = outcome.into_parts();
     let Inbox { words: inbox, credits: questions } = read_inbox(interests.inbox, limits)?;
     Ok(domain::TaskRecord {
+        asked_requester,
         label: definition.label,
         flags: phase::read_flags(definition.flags),
         last_activity: Wall::from_nanos(history.last_activity),

@@ -274,6 +274,7 @@ pub(crate) fn chat_request(project: u32, words: Text) -> jig_client::contract::A
             deadline: NewDeadline::Named,
             executor: OwnerExecutor::Agent { charter: 1 },
             spec: Specification {
+                asks: false,
                 words,
                 parameters: skein_lib::List::with_capacity(0),
                 inputs: skein_lib::List::with_capacity(0),
@@ -308,6 +309,7 @@ pub(crate) fn goal_request(form: crate::page::project::goals::GoalForm, words: T
             deadline: NewDeadline::Named,
             executor: form.executor,
             spec: Specification {
+                asks: false,
                 words,
                 parameters: skein_lib::List::with_capacity(0),
                 inputs: skein_lib::List::with_capacity(0),

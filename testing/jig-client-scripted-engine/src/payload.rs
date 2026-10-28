@@ -1338,7 +1338,7 @@ impl Payload for HoldFailure {
     }
 }
 
-fields!(Specification { words, parameters, inputs });
+fields!(Specification { words, parameters, inputs, asks });
 fields!(SpecificationDocument { specification, cut });
 impl Payload for Parameter {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
@@ -1353,7 +1353,7 @@ impl Payload for Parameter {
 }
 
 fields!(DocumentText { bytes, cut });
-fields!(DocumentSpecification { words, parameters, inputs });
+fields!(DocumentSpecification { words, parameters, inputs, asks });
 impl Payload for ParameterDocument {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
         match self {

@@ -52,3 +52,12 @@ fn a_settings_outcome_reads_its_revision_or_stale_newest_and_rejection_words() {
         );
     }
 }
+
+#[test]
+fn an_owing_notice_tells_the_run_to_ask_its_requester() {
+    let word = fixtures::word(MessageKind::QuestionOwed);
+    assert_eq!(
+        crate::words(&word).as_ref(),
+        b"You owe your requester a question: ask your plan with message, as a question, and wait."
+    );
+}

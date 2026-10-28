@@ -100,7 +100,12 @@ fn a_step_naming_a_moved_revision_is_refused_and_told_what_it_is_now() {
         addressed: None,
         instructions: None,
         release: None,
-        spec: Some(tasks::Spec { words: b"moved".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
+        spec: Some(tasks::Spec {
+            asks: false,
+            words: b"moved".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        }),
         wake: None,
         dependencies: None,
         authority: None,
@@ -187,7 +192,12 @@ fn a_procedure_steps_again_after_its_amendment_is_refused_as_moved() {
     let child = live_row(&world, procedure).delegates[0];
     let run = world.assignments[0];
     let amendment = tasks::Amendment {
-        spec: Some(tasks::Spec { words: b"moved".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
+        spec: Some(tasks::Spec {
+            asks: false,
+            words: b"moved".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        }),
         tracked: None,
         addressed: None,
         instructions: None,
@@ -357,6 +367,7 @@ fn move_delegate(world: &mut World, child: u64) {
             amendment: tasks::Amendment {
                 tracked: Some(tasks::Tracking::Tracked { priority: 1 }),
                 spec: Some(tasks::Spec {
+                    asks: false,
                     words: b"new spec".as_slice().into(),
                     parameters: Box::new([]),
                     inputs: Box::new([]),

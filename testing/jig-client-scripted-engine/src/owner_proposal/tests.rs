@@ -29,6 +29,7 @@ fn state() -> OwnerAmendmentState {
         instructions: Some(doc(b"12345678")),
         spec: SpecificationDocument {
             specification: DocumentSpecification {
+                asks: false,
                 words: doc(b"abcdefgh"),
                 parameters,
                 inputs: List::with_capacity(3),

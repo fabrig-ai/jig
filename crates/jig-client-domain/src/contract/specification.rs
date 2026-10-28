@@ -8,6 +8,7 @@ pub struct Specification {
     pub words: Text,
     pub parameters: List<Parameter>,
     pub inputs: List<u64>,
+    pub asks: bool,
 }
 
 /// A supplied specification and its owner's explicit loss marker.
@@ -31,6 +32,7 @@ pub struct DocumentSpecification {
     pub words: DocumentText,
     pub parameters: List<ParameterDocument>,
     pub inputs: List<u64>,
+    pub asks: bool,
 }
 /// A document parameter; only a byte value has a text loss fact.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -59,6 +61,7 @@ impl SpecificationDocument {
         }
         Self {
             specification: DocumentSpecification {
+                asks: specification.asks,
                 words: DocumentText::complete(specification.words),
                 parameters,
                 inputs: specification.inputs,
@@ -101,6 +104,7 @@ impl SpecificationDocument {
                 .expect("same supplied parameter capacity");
         }
         Some(Specification {
+            asks: self.specification.asks,
             words: self.specification.words.whole()?,
             parameters,
             inputs: self.specification.inputs.clone(),

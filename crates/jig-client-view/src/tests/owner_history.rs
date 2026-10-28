@@ -56,7 +56,7 @@ pub(super) fn state() -> OwnerAmendmentState {
         taken_by: Some(u64::MAX),
         instructions: Some(doc(b"stored", false)),
         spec: SpecificationDocument {
-            specification: DocumentSpecification { words: doc(b"spec", false), parameters, inputs },
+            specification: DocumentSpecification { asks: false, words: doc(b"spec", false), parameters, inputs },
             cut: false,
         },
         authority: OwnerAuthorityDocument {

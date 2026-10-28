@@ -132,7 +132,12 @@ pub(crate) fn wire_specification(value: &c::Specification, limits: &w::Limits) -
     }
     w::Specification::new(
         limits,
-        w::SpecificationParts { words: bytes::copy_of(value.words.bytes()), parameters: list0, inputs: list1 },
+        w::SpecificationParts {
+            asks: value.asks,
+            words: bytes::copy_of(value.words.bytes()),
+            parameters: list0,
+            inputs: list1,
+        },
     )
 }
 

@@ -661,6 +661,7 @@ fn approval_confirmation_keeps_the_whole_state_and_actual_optional_explanation()
 
 fn specification(words: Text) -> SpecificationDocument {
     SpecificationDocument::complete(Specification {
+        asks: false,
         words,
         parameters: List::with_capacity(0),
         inputs: List::with_capacity(0),

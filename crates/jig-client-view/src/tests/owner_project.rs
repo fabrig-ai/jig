@@ -97,6 +97,7 @@ fn template(number: u64) -> ProposedTask {
         number,
         spec: SpecificationDocument {
             specification: DocumentSpecification {
+                asks: false,
                 words: doc(b"full template source", true),
                 parameters: list(4, [ParameterDocument::Bytes { name: u32::MAX, value: doc(UTF8_TEXTS[3], true) }]),
                 inputs: list(4, [u64::MAX, 0]),

@@ -6,6 +6,11 @@ use skein_lib::{Decimal, Writer};
 /// Render one message with its label and any revision needed for a decision.
 #[must_use]
 pub fn words(word: &tasks::Word) -> Box<[u8]> {
+    if word.kind == tasks::MessageKind::QuestionOwed {
+        return Box::from(
+            b"You owe your requester a question: ask your plan with message, as a question, and wait.".as_slice(),
+        );
+    }
     let (label, number) = match word.kind {
         tasks::MessageKind::Result(_) => (
             b"Result from task ".as_slice(),
@@ -31,7 +36,8 @@ pub fn words(word: &tasks::Word) -> Box<[u8]> {
         tasks::MessageKind::Notice { target, state: tasks::NoticeState::Held { revision }, .. } => {
             return held(b"Task ", target, revision, &word.words);
         }
-        tasks::MessageKind::Words
+        tasks::MessageKind::QuestionOwed
+        | tasks::MessageKind::Words
         | tasks::MessageKind::Question
         | tasks::MessageKind::Answer { .. }
         | tasks::MessageKind::Notice { .. }

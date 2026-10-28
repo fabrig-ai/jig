@@ -508,6 +508,7 @@ pub(super) fn named_action(
                 | tasks::MessageKind::Words
                 | tasks::MessageKind::Question
                 | tasks::MessageKind::QuestionAnswered { .. }
+                | tasks::MessageKind::QuestionOwed
                 | tasks::MessageKind::QuestionEnded { .. }
                 | tasks::MessageKind::Proposal { .. }
                 | tasks::MessageKind::Escalation { .. }

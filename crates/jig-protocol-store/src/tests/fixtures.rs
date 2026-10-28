@@ -177,6 +177,7 @@ pub fn task_authority() -> jig_domain_tasks::Authority {
 pub fn task_spec() -> jig_domain_tasks::Spec {
     use jig_domain_tasks::{Parameter, Spec};
     Spec {
+        asks: false,
         words: Box::from(b"spec".as_slice()),
         parameters: Box::new([
             Parameter::Number { name: 1, value: u64::MAX },
@@ -462,6 +463,7 @@ pub fn people_amendment() -> people::Amendment {
         addressed: Some(people::AddressChange { revision: 7, address: people::PersonAddress::Role(4) }),
         instructions: Some(Box::new([0, 255])),
         spec: Some(people::Spec {
+            asks: false,
             words: Box::new([1]),
             parameters: Box::new([
                 people::Parameter::Number { name: 3, value: 8 },

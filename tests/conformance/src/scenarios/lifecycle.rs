@@ -53,7 +53,7 @@ fn delegate(world: &mut World) {
         tracked: None,
         budget: jig_domain_people::Budget::Named,
         executor: tasks::Executor::Agent { charter: 1 },
-        spec: tasks::Spec { words: words.into(), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: tasks::Spec { asks: false, words: words.into(), parameters: Box::new([]), inputs: Box::new([]) },
         contract: tasks::Contract::Report { words: 128 },
         authority: authority.clone(),
         llm: None,

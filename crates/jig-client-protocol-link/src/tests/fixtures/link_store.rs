@@ -12,7 +12,12 @@ pub fn table_record(ask: c::Ask) -> RequestRecord<jig_client_domain::Held> {
     }
 }
 fn specification() -> c::Specification {
-    c::Specification { words: store_text(), parameters: List::with_capacity(0), inputs: List::with_capacity(0) }
+    c::Specification {
+        asks: false,
+        words: store_text(),
+        parameters: List::with_capacity(0),
+        inputs: List::with_capacity(0),
+    }
 }
 fn amendment() -> c::Amendment {
     c::Amendment {

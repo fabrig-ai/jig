@@ -286,7 +286,12 @@ fn an_earlier_compound_amendment_sets_the_next_spec_revision() {
         revision,
         release: None,
         amendment: Box::new(people::Amendment {
-            spec: Some(people::Spec { words: words.into(), parameters: Box::new([]), inputs: Box::new([]) }),
+            spec: Some(people::Spec {
+                asks: false,
+                words: words.into(),
+                parameters: Box::new([]),
+                inputs: Box::new([]),
+            }),
             ..person_unchanged(b"edit")
         }),
     };

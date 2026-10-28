@@ -59,6 +59,7 @@ fn result(value: &tasks::ResultKind, limits: &Limits) -> Result<client::OwnerWor
 /// Refuses mismatched source identities, invalid whole message metadata, archive decoding failures or a complete payload above the receiving bounds.
 pub fn kind(value: &tasks::MessageKind, limits: &Limits) -> Result<client::OwnerMessageKind, owner::Invalid> {
     Ok(match value {
+        tasks::MessageKind::QuestionOwed => client::OwnerMessageKind::QuestionOwed,
         tasks::MessageKind::Escalation { task, revision } => {
             client::OwnerMessageKind::Escalation { task: *task, revision: *revision }
         }

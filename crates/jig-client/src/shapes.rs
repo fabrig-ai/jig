@@ -211,7 +211,7 @@ fn fill(
     Ok(NewTask {
         deadline,
         executor,
-        spec: Specification { words, parameters: List::with_capacity(0), inputs: List::with_capacity(0) },
+        spec: Specification { asks: false, words, parameters: List::with_capacity(0), inputs: List::with_capacity(0) },
         contract,
         authority,
         budget,

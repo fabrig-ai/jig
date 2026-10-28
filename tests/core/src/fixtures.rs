@@ -140,7 +140,7 @@ pub fn member(world: &crate::effects::World, executor: tasks::Executor, words: &
         tracked: None,
         budget: jig_domain_people::Budget::Named,
         executor,
-        spec: tasks::Spec { words: words.into(), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: tasks::Spec { asks: false, words: words.into(), parameters: Box::new([]), inputs: Box::new([]) },
         contract: tasks::Contract::Report { words: 128 },
         authority,
         llm: None,

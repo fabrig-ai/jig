@@ -54,11 +54,21 @@ fn a_refused_operation_leaves_the_operations_before_it_unmade() {
 fn a_compound_makes_its_operations_in_order_in_one_step() {
     let mut test = chat::cohort();
     let first = Amendment {
-        spec: Some(Spec { words: b"first".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
+        spec: Some(Spec {
+            asks: false,
+            words: b"first".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        }),
         ..amendment()
     };
     let second = Amendment {
-        spec: Some(Spec { words: b"second".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
+        spec: Some(Spec {
+            asks: false,
+            words: b"second".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        }),
         ..amendment()
     };
     compound(
@@ -106,7 +116,12 @@ fn an_amendment_then_a_release_of_one_held_task_are_made_together() {
     let mut test = chat::cohort();
     test.send(place(FIRST, REQUESTER, REQUESTER));
     let change = Amendment {
-        spec: Some(Spec { words: b"changed".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) }),
+        spec: Some(Spec {
+            asks: false,
+            words: b"changed".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        }),
         ..amendment()
     };
     compound(

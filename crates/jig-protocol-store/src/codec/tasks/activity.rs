@@ -137,6 +137,7 @@ pub fn message_kind(source: &domain::MessageKind, limits: &wire::Limits) -> Resu
         domain::MessageKind::QuestionAnswered { question } => wire::MessageKind::QuestionAnswered(
             wire::AnswerMessage::new(limits, wire::AnswerMessageParts { question: *question })?,
         ),
+        domain::MessageKind::QuestionOwed => wire::MessageKind::QuestionOwed,
         domain::MessageKind::QuestionEnded { question } => wire::MessageKind::QuestionEnded(wire::AnswerMessage::new(
             limits,
             wire::AnswerMessageParts { question: *question },
@@ -218,6 +219,7 @@ pub fn read_message_kind(
         wire::MessageKind::QuestionAnswered(source) => {
             domain::MessageKind::QuestionAnswered { question: source.question() }
         }
+        wire::MessageKind::QuestionOwed => domain::MessageKind::QuestionOwed,
         wire::MessageKind::QuestionEnded(source) => domain::MessageKind::QuestionEnded { question: source.question() },
         wire::MessageKind::Words => domain::MessageKind::Words,
         wire::MessageKind::EffectNotMade(source) => {

@@ -711,6 +711,7 @@ fn object(
                     | tasks::MessageKind::EffectNotMade { .. }
                     | tasks::MessageKind::Met { .. }
                     | tasks::MessageKind::QuestionAnswered { .. }
+                    | tasks::MessageKind::QuestionOwed
                     | tasks::MessageKind::QuestionEnded { .. }
                     | tasks::MessageKind::FinishRequested { .. }
                     | tasks::MessageKind::Amendment { .. }

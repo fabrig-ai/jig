@@ -720,7 +720,9 @@ fn configured_read_room_and_frame_capacity_are_measured_separately() {
     let sets = super::frame_patches::SETS;
     let capacity = crate::transcripts::patches::capacity(&sets.sets[0], 0, &limits).expect("body capacity");
     assert_eq!(u64::from(capacity.bytes) + 12, MAX_FRAME);
-    for (limits, page) in [(jig_store_world::root::limits(), 330_532), (jig_store_world::patches::limits(), 2_048)] {
+    // The fixture derives its row page from its task carriers; asks widens
+    // eight reserved carriers by eight bytes, adding 64 without a limit edit.
+    for (limits, page) in [(jig_store_world::root::limits(), 330_596), (jig_store_world::patches::limits(), 2_048)] {
         assert_eq!(limits.core.resume_bytes, 256);
         assert_eq!(limits.store.page.bytes, page);
         let room = u64::from(limits.core.resume_bytes).min(u64::from(page));

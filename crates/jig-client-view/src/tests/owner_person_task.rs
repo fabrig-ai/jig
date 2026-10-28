@@ -69,6 +69,7 @@ fn value() -> OwnerPersonTask {
         requester: OwnerRequester::Deployment { project: u32::MAX },
         spec: SpecificationDocument {
             specification: DocumentSpecification {
+                asks: false,
                 words: doc(b"question bytes"),
                 parameters: rows([ParameterDocument::Bytes { name: u32::MAX, value: doc(UTF8_TEXTS[0]) }]),
                 inputs: rows([u64::MAX]),

@@ -68,7 +68,12 @@ fn fixture_with_delegates() -> (World, root::Config, u64, [u64; 2]) {
         tracked: None,
         budget: jig_domain_people::Budget::Named,
         executor: tasks::Executor::Agent { charter: 1 },
-        spec: tasks::Spec { words: Box::from(&b"delegate"[..]), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: tasks::Spec {
+            asks: false,
+            words: Box::from(&b"delegate"[..]),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        },
         contract: tasks::Contract::Report { words: 128 },
         authority,
         llm: None,

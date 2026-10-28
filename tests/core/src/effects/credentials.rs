@@ -36,6 +36,7 @@ impl World {
                 budget: jig_domain_people::Budget::Named,
                 executor: tasks::Executor::Agent { charter: 1 },
                 spec: tasks::Spec {
+                    asks: false,
                     words: b"work on the resource".as_slice().into(),
                     parameters: Box::new([tasks::Parameter::Resource { name: 1, connector: 1, resource }]),
                     inputs: Box::new([]),

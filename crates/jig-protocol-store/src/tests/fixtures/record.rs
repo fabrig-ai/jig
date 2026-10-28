@@ -17,6 +17,7 @@ pub fn task_record() -> jig_domain_tasks::TaskRecord {
     use skein_lib::{Duration, Wall};
     let new = task_creation(17);
     task::TaskRecord {
+        asked_requester: false,
         placed: None,
         settings: task::SettingsRevision { task: 3, run: Some(2) },
         added: Box::new([]),

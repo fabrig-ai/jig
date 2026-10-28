@@ -106,7 +106,7 @@ fn delegate_agent(world: &mut World, words: &[u8], spend: u64, tasks_left: u32, 
             tracked: None,
             budget: jig_domain_people::Budget::Named,
             executor: tasks::Executor::Agent { charter: 1 },
-            spec: tasks::Spec { words: Box::from(words), parameters: Box::new([]), inputs: Box::new([]) },
+            spec: tasks::Spec { asks: false, words: Box::from(words), parameters: Box::new([]), inputs: Box::new([]) },
             contract: tasks::Contract::Report { words: 128 },
             authority,
             llm: None,
@@ -359,6 +359,7 @@ fn untracked_world(seed: u64) -> (World, root::Config, u64) {
             amendment: people::Amendment {
                 tracked: Some(people::Tracking::Untracked),
                 spec: Some(people::Spec {
+                    asks: false,
                     words: b"last goal state".as_slice().into(),
                     parameters: Box::new([]),
                     inputs: Box::new([]),

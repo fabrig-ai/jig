@@ -568,6 +568,7 @@ fn make_task_ended_by(core: &mut Core, limits: &Limits, number: u64, ended_by: t
         executor: tasks::Executor::Agent { charter: 1 },
         llm: None,
         spec: tasks::Spec {
+            asks: false,
             words: b"A task title\nThe specification".as_slice().into(),
             parameters: Box::new([]),
             inputs: Box::new([]),
@@ -821,6 +822,7 @@ fn new_row(core: &Core, number: u64, funder: tasks::Funder, tracked: Option<u32>
         executor: tasks::Executor::Agent { charter: 1 },
         llm: None,
         spec: tasks::Spec {
+            asks: false,
             words: b"Work\nDetailed instructions".as_slice().into(),
             parameters: Box::new([]),
             inputs: Box::new([]),

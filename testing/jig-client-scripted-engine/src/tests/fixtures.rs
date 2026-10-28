@@ -69,7 +69,7 @@ pub(super) fn new_task(words: Text) -> NewTask {
         llm: None,
         deadline: jig_client_domain::contract::NewDeadline::Named,
         executor: OwnerExecutor::Agent { charter: 1 },
-        spec: Specification { words, parameters: list(vec![]), inputs: list(vec![]) },
+        spec: Specification { asks: false, words, parameters: list(vec![]), inputs: list(vec![]) },
         contract: NewContract::Report { words: 128 },
         authority: owner_authority().authority,
         budget: NewBudget::Named,

@@ -29,6 +29,7 @@ fn category(kind: &MessageKind) -> u8 {
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
@@ -55,6 +56,7 @@ fn rule(domain: &Domain, number: u64, word: &Word) -> WakeRule {
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
@@ -181,6 +183,7 @@ pub(crate) fn after_message(
             | MessageKind::Amendment { .. }
             | MessageKind::Met { .. }
             | MessageKind::QuestionAnswered { .. }
+            | MessageKind::QuestionOwed
             | MessageKind::QuestionEnded { .. }
             | MessageKind::SettingsDecision { .. }
             | MessageKind::ProposalDecision { .. }

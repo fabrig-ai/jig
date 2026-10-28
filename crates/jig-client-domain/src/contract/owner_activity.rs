@@ -54,6 +54,7 @@ pub struct OwnerWord {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerMessageKind {
+    QuestionOwed,
     SettingsDecision {
         proposal: u64,
         outcome: SettingsOutcome,

@@ -1456,6 +1456,7 @@ fn bounded_goal_keeps_every_supplied_policy_recipient_in_order() {
 
 fn specification(words: Text) -> SpecificationDocument {
     SpecificationDocument::complete(Specification {
+        asks: false,
         words,
         parameters: List::with_capacity(0),
         inputs: List::with_capacity(0),

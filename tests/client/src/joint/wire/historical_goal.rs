@@ -75,6 +75,7 @@ fn authority(
 }
 fn spec(value: &tasks::Spec, limits: &Limits) -> Result<client::Specification, owner::Invalid> {
     Ok(client::Specification {
+        asks: false,
         words: text(&value.words, limits)?,
         parameters: list(&value.parameters, limits, |value| {
             Ok(match value {

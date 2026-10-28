@@ -16,6 +16,7 @@ fn task() -> c::NewTask {
         deadline: jig_client_domain::contract::NewDeadline::Named,
         executor: c::OwnerExecutor::Person(c::PersonAddress::Role(PERSON_ROLE)),
         spec: c::Specification {
+            asks: false,
             words: c::Text::new(b"Forged".as_slice().into(), SPEC_WORDS).expect("bounded specification"),
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

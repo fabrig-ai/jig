@@ -50,6 +50,7 @@ impl Protocol {
                     budget: jig_domain_people::Budget::Named,
                     executor: tasks::Executor::Agent { charter: 1 },
                     spec: tasks::Spec {
+                        asks: false,
                         words: b"live delegate".as_slice().into(),
                         parameters: Box::new([]),
                         inputs: Box::new([]),

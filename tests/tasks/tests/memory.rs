@@ -667,6 +667,10 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     // Three retained/scratch copies per live task, four per compound member
     // and one shared copy preserve the existing row-copy accounting.
     const QUESTION_RAILS_BYTES: u64 = 8 * (48 - 16) * (16 * 3 + 16 * 4 + 1);
+    // Spec::asks widens the Spec and TaskRecord carriers by eight bytes;
+    // the asked-requester latch fits the latter alignment. Their retained,
+    // compound and routed copies add 13,384 bytes at these unchanged limits.
+    const OWING_QUESTION_BYTES: u64 = 13_384;
     // One dirty set and its draining copy, one per-task continuation map,
     // and eight retired question identifiers per task.
     let question_batches = 2 * skein_lib::List::<u64>::worst_case(16).expect("bounded dirty set")
@@ -689,6 +693,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_MOVES_BYTES
                 + PLACED_HOLDS_BYTES
                 + QUESTION_RAILS_BYTES
+                + OWING_QUESTION_BYTES
                 + question_batches
         )
     );

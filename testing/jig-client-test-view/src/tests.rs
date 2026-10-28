@@ -238,6 +238,7 @@ fn task() -> Task {
         requester: OwnerRequester::Person(7),
         lineage: list([]),
         spec: SpecificationDocument::complete(Specification {
+            asks: false,
             words: text(b"spec"),
             parameters: list([]),
             inputs: list([]),

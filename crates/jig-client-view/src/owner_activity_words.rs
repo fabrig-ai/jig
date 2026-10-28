@@ -118,10 +118,11 @@ pub enum ActivityPhrase {
     ResultCancelled,
     QuestionAnswered,
     QuestionEnded,
+    QuestionOwed,
     KeptQuestion,
 }
-// The original 107 activity phrases plus three question-rail captions.
-pub const ALL: [ActivityPhrase; 110] = [
+// The original 107 activity phrases plus three question-rail captions and one owing-question caption.
+pub const ALL: [ActivityPhrase; 111] = [
     ActivityPhrase::Activity,
     ActivityPhrase::Task,
     ActivityPhrase::Position,
@@ -231,6 +232,7 @@ pub const ALL: [ActivityPhrase; 110] = [
     ActivityPhrase::ResultCancelled,
     ActivityPhrase::QuestionAnswered,
     ActivityPhrase::QuestionEnded,
+    ActivityPhrase::QuestionOwed,
     ActivityPhrase::KeptQuestion,
 ];
 impl ActivityPhrase {
@@ -350,6 +352,7 @@ impl ActivityPhrase {
             Self::ResultCancelled => 7303,
             Self::QuestionAnswered => 7307,
             Self::QuestionEnded => 7308,
+            Self::QuestionOwed => 7310,
             Self::KeptQuestion => 7309,
         };
         PhraseId { owner: Owner::Jig.opaque(), number }
@@ -432,7 +435,8 @@ impl ActivityPhrase {
             | Self::FieldValue
             | Self::Change
             | Self::ResultFailed
-            | Self::ResultCancelled => None,
+            | Self::ResultCancelled
+            | Self::QuestionOwed => None,
             Self::Task
             | Self::Position
             | Self::Message
@@ -584,6 +588,7 @@ impl ActivityPhrase {
             Self::ResultCancelled => b"Result: cancelled",
             Self::QuestionAnswered => b"Person answered question in inbox: ",
             Self::QuestionEnded => b"Question ended unanswered: ",
+            Self::QuestionOwed => b"Owes a question: ask your requester",
             Self::KeptQuestion => b"Kept by question: ",
         }
     }

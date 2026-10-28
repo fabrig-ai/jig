@@ -284,6 +284,7 @@ pub fn header(commits: u64) -> core::Record {
 #[must_use]
 pub fn live_task(number: u64) -> core::Record {
     core::Record::Tasks(tasks::Stored::Live(Box::new(tasks::TaskRecord {
+        asked_requester: false,
         placed: None,
         settings: tasks::SettingsRevision { task: 1, run: None },
         added: Box::new([]),
@@ -332,6 +333,7 @@ pub fn live_task(number: u64) -> core::Record {
         recurring: None,
         tracked: None,
         spec: tasks::Spec {
+            asks: false,
             words: Box::from(b"scripted task".as_slice()),
             parameters: Box::new([]),
             inputs: Box::new([]),

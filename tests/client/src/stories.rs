@@ -978,6 +978,7 @@ pub fn reported(mut task: Task, report: &[u8]) -> Task {
 
 fn specification(words: jig_client_domain::contract::Text) -> jig_client_domain::contract::SpecificationDocument {
     jig_client_domain::contract::SpecificationDocument::complete(jig_client_domain::contract::Specification {
+        asks: false,
         words,
         parameters: skein_lib::List::with_capacity(0),
         inputs: skein_lib::List::with_capacity(0),

@@ -265,10 +265,12 @@ pub fn server_http() -> skein_http::server::Limits {
 }
 
 pub const TURN_BYTES: &[u8] = include_bytes!("../../../crates/jig-protocol-transcript/tests/data/record_turn_full.bin");
+// The short call ID leaves eight bytes for the task's asks carrier,
+// within the unchanged single-row read budget.
 // One source call in addition to the golden's text block.
 // Blocks are numbered from one; the call follows the text.
 pub const TURN_CALL_NUMBER: u64 = 2;
-pub const TURN_CALL_ID: &[u8] = b"read-source";
+pub const TURN_CALL_ID: &[u8] = b"src";
 pub const TURN_TOOL: &[u8] = b"read";
 pub const TURN_INPUT: &[u8] = b"{ \"path\": \"a\" }";
 // The source text and call fields together fit the ordinary 32-byte text budget.

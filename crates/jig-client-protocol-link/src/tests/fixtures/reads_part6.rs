@@ -25,6 +25,7 @@ pub fn read_value_specification_document() -> c::SpecificationDocument {
 
 pub fn read_value_document_specification() -> c::DocumentSpecification {
     c::DocumentSpecification {
+        asks: false,
         words: read_value_document_text(),
         parameters: List::with_capacity(0),
         inputs: List::with_capacity(0),

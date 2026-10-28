@@ -296,7 +296,7 @@ pub(super) fn spec(value: w::Specification) -> p::Spec {
         };
         parameters.push(item).expect("same capacity");
     }
-    p::Spec { words: v.words, parameters: parameters.into_boxed(), inputs: v.inputs.into_boxed() }
+    p::Spec { asks: v.asks, words: v.words, parameters: parameters.into_boxed(), inputs: v.inputs.into_boxed() }
 }
 fn wake_rule(value: w::WakeRule) -> p::WakeRule {
     match value {

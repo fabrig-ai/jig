@@ -790,6 +790,9 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::Retained { task, root, holding } => crate::holds::retained(domain, env, task, root, &holding, out),
         Event::Settled { task } => crate::closing::settled(domain, env, task, out),
         event @ Event::PersonQuestionAnswer { .. } => crate::questions::person_answer(domain, env, event, out),
+        Event::QuestionOwedNotice { task, message } => {
+            crate::questions::owed(domain, env, task, message, out);
+        }
         Event::QuestionEndedNotice { task, notices } => {
             crate::questions::ended(domain, env, task, &notices, out);
         }
@@ -1383,6 +1386,7 @@ pub(crate) fn make_admitted(
             published: None,
             procedure_offered: None,
             record: TaskRecord {
+                asked_requester: false,
                 placed: None,
                 settings: crate::SettingsRevision { task: domain.newest, run: None },
                 label: new.label,

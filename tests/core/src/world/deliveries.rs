@@ -104,6 +104,7 @@ impl World {
                             budget: jig_domain_people::Budget::Named,
                             executor: tasks::Executor::Procedure { connector: 1, code: 1 },
                             spec: tasks::Spec {
+                                asks: false,
                                 words: b"run the check".as_slice().into(),
                                 parameters: Box::new([]),
                                 inputs: Box::new([]),

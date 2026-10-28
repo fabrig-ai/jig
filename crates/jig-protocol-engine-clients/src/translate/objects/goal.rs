@@ -113,7 +113,10 @@ pub fn spec(value: &t::Spec, limits: &w::Limits) -> Result<w::Specification, w::
         inputs.push(*row).expect("supplied rows fit");
     }
 
-    w::Specification::new(limits, w::SpecificationParts { words: bytes::copy_of(&value.words), parameters, inputs })
+    w::Specification::new(
+        limits,
+        w::SpecificationParts { asks: value.asks, words: bytes::copy_of(&value.words), parameters, inputs },
+    )
 }
 pub fn contract(value: &t::Contract, limits: &w::Limits) -> Result<w::TaskContractDocument, w::Problem> {
     Ok(match value {

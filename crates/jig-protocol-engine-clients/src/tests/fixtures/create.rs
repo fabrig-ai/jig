@@ -49,6 +49,7 @@ fn member(role: bool, authority: w::OwnerAuthority, expected: p::Authority) -> (
     let spec = w::Specification::new(
         &l,
         w::SpecificationParts {
+            asks: false,
             words: b"new words".as_slice().into(),
             parameters: list([w::Parameter::Number(
                 w::ParameterNumber::new(&l, w::ParameterNumberParts { name: 9, value: 12 }).unwrap(),

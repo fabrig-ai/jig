@@ -309,8 +309,12 @@ fn a_partys_amendment_proposal_accepted_after_its_spec_moved_is_stale() {
     world.delegate();
     let sign_in = world.sign_in.expect("party");
     let mut amendment = jig_core_world::fixtures::person_unchanged(b"evidence");
-    amendment.spec =
-        Some(people::Spec { words: b"proposed".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) });
+    amendment.spec = Some(people::Spec {
+        asks: false,
+        words: b"proposed".as_slice().into(),
+        parameters: Box::new([]),
+        inputs: Box::new([]),
+    });
     jig_core_world::fixtures::ask_as(
         &mut world,
         sign_in,

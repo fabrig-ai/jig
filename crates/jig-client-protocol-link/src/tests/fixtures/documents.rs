@@ -77,6 +77,7 @@ pub fn task() -> c::Task {
         lineage: List::with_capacity(0),
         spec: c::SpecificationDocument {
             specification: c::DocumentSpecification {
+                asks: false,
                 words: c::DocumentText { bytes: text(b""), cut: false },
                 parameters: List::with_capacity(0),
                 inputs: List::with_capacity(0),

@@ -714,6 +714,7 @@ fn malformed_machine_fields_are_refused_without_reading_an_explanation() {
 fn environment_spec() -> jig_domain_tasks::Spec {
     use jig_domain_tasks::Parameter;
     jig_domain_tasks::Spec {
+        asks: false,
         words: Box::from(b"staging for payments, a week".as_slice()),
         parameters: Box::new([
             Parameter::Bytes { name: 1, value: Box::from(b"staging".as_slice()) },

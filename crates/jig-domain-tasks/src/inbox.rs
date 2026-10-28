@@ -31,6 +31,7 @@ fn merge_key(kind: &MessageKind) -> Option<(u8, u64)> {
         | MessageKind::News { subscription, .. } => Some((1, *subscription)),
         MessageKind::Amendment { .. } => Some((0, 0)),
         MessageKind::Met { .. } => Some((2, 0)),
+        MessageKind::QuestionOwed => Some((3, 0)),
         MessageKind::FinishRequested { .. }
         | MessageKind::EffectNotMade { .. }
         | MessageKind::Words
@@ -140,6 +141,7 @@ pub(crate) fn prepare_staged(
                 | MessageKind::Amendment { .. }
                 | MessageKind::Met { .. }
                 | MessageKind::QuestionAnswered { .. }
+                | MessageKind::QuestionOwed
                 | MessageKind::QuestionEnded { .. }
                 | MessageKind::News { class: NewsClass::Kept | NewsClass::Dropped, .. } => {}
             }
@@ -181,6 +183,12 @@ pub(crate) fn room_staged(
     }
     let Some(reserved) = delegates.checked_add(stall_credits) else { return false };
     let Some(reserved) = reserved.checked_add(record.questions.len()) else { return false };
+    let mut reminder = false;
+    for word in record.inbox {
+        reminder |= word.kind == MessageKind::QuestionOwed;
+    }
+    let owed_credit = record.spec.asks && !record.asked_requester && !reminder;
+    let Some(reserved) = reserved.checked_add(usize::from(owed_credit)) else { return false };
     let received = received_credits(record.requester, &record.question_lines, &record.questions, record.inbox);
     let Some(reserved) = reserved.checked_add(received) else { return false };
     let Some(reserved) = reserved.checked_add(usize::from(record.proposal.is_some())) else { return false };
@@ -201,6 +209,7 @@ pub(crate) fn room_staged(
                 extra_bytes = extra_bytes.checked_add(word.words.len()).expect("bounded amendment bytes");
             }
             MessageKind::QuestionAnswered { .. }
+            | MessageKind::QuestionOwed
             | MessageKind::QuestionEnded { .. }
             | MessageKind::EffectNotMade { .. }
             | MessageKind::Words
@@ -325,6 +334,7 @@ pub(crate) fn check_message(
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
@@ -439,6 +449,7 @@ pub(crate) fn check_message(
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
@@ -532,6 +543,7 @@ pub(crate) fn apply_message(
         };
         let credit = question_credit(domain, number, &prepared.word);
         let source_row = task_mut(domain, source).expect("referenced questioner remains live");
+        source_row.record.asked_requester |= source_row.record.requester == Party::Task(number);
         crate::activity::append(
             &mut source_row.record,
             prepared.activity_word.at,
@@ -582,6 +594,7 @@ pub(crate) fn delegate_result(
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
         | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionOwed
         | MessageKind::QuestionEnded { .. }
         | MessageKind::Question
         | MessageKind::Answer { .. }
@@ -744,6 +757,7 @@ pub(crate) fn preview_message(
         let Party::Task(source) = checked.prepared.word.from else { unreachable!("question source checked") };
         let credit = question_credit(domain, number, &checked.prepared.word);
         let row = &mut task_mut(domain, source).expect("referenced source").record;
+        row.asked_requester |= row.requester == Party::Task(number);
         let mut credits = List::with_capacity(env.limits.inbox_messages);
         for credit in &row.questions {
             credits.push(credit.clone()).expect("bounded credits");

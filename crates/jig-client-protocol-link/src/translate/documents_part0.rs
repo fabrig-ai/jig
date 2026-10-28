@@ -243,6 +243,7 @@ pub(crate) fn document_specification_fields(
         list1.push(*item).expect("reserved supplied list");
     }
     Ok(c::DocumentSpecification {
+        asks: value.asks(),
         words: crate::translate::facts::document_text(value.words(), limits)?,
         parameters: list0,
         inputs: list1,

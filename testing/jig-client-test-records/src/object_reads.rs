@@ -17,6 +17,7 @@ pub fn read_wire_document_specification() -> w::DocumentSpecification {
     w::DocumentSpecification::new(
         &lim,
         w::DocumentSpecificationParts {
+            asks: false,
             words: read_wire_document_text(),
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

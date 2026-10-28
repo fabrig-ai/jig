@@ -44,6 +44,7 @@ fn person() -> OwnerHistorical {
         project: u32::MAX,
         executor: OwnerExecutor::Agent { charter: u32::MAX },
         spec: Specification {
+            asks: false,
             words: text(b"raw goal"),
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

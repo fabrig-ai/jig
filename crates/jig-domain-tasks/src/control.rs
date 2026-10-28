@@ -469,7 +469,7 @@ fn check_amend_fields(
     crate::compound::Staged::address(&old, amendment.addressed.as_ref())?;
     instruction_admit(&env.limits, old.executor, &amendment.instructions)?;
     if let Some(spec) = &amendment.spec
-        && (!crate::batch::valid_spec(&env.limits, spec) || !spec.inputs.is_empty())
+        && (!crate::batch::valid_spec(&env.limits, spec) || !spec.inputs.is_empty() || spec.asks != old.spec.asks)
     {
         return Err(Refusal::Spec);
     }

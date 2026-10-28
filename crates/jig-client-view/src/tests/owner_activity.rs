@@ -164,6 +164,7 @@ fn kinds() -> Box<[(OwnerMessageKind, &'static [u8])]> {
             b"Person answered question in inbox: 18446744073709551615",
         ),
         (OwnerMessageKind::QuestionEnded { question: u64::MAX }, b"Question ended unanswered: 18446744073709551615"),
+        (OwnerMessageKind::QuestionOwed, b"Owes a question: ask your requester"),
         (OwnerMessageKind::Words, b"Kind: words"),
         (OwnerMessageKind::Met { dependency: 7, removed: false }, b"T7 is done; the task can go on"),
         (OwnerMessageKind::EffectNotMade { entry: u64::MAX }, b"Kind: effect not made"),
@@ -273,8 +274,8 @@ fn assert_line_fields(tree: &Tree, line: &OwnerActivity) {
 }
 #[test]
 fn owner_activity_all_message_kinds_keep_whole_word_hits_clock_and_flags() {
-    // The original seventeen fixture rows plus the two question terminal notices.
-    const MESSAGE_CASES: usize = 19;
+    // The original seventeen fixture rows, two question terminal notices and one owing notice.
+    const MESSAGE_CASES: usize = 20;
     assert_eq!(kinds().len(), MESSAGE_CASES);
     for (kind, label) in kinds() {
         let word = fixture(kind);
@@ -339,6 +340,7 @@ fn assert_kind_numbers(tree: &Tree, kind: &OwnerMessageKind) {
         }
         OwnerMessageKind::Met { .. } => assert!(has(tree, b"T7 is done; the task can go on")),
         OwnerMessageKind::QuestionAnswered { .. }
+        | OwnerMessageKind::QuestionOwed
         | OwnerMessageKind::QuestionEnded { .. }
         | OwnerMessageKind::Words
         | OwnerMessageKind::Question

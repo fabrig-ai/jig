@@ -33,6 +33,7 @@ fn create(llm: w::LlmChoice) -> w::Ask {
             spec: w::Specification::new(
                 &limits,
                 w::SpecificationParts {
+                    asks: false,
                     words: b"chosen".as_slice().into(),
                     parameters: List::with_capacity(0),
                     inputs: List::with_capacity(0),

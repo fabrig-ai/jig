@@ -23,10 +23,13 @@ fn the_document_names_the_files_its_caller_reads() {
 fn both_jig_profiles_have_a_bounded_service() {
     // Packed inbox words/credits remove a four-byte list length and eight
     // sixteen-byte credit slots, adding ten item tags: -4 - 128 + 10 = -122.
+    // asks adds one stored byte per maximum task/specification slot, and the
+    // record latch adds one per live row: +10 for small's largest value,
+    // +26 for standard's. The maximum value alternatives differ by profile.
     // Profile capacities and the other row/commit envelopes stay as configured.
     for (label, name, value, commit, ops) in [
-        ("small", jig_protocol_config::Profile::Small, 1_567_725, 355_308_810, 41_606),
-        ("standard", jig_protocol_config::Profile::Standard, 10_664_653, 901_830_282, 303_350),
+        ("small", jig_protocol_config::Profile::Small, 1_567_735, 355_308_810, 41_606),
+        ("standard", jig_protocol_config::Profile::Standard, 10_664_679, 901_830_282, 303_350),
     ] {
         let limits = crate::limits::profile_limits(name);
         let sizes = jig_protocol_store::sizes::check(

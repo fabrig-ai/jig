@@ -65,6 +65,7 @@ pub fn document_specification(limits: &Limits) -> DocumentSpecification {
     DocumentSpecification::new(
         limits,
         DocumentSpecificationParts {
+            asks: false,
             words: document_text(limits),
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

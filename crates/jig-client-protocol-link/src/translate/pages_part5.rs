@@ -163,7 +163,7 @@ pub(crate) fn specification_fields(value: &w::Specification, limits: &Limits) ->
     for item in value.inputs() {
         list1.push(*item).expect("reserved supplied list");
     }
-    Ok(c::Specification { words: text(value.words(), limits)?, parameters: list0, inputs: list1 })
+    Ok(c::Specification { asks: value.asks(), words: text(value.words(), limits)?, parameters: list0, inputs: list1 })
 }
 
 #[expect(clippy::manual_map, reason = "step code matches optional fields without closures")]

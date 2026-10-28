@@ -240,6 +240,7 @@ fn kind_bytes(kind: &crate::MessageKind) -> Option<u64> {
         | crate::MessageKind::Amendment { .. }
         | crate::MessageKind::Met { .. }
         | crate::MessageKind::QuestionAnswered { .. }
+        | crate::MessageKind::QuestionOwed
         | crate::MessageKind::QuestionEnded { .. }
         | crate::MessageKind::Question
         | crate::MessageKind::Answer { .. }
@@ -273,6 +274,7 @@ fn word_bytes(word: &crate::Word) -> Option<u64> {
         | crate::MessageKind::Amendment { .. }
         | crate::MessageKind::Met { .. }
         | crate::MessageKind::QuestionAnswered { .. }
+        | crate::MessageKind::QuestionOwed
         | crate::MessageKind::QuestionEnded { .. }
         | crate::MessageKind::Question
         | crate::MessageKind::Answer { .. }
@@ -392,6 +394,7 @@ pub fn task_bytes(task: &TaskRecord) -> Option<u64> {
             saved_bytes = saved_bytes.checked_add(bytes(segment.len())?)?;
         }
     }
+    // The inline record includes Spec::asks and the durable asked_requester latch.
     bytes(size_of::<TaskRecord>())?
         .checked_add(match &task.grace {
             Some(grace) => bytes(grace.reason.len())?,

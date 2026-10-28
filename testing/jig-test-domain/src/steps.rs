@@ -83,7 +83,7 @@ pub(crate) fn translate(
                         tracked: None,
                         budget: jig_domain_people::Budget::Named,
                         executor: tasks::Executor::Agent { charter: u32::from(kind) },
-                        spec: tasks::Spec { words: words(task, step), parameters: Box::new([]), inputs: Box::new([]) },
+                        spec: specification(words(task, step)),
                         contract: tasks::Contract::Report { words: 128 },
                         authority,
                         llm: None,
@@ -161,11 +161,7 @@ fn amendment(task: u64, revision: u64, words: u64, priority: Option<u32>) -> cor
             task,
             revision,
             amendment: tasks::Amendment {
-                spec: if priority.is_some() {
-                    None
-                } else {
-                    Some(tasks::Spec { words: text.finish(), parameters: Box::new([]), inputs: Box::new([]) })
-                },
+                spec: if priority.is_some() { None } else { Some(specification(text.finish())) },
                 tracked,
                 addressed: None,
                 instructions: None,
@@ -202,4 +198,8 @@ pub fn procedure_input(context: &tasks::RunContext, code: u16, resource: connect
         pending: context.pending.clone(),
         added: added.into_boxed(),
     }
+}
+
+fn specification(words: Box<[u8]>) -> tasks::Spec {
+    tasks::Spec { asks: false, words, parameters: Box::new([]), inputs: Box::new([]) }
 }

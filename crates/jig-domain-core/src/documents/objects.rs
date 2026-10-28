@@ -19,6 +19,7 @@ pub struct SpecLine {
     pub parameters: List<Parameter>,
     pub inputs: List<u64>,
     pub cut: bool,
+    pub asks: bool,
 }
 /// One future batch member; dependencies retain allocated or local batch numbers.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -280,6 +281,7 @@ pub(super) fn spec(limits: &Limits, value: &tasks::Spec) -> SpecLine {
             .expect("bounded spec parameters");
     }
     SpecLine {
+        asks: value.asks,
         words: super::small::text(&value.words, limits.documents.text_bytes),
         parameters,
         inputs: numbers(limits, &value.inputs),

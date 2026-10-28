@@ -78,6 +78,7 @@ fn a_chat_s_activity_holds_the_person_s_words_its_turns_and_its_delegate_s_resul
             budget: jig_domain_people::Budget::Named,
             executor: tasks::Executor::Agent { charter: 1 },
             spec: tasks::Spec {
+                asks: false,
                 words: b"a delegate's work".as_slice().into(),
                 parameters: Box::new([]),
                 inputs: Box::new([]),

@@ -409,6 +409,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             | crate::MessageKind::Words
             | crate::MessageKind::Question
             | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionOwed
             | crate::MessageKind::QuestionEnded { .. }
             | crate::MessageKind::Answer { .. }
             | crate::MessageKind::Notice { .. }
@@ -489,6 +490,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             | crate::MessageKind::Amendment { .. }
             | crate::MessageKind::Met { .. }
             | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionOwed
             | crate::MessageKind::QuestionEnded { .. } => match word.from {
                 Party::Task(_) | Party::Person(_) => true,
                 Party::Deployment { .. } => false,
@@ -548,6 +550,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 | crate::MessageKind::PersonStalled { .. }
                 | crate::MessageKind::Met { .. }
                 | crate::MessageKind::QuestionAnswered { .. }
+                | crate::MessageKind::QuestionOwed
                 | crate::MessageKind::QuestionEnded { .. }
                 | crate::MessageKind::Timer { .. } => 0,
             }
@@ -569,6 +572,7 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 | crate::MessageKind::Amendment { .. }
                 | crate::MessageKind::Met { .. }
                 | crate::MessageKind::QuestionAnswered { .. }
+                | crate::MessageKind::QuestionOwed
                 | crate::MessageKind::QuestionEnded { .. }
                 | crate::MessageKind::Notice { .. }
                 | crate::MessageKind::News { .. }
@@ -1035,6 +1039,7 @@ fn links(domain: &Domain, env: &Env<Limits>, task: &TaskRecord) -> bool {
             | crate::MessageKind::ProposalDecision { .. }
             | crate::MessageKind::Question
             | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionOwed
             | crate::MessageKind::QuestionEnded { .. }
             | crate::MessageKind::Answer { .. }
             | crate::MessageKind::Notice { .. }

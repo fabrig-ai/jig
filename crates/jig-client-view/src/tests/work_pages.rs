@@ -202,6 +202,7 @@ pub(super) fn recurring_task(number: u64, words: &[u8]) -> ProposedTask {
         deadline: NewDeadline::Named,
         number,
         spec: SpecificationDocument::complete(Specification {
+            asks: false,
             words: text(words),
             parameters: list([]),
             inputs: list([]),

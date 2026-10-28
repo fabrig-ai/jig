@@ -473,6 +473,7 @@ fn an_amendment_on_a_spec_amended_meanwhile_is_refused_with_its_revision() {
         revision: 1,
         amendment: jig_domain_people::Amendment {
             spec: Some(jig_domain_people::Spec {
+                asks: false,
                 words: b"new words".as_slice().into(),
                 parameters: Box::new([]),
                 inputs: Box::new([]),
@@ -601,6 +602,7 @@ fn an_uncertain_effect_released_without_making_it_again_tells_its_executor() {
 fn edit() -> jig_domain_people::Amendment {
     jig_domain_people::Amendment {
         spec: Some(jig_domain_people::Spec {
+            asks: false,
             words: b"changed".as_slice().into(),
             parameters: Box::new([]),
             inputs: Box::new([]),

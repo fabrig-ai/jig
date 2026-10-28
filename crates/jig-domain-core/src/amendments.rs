@@ -221,7 +221,12 @@ pub(crate) fn spec(value: people::Spec, limits: &tasks::Limits) -> Option<tasks:
         };
         parameters.push(translated).ok()?;
     }
-    Some(tasks::Spec { words: value.words, parameters: parameters.into_boxed(), inputs: value.inputs })
+    Some(tasks::Spec {
+        asks: value.asks,
+        words: value.words,
+        parameters: parameters.into_boxed(),
+        inputs: value.inputs,
+    })
 }
 
 /// A party's given authority in the task vocabulary, with the models the task takes: a party names

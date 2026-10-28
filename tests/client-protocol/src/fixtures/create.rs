@@ -15,6 +15,7 @@ pub fn create_tasks() -> List<c::NewTask> {
                 deadline: jig_client_domain::contract::NewDeadline::Named,
                 executor: c::OwnerExecutor::Agent { charter: 1 },
                 spec: c::Specification {
+                    asks: false,
                     words: c::Text::new(b"Work".as_slice().into(), 32).expect("bounded spec"),
                     parameters: List::with_capacity(0),
                     inputs: List::with_capacity(0),

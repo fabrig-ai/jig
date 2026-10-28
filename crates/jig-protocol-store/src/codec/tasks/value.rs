@@ -378,7 +378,7 @@ pub fn read_parameter(value: wire::Parameter) -> domain::Parameter {
 }
 /// Translate a specification, checking its aggregate byte bound.
 pub fn spec(value: &domain::Spec, limits: &wire::Limits) -> Result<wire::Spec, wire::Problem> {
-    let domain::Spec { words, parameters, inputs } = value;
+    let domain::Spec { asks, words, parameters, inputs } = value;
     let mut members = List::with_capacity(limits.spec_parameters);
     let mut bytes = words.len();
     for item in parameters {
@@ -401,11 +401,14 @@ pub fn spec(value: &domain::Spec, limits: &wire::Limits) -> Result<wire::Spec, w
             return Err(problem(wire::Path::SpecInputs));
         }
     }
-    wire::Spec::new(limits, wire::SpecParts { words: words.clone(), parameters: members, inputs: references })
+    wire::Spec::new(
+        limits,
+        wire::SpecParts { asks: *asks, words: words.clone(), parameters: members, inputs: references },
+    )
 }
 /// Read a specification, checking its aggregate byte bound.
 pub fn read_spec(value: wire::Spec, limits: &wire::Limits) -> Result<domain::Spec, wire::Problem> {
-    let wire::SpecParts { words, parameters, inputs } = value.into_parts();
+    let wire::SpecParts { words, parameters, inputs, asks } = value.into_parts();
     let mut members = List::with_capacity(parameters.len());
     let mut bytes = words.len();
     for item in parameters.into_boxed() {
@@ -423,7 +426,7 @@ pub fn read_spec(value: wire::Spec, limits: &wire::Limits) -> Result<domain::Spe
     for input in inputs.into_boxed() {
         references.push(input.into_parts().value).expect("same number of inputs");
     }
-    Ok(domain::Spec { words, parameters: members.into_boxed(), inputs: references.into_boxed() })
+    Ok(domain::Spec { asks, words, parameters: members.into_boxed(), inputs: references.into_boxed() })
 }
 /// Translate a connector part and its opaque key.
 pub fn part(value: &domain::Part, limits: &wire::Limits) -> Result<wire::Part, wire::Problem> {

@@ -537,10 +537,11 @@ pub(super) fn decode_parameter(value: wire::Parameter) -> domain::Parameter {
 }
 
 pub(super) fn encode_spec(value: &domain::Spec, limits: &wire::Limits) -> Result<wire::Spec, wire::Problem> {
-    let domain::Spec { words, parameters, inputs } = value;
+    let domain::Spec { asks, words, parameters, inputs } = value;
     wire::Spec::new(
         limits,
         wire::SpecParts {
+            asks: *asks,
             words: words.clone(),
             parameters: encode_spec_parameters(
                 parameters,
@@ -553,8 +554,9 @@ pub(super) fn encode_spec(value: &domain::Spec, limits: &wire::Limits) -> Result
     )
 }
 pub(super) fn decode_spec(value: wire::Spec, limits: &wire::Limits) -> Result<domain::Spec, wire::Problem> {
-    let wire::SpecParts { words, parameters, inputs } = value.into_parts();
+    let wire::SpecParts { words, parameters, inputs, asks } = value.into_parts();
     Ok(domain::Spec {
+        asks,
         words,
         parameters: decode_spec_parameters(parameters, limits, limits.parameter_bytes_value)?,
         inputs: decode_numbers(inputs, limits, limits.parameter_bytes_value)?,

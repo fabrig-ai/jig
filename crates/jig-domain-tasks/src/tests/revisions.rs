@@ -96,7 +96,7 @@ pub(super) fn task(number: u64, dependencies: &[u64]) -> New {
         project: 1,
         executor: Executor::Agent { charter: 1 },
         llm: None,
-        spec: Spec { words: Box::new([1]), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: Spec { asks: false, words: Box::new([1]), parameters: Box::new([]), inputs: Box::new([]) },
         contract: Contract::Report { words: 32 },
         authority: authority(),
         numbers: Numbers { budget: 100, spent: 0, spent_below: 0, reserved: 0 },
@@ -227,7 +227,7 @@ impl Harness {
 }
 
 fn spec(words: &[u8]) -> Spec {
-    Spec { words: words.into(), parameters: Box::new([]), inputs: Box::new([]) }
+    Spec { asks: false, words: words.into(), parameters: Box::new([]), inputs: Box::new([]) }
 }
 
 pub(super) fn amendment() -> Amendment {
@@ -297,7 +297,7 @@ fn amendments_move_only_the_spec_and_changed_person_question() {
     test.amend(1, amendment());
     assert_eq!(test.revisions(1), Revisions { hold: 0, spec: 0, person: 0 });
     let mut change = amendment();
-    change.spec = Some(Spec { words: Box::new([2]), parameters: Box::new([]), inputs: Box::new([]) });
+    change.spec = Some(Spec { asks: false, words: Box::new([2]), parameters: Box::new([]), inputs: Box::new([]) });
     test.amend(1, change.clone());
     assert_eq!(test.revisions(1), Revisions { hold: 0, spec: 1, person: 1 });
     test.amend(1, change);
@@ -369,6 +369,7 @@ fn parameters_wake_policy_and_dependencies_each_move_only_the_spec() {
     test.make(vec![task(1, &[]), task(2, &[1])]);
     let mut change = amendment();
     change.spec = Some(Spec {
+        asks: false,
         words: Box::new([1]),
         parameters: Box::new([Parameter::Number { name: 1, value: 2 }]),
         inputs: Box::new([]),
@@ -679,7 +680,7 @@ fn an_amendment_releases_only_the_named_hold_and_preflights_both_changes() {
     let revision = h.revisions(1).hold;
     let mut change = amendment();
     change.release = Some(revision);
-    change.spec = Some(Spec { words: Box::new([8]), parameters: Box::new([]), inputs: Box::new([]) });
+    change.spec = Some(Spec { asks: false, words: Box::new([8]), parameters: Box::new([]), inputs: Box::new([]) });
     h.amend(1, change.clone());
     assert_eq!(h.domain.task(1).unwrap().spec.words.as_ref(), &[8]);
     assert!(match h.domain.task(1).unwrap().phase {

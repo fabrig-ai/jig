@@ -1359,6 +1359,7 @@ fn approved_documents_preserve_opaque_state_optional_words_and_exact_byte_bounds
 
 fn specification(words: jig_client_domain::contract::Text) -> jig_client_domain::contract::SpecificationDocument {
     jig_client_domain::contract::SpecificationDocument::complete(jig_client_domain::contract::Specification {
+        asks: false,
         words,
         parameters: List::with_capacity(0),
         inputs: List::with_capacity(0),
@@ -1374,7 +1375,8 @@ fn whole_specification_prices_parameter_and_input_capacity_and_refuses_partial_v
     let mut inputs = List::with_capacity(3);
     inputs.push(u64::MAX).unwrap();
     let value = {
-        let mut document = SpecificationDocument::complete(Specification { words: text(b"whole"), parameters, inputs });
+        let mut document =
+            SpecificationDocument::complete(Specification { asks: false, words: text(b"whole"), parameters, inputs });
         document.cut = true;
         document
     };
@@ -1622,6 +1624,7 @@ fn document_text_loss_is_preserved_and_priced_with_whole_document_parameter_capa
     let mut parameters = List::with_capacity(4);
     parameters.push(Parameter::Bytes { name: u32::MAX, value: text(UTF8_TEXTS[0]) }).unwrap();
     let value = SpecificationDocument::complete(Specification {
+        asks: false,
         words: text(b"w"),
         parameters,
         inputs: List::with_capacity(2),

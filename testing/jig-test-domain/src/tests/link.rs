@@ -377,6 +377,7 @@ fn stopping_continues_a_projection_deferred_watch_without_another_commit() {
                 executor: tasks::Executor::Agent { charter: 1 },
                 llm: None,
                 spec: tasks::Spec {
+                    asks: false,
                     words: b"queued goal change".as_slice().into(),
                     parameters: Box::new([]),
                     inputs: Box::new([]),

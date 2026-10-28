@@ -518,6 +518,7 @@ pub(super) fn scenario(words: &crate::words::Words) {
 
 fn specification(words: Text) -> SpecificationDocument {
     SpecificationDocument::complete(Specification {
+        asks: false,
         words,
         parameters: list([
             Parameter::Bytes { name: u32::MAX, value: full_text() },

@@ -144,7 +144,12 @@ fn propose_member_batch(world: &mut World) -> u64 {
         tracked: None,
         budget: jig_domain_people::Budget::Named,
         executor: tasks::Executor::Agent { charter: 1 },
-        spec: tasks::Spec { words: b"proposed root".as_slice().into(), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: tasks::Spec {
+            asks: false,
+            words: b"proposed root".as_slice().into(),
+            parameters: Box::new([]),
+            inputs: Box::new([]),
+        },
         contract: tasks::Contract::Report { words: 128 },
         authority: given,
         llm: None,

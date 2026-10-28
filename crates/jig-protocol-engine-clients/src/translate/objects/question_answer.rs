@@ -20,6 +20,7 @@ pub fn message_kind(value: &t::MessageKind, limits: &w::Limits) -> Result<w::Own
         t::MessageKind::QuestionAnswered { question } => w::OwnerMessageKind::QuestionAnswered(
             w::OwnerMessageKindAnswer::new(limits, w::OwnerMessageKindAnswerParts { question: *question })?,
         ),
+        t::MessageKind::QuestionOwed => w::OwnerMessageKind::QuestionOwed,
         t::MessageKind::QuestionEnded { question } => w::OwnerMessageKind::QuestionEnded(
             w::OwnerMessageKindAnswer::new(limits, w::OwnerMessageKindAnswerParts { question: *question })?,
         ),

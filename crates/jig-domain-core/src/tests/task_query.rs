@@ -194,6 +194,7 @@ fn generated_event(core: &Core, draw: u64, iteration: u64) -> Event {
             amendment: tasks::Amendment {
                 tracked: None,
                 spec: Some(tasks::Spec {
+                    asks: false,
                     words: Box::from(&b"changed task"[..]),
                     parameters: Box::new([]),
                     inputs: Box::new([]),

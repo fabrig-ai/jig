@@ -177,6 +177,7 @@ fn document(number: u64) -> contract::Task {
         lineage: List::with_capacity(0),
         spec: contract::SpecificationDocument {
             specification: contract::DocumentSpecification {
+                asks: false,
                 words: contract::DocumentText { bytes: text(), cut: false },
                 parameters: List::with_capacity(0),
                 inputs: List::with_capacity(0),

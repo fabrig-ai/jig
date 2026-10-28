@@ -438,7 +438,9 @@ pub(crate) fn activation(
             End::FinishedWithFollowups { .. } => unreachable!("follow-ups normalized"),
             End::Parked => {
                 let task = task_mut(domain, number).expect("terminal names live task");
-                task.record.tries = Tries::NONE;
+                if !kept.owes {
+                    task.record.tries = Tries::NONE;
+                }
                 task.record.refusals = 0;
                 if narrowed && !kept.blocks_claims() { Phase::Active(Active::Due) } else { Phase::Active(Active::Idle) }
             }
@@ -454,6 +456,18 @@ pub(crate) fn activation(
             }
         }
     };
+    let next = if parked && kept.owes {
+        let task = task_mut(domain, number).expect("owing task live");
+        task.record.tries.add(Class::Run);
+        let times = task.record.tries.of(Class::Run);
+        if times > env.limits.retries.run.retries {
+            Phase::Closing(Closing { stage: Stage::Delegates, ending: Ending::Failed { reason: Box::new([]) } })
+        } else {
+            next
+        }
+    } else {
+        next
+    };
     let task = task_mut(domain, number).expect("terminal names live task");
     task.record.invalid_result = invalid;
     task.record.numbers.reserved =
@@ -463,7 +477,7 @@ pub(crate) fn activation(
     task.record.narrowing = false;
     let spent = task.record.run_spent;
     crate::activity::append(&mut task.record, env.wall, crate::Line::RunEnded { attempt, end: end_kind, spent }, out);
-    if parked {
+    if parked && !kept.owes {
         let pending = task.record.waiting_on.clone();
         crate::activity::append(
             &mut task.record,
@@ -487,6 +501,9 @@ pub(crate) fn activation(
     }
     crate::wake::after_run(domain, env, number, out);
     publish(domain, env, number, out);
+    if parked && kept.owes && record(domain, number).expect("owing task live").phase == Phase::Active(Active::Idle) {
+        out.push(Request::QuestionOwedDue { task: number });
+    }
     if (narrowed || end_kind == crate::EndKind::Refused)
         && record(domain, number).expect("amended task live").phase == Phase::Active(Active::Due)
     {

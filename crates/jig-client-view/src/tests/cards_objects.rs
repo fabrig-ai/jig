@@ -1480,6 +1480,7 @@ fn approved_and_failed_results_show_only_their_supplied_owner_payloads() {
 
 fn specification(words: Text) -> SpecificationDocument {
     SpecificationDocument::complete(Specification {
+        asks: false,
         words,
         parameters: List::with_capacity(0),
         inputs: List::with_capacity(0),
@@ -1536,6 +1537,7 @@ fn cut_specification_is_shown_and_cannot_be_reconstructed_by_the_words_editor() 
         &mut builder,
         &{
             let mut document = SpecificationDocument::complete(Specification {
+                asks: false,
                 words: text(b"partial"),
                 parameters: list([]),
                 inputs: list([]),

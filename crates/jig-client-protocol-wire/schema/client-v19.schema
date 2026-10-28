@@ -248,7 +248,7 @@ record ParameterNumber { name: u32 value: u64 }
 record ParameterBytes { name: u32 value: text 65536 }
 record ParameterResource { name: u32 connector: u16 resource: u64 }
 enum Parameter { number: ParameterNumber, bytes: ParameterBytes, resource: ParameterResource }
-record Specification { words: text 65536 parameters: list 32 Parameter inputs: list 32 u64 }
+record Specification { words: text 65536 parameters: list 32 Parameter inputs: list 32 u64 asks: bool }
 record ModelEffort { model: text 4096 effort: option text 32 }
 record LlmChoice { account: option u32 main: ModelEffort subagents: list 64 ModelEffort }
 record OwnerPatternEndExact { value: bytes 65536 }
@@ -507,7 +507,7 @@ record OwnerMessageKindTimer { subscription: u64 }
 record OwnerMessageKindNews { subscription: u64 class: OwnerNewsClass }
 record OwnerMessageKindResult { value: OwnerWordResult }
 record OwnerMessageKindMet { dependency: u64 removed: bool }
-enum OwnerMessageKind { escalation: OwnerMessageKindEscalation, proposal: OwnerMessageKindProposal, person_stalled: OwnerMessageKindPersonStalled, proposal_decision: OwnerMessageKindProposalDecision, words, effect_not_made: OwnerMessageKindEffectNotMade, amendment: OwnerMessageKindAmendment, question, answer: OwnerMessageKindAnswer, notice: OwnerMessageKindNotice, timer: OwnerMessageKindTimer, news: OwnerMessageKindNews, result: OwnerMessageKindResult, met: OwnerMessageKindMet, settings_decision: OwnerMessageKindSettingsDecision, question_answered: OwnerMessageKindAnswer, question_ended: OwnerMessageKindAnswer }
+enum OwnerMessageKind { escalation: OwnerMessageKindEscalation, proposal: OwnerMessageKindProposal, person_stalled: OwnerMessageKindPersonStalled, proposal_decision: OwnerMessageKindProposalDecision, words, effect_not_made: OwnerMessageKindEffectNotMade, amendment: OwnerMessageKindAmendment, question, answer: OwnerMessageKindAnswer, notice: OwnerMessageKindNotice, timer: OwnerMessageKindTimer, news: OwnerMessageKindNews, result: OwnerMessageKindResult, met: OwnerMessageKindMet, settings_decision: OwnerMessageKindSettingsDecision, question_answered: OwnerMessageKindAnswer, question_ended: OwnerMessageKindAnswer, question_owed }
 record OwnerWord { number: u64 from: OwnerRequester kind: OwnerMessageKind words: text 65536 at: u64 hits: u32 eligible: bool }
 record OwnerRunWhyMessage { message: u64 }
 record OwnerRunWhyRetry { tries: OwnerFailureTries }
@@ -592,7 +592,7 @@ record ParameterDocumentNumber { name: u32 value: u64 }
 record ParameterDocumentBytes { name: u32 value: DocumentText }
 record ParameterDocumentResource { name: u32 connector: u16 resource: u64 }
 enum ParameterDocument { number: ParameterDocumentNumber, bytes: ParameterDocumentBytes, resource: ParameterDocumentResource }
-record DocumentSpecification { words: DocumentText parameters: list 32 ParameterDocument inputs: list 32 u64 }
+record DocumentSpecification { words: DocumentText parameters: list 32 ParameterDocument inputs: list 32 u64 asks: bool }
 record SpecificationDocument { specification: DocumentSpecification cut: bool }
 record ProposedTask { deadline: NewDeadline number: u64 spec: SpecificationDocument executor: OwnerExecutor contract: TaskContractDocument authority: OwnerAuthorityDocument budget: u64 funder: Funder dependencies: list 32 u64 resources: bytes 16777216 wake: OwnerWakePolicy priority: option u32 cut: bool }
 record OwnerRetainedAmendment { addressed: option AddressChange instructions: option DocumentText release: option u64 spec: option SpecificationDocument authority: option OwnerAuthorityDocument wake: option OwnerWakePolicy dependencies: option list 32 u64 reason: DocumentText cut: bool }

@@ -1904,6 +1904,7 @@ fn goal_description_review(world: &mut World, signed: u64, goal: u64) -> documen
     let revision = fixtures::live_row(world, goal).revisions.spec;
     let mut amendment = fixtures::person_unchanged(b"Review the goal's description");
     amendment.spec = Some(people::Spec {
+        asks: false,
         words: b"Proposed goal description".as_slice().into(),
         parameters: Box::new([]),
         inputs: Box::new([]),

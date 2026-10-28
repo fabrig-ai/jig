@@ -162,6 +162,7 @@ pub fn task_with_hold() -> d::Task {
         taken_by: None,
         activity: 7,
         spec: d::SpecLine {
+            asks: false,
             words: text(),
             parameters: List::with_capacity(0),
             inputs: List::with_capacity(0),

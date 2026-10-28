@@ -380,6 +380,7 @@ fn bound_problem(path: crate::tasks_v9::Path) -> crate::tasks_v9::Problem {
 }
 fn spec_with_bytes(bytes: usize) -> jig_domain_tasks::Spec {
     jig_domain_tasks::Spec {
+        asks: false,
         words: Box::new([]),
         parameters: Box::new([jig_domain_tasks::Parameter::Bytes { name: 1, value: skein_lib::bytes::zeroed(bytes) }]),
         inputs: Box::new([]),
@@ -1389,3 +1390,12 @@ fn project_asks_answers_and_name_refusals_round_trip() {
 
 mod holds;
 mod settings_proposals;
+
+#[test]
+fn an_owing_spec_and_its_asked_latch_survive_storage() {
+    let mut task = fixtures::task_record();
+    task.spec.asks = true;
+    task.asked_requester = true;
+    let row = jig_domain_tasks::Stored::Live(Box::new(task));
+    assert_eq!(saved_tasks(&row), Ok(row));
+}

@@ -109,7 +109,7 @@ pub fn task(number: u64, dependencies: &[u64]) -> New {
         project: 1,
         executor: Executor::Agent { charter: 1 },
         llm: None,
-        spec: Spec { words: Box::new([1]), parameters: Box::new([]), inputs: Box::new([]) },
+        spec: Spec { asks: false, words: Box::new([1]), parameters: Box::new([]), inputs: Box::new([]) },
         contract: Contract::Report { words: 32 },
         authority: authority(),
         numbers: Numbers { budget: 100, spent: 0, spent_below: 0, reserved: 0 },
@@ -361,6 +361,17 @@ impl World {
         );
     }
 
+    fn question_ended(&mut self, task: u64, questions: &[u64]) {
+        let notices = questions
+            .iter()
+            .map(|question| {
+                self.message = self.message.checked_add(1).expect("question notice number room");
+                tasks::QuestionNotice { question: *question, message: self.message }
+            })
+            .collect();
+        tasks::step(&mut self.domain, &self.env, Event::QuestionEndedNotice { task, notices }, &mut self.out);
+    }
+
     fn route_hint(&mut self, request: &Request) {
         match request {
             Request::PersonStallDue { task } => {
@@ -372,21 +383,16 @@ impl World {
                     &mut self.out,
                 );
             }
-            Request::QuestionEndedDue { task, questions } => {
-                let notices = questions
-                    .iter()
-                    .map(|question| {
-                        self.message = self.message.checked_add(1).expect("question notice number room");
-                        tasks::QuestionNotice { question: *question, message: self.message }
-                    })
-                    .collect();
+            Request::QuestionOwedDue { task } => {
+                self.message = self.message.checked_add(1).expect("owing message number room");
                 tasks::step(
                     &mut self.domain,
                     &self.env,
-                    Event::QuestionEndedNotice { task: *task, notices },
+                    Event::QuestionOwedNotice { task: *task, message: self.message },
                     &mut self.out,
                 );
             }
+            Request::QuestionEndedDue { task, questions } => self.question_ended(*task, questions),
             Request::MetDue { task, dependency, removed, by } => {
                 self.message = self.message.checked_add(1).expect("met message number room");
                 tasks::step(
@@ -542,6 +548,7 @@ impl World {
             | Event::EffectsSettled { .. }
             | Event::Retained { .. }
             | Event::PersonQuestionAnswer { .. }
+            | Event::QuestionOwedNotice { .. }
             | Event::QuestionEndedNotice { .. }
             | Event::CancelQuestion { .. }
             | Event::Settled { .. }
@@ -576,7 +583,7 @@ impl World {
                     self.message = self.message.max(notice.message);
                 }
             }
-            Event::Amend { message, .. } => {
+            Event::Amend { message, .. } | Event::QuestionOwedNotice { message, .. } => {
                 self.message = self.message.max(*message);
             }
             Event::Message { word, .. }
@@ -803,6 +810,7 @@ impl World {
                 | Request::ResolveUncertain { .. }
                 | Request::Sent { .. }
                 | Request::Relay { .. }
+                | Request::QuestionOwedDue { .. }
                 | Request::QuestionEndedDue { .. }
                 | Request::MetDue { .. }
                 | Request::PersonStallDue { .. }
@@ -897,6 +905,7 @@ impl World {
                 | Request::Ended { .. }
                 | Request::EscalationNeeded { .. }
                 | Request::Relay { .. }
+                | Request::QuestionOwedDue { .. }
                 | Request::QuestionEndedDue { .. }
                 | Request::MetDue { .. }
                 | Request::PersonStallDue { .. }
