@@ -426,7 +426,8 @@ impl Application for Ops {
                 let position = match step {
                     core::RestartStep::LoadCore | core::RestartStep::LoadInbox => 0,
                     core::RestartStep::RestoreConnector { connector } => u32::from(connector),
-                    core::RestartStep::Switch
+                    core::RestartStep::Sweep
+                    | core::RestartStep::Switch
                     | core::RestartStep::AdoptRuns
                     | core::RestartStep::ReadAfresh { .. }
                     | core::RestartStep::SettleOutbox { .. }

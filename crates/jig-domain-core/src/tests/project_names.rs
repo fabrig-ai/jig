@@ -37,7 +37,8 @@ fn loaded_project_names_keep_every_value_within_the_codec_bound() {
     for (name, accepted) in [("", true), (long.as_str(), false), ("Ta\u{7}lly", true), (" Tally", true), ("12", true)] {
         let (mut core, limits, value) = restoring();
         assert_eq!(core.restore_policy(&limits, FIRST_PROJECT, Box::from(name), value), accepted, "{name:?}");
-        assert_eq!(core.names.get(&FIRST_PROJECT).map(AsRef::as_ref), accepted.then_some(name));
+        let expected = if accepted { Some(Box::<str>::from(name)) } else { None };
+        assert_eq!(core.names.get(&FIRST_PROJECT), expected.as_ref());
     }
 }
 
