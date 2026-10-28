@@ -245,6 +245,19 @@ impl Store {
     }
     /// Crash and reopen under a configuration whose models may differ from the last.
     pub fn reconfigure(&mut self, seed: u64, models: &[jig_domain_core::Model]) {
+        let before = protocol::codec::names(&self.models);
+        let after = protocol::codec::names(models);
+        if before != after {
+            let limits = protocol::codec::limits(&self.limits.core).expect("admitted codec");
+            // The mirror follows the codec's named-model coordinates too.
+            // Reinterpret the same committed bytes, without changing the store.
+            for row in self.rows.values_mut() {
+                if let root::Record::Core(row) = row {
+                    let bytes = protocol::codec::encode(row, &limits, &before).expect("committed row encodes");
+                    *row = protocol::codec::decode(&row.key(), &bytes, &limits, &after).expect("committed row decodes");
+                }
+            }
+        }
         self.models = models.into();
         self.crash(seed);
     }
