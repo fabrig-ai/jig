@@ -21,8 +21,8 @@ mod selection;
 mod signing;
 pub use boundary::{
     ADDRESS, Answer, Change, Deadline, End, Ended, Event, Fact, Failure, Form, FromComponent, Grant, GrantTable,
-    KeyFailure, Pending, Place, Program, ProgramFailure, ProgramHost, ProgramResult, Request, Scheme, Signing, State,
-    ToComponent, Turned, Unread,
+    KeyFailure, Pending, Place, Program, ProgramFailure, ProgramHost, ProgramResult, Request, RestoreLimit, Scheme,
+    Signing, State, ToComponent, Turned, Unread,
 };
 pub use checks::{Bound, Refusal, SignIn, SignInRedirectWhy, room_for_sign_in};
 pub use domain::{Account, Domain, fire, max_out, step};

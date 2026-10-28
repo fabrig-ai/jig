@@ -648,12 +648,6 @@ pub(crate) fn take(task: &mut crate::TaskRecord, read: Option<u64>) {
 }
 
 /// The one finish word has its own reserved room beside the merged amendment.
-pub(crate) fn finish_word(task: &crate::TaskRecord, message: u64) -> bool {
-    match &task.grace {
-        Some(grace) => grace.message == message,
-        None => false,
-    }
-}
 
 /// Project inbox admission and answer credits without publishing a step part.
 pub(crate) fn preview_message(

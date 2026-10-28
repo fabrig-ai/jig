@@ -583,3 +583,12 @@ pub struct Program {
     pub name: crate::SourceName,
     pub cleanup: bool,
 }
+
+/// The live restore set that does not fit the deployment's current limits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RestoreLimit {
+    Accounts,
+    Sources,
+    SourcePlaces,
+    ProgramNames,
+}

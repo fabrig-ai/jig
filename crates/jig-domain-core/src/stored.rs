@@ -422,51 +422,33 @@ impl Core {
     pub fn restore_task_row(&mut self, row: &jig_domain_tasks::Stored) -> bool {
         use jig_domain_tasks as tasks;
 
-        let deployment = self.counters.deployment();
         match row {
-            tasks::Stored::PersonProposal(proposal) => {
-                for member in proposal.batch() {
-                    if member.number > deployment.tasks {
-                        return false;
-                    }
-                }
-                proposal.number <= deployment.messages
-                    && proposal.proposer <= deployment.people
-                    && match proposal.action {
-                        tasks::PersonAction::Settings { .. } => proposal.project == jig_domain_people::DEPLOYMENT,
-                        tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {
-                            self.authority.policy(proposal.project).is_some()
-                        }
-                    }
-            }
-            tasks::Stored::PlacedHold(hold) => {
-                self.authority.policy(hold.project).is_some() && supported_placed_hold(hold, &deployment)
-            }
-            tasks::Stored::Stub(stub) => stub.task <= deployment.tasks,
+            tasks::Stored::PersonProposal(_) | tasks::Stored::PlacedHold(_) | tasks::Stored::Stub(_) => true,
             tasks::Stored::Live(task) => {
                 let number = match task.executor {
                     jig_domain_tasks::Executor::Agent { charter } => Some(charter),
                     jig_domain_tasks::Executor::Procedure { .. } | jig_domain_tasks::Executor::Person(_) => None,
                 };
                 if let Some(number) = number {
-                    let mut versions = true;
                     for revision in [Some(task.settings.task), task.settings.run].into_iter().flatten() {
-                        if !self.held(revision) {
-                            self.restore_failure =
-                                Some(crate::RestartRequest::UnheldRevision { task: task.number, revision });
-                            let _refused = self.restart_refuse();
-                            return false;
-                        }
-                        versions &= self.charter_at(number, revision).is_some();
+                        assert!(
+                            self.held(revision),
+                            "core: Live({}) links to settings revision {revision}, which is absent",
+                            task.number
+                        );
+                        assert!(
+                            self.charter_at(number, revision).is_some(),
+                            "core: Live({}) links to charter {number} at revision {revision}, which is absent",
+                            task.number
+                        );
                     }
-                    let valid = versions
-                        && match self.charter_at(number, task.settings.task) {
-                            Some(charter) => match &task.llm {
-                                Some(choice) => crate::llm::takes(&self.settings.models, &charter.policy, choice),
-                                None => true,
-                            },
-                            None => false,
-                        };
+                    let valid = match (&task.llm, self.charter_at(number, task.settings.task)) {
+                        (Some(choice), Some(charter)) => {
+                            crate::llm::takes(&self.settings.models, &charter.policy, choice)
+                        }
+                        (None, _) => true,
+                        (Some(_), None) => unreachable!("charter linked above"),
+                    };
                     if !valid {
                         let _request = self.refuse_settings(crate::settings::Failure {
                             setting: crate::settings::Setting::Charter(number),
@@ -476,20 +458,10 @@ impl Core {
                     }
                 }
 
-                if !supported_task(task, self)
-                    || !supported_proposal(task, &deployment)
-                    || task.number > deployment.tasks
-                    || !supported_requester(task.requester, deployment.people, deployment.tasks)
-                {
-                    return false;
-                }
                 let agent_attempt = match task.executor {
                     tasks::Executor::Agent { .. } => task.attempt != 0,
                     tasks::Executor::Procedure { .. } | tasks::Executor::Person(_) => false,
                 };
-                if agent_attempt && task.attempt > deployment.runs {
-                    return false;
-                }
                 if agent_attempt
                     && self
                         .restoring_proofs
@@ -552,23 +524,7 @@ impl Core {
                 Restored::Deployment { commits: deployment.commits }
             }
             CoreRecord::Call(record) => {
-                let mut valid_settled = match &record.settled {
-                    Some(call) => {
-                        call.serial != 0 && call.serial <= self.counters.deployment().calls && call.valid(limits)
-                    }
-                    None => true,
-                };
-                if let Some(call) = &record.settled {
-                    for (_, previous) in &self.call_settled {
-                        if call.serial == previous.serial {
-                            valid_settled = false;
-                        }
-                    }
-                }
-                if valid_settled
-                    && record.part.valid(&self.counters.deployment(), limits, self.authority.limits())
-                    && self.restore_call(record.key, record.part)
-                {
+                if self.restore_call(record.key, record.part) {
                     if let Some(call) = record.settled {
                         assert!(
                             self.call_settled.insert(record.key, call).is_ok(),
@@ -592,66 +548,6 @@ impl Core {
             | CoreRecord::ProposalDecision(_)
             | CoreRecord::EscalationDecision(_) => Restored::Archive,
         }
-    }
-}
-
-fn supported_task(task: &jig_domain_tasks::TaskRecord, core: &Core) -> bool {
-    use jig_domain_tasks as tasks;
-    let executor = match task.executor {
-        tasks::Executor::Agent { charter } => core.charter_at(charter, task.settings.task).is_some(),
-        tasks::Executor::Procedure { code, .. } => code != 0,
-        tasks::Executor::Person(tasks::PersonAddress::Person(person)) => person != 0,
-        tasks::Executor::Person(tasks::PersonAddress::Role(_)) => true,
-    };
-    task.number != 0 && task.result_position == 0 && executor
-}
-
-fn supported_proposal(task: &jig_domain_tasks::TaskRecord, deployment: &Deployment) -> bool {
-    use jig_domain_tasks as tasks;
-    let Some(proposal) = &task.proposal else { return true };
-    if proposal.number == 0 || proposal.number > deployment.messages || proposal.proposer != task.number {
-        return false;
-    }
-    let holder = match proposal.state {
-        tasks::ProposalState::Pending { holder, .. } => holder,
-        tasks::ProposalState::Accepted { .. }
-        | tasks::ProposalState::Rejected { .. }
-        | tasks::ProposalState::Withdrawn => return false,
-    };
-    let holder_valid = match holder {
-        tasks::ProposalHolder::Task(number) => number != 0 && number <= deployment.tasks,
-        tasks::ProposalHolder::Person(number) => number != 0 && number <= deployment.people,
-        tasks::ProposalHolder::Policy { project, .. } => project == proposal.project,
-    };
-    if !holder_valid {
-        return false;
-    }
-    match &proposal.action {
-        tasks::ProposalAction::Settings { .. } => true,
-        tasks::ProposalAction::Effect { attempt, completion, .. } => {
-            *attempt != 0 && *attempt <= deployment.runs && *completion != 0
-        }
-        tasks::ProposalAction::ProcedureEffect { step, .. } => *step != 0,
-        tasks::ProposalAction::Batch(batch) => {
-            for member in batch {
-                if member.number == 0 || member.number > deployment.tasks {
-                    return false;
-                }
-            }
-            true
-        }
-        tasks::ProposalAction::Amend { task, .. }
-        | tasks::ProposalAction::Widen { task, .. }
-        | tasks::ProposalAction::ReleasePlaced { task, .. }
-        | tasks::ProposalAction::Release { task } => *task != 0 && *task <= deployment.tasks,
-    }
-}
-
-fn supported_requester(requester: jig_domain_tasks::Party, people: u64, tasks: u64) -> bool {
-    match requester {
-        jig_domain_tasks::Party::Person(person) => person != 0 && person <= people,
-        jig_domain_tasks::Party::Task(task) => task != 0 && task <= tasks,
-        jig_domain_tasks::Party::Deployment { .. } => true,
     }
 }
 
@@ -840,15 +736,6 @@ impl RunProof {
             terminal: None,
         }
     }
-}
-
-fn supported_placed_hold(hold: &jig_domain_tasks::PlacedHold, deployment: &Deployment) -> bool {
-    hold.number != 0
-        && hold.number <= deployment.messages
-        && match hold.owner {
-            jig_domain_tasks::Owner::Party { person } => person != 0 && person <= deployment.people,
-            jig_domain_tasks::Owner::Task { task } => task != 0 && task <= deployment.tasks,
-        }
 }
 
 fn settings_refusal_valid(why: &jig_domain_people::Refusal) -> bool {

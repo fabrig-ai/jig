@@ -172,7 +172,7 @@ pub struct Domain {
     facts: Queue<Fact>,
     ended: Queue<Ended>,
     lost: u64,
-    pub(crate) unrestored: u64,
+    pub(crate) restore_limit: Option<crate::RestoreLimit>,
     now: Time,
     phase: Phase,
 }
@@ -203,7 +203,7 @@ impl Domain {
             facts: Queue::with_capacity(limits.facts),
             ended: Queue::with_capacity(limits.facts),
             lost: 0,
-            unrestored: 0,
+            restore_limit: None,
             now: Time::ZERO,
             phase: Phase::New,
         }
@@ -292,11 +292,12 @@ impl Domain {
     pub fn restore_finished(&self) -> bool {
         self.phase == Phase::Wanted
     }
-    /// Records the store gave that broke a rule, and accounts left with no source, not restored.
+    /// The live set that does not fit the current configuration.
     #[must_use]
-    pub const fn unrestored(&self) -> u64 {
-        self.unrestored
+    pub const fn restore_limit(&self) -> Option<crate::RestoreLimit> {
+        self.restore_limit
     }
+
     fn choose(&self, account: &Account) -> Choice {
         let mut first = None;
         for (_, number) in &account.sources {
