@@ -31,7 +31,9 @@ impl World {
                     event: connector::Event::Restart(connector::RestartStep::SettleOutbox),
                 });
             }
-            core::RestartStep::AdoptRuns | core::RestartStep::Open => panic!("root performs its synchronous step"),
+            core::RestartStep::Sweep | core::RestartStep::AdoptRuns | core::RestartStep::Open => {
+                panic!("root performs its synchronous step")
+            }
         }
     }
 
