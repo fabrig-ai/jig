@@ -284,8 +284,11 @@ fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
     Some((common, serving))
 }
 
-// Two decoded records, including their wire values and the census's joined task.
-pub(crate) fn decoded_worst_case(limits: &Limits) -> Option<u64> {
+/// Already-priced workspace for two decoded records, including their wire
+/// values and the census's joined task (store.md, 13). Consumers can price a
+/// cold page separately from their authenticated on-demand read allowance.
+#[must_use]
+pub fn decoded_worst_case(limits: &Limits) -> Option<u64> {
     let codec = codec::limits(&limits.core)?;
     core_v6::Row::worst_case_heap(&codec.core)?
         .checked_add(tasks_v9::Row::worst_case_heap(&codec.tasks)?)?
