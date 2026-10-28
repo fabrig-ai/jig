@@ -14,9 +14,12 @@ fn fixture() -> (Core, Limits) {
     limits.people.requests = 4;
     limits.people.inbox_entries = 16;
     limits.documents.rows = 16;
-    let ledgers: Vec<_> = core.tasks.funding_records().iter().map(|(_, row)| *row).collect();
+    let mut ledgers = List::with_capacity(core.tasks.funding_records().len());
+    for (_, row) in core.tasks.funding_records() {
+        ledgers.push(*row).unwrap();
+    }
     core.tasks = fixtures::fresh_tasks(&core, &limits);
-    for row in ledgers {
+    for row in ledgers.into_boxed() {
         send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Ledger(row) });
     }
     for (number, requester) in [

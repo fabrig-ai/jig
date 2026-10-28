@@ -1807,11 +1807,7 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
             !domain.acted.contains_key(key)
                 && domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests
         }
-        Stored::Person { number, identity } => {
-            !domain.people.contains_key(number)
-                && !domain.identities.contains_key(&identity.key)
-                && domain.people.len() < env.limits.people
-        }
+        Stored::Person { number, .. } => !domain.people.contains_key(number) && domain.people.len() < env.limits.people,
         Stored::ReadResults { party: person, .. } => {
             !domain.results_seen.contains_key(person) && domain.results_seen.len() < env.limits.people
         }
@@ -1838,8 +1834,6 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
     match record {
         Stored::Acted { key, act, outcome, at } => acts::restore(domain, env, key, act, outcome, at, out),
         Stored::Person { number, identity } => {
-            let indexed = domain.identities.insert(identity.key.clone(), number);
-            assert!(indexed == Ok(None), "restored identity admitted");
             let saved = domain.people.insert(number, identity);
             assert!(saved.is_ok(), "restored person admitted");
         }
@@ -1883,6 +1877,16 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, _out: &mut Queue<Request>) {
     match domain.phase {
         Phase::Ready | Phase::Failed => return,
         Phase::Restoring => {}
+    }
+    // Attach the identity namespace after every person has loaded.
+    for (number, identity) in &domain.people {
+        let reserved = domain.identities.get(&identity.key);
+        assert!(
+            reserved.is_none(),
+            "people: Person({number}) links to identity {:?}, reserved by person {reserved:?}",
+            identity.key
+        );
+        assert!(domain.identities.insert(identity.key.clone(), *number) == Ok(None), "one identity per linked person");
     }
     // Link every retained owner before expiry can erase any of them.
     for (number, signin) in &domain.sign_ins {

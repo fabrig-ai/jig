@@ -1,6 +1,6 @@
 //! Kept facts and requester authority (domain/tasks.md, 5.7 and 5.8).
 use super::revisions::{Harness, LIMITS, task};
-use crate::{Domain, Event, Party, Request, Stored};
+use crate::{Domain, Event, Party, Stored};
 use alloc::boxed::Box;
 
 #[test]
