@@ -647,8 +647,6 @@ pub(crate) fn take(task: &mut crate::TaskRecord, read: Option<u64>) {
     }
 }
 
-/// The one finish word has its own reserved room beside the merged amendment.
-
 /// Project inbox admission and answer credits without publishing a step part.
 pub(crate) fn preview_message(
     domain: &mut Domain,

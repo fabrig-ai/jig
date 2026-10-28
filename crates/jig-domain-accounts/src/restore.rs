@@ -45,10 +45,8 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored) {
             (source(domain, env, number, place, entry), crate::RestoreLimit::Sources)
         }
     };
-    if !taken {
-        if domain.restore_limit.is_none() {
-            domain.restore_limit = Some(which);
-        }
+    if !taken && domain.restore_limit.is_none() {
+        domain.restore_limit = Some(which);
     }
 }
 
