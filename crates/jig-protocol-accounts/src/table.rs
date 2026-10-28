@@ -110,10 +110,17 @@ fn expire(slot: &mut Option<Entry>, now: Time) {
         *slot = None;
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub const fn valid(accounts: u32, token_bytes: u32) -> bool {
+    accounts > 0 && token_bytes > 0
+}
+
 /// The fixed slots and bounded token bytes of two generations per account.
 #[must_use]
 pub fn worst_case(accounts: u32, token_bytes: u32) -> Option<u64> {
-    if accounts == 0 || token_bytes == 0 {
+    if !valid(accounts, token_bytes) {
         return None;
     }
     Map::<u32, Generations>::worst_case(accounts)?

@@ -12,6 +12,6 @@ mod sign_in;
 mod stream;
 pub use boundary::*;
 pub use component::{Component, Unusable};
-pub use limits::{Limits, MAX_OUT_DOWN, MAX_OUT_FIRE, MAX_OUT_UP, provider_limits, worst_case};
+pub use limits::{Limits, MAX_OUT_DOWN, MAX_OUT_FIRE, MAX_OUT_UP, provider_limits, valid, worst_case};
 
 pub mod translate;

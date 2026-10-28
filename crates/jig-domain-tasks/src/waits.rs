@@ -48,8 +48,18 @@ fn resource_capacity(limits: &Limits) -> Option<u32> {
     limits.tasks.checked_mul(limits.tasks)?.checked_mul(limits.holdings)
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &Limits) -> bool {
+    resource_capacity(limits).is_some() && limits.tasks.checked_mul(limits.dependencies).is_some()
+}
+
 /// Index and traversal heap, including owned names and the simultaneous batch/restore scratch.
 pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let resources = resource_capacity(limits)?;
     let dependencies = limits.tasks.checked_mul(limits.dependencies)?;
     let name = u64::from(limits.hold_bytes).checked_add(List::<Box<[u8]>>::worst_case(limits.hold_segments)?)?;

@@ -180,7 +180,7 @@ impl Domain {
     /// Providers are configuration; accounts and sources are durable runtime records.
     #[must_use]
     pub fn new(limits: &Limits, providers: Providers) -> Domain {
-        assert!(crate::worst_case(limits).is_some(), "account limits are valid");
+        assert!(crate::valid(limits), "account limits are valid");
         let sources = limits.accounts.checked_mul(limits.sources).expect("checked by the worst case");
         Domain {
             accounts: Map::with_capacity(limits.accounts),

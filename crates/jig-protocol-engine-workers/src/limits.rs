@@ -40,14 +40,36 @@ pub(crate) fn channel(limits: &Limits) -> Option<skein_channel::Limits> {
 pub(crate) fn schema(limits: &Limits) -> Option<Schema> {
     wire::schema(&sizes::limits(&limits.sizes)?).ok()
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
+pub fn valid(limits: &Limits) -> bool {
     if limits.handshake == Duration::ZERO
         || limits.hello == Duration::ZERO
         || limits.stall == Duration::ZERO
         || limits.ping == Duration::ZERO
         || limits.silence < limits.ping.saturating_mul(3)
     {
+        return false;
+    }
+    let Some(schema) = schema(limits) else {
+        return false;
+    };
+    let Some(channel) = channel(limits) else {
+        return false;
+    };
+    let Some(codec) = sizes::limits(&limits.sizes) else {
+        return false;
+    };
+    limits.workers.checked_add(limits.opening).is_some()
+        && schema.check(Role::Responder, &channel).is_ok()
+        && channel_capacity(&channel).is_some()
+        && wire::v9::worst_case_heap(&codec).is_some()
+}
+
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
     let connections = limits.workers.checked_add(limits.opening)?;
@@ -77,4 +99,13 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(records)?
         .checked_add(schema_heap)?
         .checked_add(Queue::<Request>::worst_case(MAX_OUT_DOWN)?)
+}
+
+// The channel has no separate validity API at this pin. Keep its derived
+// queue capacity and control-frame bounds, without its retained heap price.
+fn channel_capacity(limits: &skein_channel::Limits) -> Option<u32> {
+    limits.output_frames.checked_add(3)?;
+    let terms = limits.kinds.checked_mul(6)?.checked_add(4)?;
+    let open = limits.credential.checked_add(14)?;
+    open.max(terms).max(262).checked_add(8)
 }

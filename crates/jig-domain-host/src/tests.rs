@@ -196,7 +196,7 @@ fn turns_stay_in_the_host_until_their_own_ack_and_credit_returns() {
 
 #[test]
 fn a_turn_credit_bound_must_hold_a_maximum_body() {
-    assert!(crate::worst_case(&Limits { turn_queue_bytes: 63, ..LIMITS }).is_none());
+    assert!(!crate::valid(&Limits { turn_queue_bytes: 63, ..LIMITS }));
 }
 
 #[test]
@@ -932,4 +932,48 @@ fn a_local_call_error_retires_the_relay_and_ignores_late_terminals() {
     h.step(Event::Down(LinkDown::Acknowledge { run: Token::new(1), attempt: Token::new(1001) }));
     h.domain.reclaim();
     assert_eq!((h.domain.hosted(), h.domain.calls()), (0, 0));
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    for (name, limits, accepted) in [
+        ("fixture", LIMITS, true),
+        ("turn bytes", Limits { turn_bytes: 0, ..LIMITS }, false),
+        ("turn queue", Limits { turn_queue_bytes: LIMITS.turn_bytes - 1, ..LIMITS }, false),
+        ("cancel count", Limits { run_calls: u32::MAX, ..LIMITS }, false),
+        ("start count", Limits { held: u32::MAX, ..LIMITS }, false),
+        ("source output", Limits { program_sources: u32::MAX, ..LIMITS }, false),
+        ("turn output", Limits { turns: u32::MAX, ..LIMITS }, false),
+        ("output total", Limits { program_sources: u32::MAX - 4, ..LIMITS }, false),
+        ("call capacity", Limits { slots: u32::MAX, run_calls: 2, turns: 0, ..LIMITS }, false),
+        ("turn capacity", Limits { slots: u32::MAX, turns: 1, run_calls: 0, ..LIMITS }, false),
+        ("source_interval", Limits { source_interval: skein_lib::Duration::ZERO, ..LIMITS }, false),
+        ("source_timeout", Limits { source_timeout: skein_lib::Duration::ZERO, ..LIMITS }, false),
+    ] {
+        assert_eq!(crate::valid(&limits), accepted, "{name}");
+    }
+}
+
+mod source_validity {
+    #[test]
+    fn valid_refuses_each_unrepresentable_limit() {
+        for (name, limits, accepted) in [
+            ("fixture", super::LIMITS, true),
+            ("interval", crate::Limits { source_interval: skein_lib::Duration::ZERO, ..super::LIMITS }, false),
+            ("timeout", crate::Limits { source_timeout: skein_lib::Duration::ZERO, ..super::LIMITS }, false),
+        ] {
+            assert_eq!(crate::sources::valid(&limits), accepted, "{name}");
+        }
+    }
+}
+
+#[test]
+fn validity_does_not_price_host_payloads() {
+    assert!(crate::valid(&Limits {
+        event_bytes: u64::MAX,
+        charter_bytes: u64::MAX,
+        transcript_bytes: u64::MAX,
+        turn_queue_bytes: u64::MAX,
+        ..LIMITS
+    }));
 }

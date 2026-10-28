@@ -27,13 +27,10 @@ pub struct Limits {
     pub facts: u32,
 }
 
-/// Accounts hold bounded names and times; every secret is below them. Each bound is at least
-/// one, and a holder's accounts are within the deployment's. The configured providers are the
-/// configuration's, outside this bound. Sign-ins under way are within `sign_ins`, sign-outs the
-/// component has not answered within the sources' bound, removals within `accounts`,
-/// LLM-key keeps sharing `sign_ins`, and sign-ins' ends within `facts`.
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
+pub fn valid(limits: &Limits) -> bool {
     if limits.accounts == 0
         || crate::domain::out_bound(limits).is_none()
         || limits.holder_accounts == 0
@@ -48,6 +45,19 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.backoff_base == Duration::ZERO
         || limits.backoff_max < limits.backoff_base
     {
+        return false;
+    }
+    true
+}
+
+/// Accounts hold bounded names and times; every secret is below them. Each bound is at least
+/// one, and a holder's accounts are within the deployment's. The configured providers are the
+/// configuration's, outside this bound. Sign-ins under way are within `sign_ins`, sign-outs the
+/// component has not answered within the sources' bound, removals within `accounts`,
+/// LLM-key keeps sharing `sign_ins`, and sign-ins' ends within `facts`.
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
     let accounts = u64::from(limits.accounts);

@@ -217,7 +217,7 @@ impl Domain {
         charters: Box<[crate::CharterModels]>,
         efforts: Box<[u8]>,
     ) -> Domain {
-        assert!(crate::worst_case(limits).is_some(), "task limits are valid");
+        assert!(crate::valid(limits), "task limits are valid");
         validate_charters(limits, &charters, &efforts);
         Domain {
             startup: Startup::Restoring,

@@ -62,7 +62,7 @@ pub use check::{
     covers, needed_judges, needs,
 };
 pub use domain::{Domain, Event, POLICY_MAX_OUT, PolicyFact, PolicyRefusal, policy_refusal, step, valid_rules};
-pub use limits::{Limits, max_out, rules_worst_case, worst_case};
+pub use limits::{Limits, max_out, rules_worst_case, valid, worst_case};
 pub use numbers::{Numbers, carve, charge, left, settle};
 pub use order::{FITS_MAX_OUT, Lack, Lacks, fits};
 pub use order::{

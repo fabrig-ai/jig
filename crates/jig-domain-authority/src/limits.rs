@@ -48,12 +48,24 @@ pub fn max_out(limits: &Limits) -> Option<u32> {
     Some(batch.max(run).max(effect))
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+// This sum has only storage prices. Finding-output arithmetic is checked
+// separately by the caller; there is no additional edge or derived capacity.
+pub const fn valid(_limits: &Limits) -> bool {
+    true
+}
+
 /// Heap held by the domain's rules and full project table. Questions and finding queues belong to
 /// the caller and are counted there. Checked retained-heap bound for deployment rules and a full
 /// live policy table under `limits`; `None` means unrepresentable arithmetic. Caller separately
 /// counts question payloads, constructed needs and output queues.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let authority = authority_heap(limits)?;
     let requirements = requirement_heap(limits)?;
     let role_heap = bytes(u64::from(limits.roles), size_of::<Role>())?

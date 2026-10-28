@@ -43,7 +43,9 @@ pub struct Component {
 }
 impl Component {
     pub fn new(settings: Settings, env: &Env<Limits>, out: &mut Queue<Request>) -> Result<Self, Unusable> {
-        crate::worst_case(&env.limits).ok_or(Unusable::Limits)?;
+        if !crate::valid(&env.limits) {
+            return Err(Unusable::Limits);
+        }
         if settings.served.capacity() > env.limits.families
             || settings.providers.capacity() > env.limits.providers
             || settings.addresses.len() > usize::try_from(env.limits.providers).expect("u32 fits")

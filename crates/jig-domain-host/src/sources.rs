@@ -73,9 +73,16 @@ impl Domain {
         self.busy.is_none()
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.source_interval != skein_lib::Duration::ZERO && limits.source_timeout != skein_lib::Duration::ZERO
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.source_interval == skein_lib::Duration::ZERO || limits.source_timeout == skein_lib::Duration::ZERO {
+    if !valid(limits) {
         return None;
     }
     let rows = List::<Row>::worst_case(limits.program_sources)?;

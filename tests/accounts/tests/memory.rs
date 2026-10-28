@@ -503,3 +503,25 @@ fn full_opened_arrivals_stay_within_the_worst_case() {
     }
     run.step(&mut domain, Event::Close, "full arrivals close");
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    for (name, limits, accepted) in [
+        ("fixture", LIMITS, true),
+        ("accounts", Limits { accounts: 0, ..LIMITS }, false),
+        ("output", Limits { accounts: u32::MAX, ..LIMITS }, false),
+        ("holder zero", Limits { holder_accounts: 0, ..LIMITS }, false),
+        ("holder range", Limits { holder_accounts: LIMITS.accounts + 1, ..LIMITS }, false),
+        ("hosts zero", Limits { program_hosts: 0, ..LIMITS }, false),
+        ("hosts range", Limits { program_hosts: 129, ..LIMITS }, false),
+        ("program names", Limits { program_names: 0, ..LIMITS }, false),
+        ("sources", Limits { sources: 0, ..LIMITS }, false),
+        ("sign ins", Limits { sign_ins: 0, ..LIMITS }, false),
+        ("retry", Limits { retry: Duration::ZERO, ..LIMITS }, false),
+        ("move deadline", Limits { move_deadline: Duration::ZERO, ..LIMITS }, false),
+        ("backoff base", Limits { backoff_base: Duration::ZERO, ..LIMITS }, false),
+        ("backoff order", Limits { backoff_max: Duration::ZERO, ..LIMITS }, false),
+    ] {
+        assert_eq!(jig_domain_accounts::valid(&limits), accepted, "{name}");
+    }
+}

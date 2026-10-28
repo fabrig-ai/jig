@@ -47,7 +47,7 @@ impl Domain {
     /// A domain with room for `limits`.
     #[must_use]
     pub fn new(limits: &Limits) -> Domain {
-        let calls = limits::calls(limits).expect("worst_case accepted the limits");
+        let calls = limits::calls(limits).expect("valid accepted the limits");
         Domain {
             sources: crate::sources::Domain::new(limits.program_sources),
             hosted: Slab::with_capacity(limits.slots),

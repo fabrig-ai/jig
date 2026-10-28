@@ -36,7 +36,9 @@ pub struct Component {
 }
 impl Component {
     pub fn new(limits: &Limits, workers: Box<[Worker]>, payload: u32) -> Result<Self, Unusable> {
-        crate::worst_case(limits).ok_or(Unusable::Limits)?;
+        if !crate::valid(limits) {
+            return Err(Unusable::Limits);
+        }
         let codec = wire::sizes::limits(&limits.sizes).ok_or(Unusable::Limits)?;
         let schema = crate::limits::schema(limits).ok_or(Unusable::Limits)?;
         if workers.len() > usize::try_from(limits.names).expect("u32 fits usize") {

@@ -53,7 +53,9 @@ pub struct Component {
 }
 impl Component {
     pub fn new(limits: &Limits, credential: Credential, seed: u64) -> Result<Self, Unusable> {
-        limits::worst_case(limits).ok_or(Unusable::Limits)?;
+        if !limits::valid(limits) {
+            return Err(Unusable::Limits);
+        }
         let bodies = sizes::limits(&limits.sizes).ok_or(Unusable::Limits)?;
         let credential = wire::Credential::new(
             &bodies,

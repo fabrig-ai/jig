@@ -10,6 +10,6 @@ mod opening;
 mod translate;
 pub use boundary::{Event, GrantValue, Request, Scheme, Worker};
 pub use component::{Component, Unusable};
-pub use limits::{Limits, MAX_OUT_DOWN, MAX_OUT_FIRE, worst_case};
+pub use limits::{Limits, MAX_OUT_DOWN, MAX_OUT_FIRE, valid, worst_case};
 #[cfg(test)]
 mod tests;

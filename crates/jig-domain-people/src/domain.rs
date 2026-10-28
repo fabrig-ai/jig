@@ -191,7 +191,7 @@ impl Domain {
         deployment_provider: u16,
         grants: Box<[crate::ActGrant]>,
     ) -> Domain {
-        assert!(crate::worst_case(limits).is_some(), "people limits are valid");
+        assert!(crate::valid(limits), "people limits are valid");
         assert!(
             owners.len() <= usize::try_from(limits.initial_owners).expect("u32 fits usize"),
             "configured owners fit"

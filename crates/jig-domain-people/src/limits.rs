@@ -1,4 +1,4 @@
-//! Root-configured capacities and checked heap accounting (domain/people.md, sections 2–5). `worst_case` validates limits before construction;
+//! Root-configured capacities and checked heap accounting (domain/people.md, sections 2–5). `valid` validates limits before construction;
 //! bounds cover retained state and scratch. Root accounts output queues and
 //! payloads separately. These calculations know no IO, credentials or tasks.
 
@@ -8,7 +8,7 @@ use alloc::boxed::Box;
 use skein_lib::{Deadlines, Duration, Id, List, Map, Queue, Set, Slab, Wall};
 
 /// Immutable root-configured capacities and payload limits for people's retained state and one-step
-/// outputs; validate via `worst_case` before construction. (domain/people.md, sections 2–5).
+/// outputs; validate via `valid` before construction. (domain/people.md, sections 2–5).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Limits {
     /// Configured workers plus the engine host in one retained program outcome.
@@ -64,22 +64,10 @@ pub struct Limits {
     pub facts: u32,
 }
 
-/// Containers, retained bytes, pending copies and bounded bootstrap config. Checked heap bound
-/// under `limits` for retained containers/bytes, pending copies, bootstrap owners, restoration
-/// sign-in snapshot, role-update scratch and facts. Returns `None` for arithmetic overflow, zero
-/// waiters, zero sign-ins or zero sign-in lifetime; validates `max_out` additions. Caller separately counts
-/// incoming/outgoing payloads and Request queue storage.
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    limits.inbox_entries.checked_add(1)?;
-    limits.people.checked_add(1)?;
-    let conversation_positions = limits.people.checked_mul(limits.inbox_tasks)?;
-    limits.inbox_tasks.checked_mul(limits.inbox_recipients)?.checked_add(limits.inbox_entries.checked_add(1)?)?;
-    let refusal_views = limits.requests.checked_add(limits.room_refusals)?;
-    limits.initial_owners.checked_add(4)?;
-    limits.waiters.checked_add(2)?;
-    limits.sign_ins.checked_add(1)?;
-    limits.holdings.checked_add(1)?;
+pub fn valid(limits: &Limits) -> bool {
     if limits.act_grants > u32::from(u16::MAX).saturating_add(1)
         || limits.program_hosts == 0
         || limits.program_hosts > 128
@@ -90,8 +78,33 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.sign_in_lifetime == Duration::ZERO
         || limits.request_retention == Duration::ZERO
     {
+        return false;
+    }
+    limits.inbox_entries.checked_add(1).is_some()
+        && limits.people.checked_add(1).is_some()
+        && limits.people.checked_mul(limits.inbox_tasks).is_some()
+        && inbox_capacity(limits).is_some()
+        && limits.requests.checked_add(limits.room_refusals).is_some()
+        && limits.initial_owners.checked_add(4).is_some()
+        && limits.waiters.checked_add(2).is_some()
+        && limits.sign_ins.checked_add(1).is_some()
+        && limits.holdings.checked_add(1).is_some()
+        && limits.people.checked_mul(limits.projects).is_some()
+        && waiting_capacity(limits).is_some()
+}
+
+/// Containers, retained bytes, pending copies and bounded bootstrap config. Checked heap bound
+/// under `limits` for retained containers/bytes, pending copies, bootstrap owners, restoration
+/// sign-in snapshot, role-update scratch and facts. Returns `None` for arithmetic overflow, zero
+/// waiters, zero sign-ins or zero sign-in lifetime; validates `max_out` additions. Caller separately counts
+/// incoming/outgoing payloads and Request queue storage.
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
+    let conversation_positions = limits.people.checked_mul(limits.inbox_tasks)?;
+    let refusal_views = limits.requests.checked_add(limits.room_refusals)?;
     let ask_bytes = ask_bytes(limits)?;
     // One local copy validates a restored answer while its retained names remain owned.
     let host_copy = host_outcome_bytes(limits)?;
@@ -242,11 +255,18 @@ pub(crate) fn act_worst_case(limits: &Limits) -> Option<u64> {
 
 fn waiting_worst_case(limits: &Limits) -> Option<u64> {
     // At most one role per holding; only held roles can have a cached inbox.
-    let waiting_recipients = limits.people.checked_add(limits.projects.checked_mul(limits.holdings)?)?;
+    let waiting_recipients = waiting_capacity(limits)?;
     Map::<crate::Whom, Box<[crate::Entry]>>::worst_case(waiting_recipients)?
         .checked_add(
             u64::from(waiting_recipients).checked_mul(List::<crate::Entry>::worst_case(limits.inbox_entries)?)?,
         )?
         .checked_add(List::<crate::Whom>::worst_case(waiting_recipients)?)?
         .checked_add(List::<crate::Entry>::worst_case(limits.inbox_entries)?)
+}
+
+fn inbox_capacity(limits: &Limits) -> Option<u32> {
+    limits.inbox_tasks.checked_mul(limits.inbox_recipients)?.checked_add(limits.inbox_entries.checked_add(1)?)
+}
+fn waiting_capacity(limits: &Limits) -> Option<u32> {
+    limits.people.checked_add(limits.projects.checked_mul(limits.holdings)?)
 }

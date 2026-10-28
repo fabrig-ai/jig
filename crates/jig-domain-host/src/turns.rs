@@ -38,7 +38,7 @@ impl Turns {
             .checked_mul(limits.turns)
             .expect("checked per-run capacity")
             .checked_mul(2)
-            .expect("worst_case accepted turn capacity");
+            .expect("valid accepted turn capacity");
         Turns { pending: Map::with_capacity(capacity), abandoned: 0 }
     }
 

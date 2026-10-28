@@ -98,6 +98,6 @@ fn a_grant_at_the_configured_bound_fits() {
 fn grant_count_is_bounded_by_connector_numbers() {
     const CONNECTOR_NUMBERS: u32 = 1_u32 << u16::BITS;
     for (act_grants, fits) in [(CONNECTOR_NUMBERS, true), (CONNECTOR_NUMBERS + 1, false)] {
-        assert_eq!(worst_case(&Limits { act_grants, ..LIMITS }).is_some(), fits);
+        assert_eq!(crate::valid(&Limits { act_grants, ..LIMITS }), fits);
     }
 }

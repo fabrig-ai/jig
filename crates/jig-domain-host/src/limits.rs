@@ -67,6 +67,23 @@ pub(crate) fn calls(limits: &Limits) -> Option<u32> {
     limits.slots.checked_mul(limits.run_calls)
 }
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    if limits.turns > 0 && (limits.turn_bytes == 0 || limits.turn_queue_bytes < limits.turn_bytes) {
+        return false;
+    }
+    cancellations_bound(limits).is_some()
+        && calls(limits).is_some()
+        && turn_capacity(limits).is_some()
+        && crate::sources::valid(limits)
+}
+
+fn turn_capacity(limits: &Limits) -> Option<u32> {
+    limits.slots.checked_mul(limits.turns)?.checked_mul(2)
+}
+
 /// The most memory the domain holds under `limits`, in bytes (6.3), or `None`
 /// if it does not fit a `u64`.
 ///
@@ -79,14 +96,7 @@ pub(crate) fn calls(limits: &Limits) -> Option<u32> {
 /// alongside the runs' retained state, including their kept answers.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.turns > 0 && (limits.turn_bytes == 0 || limits.turn_queue_bytes < limits.turn_bytes) {
-        return None;
-    }
-    cancellations_bound(limits)?;
-    // The reserved output bound must be representable without saturation.
-    // Cancelling each relay emits its reply and its cancellation request.
-    let cancellations = limits.run_calls.checked_mul(2)?;
-    if cancellations.checked_add(2).is_none() || limits.held.checked_add(limits.accounts)?.checked_add(2).is_none() {
+    if !valid(limits) {
         return None;
     }
     let sources = crate::sources::worst_case(limits)?;

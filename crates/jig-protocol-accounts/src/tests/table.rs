@@ -69,8 +69,8 @@ fn the_tables_debug_never_shows_a_value() {
     assert_eq!(bytes::find(&output, TOKEN_FIRST), None);
 }
 #[test]
-fn zero_accounts_have_no_usable_worst_case() {
-    assert_eq!(table::worst_case(0, 32), None);
+fn zero_accounts_are_invalid() {
+    assert!(!table::valid(0, 32));
 }
 
 #[test]
@@ -91,5 +91,12 @@ fn each_scheme_is_kept_with_its_generation() {
         value.scheme = scheme.clone();
         table.granted(ACCOUNT_CHAT, generation, value, Time::from_nanos(1000)).expect("fits");
         assert_eq!(table.value(ACCOUNT_CHAT, generation, Time::ZERO).expect("granted").scheme, scheme);
+    }
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    for (accounts, token_bytes, accepted) in [(2, 32, true), (0, 32, false), (2, 0, false)] {
+        assert_eq!(table::valid(accounts, token_bytes), accepted);
     }
 }

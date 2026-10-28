@@ -7,7 +7,7 @@ use alloc::boxed::Box;
 use skein_lib::{Deadlines, Id, List, Map, Queue, Slab};
 
 /// Immutable root-configured limits for live task state, finite sources, owned semantic payloads
-/// and retry policies; validate through `worst_case` before construction. (domain/tasks.md, section 10).
+/// and retry policies; validate through `valid` before construction. (domain/tasks.md, section 10).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Limits {
     /// Placed holds in the deployment, including lifted holds kept for their tasks.
@@ -125,15 +125,10 @@ pub(crate) fn stub_capacity(limits: &Limits) -> Option<u32> {
     )
 }
 
-/// Pure checked heap bound for live containers and nested payloads, finite ledgers, charter
-/// configuration, optional facts and bounded graph/traversal scratch under `limits`. Returns `None`
-/// on overflow or invalid task/batch/tree/retry settings. Validates output-bound arithmetic; caller
-/// separately counts incoming data, `RunContext`/saved-row copies and `Request` queues.
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-#[expect(clippy::too_many_lines, reason = "one checked bound includes every retained task and hold container")]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    crate::domain::output_bound(limits)?;
-    crate::activity::line_bytes_limit(limits)?;
+pub fn valid(limits: &Limits) -> bool {
     if limits.placed_holds == 0
         || limits.project_placed_holds == 0
         || limits.party_placed_holds == 0
@@ -155,13 +150,34 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.proposal_stall == skein_lib::Duration::ZERO
         || limits.escalation_stall == skein_lib::Duration::ZERO
     {
-        return None;
+        return false;
     }
     for class in [Class::Transient, Class::Permanent, Class::Run, Class::Agent, Class::Lost, Class::Invalid] {
         let retry = limits.retries.of(class);
         if retry.retries == u32::MAX || retry.base == skein_lib::Duration::ZERO || retry.max < retry.base {
-            return None;
+            return false;
         }
+    }
+    crate::domain::output_bound(limits).is_some()
+        && crate::activity::line_bytes_limit(limits).is_some()
+        && crate::waits::valid(limits)
+        && limits.tasks.checked_mul(4).is_some()
+        && charter_capacity(limits).is_some()
+}
+
+fn charter_capacity(limits: &Limits) -> Option<u32> {
+    limits.charters.checked_mul(2)?.checked_add(limits.versions)
+}
+
+/// Pure checked heap bound for live containers and nested payloads, finite ledgers, charter
+/// configuration, optional facts and bounded graph/traversal scratch under `limits`. Returns `None`
+/// on overflow or invalid task/batch/tree/retry settings. Validates output-bound arithmetic; caller
+/// separately counts incoming data, `RunContext`/saved-row copies and `Request` queues.
+#[must_use]
+#[expect(clippy::too_many_lines, reason = "one checked bound includes every retained task and hold container")]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
     }
     let segments = u64::from(limits.authority_grants)
         .checked_mul(2)?

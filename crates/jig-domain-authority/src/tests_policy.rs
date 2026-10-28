@@ -1128,7 +1128,7 @@ fn check_full_policy_memory() {
         accounts: u32::MAX,
         writes: u32::MAX,
     };
-    assert_eq!(worst_case(&enormous), None, "overflowing memory is never wrapped");
+    assert!(crate::valid(&enormous), "heap prices do not decide validity");
     assert_eq!(max_out(&enormous), None, "overflowing queue bounds are never wrapped");
 }
 
@@ -1369,4 +1369,26 @@ fn replacement_rules_and_restore_preserve_a_project_above_the_new_ceiling() {
         assert_eq!(Some(finding), after.pop());
     }
     assert!(after.is_empty());
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    // This sum has no validity conditions: even prices that overflow do not
+    // make an edge unrepresentable. Finding-output checks remain separate.
+    for (name, limits) in [
+        ("fixture", LIMITS),
+        (
+            "retained heap prices",
+            Limits {
+                projects: u32::MAX,
+                roles: u32::MAX,
+                grants: u32::MAX,
+                segments: u32::MAX,
+                segment_bytes: u32::MAX,
+                ..LIMITS
+            },
+        ),
+    ] {
+        assert!(crate::valid(&limits), "{name}");
+    }
 }

@@ -5,7 +5,7 @@ use skein_lib::{List, Map, Queue};
 
 use crate::limits::{authority_within, requirements_within, within};
 use crate::order::at_most_but_models;
-use crate::{Limits, Models, Policy, Requirement, Role, Rules, max_out, worst_case};
+use crate::{Limits, Models, Policy, Requirement, Role, Rules, max_out};
 
 /// Bounded live project-policy table and immutable deployment rules; contains no task ledger,
 /// connector state or authentication. (domain/authority.md, sections 2 and 6).
@@ -92,7 +92,9 @@ impl Domain {
     #[must_use]
     pub fn new(rules: Rules, limits: Limits) -> Option<Domain> {
         max_out(&limits)?;
-        worst_case(&limits)?;
+        if !crate::valid(&limits) {
+            return None;
+        }
         if !valid_rules(&rules, &limits) {
             return None;
         }

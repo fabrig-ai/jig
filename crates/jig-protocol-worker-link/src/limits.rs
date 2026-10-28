@@ -46,8 +46,10 @@ pub fn channel_limits(limits: &Limits) -> Result<channel::Limits, Unusable> {
         kinds,
     })
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
+pub fn valid(limits: &Limits) -> bool {
     if limits.ping == Duration::ZERO
         || limits.silence < limits.ping.saturating_mul(3)
         || limits.stall == Duration::ZERO
@@ -58,6 +60,29 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.handshake == Duration::ZERO
         || limits.proved == Duration::ZERO
     {
+        return false;
+    }
+    let Some(bodies) = sizes::limits(&limits.sizes) else {
+        return false;
+    };
+    let Ok(schema) = wire::schema(&bodies) else {
+        return false;
+    };
+    let Ok(channel) = channel_limits(limits) else {
+        return false;
+    };
+    schema.check(Role::Initiator, &channel).is_ok()
+        && channel_capacity(&channel).is_some()
+        && limits.sizes.slots.checked_mul(limits.sizes.calls).is_some()
+        && limits.sizes.slots.checked_mul(limits.sizes.turns).is_some()
+        && limits.sizes.accounts.checked_add(limits.sizes.credentials).is_some()
+        && u64::from(channel.skip).checked_add(8).is_some()
+        && inventory_bound(&bodies).is_some()
+}
+
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
     let bodies = sizes::limits(&limits.sizes)?;
@@ -86,4 +111,17 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(u64::from(limits.sizes.secret))?
         .checked_add(Queue::<channel::Event>::worst_case(channel::MAX_UP.checked_mul(3)?)?)?
         .checked_add(Queue::<channel::Lower>::worst_case(channel::MAX_DOWN.checked_mul(3)?)?)
+}
+
+fn inventory_bound(bodies: &wire::v9::Limits) -> Option<u64> {
+    wire::Logins::worst_case_bytes(bodies)?.checked_add(8)
+}
+
+// The channel has no separate validity API at this pin. Keep its derived
+// queue capacity and control-frame bounds, without its retained heap price.
+fn channel_capacity(limits: &skein_channel::Limits) -> Option<u32> {
+    limits.output_frames.checked_add(3)?;
+    let terms = limits.kinds.checked_mul(6)?.checked_add(4)?;
+    let open = limits.credential.checked_add(14)?;
+    open.max(terms).max(262).checked_add(8)
 }

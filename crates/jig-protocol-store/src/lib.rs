@@ -230,9 +230,32 @@ impl Store {
 /// Most terminals from a component step, including a store batch.
 pub const MAX_OUT_DOWN: u32 = skein_kv::MAX_OUT.above.saturating_mul(2);
 
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.store.is_usable()
+        && limits.secrets.is_usable()
+        && decoded_worst_case(limits).is_some()
+        && frame_bound(limits).is_some()
+        && transcripts::reservation_count(limits).is_some()
+        && commits::most_ops(limits.journal.writes, limits.orphan_erases).is_some()
+        && limits.journal.writes.checked_add(1).is_some()
+        && limits.core.tasks.tasks.checked_mul(limits.core.tasks.inbox_messages).is_some()
+        && limits.core.load_slots.checked_add(limits.core.tasks.tasks).is_some()
+}
+
+fn frame_bound(limits: &Limits) -> Option<u64> {
+    let codec = codec::limits(&limits.core)?;
+    core_v6::TurnRecord::worst_case_bytes(&codec.core)?.checked_add(12)
+}
+
 /// Owned stores, component state and bounded temporary rows and operations.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     worst_case_with_patches(limits, &PatchSets::NONE)
 }
 
@@ -241,6 +264,9 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
 /// arbitrary number of kept schemas. Record bytes also bound nodes (at least one wire byte each).
 #[must_use]
 pub fn worst_case_with_patches(limits: &Limits, sets: &PatchSets) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let (common, serving) = serving_peak(limits)?;
     let serving = serving.checked_add(transcripts::patches::worst_case(limits, sets)?)?;
     let patching = patching::phase::worst_case(limits, sets)?;

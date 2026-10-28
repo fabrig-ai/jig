@@ -1783,7 +1783,7 @@ fn zero_room_history_counts_omissions_without_changing_busy_or_key_admission() {
     assert_eq!(test.d.capacity_refusals_lost(), 1);
     assert_eq!(reply(&test.request(10, 1, ask(1))), Reply::Again(Again::Busy));
     assert_eq!(test.d.capacity_refusals_lost(), 2);
-    assert_eq!(worst_case(&Limits { requests: u32::MAX, room_refusals: 1, ..LIMITS }), None);
+    assert!(!valid(&Limits { requests: u32::MAX, room_refusals: 1, ..LIMITS }));
     assert_eq!(capacity::permanent(&Outcome::Refused(Refusal::Limit { which: LimitKind::Words })), None);
     assert_eq!(capacity::permanent(&Outcome::Refused(Refusal::Role { held: Some(Role::Observer) })), None);
     assert_eq!(
@@ -2252,8 +2252,8 @@ fn an_absent_ended_or_expired_held_sign_in_signs_in_afresh() {
 }
 
 #[test]
-fn worst_case_refuses_zero_sign_ins() {
-    assert_eq!(worst_case(&Limits { sign_ins: 0, ..LIMITS }), None);
+fn validity_refuses_zero_sign_ins() {
+    assert!(!valid(&Limits { sign_ins: 0, ..LIMITS }));
 }
 
 #[test]
@@ -2435,4 +2435,39 @@ fn reservations_alone_report_now_and_the_exact_count() {
         reply(&test.request(10, 3, ask(1))),
         Reply::Again(Again::Full { held: RESERVED_PLACES, room_at: Wall::EPOCH })
     );
+}
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    for (name, limits, accepted) in [
+        ("fixture", LIMITS, true),
+        ("act grants", Limits { act_grants: 65_537, ..LIMITS }, false),
+        ("hosts zero", Limits { program_hosts: 0, ..LIMITS }, false),
+        ("hosts range", Limits { program_hosts: 129, ..LIMITS }, false),
+        ("host name zero", Limits { program_host_name_bytes: 0, ..LIMITS }, false),
+        ("host name range", Limits { program_host_name_bytes: 4097, ..LIMITS }, false),
+        ("waiters zero", Limits { waiters: 0, ..LIMITS }, false),
+        ("sign ins zero", Limits { sign_ins: 0, ..LIMITS }, false),
+        ("sign in lifetime", Limits { sign_in_lifetime: Duration::ZERO, ..LIMITS }, false),
+        ("request retention", Limits { request_retention: Duration::ZERO, ..LIMITS }, false),
+        ("entries witness", Limits { inbox_entries: u32::MAX, ..LIMITS }, false),
+        ("people witness", Limits { people: u32::MAX, ..LIMITS }, false),
+        ("conversation positions", Limits { people: 65_536, inbox_tasks: 65_536, projects: 0, ..LIMITS }, false),
+        ("inbox product", Limits { inbox_tasks: u32::MAX, inbox_recipients: 2, ..LIMITS }, false),
+        (
+            "inbox addition",
+            Limits { inbox_tasks: u32::MAX - 1, inbox_recipients: 1, inbox_entries: 1, people: 0, ..LIMITS },
+            false,
+        ),
+        ("refusal views", Limits { requests: u32::MAX, room_refusals: 1, ..LIMITS }, false),
+        ("initial owners", Limits { initial_owners: u32::MAX, ..LIMITS }, false),
+        ("waiters output", Limits { waiters: u32::MAX, ..LIMITS }, false),
+        ("sign ins output", Limits { sign_ins: u32::MAX, ..LIMITS }, false),
+        ("holdings output", Limits { holdings: u32::MAX, ..LIMITS }, false),
+        ("project census", Limits { people: 65_536, projects: 65_536, inbox_tasks: 0, holdings: 0, ..LIMITS }, false),
+        ("waiting product", Limits { people: 0, projects: 65_536, holdings: 65_536, ..LIMITS }, false),
+        ("waiting addition", Limits { people: 1, projects: u32::MAX, holdings: 1, inbox_tasks: 0, ..LIMITS }, false),
+    ] {
+        assert_eq!(valid(&limits), accepted, "{name}");
+    }
 }
