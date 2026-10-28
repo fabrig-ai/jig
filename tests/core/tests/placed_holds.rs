@@ -1064,7 +1064,7 @@ fn party_proposal(s: &Story, number: u64) -> tasks::PersonProposal {
             root::Record::Core(core::Record::Tasks(
                 tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row),
             )) if row.number == number => Some(*row.clone()),
-            _ => None,
+            root::Record::Core(_) | root::Record::Connector { .. } => None,
         })
         .expect("durable party proposal")
 }
@@ -1141,7 +1141,7 @@ fn a_party_release_proposal_is_withdrawn_when_the_hold_is_lifted_or_moves() {
         assert!(s.world.store.rows.values().any(|row| matches!(row,
             root::Record::Core(core::Record::Tasks(tasks::Stored::History(history))) if history.proposal.as_ref().is_some_and(|row| row.number == task_proposal && row.state == tasks::ProposalState::Withdrawn))));
         if !with_tasks {
-            assert_eq!(placed_hold(&s, number).revision, 2)
+            assert_eq!(placed_hold(&s, number).revision, 2);
         }
     }
 }

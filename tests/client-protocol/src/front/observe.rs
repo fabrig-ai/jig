@@ -105,12 +105,7 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
                     4,
                     value.revision().value(),
                 )),
-                w::Ask::Propose(value) => match value.action() {
-                    w::ProposeAction::Settings(_) | w::ProposeAction::Batch(_) | w::ProposeAction::ReleasePlaced(_) => {
-                        None
-                    }
-                    w::ProposeAction::Amendment(v) => Some((c::ObjectKey::Task(v.task()), 1, v.revision().value())),
-                },
+                w::Ask::Propose(value) => proposed_revision(value.action()),
                 w::Ask::Hold(_)
                 | w::Ask::Lift(_)
                 | w::Ask::Withdraw(_)
@@ -152,6 +147,13 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
         }
     }
     Some(sent)
+}
+
+fn proposed_revision(action: &w::ProposeAction) -> Option<(c::ObjectKey, u16, u64)> {
+    match action {
+        w::ProposeAction::Settings(_) | w::ProposeAction::Batch(_) | w::ProposeAction::ReleasePlaced(_) => None,
+        w::ProposeAction::Amendment(v) => Some((c::ObjectKey::Task(v.task()), 1, v.revision().value())),
+    }
 }
 
 #[must_use]

@@ -484,8 +484,10 @@ fn a_client_proposes_a_release_and_the_owner_reads_it_in_their_inbox() {
         panic!("proposal document")
     };
     assert_eq!(document.waiting.holder, c::OwnerHistoryHolder::Person(owner));
-    let c::OwnerProposalAction::Release { hold: Some(held), .. } = &document.action else { panic!("release facts") };
-    assert_eq!(held.placed.as_ref().expect("placed facts").number, hold);
+    let c::OwnerProposalAction::Release { hold: Some(placed_hold), .. } = &document.action else {
+        panic!("release facts")
+    };
+    assert_eq!(placed_hold.placed.as_ref().expect("placed facts").number, hold);
     assert!(
         document.acts.iter().any(|offer| offer.act == c::ActKind::Accept && offer.admission == c::Admission::Allowed)
     );
