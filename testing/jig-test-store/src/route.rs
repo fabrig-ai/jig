@@ -83,7 +83,8 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
                 core::RestartStep::LoadInbox => {
                     census.as_ref()?;
                 }
-                core::RestartStep::Switch
+                core::RestartStep::Sweep
+                | core::RestartStep::Switch
                 | core::RestartStep::AdoptRuns
                 | core::RestartStep::ReadAfresh { .. }
                 | core::RestartStep::SettleOutbox { .. }
@@ -126,7 +127,8 @@ fn restart(routes: &Routes, owner: Token, after: Option<store::Cursor>) -> Optio
         core::RestartStep::LoadCore => Restore::Jig(Box::new(core::RestoreRange::LIVE)),
         core::RestartStep::LoadInbox => Restore::Jig(Box::new([core::RestoreRange::Census(census.clone()?)])),
         core::RestartStep::RestoreConnector { connector } => Restore::Application(Box::new([live(*connector)])),
-        core::RestartStep::Switch
+        core::RestartStep::Sweep
+        | core::RestartStep::Switch
         | core::RestartStep::AdoptRuns
         | core::RestartStep::ReadAfresh { .. }
         | core::RestartStep::SettleOutbox { .. }

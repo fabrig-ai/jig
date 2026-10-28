@@ -136,7 +136,10 @@ fn restart(engine: &mut Engine, step: core::RestartStep) {
             };
             crate::store::request(engine, jig_test_store::StoreOut::Restart { step, census });
         }
-        core::RestartStep::AdoptRuns | core::RestartStep::SettleOutbox { .. } | core::RestartStep::Open => {
+        core::RestartStep::Sweep
+        | core::RestartStep::AdoptRuns
+        | core::RestartStep::SettleOutbox { .. }
+        | core::RestartStep::Open => {
             stop::invalid_restore(engine);
         }
     }
@@ -239,6 +242,7 @@ fn core_held(engine: &mut Engine, held: core::Held) {
         core::Held::Sources { .. } | core::Held::CheckSource { .. } | core::Held::SignOutSource { .. } => {
             unreachable!("link translates host-wide source commands")
         }
+        core::Held::Restart(_) => unreachable!("root consumes restart continuations"),
         core::Held::Drained => stop::drained(engine),
         core::Held::Load(load) => immediate(engine, *load),
         core::Held::ReadLoad { load, range } => {
