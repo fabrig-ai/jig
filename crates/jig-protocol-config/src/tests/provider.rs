@@ -147,10 +147,10 @@ fn provider_limits_are_positive_named_overrides_with_profile_defaults() {
         }
         assert_eq!((limits.clients.provider_codes, limits.clients.provider_tokens), (7, 7));
         limits.clients.provider_codes = 0;
-        assert!(jig_protocol_engine_clients::worst_case(&limits.clients).is_none());
+        assert!(!jig_protocol_engine_clients::valid(&limits.clients));
         limits.clients.provider_codes = 1;
         limits.clients.provider_tokens = 0;
-        assert!(jig_protocol_engine_clients::worst_case(&limits.clients).is_none());
+        assert!(!jig_protocol_engine_clients::valid(&limits.clients));
     }
 }
 #[test]
