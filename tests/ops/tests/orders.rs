@@ -164,8 +164,7 @@ fn read_answers_keep_completion_arrival_order_under_load() {
 #[test]
 #[ignore = "passes once the watermark takes completions (phase 2)"]
 fn turn_kept_precedes_terminal_acknowledgement_under_load() {
-    let mut driver = Driver::started(SEED);
-    driver.chat();
+    let mut driver = Driver::turn_story(SEED);
     driver.send(root::Event::Host(host::Event::Turn {
         owner: driver.owner,
         turn: host::Turn {
