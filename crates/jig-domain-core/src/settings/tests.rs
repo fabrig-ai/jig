@@ -312,7 +312,7 @@ fn current_lookup_keeps_each_kinds_default_change_and_removal_origin() {
 }
 
 #[test]
-fn restoring_settings_proposals_requires_the_deployment_scope_without_a_project_policy() {
+fn loading_settings_proposals_does_not_rejudge_their_scope() {
     let (mut core, _) = crate::tests::core();
     core.counters.deployment.messages = 1;
     core.counters.deployment.people = 1;
@@ -332,7 +332,7 @@ fn restoring_settings_proposals_requires_the_deployment_scope_without_a_project_
     };
     assert!(core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row.clone()))));
     row.project = 1;
-    assert!(!core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row))));
+    assert!(core.restore_task_row(&jig_domain_tasks::Stored::PersonProposal(Box::new(row))));
 }
 
 fn stored_policy_change(bytes: u64) -> (Core, Limits, Record) {

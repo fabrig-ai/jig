@@ -40,7 +40,7 @@ fn supplied_period_boundaries_preserve_the_opening_wall_across_duplicates_and_re
 }
 
 #[test]
-fn cold_restore_refuses_a_period_without_its_actual_opening_fact() {
+fn loaded_ledgers_keep_the_original_opening_facts() {
     let test = Harness::new();
     let mut row = *test.domain.funding(Funder::Period { project: 1, period: 0 }).unwrap();
     let original = row;
@@ -55,13 +55,8 @@ fn cold_restore_refuses_a_period_without_its_actual_opening_fact() {
         let mut domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
         let mut out = Queue::with_capacity(max_out(&LIMITS));
         step(&mut domain, &test.env, Event::Restore { record: Stored::Ledger(row) }, &mut out);
-        let mut refused = false;
-        while let Some(request) = out.pop() {
-            if let Request::RestoreRefused { .. } = request {
-                refused = true;
-            }
-        }
-        assert!(refused);
+        assert!(out.is_empty());
+        assert_eq!(domain.funding(row.funder), Some(&row));
     }
 }
 

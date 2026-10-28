@@ -264,9 +264,9 @@ fn a_short_whole_closed_tail_fits_below_the_marker_size() {
 // Three claims put the window after the conversation's first attempt and
 // before the current claim, exposing the lower bound's turn-zero hole.
 #[test]
-fn a_window_at_turn_zero_is_refused_at_restore() {
+fn a_loaded_window_keeps_its_original_turn() {
     const TASK: u64 = 1;
-    for (turn, accepted) in [(0, false), (1, true)] {
+    for turn in [0, 1] {
         let (mut core, limits) = core();
         let mut proof = RunProof::claimed(TASK, 3, 1, None, fleet::HostKind::Worker);
         proof.accounts = Box::new([authority::AccountBinding { provider: 1, account: 0, source: 1 }]);
@@ -276,7 +276,8 @@ fn a_window_at_turn_zero_is_refused_at_restore() {
         core.restoring_proofs
             .insert(TASK, RestoringProof { attempt: 3, turn: 1, run_spent: 0, last_answer: None })
             .unwrap();
-        assert_eq!(core.restore_proof(proof, limits.tasks.result_bytes), accepted, "window turn {turn}");
+        assert!(core.restore_proof(proof.clone(), limits.tasks.result_bytes));
+        assert_eq!(core.proofs.get(&TASK), Some(&proof), "window turn {turn}");
     }
 }
 

@@ -252,7 +252,10 @@ fn invalid(rules: &Rules, limits: &Limits, policy: &Policy, restoring: bool) -> 
         if !authority_within(&role.authority, limits) {
             return Some(PolicyRefusal::Oversized);
         }
-        if (!restoring && !at_most_but_models(&role.authority, &policy.ceiling, &rules.implies))
+        if restoring {
+            continue;
+        }
+        if !at_most_but_models(&role.authority, &policy.ceiling, &rules.implies)
             || role.period_spend > policy.period_spend
             || role.requests.0 & !crate::Requests::ALL.0 != 0
             || role.decides.0 & !crate::Proposals::ALL.0 != 0
@@ -265,7 +268,7 @@ fn invalid(rules: &Rules, limits: &Limits, policy: &Policy, restoring: bool) -> 
             }
         }
     }
-    if let Some(number) = policy.escalation_role {
+    if !restoring && let Some(number) = policy.escalation_role {
         let mut valid = false;
         for role in &policy.roles {
             if role.number == number {
