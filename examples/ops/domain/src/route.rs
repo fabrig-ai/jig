@@ -261,7 +261,7 @@ fn core_held(
     work: &mut Queue<Work>,
 ) {
     match value {
-        core::Held::Restart(stage) => child(decision, crate::Released::Restart(stage)),
+        core::Held::Restart(stage) => child(decision, Released::Restart(stage)),
         core::Held::Load(load) => held(decision, Output::CoreLoad(*load)),
         core::Held::ApplicationDelivery { .. } => unreachable!("document assembly owns this synchronous output"),
         core::Held::ApplicationWatchEnded { watcher, connector, subject, why } => {

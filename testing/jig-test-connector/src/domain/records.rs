@@ -11,7 +11,7 @@ impl Domain {
             }
             RecordKey::ApplicationAnswer(token) => {
                 let (until, outcome) = self.application.answers.get(token)?;
-                Record::ApplicationAnswer { token: *token, until: *until, outcome: outcome.clone() }
+                Record::ApplicationAnswer { token: *token, until: *until, outcome: *outcome }
             }
             RecordKey::Procedure(task) => Record::Procedure(self.procedures.get(task)?.clone()),
             RecordKey::ProcedureDelegateOutcome(task) => {

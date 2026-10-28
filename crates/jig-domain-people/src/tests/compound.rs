@@ -45,7 +45,7 @@ fn a_compound_sent_twice_under_one_key_is_routed_once() {
 
 #[test]
 fn a_loaded_compound_answer_keeps_its_original_first_message() {
-    super::restored_answer_is_kept(compound(2), Outcome::Compound { project: 1, operations: 2, first_message: 0 });
+    restored_answer_is_kept(compound(2), Outcome::Compound { project: 1, operations: 2, first_message: 0 });
 }
 
 const INVALID: &[(u64, &[u8], Refusal)] = &[
