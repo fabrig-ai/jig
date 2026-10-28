@@ -253,10 +253,6 @@ impl Host for Visitor {
             && self.below.is_empty()
             && self.socket.is_none()
     }
-    fn worst_case(&self) -> u64 {
-        let limits = fixtures::limits();
-        io::worst_case(&limits.io).expect("io bound") + 512 * 1024
-    }
     fn operations(&self) -> u32 {
         io::operations(&fixtures::limits().io).expect("io operation bound")
     }

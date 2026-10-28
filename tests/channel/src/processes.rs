@@ -112,9 +112,6 @@ impl Host for ServiceHost {
     fn is_empty(&self) -> bool {
         self.service.is_empty() && self.restart_root.is_none()
     }
-    fn worst_case(&self) -> u64 {
-        self.service.worst_case().checked_add(2_097_152).expect("port observations")
-    }
     fn operations(&self) -> u32 {
         self.service.operations()
     }
@@ -168,9 +165,6 @@ impl Host for Proc {
     }
     fn exit(&self) -> Option<kernel::Exit> {
         self.host().exit()
-    }
-    fn worst_case(&self) -> u64 {
-        self.host().worst_case().checked_add(4096).expect("process wrapper")
     }
     fn operations(&self) -> u32 {
         self.host().operations()

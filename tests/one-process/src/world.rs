@@ -99,9 +99,6 @@ impl Host for ServiceHost {
     fn is_empty(&self) -> bool {
         self.service.is_empty()
     }
-    fn worst_case(&self) -> u64 {
-        self.service.worst_case() + 8 * 1024 * 1024
-    }
     fn operations(&self) -> u32 {
         self.service.operations()
     }
@@ -154,9 +151,6 @@ impl Host for Proc {
     }
     fn is_empty(&self) -> bool {
         self.host().is_empty()
-    }
-    fn worst_case(&self) -> u64 {
-        self.host().worst_case()
     }
     fn operations(&self) -> u32 {
         self.host().operations()

@@ -1330,21 +1330,6 @@ impl Host for Owner {
             && self.completions.is_empty()
             && self.submissions.is_empty()
     }
-    fn worst_case(&self) -> u64 {
-        driver::worst_case(&self.limits).expect("driver bound")
-            + io::worst_case(&self.limits.io).expect("io bound")
-            + store::worst_case(&self.store_limits).expect("store bound")
-            + 2 * Queue::<store::Event>::worst_case(store::MAX_OUT_DOWN).expect("store answers and readbacks bound")
-            + 3 * Queue::<skein_io::file::Request>::worst_case(skein_kv::MAX_OUT.below).expect("store files bound")
-            + records::worst_case(self.limits.accounts, &self.limits.client.document).expect("records bound")
-            + moves::worst_case(self.limits.accounts, &self.limits.client.document).expect("moves bound")
-            + restart::worst_case(self.limits.accounts, self.store_limits.secrets.page.rows).expect("inventory bound")
-            + Queue::<moves::Next>::worst_case(ROOM).expect("move steps bound")
-            + child::worst_case(&self.child_limits).expect("child bound")
-            + jig_protocol_accounts::table::worst_case(self.limits.accounts, self.limits.client.document.token_bytes)
-                .expect("table bound")
-            + 512_000
-    }
     fn operations(&self) -> u32 {
         io::operations(&self.limits.io).expect("io operation bound")
     }

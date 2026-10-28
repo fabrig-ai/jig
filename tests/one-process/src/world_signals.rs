@@ -66,9 +66,6 @@ impl<H: Host> Host for SignalHost<H> {
     fn is_empty(&self) -> bool {
         self.signal.is_none() && self.host.is_empty()
     }
-    fn worst_case(&self) -> u64 {
-        self.host.worst_case()
-    }
     fn operations(&self) -> u32 {
         self.host.operations() + 1
     }
