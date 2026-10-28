@@ -1543,7 +1543,7 @@ fn assert_check(events: &[Event], store: &Store, why: crate::Check) {
 }
 
 #[test]
-fn the_count_check_names_the_first_family_whose_rows_differ() {
+fn the_manifest_keeps_a_patchs_changed_counts() {
     let mut store = fixtures::opened();
     store.patch_sets(SETS);
     fixtures::committed(
@@ -1552,10 +1552,9 @@ fn the_count_check_names_the_first_family_whose_rows_differ() {
     );
     let mut before = crate::patching::check::before(&mut store).expect("count kept rows");
     before.get_mut(0).expect("label count").before = 2;
-    assert_eq!(
-        crate::patching::check::counts(&mut store, before),
-        Err(OpenRefusal::Check { why: crate::Check::Count { family: "fixture-label", before: 2, after: 1 } })
-    );
+    let counts = crate::patching::check::counts(&mut store, before).expect("counts are observations");
+    let counts = counts.get(0).expect("label count");
+    assert_eq!((counts.before(), counts.after()), (2, 1));
 }
 
 fn fixture_with_record(record: jig_domain_core::Record) -> Vec<Item> {
@@ -1594,14 +1593,12 @@ fn a_restart_row_past_the_deployments_lowered_limit_refuses_load() {
 }
 
 #[test]
-fn an_ended_read_without_its_task_refuses_the_join() {
+fn the_patch_check_leaves_ended_read_links_to_the_restart() {
     let record = ended_position();
-    let key = crate::keys::encode(&record.key(), fixtures::KEY_LIMIT).expect("ended position key");
     let mut disk = Harness::new(&fixture_with_record(record));
     let mut store = fixture_store(&disk, 8, fixtures::store_limits().store.commit, levels(2, 2));
     let events = disk.open(&mut store);
-    assert_check(&events, &store, crate::Check::Join { key });
-    assert_abandoned_at(disk, FIXTURE_LAST + 1);
+    assert!(matches!(events.last(), Some(Event::Opened { .. })), "{events:?}");
 }
 
 #[test]
