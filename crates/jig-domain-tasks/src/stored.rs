@@ -18,9 +18,27 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
     }
     match stored {
         Stored::PlacedHold(hold) => {
-            if domain.placed.contains_key(&hold.number) || domain.placed.len() >= env.limits.placed_holds {
-                return failed(domain, None, Refusal::Restore, out);
+            if let Some(cause) = placed_fit(domain, &env.limits, &hold) {
+                domain.startup = Startup::Failed;
+                out.push(Request::RestoreRefused {
+                    problem: Problem {
+                        task: None,
+                        why: Refusal::Restore,
+                        blocked_by: None,
+                        capacity: Some(crate::Capacity {
+                            project: Some(hold.project),
+                            by: match hold.owner {
+                                crate::Owner::Party { person } => Party::Person(person),
+                                crate::Owner::Task { task } => Party::Task(task),
+                            },
+                            action: crate::CapacityAction::Place { hold: hold.number },
+                            cause,
+                        }),
+                    },
+                });
+                return;
             }
+            assert!(!domain.placed.contains_key(&hold.number), "tasks: duplicate PlacedHold({})", hold.number);
             domain.placed.insert(hold.number, *hold).expect("restored hold room");
         }
         Stored::PersonProposal(row) => restore_person_proposal(domain, env, *row, out),
@@ -90,6 +108,34 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, ou
             }
         }
     }
+}
+
+fn placed_fit(domain: &Domain, limits: &Limits, hold: &crate::PlacedHold) -> Option<crate::CapacityCause> {
+    if domain.placed.len() >= limits.placed_holds {
+        return Some(crate::CapacityCause::PlacedHolds { limit: limits.placed_holds });
+    }
+    if hold.exempt.len() > usize::try_from(limits.exemptions).expect("exemption bound fits") {
+        return Some(crate::CapacityCause::Exemptions { limit: limits.exemptions });
+    }
+    let mut project = 0_u32;
+    let mut party = 0_u32;
+    for (_, old) in &domain.placed {
+        if old.project == hold.project {
+            project = project.checked_add(1).expect("bounded restored holds");
+        }
+        if old.owner == hold.owner {
+            party = party.checked_add(1).expect("bounded restored holds");
+        }
+    }
+    if project >= limits.project_placed_holds {
+        return Some(crate::CapacityCause::ProjectPlacedHolds { limit: limits.project_placed_holds });
+    }
+    if let crate::Owner::Party { .. } = hold.owner
+        && party >= limits.party_placed_holds
+    {
+        return Some(crate::CapacityCause::PartyPlacedHolds { limit: limits.party_placed_holds });
+    }
+    None
 }
 
 fn restore_person_proposal(
