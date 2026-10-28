@@ -80,7 +80,16 @@ fn decode(store: &mut Store, row: skein_kv::Row) -> Option<(Row, Option<Row>, u6
         Row::Jig(Record::People(jig_domain_people::Stored::EndedRead { task, .. })) => *task,
         Row::Jig(_) | Row::Application { .. } => return Some((row, None, size)),
     };
-    let (record, owner_size) = ended(store, task)?;
+    let (record, owner_size) = match ended(store, task)? {
+        Some(ended) => ended,
+        None => panic!(
+            "store: {:?} links to Ended({task}), which is absent",
+            match &row {
+                Row::Jig(record) => record.key(),
+                Row::Application { .. } => unreachable!("typed census row"),
+            }
+        ),
+    };
     if let Row::Jig(Record::People(jig_domain_people::Stored::EndedRead { .. })) = row {
         Some((row, Some(Row::Jig(record)), size.checked_add(owner_size)?))
     } else {
@@ -89,7 +98,7 @@ fn decode(store: &mut Store, row: skein_kv::Row) -> Option<(Row, Option<Row>, u6
 }
 
 /// The restart's census join, shared with the check before the switch.
-pub(crate) fn ended(store: &mut Store, task: u64) -> Option<(Record, u64)> {
+pub(crate) fn ended(store: &mut Store, task: u64) -> Option<Option<(Record, u64)>> {
     let key = Key::Tasks(tasks::Key::Ended(task));
     let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
     let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
@@ -101,12 +110,16 @@ pub(crate) fn ended(store: &mut Store, task: u64) -> Option<(Record, u64)> {
         &mut below,
     );
     assert!(below.is_empty(), "memory census joins issue no files");
-    let Some(skein_kv::Event::Got { value: Some(value), .. }) = above.pop() else { return None };
+    let value = match above.pop()? {
+        skein_kv::Event::Got { value: Some(value), .. } => value,
+        skein_kv::Event::Got { value: None, .. } => return Some(None),
+        _ => return None,
+    };
     let record = codec::decode(&key, &value, &store.codec, &store.names)?;
     if record.key() != key {
         return None;
     }
-    Some((record, u64::try_from(value.len()).ok()?))
+    Some(Some((record, u64::try_from(value.len()).ok()?)))
 }
 
 fn people_interval(range: &Restore) -> Option<u32> {

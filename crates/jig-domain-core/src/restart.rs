@@ -117,15 +117,6 @@ pub enum RestartRequest {
     },
 }
 
-/// The child holding a record refused before the switch (domain/engine.md, 6).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum RestoreChild {
-    People,
-    Tasks,
-    Accounts,
-    Core,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Restart {
     Cold,
@@ -148,6 +139,7 @@ impl Core {
             let _request = self.restart_refuse();
             return false;
         }
+        self.accounts.link_restored();
         self.link_tasks();
         for ((party, task), _) in self.people.read_conversations() {
             assert!(

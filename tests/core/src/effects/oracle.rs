@@ -10,6 +10,9 @@ impl World {
         self.oracle_skip = Some("the oracle already owns the story's teardown");
         self.cut = None;
         self.peers = None;
+        self.hold_restore_pages = false;
+        self.hold_restart_reads = false;
+        self.hold_switch = false;
         self.release_commits();
         let before = self.oracle_documents();
         let hosts = self.domain.core().fleet.host_views();
@@ -152,8 +155,6 @@ impl Drop for World {
     fn drop(&mut self) {
         if !std::thread::panicking() && self.oracle_skip.is_none() {
             let configuration = self.oracle_configuration.take().expect("story retains its startup configuration");
-            self.observer = crate::observations::Observer::new(&configuration);
-            self.observer.fresh_mark(self.wall, &self.store);
             self.restart_oracle(configuration);
         }
     }
