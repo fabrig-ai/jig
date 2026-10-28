@@ -973,7 +973,7 @@ fn documents_part_keys_are_preserved_or_refused_whole() {
     assert_eq!(task.authority.grants.get(0).unwrap().segments.get(0).unwrap().as_ref(), b"whole");
     assert_eq!(task.authority.grants.get(0).unwrap().last, PatternEnd::Exact(b"end".as_slice().into()));
     assert!(document_worst_case(&limits.documents).is_some());
-    assert!(worst_case(&limits).is_some());
+    assert!(valid(&limits));
 }
 
 #[test]

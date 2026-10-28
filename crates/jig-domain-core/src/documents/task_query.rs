@@ -176,6 +176,3 @@ pub(super) fn worst_case(limits: &DocumentLimits) -> Option<u64> {
             .checked_mul(super::chip_heap_worst_case(limits)?.checked_add(List::<u64>::worst_case(limits.lines)?)?)?,
     )
 }
-pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    Map::<SortKey, u64>::worst_case(limits.tasks.tasks)
-}

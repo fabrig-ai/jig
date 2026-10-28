@@ -358,32 +358,6 @@ pub fn revision_worst_case(limits: &crate::Limits) -> Option<u64> {
         .checked_add(List::<Item>::worst_case(capacity(limits)?.checked_mul(2)?)?)?
         .checked_add(u64::try_from(size_of::<Head>()).ok()?)
 }
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    let count = capacity(limits)?;
-    let maps = Map::<Setting, Default>::worst_case(count)?.checked_add(Map::<Setting, Changed>::worst_case(count)?)?;
-    let restore = Map::<Setting, bool>::worst_case(count.checked_mul(2)?)?
-        .checked_add(Map::<Setting, Default>::worst_case(count)?)?
-        .checked_add(set_worst_case(limits)?)?;
-    let walks = Map::<Setting, ()>::worst_case(count.checked_mul(4)?)?
-        .checked_add(List::<Setting>::worst_case(count.checked_mul(4)?)?)?
-        .checked_add(List::<jig_domain_tasks::CharterModels>::worst_case(
-            limits.tasks.charters.checked_mul(2)?.checked_add(limits.settings.versions)?,
-        )?)?
-        .checked_add(
-            u64::from(limits.tasks.charters.checked_mul(2)?.checked_add(limits.settings.versions)?)
-                .checked_mul(u64::from(jig_domain_tasks::MODELS))?,
-        )?
-        .checked_add(List::<u64>::worst_case(limits.tasks.circle)?)?
-        .checked_add(u64::try_from(size_of::<Change>()).ok()?)?;
-    set_worst_case(limits)?
-        .checked_mul(2)?
-        .checked_add(walks)?
-        .checked_add(maps)?
-        .checked_add(restore)?
-        .checked_add(held::worst_case(limits)?)?
-        .checked_add(u64::try_from(size_of::<Head>()).ok()?)
-}
 
 #[cfg(test)]
 mod tests;

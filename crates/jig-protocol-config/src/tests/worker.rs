@@ -218,13 +218,9 @@ fn table<const N: usize>(cases: [Case; N]) {
 fn program_source_resources_have_positive_bounded_admission() {
     let limits = crate::profile(crate::Profile::Small).hub;
     assert_eq!(limits.program_sources, 12);
-    assert!(jig_domain_host::worst_case(&limits).is_some());
-    assert!(
-        jig_domain_host::worst_case(&jig_domain_host::Limits { source_interval: Duration::ZERO, ..limits }).is_none()
-    );
-    assert!(
-        jig_domain_host::worst_case(&jig_domain_host::Limits { source_timeout: Duration::ZERO, ..limits }).is_none()
-    );
+    assert!(jig_domain_host::valid(&limits));
+    assert!(!jig_domain_host::valid(&jig_domain_host::Limits { source_interval: Duration::ZERO, ..limits }));
+    assert!(!jig_domain_host::valid(&jig_domain_host::Limits { source_timeout: Duration::ZERO, ..limits }));
 }
 
 #[test]

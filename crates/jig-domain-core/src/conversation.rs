@@ -128,18 +128,3 @@ pub(crate) fn settle(
     out.push(Request::Decided);
     Requests::Out(out)
 }
-
-/// Include settled records, assignment copies and the current commit/delivery
-/// scratch copies in the application's startup heap bound.
-#[must_use]
-pub fn conversation_worst_case(limits: &Limits) -> Option<u64> {
-    let each = u64::try_from(size_of::<SettledCall>()).ok()?.checked_add(u64::from(limits.call_answer_bytes))?;
-    let replay = u64::try_from(size_of::<Settled>()).ok()?.checked_add(u64::from(limits.call_answer_bytes))?;
-    // Assignment copies carry their full keys. The four scratch copies retain
-    // tool and answer alone; a settling input can also own its live address.
-    let copies =
-        replay.checked_mul(u64::from(limits.tasks.tasks).checked_mul(2)?)?.checked_add(each.checked_mul(4)?)?;
-    skein_lib::Map::<CallKey, SettledCall>::worst_case(limits.call_records)?
-        .checked_add(u64::from(limits.call_records).checked_mul(copies)?)?
-        .checked_add(limits.fleet.call_name_bytes)
-}

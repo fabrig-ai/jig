@@ -175,13 +175,6 @@ fn allowed(value: Result<(), people::Refusal>) -> Admission {
     }
 }
 
-/// Transient judgment facts and their authority translations; no result is retained.
-pub(crate) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    documents::document_worst_case(&limits.documents)?
-        .checked_mul(4)?
-        .checked_add(List::<u32>::worst_case(limits.authority.roles)?)
-}
-
 /// Judge a note edit with the scope supplied by its owner-loaded entry.
 pub(crate) fn note(
     core: &Core,

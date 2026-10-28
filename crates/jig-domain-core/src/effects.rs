@@ -1479,43 +1479,6 @@ pub(crate) fn deadline(core: &mut Core, env: &Env<Limits>) -> Requests {
     Requests::Out(out)
 }
 
-/// Heap owned by effect handoffs and live reply rights. Roots that price the
-/// core's children separately add this bound for the core's effect state.
-#[must_use]
-pub fn effect_worst_case(limits: &Limits) -> Option<u64> {
-    use core::mem::size_of;
-    use skein_lib::Map;
-    let flights = limits.call_records.checked_add(limits.tasks.tasks)?.checked_add(limits.people.pending)?;
-    let name = u64::from(limits.authority.segments).checked_mul(
-        u64::try_from(size_of::<Box<[u8]>>()).ok()?.checked_add(u64::from(limits.authority.segment_bytes))?,
-    )?;
-    let resources = u64::from(limits.authority.writes.checked_add(1)?)
-        .checked_mul(name.checked_add(u64::try_from(size_of::<authority::EffectResource>()).ok()?)?)?;
-    let description = u64::try_from(size_of::<connector::EffectDescription>())
-        .ok()?
-        .checked_add(resources)?
-        .checked_add(List::<authority::Judge>::worst_case(limits.authority.facts)?)?;
-    let flight = u64::try_from(size_of::<Flight>())
-        .ok()?
-        .checked_add(description)?
-        .checked_add(u64::try_from(size_of::<tasks::Proposal>()).ok()?)?
-        .checked_add(u64::from(limits.tasks.message_bytes))?
-        .checked_add(u64::from(limits.tasks.authority_bytes))?
-        .checked_add(u64::from(limits.tasks.authority_grants).checked_mul(
-            u64::try_from(size_of::<tasks::Grant>()).ok()?.checked_add(
-                u64::from(limits.tasks.authority_segments).checked_mul(u64::try_from(size_of::<Box<[u8]>>()).ok()?)?,
-            )?,
-        )?)?
-        .checked_add(List::<authority::Judge>::worst_case(limits.authority.facts)?)?
-        .checked_add(List::<authority::Given>::worst_case(limits.authority.facts)?)?;
-    Map::<Token, Box<Flight>>::worst_case(flights)?
-        .checked_add(u64::from(flights).checked_mul(flight)?)?
-        .checked_add(Map::<u64, Waiting>::worst_case(limits.call_records)?)?
-        .checked_add(Map::<Token, (u16, Token)>::worst_case(limits.call_records)?)?
-        // One completed handoff owns a cloned description and all judge asks.
-        .checked_add(description.checked_mul(u64::from(limits.authority.facts.checked_add(1)?))?)
-}
-
 fn projection_refused(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, goal: u64) {
     let message = b"Projection write refused";
     let words: &[u8] = message;

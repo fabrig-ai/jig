@@ -914,5 +914,5 @@ fn inbox_context_memory_prices_every_reserved_container_and_complete_document_en
         Some(document_worst_case(&limits.documents).unwrap() + bound + TEMPLATE_ENVELOPES + SETTINGS_DOCUMENT)
     );
     assert!(reads::answer_worst_case(&limits).unwrap() >= document_with_context_worst_case(&limits).unwrap());
-    assert!(worst_case(&limits).is_some());
+    assert!(valid(&limits));
 }

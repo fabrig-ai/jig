@@ -37,7 +37,7 @@ use crate::documents::{self, DocumentClock, Missing, Subject, Window};
 use crate::{Core, Held, Limits, Request, Requests};
 use alloc::boxed::Box;
 use core::mem::size_of;
-use skein_lib::{Env, Id, List, Queue, ReplyTo, Slab, Token};
+use skein_lib::{Env, Id, List, Queue, ReplyTo, Token};
 
 /// Which physical rows a read scope loads (protocol/store.md, 4.3 and 7.3).
 /// Cursor admission is separate: notes lines are joined to entry rows before paging.
@@ -634,31 +634,6 @@ pub(crate) fn query_worst_case(limits: &Limits) -> Option<u64> {
     u64::from(limits.notes.pattern_bytes)
         .checked_mul(u64::try_from(size_of::<Box<[u8]>>()).ok()?.checked_add(1)?)?
         .checked_add(u64::from(limits.notes.description_bytes))
-}
-
-/// Pending load slots, one incoming bounded page and its constructed answer.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.load_bytes == 0 || limits.load_slots == 0 {
-        return None;
-    }
-    Slab::<Pending>::worst_case(limits.load_slots)?
-        // Each pending query, plus the incoming read, its cursor and the target
-        // clone during admission. The emitted range and page cursor are priced
-        // in the held output's answer bound.
-        .checked_add(u64::from(limits.load_slots).checked_add(3)?.checked_mul(query_worst_case(limits)?)?)?
-        .checked_add(u64::from(limits.load_slots).checked_mul(u64::try_from(size_of::<Position>()).ok()?)?)?
-        .checked_add(limits.load_bytes.max(settings::load_bytes(limits, limits.documents.rows)?))?
-        .checked_add(skein_lib::Map::<u32, crate::settings::Revision>::worst_case(limits.documents.rows)?)?
-        .checked_add(skein_lib::Map::<crate::settings::Setting, ()>::worst_case(
-            crate::settings::capacity(limits)?.checked_mul(2)?,
-        )?)?
-        // The incoming failure carrier owns its task within load_bytes.
-        .checked_add(u64::try_from(size_of::<Loaded>()).ok()?)?
-        .checked_add(u64::from(limits.load_slots).checked_mul(documents::document_with_context_worst_case(limits)?)?)?
-        // Reverse live reads retain one bounded tail while making producer pages.
-        .checked_add(Queue::<PageRow>::worst_case(limits.documents.rows)?)?
-        .checked_add(answer_worst_case(limits)?)
 }
 
 pub(super) fn load_settings(core: &mut Core, env: &Env<Limits>, pending: Pending) -> Requests {

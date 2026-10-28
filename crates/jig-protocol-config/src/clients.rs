@@ -215,7 +215,7 @@ mod settings_tests {
     fn profile_core_shares_remain_representable() {
         for profile in [crate::Profile::Small, crate::Profile::Standard] {
             let limits = crate::profile(profile);
-            assert!(jig_domain_core::worst_case(&limits.core).is_some(), "a profile's core share is representable");
+            assert!(jig_domain_core::valid(&limits.core), "a profile's core limits are representable");
         }
     }
 }

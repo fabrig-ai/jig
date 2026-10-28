@@ -203,25 +203,3 @@ pub(super) fn offers_worst_case(limits: &DocumentLimits) -> Option<u64> {
 pub(super) fn rows_worst_case(limits: &DocumentLimits) -> Option<u64> {
     List::<PayerReadiness>::worst_case(limits.lines)
 }
-
-/// Pending and roles survive each payer walk; coverage and candidates survive its host check.
-/// Candidate ranking is temporary; host facts survive the per-host model support check.
-pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    let ranking = List::<(u8, accounts::Holder, u32, u32)>::worst_case(limits.accounts.accounts)?;
-    let hosts = List::<fleet::HostView>::worst_case(
-        limits
-            .fleet
-            .workers
-            .checked_add(limits.fleet.history)?
-            .checked_add(u32::from(limits.fleet.engine_slots > 0))?,
-    )?
-    .checked_add(u64::try_from(size_of::<fleet::ModelNeed>()).ok()?)?
-    .checked_add(u64::from(crate::MODEL_NAME_BYTES))?;
-    let host_facts =
-        List::<accounts::HostSource>::worst_case(limits.accounts.accounts.checked_mul(limits.accounts.sources)?)?;
-    List::<accounts::Pending>::worst_case(limits.accounts.sign_ins)?
-        .checked_add(List::<jig_domain_people::ProjectRole>::worst_case(limits.people.projects)?)?
-        .checked_add(List::<accounts::Coverage>::worst_case(limits.accounts.accounts)?)?
-        .checked_add(List::<u32>::worst_case(limits.accounts.accounts)?)?
-        .checked_add(ranking.max(hosts.checked_add(host_facts)?))
-}

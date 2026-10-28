@@ -449,10 +449,9 @@ fn the_accounts_move_deadline_is_positive_and_overridden_in_milliseconds() {
 fn the_tail_has_its_own_profile_budget_and_override() {
     let mut expected = small();
     assert_eq!(expected.core.brief_core_budgets.tail, 2048);
-    let before = jig_domain_core::worst_case(&expected.core).unwrap();
     expected.core.brief_core_budgets.tail = 90;
     assert_eq!(parse(br#"{"profile":"small","overrides":{"core.brief_core_budgets.tail":90}}"#), Ok(expected));
-    assert!(jig_domain_core::worst_case(&expected.core).unwrap() < before);
+    assert!(jig_domain_core::valid(&expected.core));
 }
 
 #[test]

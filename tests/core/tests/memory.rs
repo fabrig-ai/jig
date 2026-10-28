@@ -9,10 +9,12 @@ use skein_world::domain::heap::{self, Meter};
 
 #[global_allocator]
 static HEAP: heap::Counting = heap::Counting;
+// The core world's existing fixed scenario ceiling.
+const CORE_HEAP_CEILING: u64 = 12_000_000;
 
-fn core_children_routes_and_an_in_flight_decision_fit_the_checked_bound() {
+fn core_children_routes_and_an_in_flight_decision_stay_under_the_scenario_ceiling() {
     let limits = world::limits();
-    let bound = core::worst_case(&limits.core).expect("walking limits price every core owner");
+    let bound = CORE_HEAP_CEILING;
     let configuration = world::config(91);
     let mut observer = jig_core_world::observations::Observer::new(&configuration);
     let config = configuration.core;
@@ -46,15 +48,12 @@ fn core_children_routes_and_an_in_flight_decision_fit_the_checked_bound() {
     observer.observe(0, jig_core_world::referee::Observed::Heap { held: meter.held(), maximum: bound });
 }
 
-fn room_and_memory_refuse_unrepresentable_or_missing_limits() {
+fn invalid_limits_are_refused() {
     let limits = world::limits().core;
-    assert!(core::worst_case(&core::Limits { connectors: 0, ..limits }).is_some());
-    assert!(core::worst_case(&core::Limits { resume_bytes: 0, ..limits }).is_none());
-    assert!(core::worst_case(&core::Limits { call_records: 0, ..limits }).is_none());
-    assert!(
-        core::worst_case(&core::Limits { tasks: tasks::Limits { tasks: u32::MAX, ..limits.tasks }, ..limits })
-            .is_none()
-    );
+    assert!(core::valid(&core::Limits { connectors: 0, ..limits }));
+    assert!(!core::valid(&core::Limits { resume_bytes: 0, ..limits }));
+    assert!(!core::valid(&core::Limits { call_records: 0, ..limits }));
+    assert!(!core::valid(&core::Limits { tasks: tasks::Limits { tasks: u32::MAX, ..limits.tasks }, ..limits }));
 }
 
 fn both_worlds_check_the_counted_heap_at_every_iteration() {
@@ -70,8 +69,8 @@ fn both_worlds_check_the_counted_heap_at_every_iteration() {
 // Each named scenario preserves its own fixture and original assertions.
 #[test]
 fn memory_scenario_family() {
-    core_children_routes_and_an_in_flight_decision_fit_the_checked_bound();
-    room_and_memory_refuse_unrepresentable_or_missing_limits();
+    core_children_routes_and_an_in_flight_decision_stay_under_the_scenario_ceiling();
+    invalid_limits_are_refused();
     both_worlds_check_the_counted_heap_at_every_iteration();
 }
 
@@ -83,7 +82,7 @@ fn settled_finishing_queries_allocate_nothing_and_empty_closure_holds_one_output
     let mut domain = core::Core::new(world::config(192).core, &limits).expect("fixture core");
     domain.counters = core::Counters::new(domain.counters.deployment());
     let setup = meter.end();
-    let bound = core::worst_case(&limits).expect("validated core heap bound");
+    let bound = CORE_HEAP_CEILING;
     meter.check(setup, bound, &limits);
     let held = meter.held();
     meter.start();

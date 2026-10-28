@@ -2,7 +2,7 @@
 //! The core routes these sibling facts on save and restore (domain/engine.md, 4.4).
 
 mod census;
-pub(crate) use census::{Progress, worst_case as census_worst_case};
+pub(crate) use census::Progress;
 
 use alloc::boxed::Box;
 use jig_domain_authority as authority;
@@ -78,22 +78,6 @@ pub(crate) fn reply_refs(limits: &Limits, row: &tasks::TaskRecord, party: u64) -
         .expect("bounded owner hints");
     }
     refs.into_boxed()
-}
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let headers = limits.people.people.checked_mul(limits.people.inbox_entries)?.checked_add(1)?;
-    let questions = question_capacity(limits)?;
-    skein_lib::Map::<(u64, u64), tasks::ActivityLine>::worst_case(questions)?
-        .checked_add(u64::from(questions).checked_mul(u64::from(limits.tasks.message_bytes))?)?
-        .checked_add(List::<(u64, u64)>::worst_case(questions)?)?
-        .checked_add(skein_lib::Map::<u64, ArchivedChat>::worst_case(headers)?)?
-        .checked_add(
-            u64::from(headers)
-                .checked_mul(crate::documents::chip_heap_worst_case(&limits.documents)?.checked_mul(2)?)?,
-        )?
-        .checked_add(List::<u64>::worst_case(headers)?)?
-        .checked_add(List::<people::ReplyRef>::worst_case(limits.tasks.inbox_messages)?)?
-        .checked_add(List::<people::Update>::worst_case(limits.people.inbox_entries)?)
 }
 
 impl Core {

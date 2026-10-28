@@ -511,22 +511,6 @@ pub fn document_with_context_worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(u64::from(limits.documents.lines).checked_mul(crate::templates::list_worst_case(limits)?)?)
 }
 
-/// Peak scratch allocated while constructing party/deployment pages. Child
-/// accessors copy bounded shallow facts only; documents themselves are separate.
-pub(crate) fn document_scratch_worst_case(limits: &Limits) -> Option<u64> {
-    let waits = List::<u64>::worst_case(limits.tasks.tree_tasks)?
-        .checked_add(List::<people::Entry>::worst_case(crate::inbox::waiting_capacity(limits)?)?)?;
-    Some(
-        deployment::scratch_worst_case(limits)?
-            .max(inbox_deployment::scratch_worst_case(limits)?)
-            .max(settings::scratch_worst_case(limits)?)
-            .max(catalogue::scratch_worst_case(limits)?)
-            .max(List::<jig_domain_accounts::Pending>::worst_case(limits.accounts.sign_ins)?)
-            .max(List::<crate::Template>::worst_case(limits.templates)?)
-            .max(task_query::scratch_worst_case(limits)?.checked_add(waits)?),
-    )
-}
-
 /// Join volatile live observations to a loaded owner row. The reader checks
 /// project visibility first; this does not restore or change the row.
 pub fn chip_from_row_with_core(core: &Core, limits: &Limits, row: &tasks::TaskRecord) -> Result<Chip, Missing> {

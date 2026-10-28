@@ -33,7 +33,7 @@ pub mod documents;
 mod effects;
 mod escalation;
 pub mod waits;
-pub use effects::{EffectKey, EffectOrigin, EffectPurpose, effect_worst_case};
+pub use effects::{EffectKey, EffectOrigin, EffectPurpose};
 
 mod ended_marks;
 pub mod forget;
@@ -49,7 +49,7 @@ mod indexes;
 mod llm;
 mod memory;
 
-pub use memory::{Problem, policy_owned_bytes, valid, worst_case};
+pub use memory::{Problem, policy_owned_bytes, valid};
 mod model_names;
 mod numbers;
 mod person_task;
@@ -94,7 +94,7 @@ pub use routing::{
 };
 pub use sibling_routes::{MadeRoute, PersonMessage, SentRoute};
 mod conversation;
-pub use conversation::{DeliveryOutcome, Settled, SettledAnswer, SettledCall, conversation_worst_case};
+pub use conversation::{DeliveryOutcome, Settled, SettledAnswer, SettledCall};
 pub mod charters;
 pub mod fleet_needs;
 pub mod settings;

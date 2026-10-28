@@ -1,7 +1,7 @@
 //! Rebuild live projections once, then name the indexed ended owners (store.md 7.2).
 use crate::{Census, Core, Limits, ReadResults};
 use jig_domain_people as people;
-use skein_lib::{Env, List, Map, Queue, Time, Wall};
+use skein_lib::{Env, List, Queue, Time, Wall};
 
 #[derive(Debug)]
 pub(crate) struct Progress {
@@ -9,12 +9,6 @@ pub(crate) struct Progress {
     read_conversation: u64,
 }
 
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<u64, Progress>::worst_case(limits.people.people)?
-        .checked_add(List::<u64>::worst_case(limits.people.people)?)?
-        .checked_add(List::<ReadResults>::worst_case(limits.people.people)?)?
-        .checked_add(List::<(u64, u64)>::worst_case(super::question_capacity(limits)?)?)
-}
 impl Core {
     pub fn census(&mut self, limits: &Limits) -> Census {
         assert!(

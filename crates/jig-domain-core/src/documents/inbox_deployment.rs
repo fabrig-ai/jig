@@ -322,7 +322,3 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
         selection: Some(selection),
     })
 }
-
-pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    Map::<(bool, u64, u64, u64, InboxObject), (u64, u32, InboxObject, Option<u64>, Wall, bool, Cursor, bool)>::worst_case(limits.people.inbox_entries.checked_mul(2)?.checked_add(limits.settings.proposals)?)
-}

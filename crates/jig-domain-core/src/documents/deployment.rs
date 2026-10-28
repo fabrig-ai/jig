@@ -1,13 +1,13 @@
 //! Deployment facts and store fill (client/domain/pages.md, 7; protocol/store.md, 11.2).
 use super::inbox_deployment::line_bound;
-use super::{Chip, Cursor, InboxObject, Missing, TaskLink, Window};
+use super::{Chip, Missing, TaskLink, Window};
 use crate::{Core, Limits};
 use alloc::boxed::Box;
 use jig_domain_accounts as accounts;
 use jig_domain_fleet as fleet;
 use jig_domain_people as people;
 use jig_domain_tasks as tasks;
-use skein_lib::{Duration, List, Map, Time, Wall};
+use skein_lib::{Duration, List, Time, Wall};
 
 /// Store map bytes at the last commit answer and its admission mark (store.md, 11.2).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -584,33 +584,4 @@ pub(super) fn worst_case(limits: &super::DocumentLimits) -> Option<u64> {
         .checked_add(u64::try_from(size_of::<Deployment>()).ok()?)?
         .checked_add(super::catalogue::offers_worst_case(limits)?)?
         .checked_add(super::catalogue::rows_worst_case(limits)?)
-}
-
-pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    let tracked = limits
-        .fleet
-        .workers
-        .checked_mul(limits.fleet.slots)?
-        .checked_add(limits.fleet.engine_slots)?
-        .checked_add(limits.fleet.attempts)?;
-    List::<fleet::HostView>::worst_case(
-        limits
-            .fleet
-            .workers
-            .checked_add(u32::from(limits.fleet.engine_slots > 0))?
-            .checked_add(limits.fleet.history)?,
-    )?
-    .checked_add(List::<fleet::HelloRefusalRecord>::worst_case(limits.fleet.history)?)?
-    .checked_add(List::<people::CapacityRefusal>::worst_case(
-        limits.people.requests.checked_add(limits.people.room_refusals)?,
-    )?)?
-    .checked_add(List::<tasks::CapacityRefusal>::worst_case(limits.tasks.room_refusals)?)?
-    .checked_add(List::<fleet::AttemptView>::worst_case(tracked)?)?
-    .checked_add(List::<accounts::Fact>::worst_case(limits.accounts.accounts)?)?
-    .checked_add(Map::<
-        (bool, u64, u64, u64, InboxObject),
-        (u64, u32, InboxObject, Option<u64>, Wall, bool, Cursor, bool),
-    >::worst_case(limits.people.inbox_entries.checked_mul(2)?)?)?
-    .checked_add(List::<people::Entry>::worst_case(limits.people.inbox_entries.checked_mul(5)?)?)?
-    .checked_add(super::catalogue::scratch_worst_case(limits)?)
 }

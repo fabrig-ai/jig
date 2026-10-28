@@ -92,9 +92,6 @@ pub(super) fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<SettingsProposal>::worst_case(limits.settings.proposals)?)?
         .checked_add(u64::try_from(size_of::<Settings>()).ok()?)
 }
-pub(super) fn scratch_worst_case(limits: &Limits) -> Option<u64> {
-    Map::<Setting, ()>::worst_case(crate::settings::capacity(limits)?.checked_mul(2)?)
-}
 
 #[cfg(test)]
 mod tests {
