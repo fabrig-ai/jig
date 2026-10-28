@@ -232,7 +232,7 @@ impl<A: App, F: Front<A>> World<A, F> {
         let (root, view) = constructor(self.rng.next_u64());
         let id = ClientId(self.clients.len());
         let patches = Queue::with_capacity(A::patch_limit(&view));
-        let out = Queue::with_capacity(A::max_out(&limits));
+        let out = Queue::uncapped();
         self.clients.push(Client {
             constructor,
             limits,

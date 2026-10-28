@@ -65,7 +65,7 @@ fn drain(client: &mut Client, front: &mut Joint, out: &mut Queue<Request>) {
 fn an_unlinked_client_sees_me_live_against_the_real_core() {
     let limits = limits();
     let mut client = Client::unlinked(&limits, 8512).expect("bounded client");
-    let mut out = Queue::with_capacity(jig_client::max_out(&limits));
+    let mut out = Queue::uncapped();
     let mut front = front();
     Front::<Test>::bind(&mut front, CLIENT, PARTY);
     client.step(NOW, WALL, Event::StartUnlinked { kept: List::with_capacity(0) }, &mut out);
@@ -90,7 +90,7 @@ fn a_key_constructor_sends_the_value_once_without_keeping_it() {
     use skein_lib::{RequestEnvelope, Secret, sha256};
     let limits = limits();
     let mut client = Client::unlinked(&limits, 8513).expect("bounded client");
-    let mut out = Queue::with_capacity(jig_client::max_out(&limits));
+    let mut out = Queue::uncapped();
     let mut front = front();
     Front::<Test>::bind(&mut front, CLIENT, PARTY);
     client.step(NOW, WALL, Event::StartUnlinked { kept: List::with_capacity(0) }, &mut out);

@@ -32,7 +32,7 @@ impl Host {
             bounds,
             codec: address::REFERENCE,
             env: Env { now, wall, limits },
-            out: Queue::with_capacity(root::max_out(&limits)),
+            out: Queue::uncapped(),
             mapping: super::mapping::mapping(),
             stream: jig_client_protocol_http::Stream::new(&jig_client_protocol_http::Limits {
                 record: 65536,
@@ -99,7 +99,7 @@ impl Host {
     }
     pub fn heard(&mut self, heard: Heard) {
         use jig_client_protocol_http::Heard as H;
-        let mut above = Queue::with_capacity(4096);
+        let mut above = Queue::uncapped();
         match heard {
             Heard::Answered { exchange, status, body } => {
                 if let Some(token) = self.tickets.remove(&exchange) {

@@ -10,7 +10,7 @@ const PAGE: Handle = Handle { asker: Asker::JIG, number: 2 };
 const PASSES: u32 = 16;
 
 fn exchange(session: &mut Session, client: &mut Client, now: Time, wall: Wall, event: jig_client::Event) -> Vec<Told> {
-    let mut out = Queue::with_capacity(jig_client::max_out(&session.limits.client));
+    let mut out = Queue::uncapped();
     client.step(now, wall, event, &mut out);
     let mut told = Vec::new();
     let mut kept = std::collections::BTreeMap::new();

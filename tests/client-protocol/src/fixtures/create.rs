@@ -65,7 +65,7 @@ pub fn batch_config(seed: u64) -> jig_test_domain::Config {
     let mut bounds = jig_core_world::world::limits().core.authority;
     bounds.batch = 2;
     let mut authority = a::Domain::new(current.clone(), bounds).expect("two-member authority");
-    let mut out = skein_lib::Queue::with_capacity(a::POLICY_MAX_OUT);
+    let mut out = skein_lib::Queue::uncapped();
     a::step(&mut authority, a::Event::Policy { project: 1, policy }, &mut out);
     assert_eq!(out.pop(), Some(a::PolicyFact::Added { project: 1 }));
     config.core.seed_projects[0].policy.policy = authority.policy(1).expect("checked seed policy").clone();
@@ -104,7 +104,7 @@ mod tests {
                 note_resources: Box::new([]),
             },
         };
-        let mut admitted = skein_lib::Queue::with_capacity(a::POLICY_MAX_OUT);
+        let mut admitted = skein_lib::Queue::uncapped();
         a::step(
             &mut authority,
             a::Event::Policy { project: 1, policy: config.core.seed_projects[0].policy.policy.clone() },
@@ -117,7 +117,7 @@ mod tests {
             tasks_left: 2,
             request: a::PersonRequest::Create(Box::new([given(20), given(10)])),
         };
-        let mut out = skein_lib::Queue::with_capacity(a::max_out(authority.limits()).expect("authority output bound"));
+        let mut out = skein_lib::Queue::uncapped();
         assert_eq!(a::check_request(&authority, &ask, &mut out).answer, a::Answer::Allow);
     }
 }

@@ -10,14 +10,13 @@ struct Story {
     engine: Engine,
     told: Vec<client::Told>,
     now: Time,
-    capacity: u32,
 }
 impl Story {
     fn event(&mut self, event: client::Event) {
         let mut events = VecDeque::from([event]);
         for _ in 0..128 {
             if let Some(event) = events.pop_front() {
-                let mut out = Queue::with_capacity(self.capacity);
+                let mut out = Queue::uncapped();
                 self.client.step(self.now, Wall::EPOCH, event, &mut out);
                 while let Some(request) = out.pop() {
                     match request {
@@ -131,7 +130,6 @@ fn an_owner_reads_settings_and_history_and_changes_them_under_a_key() {
         engine: Engine::new(setup, 1).expect("valid public story fixture"),
         told: vec![],
         now: Time::ZERO,
-        capacity: client::max_out(&limits),
     };
     story.event(client::Event::StartUnlinked { kept: List::with_capacity(0) });
     story.event(client::Event::Up {

@@ -114,9 +114,9 @@ impl Front {
         Self {
             client: client::Client::new(&limits, seed).expect("bounded client"),
             connections: Connections::new(&fixtures::connections_limits(), fixtures::HOST),
-            out: Queue::with_capacity(client::max_out(&limits)),
-            up: Queue::with_capacity(256),
-            below: Queue::with_capacity(256),
+            out: Queue::uncapped(),
+            up: Queue::uncapped(),
+            below: Queue::uncapped(),
             told: Vec::new(),
             told_at: BTreeMap::new(),
             store: BTreeMap::new(),
@@ -213,7 +213,6 @@ impl Front {
             }
         }
         let limits = client::Limits { domain: fixtures::domain_limits(), exchanges: 8 };
-        assert!(self.out.len() <= client::max_out(&limits), "bounded client output queue");
         assert!(
             self.store.keys().filter(|key| key.len() == 16).count()
                 <= usize::try_from(limits.domain.requests.requests).expect("table bound fits"),

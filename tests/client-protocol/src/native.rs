@@ -141,7 +141,7 @@ impl NativeClient {
             view,
             person: Person::new(script.steps),
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-            out: Queue::with_capacity(Test::max_out(&limits) * 4),
+            out: Queue::uncapped(),
             patches,
             address: jig_client_world::stories::conversation(),
             started: false,

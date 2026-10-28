@@ -33,7 +33,7 @@ pub(super) fn drive(root: &mut Domain, event: Event, limits: &jig_client_test_do
     step(root, Event::Client { event: jig_client::Event::Up { up } }, limits)
 }
 fn step(root: &mut Domain, event: Event, limits: &jig_client_test_domain::Limits) -> Vec<Request> {
-    let mut out = Queue::with_capacity(jig_client_test_domain::max_out(limits));
+    let mut out = Queue::uncapped();
     jig_client_test_domain::step(root, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits }, event, &mut out);
     let mut rows = Vec::new();
     while let Some(request) = out.pop() {

@@ -67,7 +67,7 @@ impl Party {
             bearer: bearer.finish(),
             sign_in,
             next: 1,
-            out: Queue::with_capacity(client::max_out(&limits)),
+            out: Queue::uncapped(),
         };
         party.step(client::Event::Start { kept: List::with_capacity(0) });
         party.step(client::Event::SignIn { with: client::With::Held(Secret::new(token.expose().into())) });

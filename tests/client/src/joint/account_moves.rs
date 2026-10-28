@@ -50,7 +50,7 @@ impl Story {
         let mut story = Self {
             session: Session::new(driver, limits, codec),
             client: client::Client::unlinked(&limits.client, 8510).expect("bounded client"),
-            out: Queue::with_capacity(client::max_out(&limits.client)),
+            out: Queue::uncapped(),
             now,
             told: Vec::new(),
             sent: Vec::new(),

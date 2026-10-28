@@ -33,7 +33,7 @@ fn full_people_answers_reach_the_carried_clients_outcome_with_facts() {
     let limits = jig_client_world::test::limits().client;
     let receiving = link::Limits::new(limits.domain, limits.exchanges).expect("receiving profile");
     let mut client = client::Client::unlinked(&limits, SEED).expect("client");
-    let mut output = Queue::with_capacity(client::max_out(&limits));
+    let mut output = Queue::uncapped();
     client.step(Time::ZERO, WALL, client::Event::StartUnlinked { kept: List::with_capacity(0) }, &mut output);
     client.step(Time::ZERO, WALL, client::Event::SignIn { with: client::With::Transport }, &mut output);
     let mut frame_watch = None;
@@ -66,7 +66,7 @@ fn full_people_answers_reach_the_carried_clients_outcome_with_facts() {
         &mut output,
     );
     let mut codec = link::Link::new(&receiving).expect("client codec");
-    let mut wire = Queue::with_capacity(codec.max_out());
+    let mut wire = Queue::uncapped();
     while let Some(request) = output.pop() {
         if let client::Request::Down { down: client::Down::Send { attempt, key, request, value } } = request {
             codec.step(Time::ZERO, link::Event::Send { attempt, key, ask: request, value }, &mut wire);

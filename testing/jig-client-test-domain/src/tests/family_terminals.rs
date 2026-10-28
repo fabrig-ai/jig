@@ -32,7 +32,7 @@ fn limits() -> first::Limits {
     }
 }
 fn drive(side: &mut first::Side, now: u64, event: first::Event) -> Vec<first::Request> {
-    let mut out = Queue::with_capacity(first::max_out(&limits()));
+    let mut out = Queue::uncapped();
     first::step(side, &Env { now: Time::from_nanos(now), wall: Wall::EPOCH, limits: limits() }, event, &mut out);
     let mut rows = Vec::new();
     while let Some(row) = out.pop() {
@@ -41,7 +41,7 @@ fn drive(side: &mut first::Side, now: u64, event: first::Event) -> Vec<first::Re
     rows
 }
 fn fire(side: &mut first::Side, now: u64) -> Vec<first::Request> {
-    let mut out = Queue::with_capacity(first::max_out(&limits()));
+    let mut out = Queue::uncapped();
     first::fire(side, &Env { now: Time::from_nanos(now), wall: Wall::EPOCH, limits: limits() }, &mut out);
     let mut rows = Vec::new();
     while let Some(row) = out.pop() {
@@ -257,7 +257,7 @@ fn family_terminal_envelopes_fit_full_rows_and_object_capacity_and_signed_out_pa
                 _ => false,
             }));
             let (_, client) = super::root::live_first(limits());
-            let mut out = Queue::with_capacity(first::max_out(&limits()));
+            let mut out = Queue::uncapped();
             first::me::told(
                 &mut side,
                 &Env { now: Time::from_nanos(3), wall: Wall::EPOCH, limits: limits() },

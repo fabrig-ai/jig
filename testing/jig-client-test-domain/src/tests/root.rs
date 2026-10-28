@@ -565,7 +565,7 @@ fn closing_family_watches_keep_their_terminal_obligation_and_stale_tokens_do_not
     assert_ne!(watch, current);
     drive(&mut root, Event::First(first::Event::Ended { watch: current, end: first::WatchEnd::Dropped }));
     assert_eq!(crate::next_deadline(&root), Some(Time::ZERO.saturating_add(Duration::from_nanos(5))));
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     let mut later = env();
     later.now = Time::ZERO.saturating_add(Duration::from_nanos(10));
     crate::fire(&mut root, &later, &mut out);

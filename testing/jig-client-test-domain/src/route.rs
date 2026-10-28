@@ -10,12 +10,12 @@ fn first_env(env: &Env<Limits>) -> Env<first::Limits> {
     Env { now: env.now, wall: env.wall, limits: env.limits.first }
 }
 pub(crate) fn jig(root: &mut Domain, env: &Env<Limits>, event: jig_client_view::Event, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+    let mut child = Queue::uncapped();
     root.jig.step(env.now, env.wall, &root.client, event, &mut child);
     route_jig(root, env, &mut child, out);
 }
 pub(crate) fn first(root: &mut Domain, env: &Env<Limits>, event: first::Event, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(first::max_out(&env.limits.first));
+    let mut child = Queue::uncapped();
     first::step(&mut root.first, &first_env(env), event, &mut child);
     route_first(root, env, &mut child, out);
 }
@@ -45,7 +45,7 @@ pub(crate) fn event(root: &mut Domain, env: &Env<Limits>, event: Event, out: &mu
                 Address::Jig(address) => address,
                 Address::First(_) => jig_client_view::address::Address::Inbox { project: None },
             };
-            let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+            let mut child = Queue::uncapped();
             root.jig.step(
                 env.now,
                 env.wall,
@@ -162,7 +162,7 @@ pub(crate) fn route_first(
     }
 }
 pub(crate) fn client(root: &mut Domain, env: &Env<Limits>, event: jig_client::Event, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(jig_client::max_out(&env.limits.client));
+    let mut child = Queue::uncapped();
     root.client.step(env.now, env.wall, event, &mut child);
     route_client(root, env, &mut child, out);
 }
@@ -206,7 +206,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
     let asker = match &told {
         Told::Link { .. } => {
             first_me(root, env, &told, out);
-            let mut child = Queue::with_capacity(2);
+            let mut child = Queue::uncapped();
             root.second.told(&root.client, &told, &mut child);
             while let Some(event) = child.pop() {
                 client(root, env, event, out);
@@ -221,7 +221,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
     };
     match jig_client_view::Owner::of_asker(asker) {
         Some(jig_client_view::Owner::Jig) => {
-            let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+            let mut child = Queue::uncapped();
             root.jig.step(env.now, env.wall, &root.client, jig_client_view::Event::Client { told }, &mut child);
             route_jig(root, env, &mut child, out);
         }
@@ -230,7 +230,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
                 crate::family::client::told(root, env, told, out);
             }
             Some(crate::Connector::Second) => {
-                let mut child = Queue::with_capacity(2);
+                let mut child = Queue::uncapped();
                 root.second.told(&root.client, &told, &mut child);
                 while let Some(event) = child.pop() {
                     client(root, env, event, out);
@@ -243,7 +243,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
 }
 
 fn first_me(root: &mut Domain, env: &Env<Limits>, told: &jig_client::Told, out: &mut Queue<Request>) -> bool {
-    let mut child = Queue::with_capacity(first::max_out(&env.limits.first));
+    let mut child = Queue::uncapped();
     let consumed = first::me::told(
         &mut root.first,
         &Env { now: env.now, wall: env.wall, limits: env.limits.first },

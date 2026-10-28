@@ -129,7 +129,7 @@ pub(super) fn drive(root: &mut Domain, event: Event) -> Vec<Request> {
     root_step(root, Event::Client { event: jig_client::Event::Up { up } })
 }
 pub(super) fn root_step(root: &mut Domain, event: Event) -> Vec<Request> {
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     step(root, &env(), event, &mut out);
     out_iter(out)
 }
@@ -141,7 +141,7 @@ pub(super) fn out_iter(mut out: Queue<Request>) -> Vec<Request> {
     rows
 }
 pub(super) fn taken(root: &mut Domain) -> Vec<Request> {
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     take(root, &env(), &mut out);
     out_iter(out)
 }

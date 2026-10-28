@@ -70,19 +70,19 @@ impl Domain {
 }
 pub fn step(root: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queue<Request>) {
     route::event(root, env, event, out);
-    children_first(env, out);
+    children_first(out);
 }
 pub fn fire(root: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+    let mut child = Queue::uncapped();
     root.jig.fire(env.now, env.wall, &root.client, &mut child);
     route::route_jig(root, env, &mut child, out);
-    let mut child = Queue::with_capacity(first::max_out(&env.limits.first));
+    let mut child = Queue::uncapped();
     first::fire(&mut root.first, &Env { now: env.now, wall: env.wall, limits: env.limits.first }, &mut child);
     route::route_first(root, env, &mut child, out);
-    let mut client = Queue::with_capacity(jig_client::max_out(&env.limits.client));
+    let mut client = Queue::uncapped();
     root.client.fire(env.now, env.wall, &mut client);
     route::route_client(root, env, &mut client, out);
-    children_first(env, out);
+    children_first(out);
 }
 #[must_use]
 pub fn next_deadline(root: &Domain) -> Option<Time> {
@@ -115,8 +115,8 @@ pub fn configure_arrangement(
     root.jig.configure_arrangement(arrangement)
 }
 
-fn children_first(env: &Env<Limits>, out: &mut Queue<Request>) {
-    let mut client = Queue::with_capacity(crate::max_out(&env.limits));
+fn children_first(out: &mut Queue<Request>) {
+    let mut client = Queue::uncapped();
     for _ in 0..out.len() {
         let request = out.pop().expect("counted root output");
         match request {

@@ -1,6 +1,6 @@
 use super::fixtures::{RECORD_ITEM, RECORD_PROJECT, UNOWNED_KEY_NUMBER};
 use super::{confirm, drive, env, limits, out_iter, ready, start};
-use crate::{Address, Event, Request, first, max_out, new, route};
+use crate::{Address, Event, Request, first, new, route};
 use jig_client::Link;
 use jig_client::{Asker, Key, Told, contract};
 use skein_lib::{List, Queue};
@@ -17,10 +17,10 @@ fn the_link_reaches_each_child() {
 #[test]
 fn passes_the_client_s_transport_requests_out_in_order() {
     let mut root = new(&limits(), 7);
-    let mut child = Queue::with_capacity(2);
+    let mut child = Queue::uncapped();
     child.push(jig_client::Request::OpenStream { credential: None });
     child.push(jig_client::Request::CloseStream);
-    let mut out = Queue::with_capacity(max_out(&limits()));
+    let mut out = Queue::uncapped();
     route::route_client(&mut root, &env(), &mut child, &mut out);
     assert_eq!(
         out_iter(out),
@@ -35,7 +35,7 @@ fn passes_the_client_s_transport_requests_out_in_order() {
 fn a_kept_request_of_an_asker_no_owner_names_reaches_no_child() {
     let mut root = new(&limits(), 7);
     let before = crate::shown(&root);
-    let mut out = Queue::with_capacity(max_out(&limits()));
+    let mut out = Queue::uncapped();
     route::told(
         &mut root,
         &env(),
@@ -55,7 +55,7 @@ fn routes_a_tell_to_the_child_its_asker_names() {
     let watch = start(&mut root, List::with_capacity(0));
     confirm(&mut root, watch, 7);
     root.first = first::Side::new(&limits().first, 7);
-    let mut out = Queue::with_capacity(max_out(&limits()));
+    let mut out = Queue::uncapped();
     route::told(&mut root, &env(), Told::Changed { handle: first::me::handle() }, &mut out);
     assert_eq!(out_iter(out), vec![]);
     assert_eq!(root.first().party(), Some(7));
@@ -107,7 +107,7 @@ fn a_family_side_reads_the_party_from_its_own_me_handle() {
         jig_client_view::page::Arrangement::none(),
     )
     .unwrap();
-    let mut out = Queue::with_capacity(max_out(&limits()));
+    let mut out = Queue::uncapped();
     route::told(&mut root, &env(), Told::Changed { handle }, &mut out);
     assert_eq!(root.first().party(), Some(ME));
     assert_eq!(root.jig().link(), Link::Starting);

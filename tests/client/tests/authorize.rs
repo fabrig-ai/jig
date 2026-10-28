@@ -4,7 +4,7 @@ fn client() -> (Client, Queue<Request>) {
     let world = jig_client_world::test::limits();
     let limits = Limits { domain: world.client.domain, exchanges: 8 };
     let client = Client::new(&limits, 7).expect("bounded fixture");
-    let out = Queue::with_capacity(jig_client::max_out(&limits));
+    let out = Queue::uncapped();
     (client, out)
 }
 fn step(client: &mut Client, event: Event, out: &mut Queue<Request>) {

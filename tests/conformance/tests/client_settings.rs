@@ -273,7 +273,7 @@ fn move_exchange(
     wall: skein_lib::Wall,
     event: jig_client::Event,
 ) -> Vec<jig_client::Told> {
-    let mut out = skein_lib::Queue::with_capacity(jig_client::max_out(&jig_client_world::test::limits().client));
+    let mut out = skein_lib::Queue::uncapped();
     client.step(now, wall, event, &mut out);
     let mut told = Vec::new();
     let mut kept = std::collections::BTreeMap::new();
