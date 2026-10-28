@@ -553,11 +553,11 @@ fn a_draining_procedure_hears_the_context_and_its_idle_step_is_held() {
     decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Wait));
     let sign_in = world.sign_in.expect("owner signed in");
     place_drain(&mut world, sign_in, procedure);
-    assert!(world.procedure_inputs.last().unwrap().3.draining);
+    assert!(world.procedure_inputs.last().expect("procedure input").3.draining);
     decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Wait));
     assert_eq!(live_row(&world, procedure).phase, tasks::Phase::Active(tasks::Active::Idle));
     world.send(root::Event::Core(core::Event::Tasks(tasks::Event::WakeProcedure { task: procedure })));
-    assert!(world.procedure_inputs.last().unwrap().3.draining);
+    assert!(world.procedure_inputs.last().expect("procedure input").3.draining);
     decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Idle));
     assert!(matches!(live_row(&world, procedure).phase, tasks::Phase::Held { why: tasks::Hold::Placed { .. }, .. }));
 }

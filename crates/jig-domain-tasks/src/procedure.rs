@@ -143,21 +143,21 @@ fn apply(domain: &mut Domain, env: &Env<Limits>, fence: Fence, decision: Procedu
             publish(domain, env, number, out);
         }
         ProcedureEnd::Hold(why) => crate::run::hold(domain, env, number, why, out),
-        ProcedureEnd::Idle => {
-            let row = record(domain, number).expect("procedure task live");
-            if crate::placed::draining(domain, row) {
-                let hold = row.placed.expect("draining procedure has a hold");
-                task_mut(domain, number).expect("procedure task live").record.phase = Phase::Held {
-                    was: crate::Was::Active(Active::Due),
-                    why: crate::Hold::Placed { hold },
-                    source: None,
-                };
-            }
-            publish(domain, env, number, out);
-        }
+        ProcedureEnd::Idle => idle(domain, env, number, out),
         ProcedureEnd::Wait => publish(domain, env, number, out),
     }
     crate::wake::after_step(domain, env, number, out);
+}
+
+/// Only the connector can say a procedure has finished draining its work.
+fn idle(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue<Request>) {
+    let row = record(domain, number).expect("procedure task live");
+    if crate::placed::draining(domain, row) {
+        let hold = row.placed.expect("draining procedure has a hold");
+        task_mut(domain, number).expect("procedure task live").record.phase =
+            Phase::Held { was: crate::Was::Active(Active::Due), why: crate::Hold::Placed { hold }, source: None };
+    }
+    publish(domain, env, number, out);
 }
 
 fn problem(task: u64, why: Refusal) -> crate::Problem {

@@ -830,7 +830,7 @@ fn a_full_parking_table_and_its_cold_rebuild_fit() {
         assert!(tasks::draining(&measured.d, row));
         records.push(Stored::Live(Box::new(row.clone())));
     }
-    records.push(Stored::PlacedHold(Box::new(measured.d.placed_hold(100).unwrap().clone())));
+    records.push(Stored::PlacedHold(Box::new(measured.d.placed_hold(100).expect("placed drain").clone())));
     for (_, ledger) in measured.d.funding_records() {
         records.push(Stored::Ledger(*ledger));
     }
@@ -853,6 +853,6 @@ fn a_full_parking_table_and_its_cold_rebuild_fit() {
             cause: tasks::Cause::Unpriced,
         });
         assert!(!measured.refused);
-        assert!(matches!(measured.d.task(number).unwrap().phase, tasks::Phase::Held { .. }));
+        assert!(matches!(measured.d.task(number).expect("held drained task").phase, tasks::Phase::Held { .. }));
     }
 }

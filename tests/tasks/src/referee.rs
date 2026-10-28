@@ -405,7 +405,7 @@ impl Expectations for Tasks {
                 }
             }
             Seen::Placed { live, holds, stops, parks, draining, limits } => {
-                placed(&live, &holds, &stops, &parks, &draining, &limits, judge)
+                placed(&live, &holds, &stops, &parks, &draining, &limits, judge);
             }
             Seen::Stored { live, limits } => {
                 stored(&live, &limits, judge);
@@ -783,8 +783,8 @@ fn placed(
             let attempt = match row.phase {
                 Phase::Active(
                     jig_domain_tasks::Active::Claimed { attempt } | jig_domain_tasks::Active::Running { attempt },
-                ) => Some(attempt),
-                Phase::Held {
+                )
+                | Phase::Held {
                     was:
                         Was::Active(
                             jig_domain_tasks::Active::Claimed { attempt }

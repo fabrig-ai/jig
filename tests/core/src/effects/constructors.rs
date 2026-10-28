@@ -278,6 +278,14 @@ impl World {
         Self::empty_with_sets(configuration, limits, jig_protocol_store::PatchSets::NONE)
     }
 
+    fn initial_ask(configuration: &root::Config, creating: &crate::fixtures::Creating) -> people::Ask {
+        if configuration.core.seed_projects.is_empty() {
+            people::Ask::MarkSeen { seen: people::Seen::Results { through: 0 } }
+        } else {
+            crate::fixtures::create_chat(creating, 1, 0, b"make an effect".as_slice().into())
+        }
+    }
+
     fn empty_with_sets(
         configuration: root::Config,
         limits: &root::Limits,
@@ -286,11 +294,7 @@ impl World {
         let observer = crate::observations::Observer::new(&configuration);
         let heap = crate::observations::Heap::new(limits);
         let creating = crate::fixtures::Creating::new(&configuration.core, limits.core.tasks.tree_tasks);
-        let initial_ask = if configuration.core.seed_projects.is_empty() {
-            people::Ask::MarkSeen { seen: people::Seen::Results { through: 0 } }
-        } else {
-            crate::fixtures::create_chat(&creating, 1, 0, b"make an effect".as_slice().into())
-        };
+        let initial_ask = Self::initial_ask(&configuration, &creating);
         let protocol = crate::protocol::Stand::with_models(limits.core, &configuration.core.settings.models);
         let store = Store::with_patch_sets(limits, &configuration.core.settings.models, sets);
         let move_provider = configuration.core.settings.llm_providers.providers.first().map(|provider| provider.number);

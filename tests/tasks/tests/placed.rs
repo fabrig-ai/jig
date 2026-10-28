@@ -1213,7 +1213,7 @@ fn a_task_released_from_a_drain_is_exempt_and_runs() {
             w.terminal(2, End::Parked);
         }
         due(&w, number);
-        assert_eq!(w.placed_hold(100).unwrap().exempt.as_ref(), &[number]);
+        assert_eq!(w.placed_hold(100).expect("standing drain").exempt.as_ref(), &[number]);
         w.claim(number, 5);
         assert_eq!(w.record(number).phase, Phase::Active(Active::Running { attempt: 5 }));
         w.restart();
