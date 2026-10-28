@@ -202,15 +202,16 @@ const JOURNAL: skein_lib::JournalLimits =
 // Ending authority adds (batch + 1)^2 = (4 + 1)^2 = 25 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
 // Task/run settings revisions add nine bytes: u32 plus an optional u32.
+// A refused procedure room wait adds at most fourteen bytes: option, count scope, project and order.
 const STORE_KV: skein_kv::Limits = skein_kv::Limits {
-    value: 10_664_775,
+    value: 10_664_789,
     ops: 303_350,
     commit: 901_830_282,
     queued_bytes: 2_705_490_846,
     segment: 1_803_660_564,
     snapshot_after: 901_830_282,
-    chunk: 10_666_874,
-    page: skein_kv::Page { rows: 2, bytes: 10_666_854 },
+    chunk: 10_666_888,
+    page: skein_kv::Page { rows: 2, bytes: 10_666_868 },
     ..small::STORE_KV
 };
 const STORE: jig_protocol_store::Limits = jig_protocol_store::Limits {

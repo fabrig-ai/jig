@@ -396,9 +396,10 @@ pub(super) const DRIVER: skein_oauth_accounts::Limits = skein_oauth_accounts::Li
 // Ending authority adds (batch + 1)^2 = (2 + 1)^2 = 9 bytes: the row,
 // its recurring members and its proposed creations with their recurring members.
 // Task/run settings revisions add nine bytes: u32 plus an optional u32.
+// A refused procedure room wait adds at most fourteen bytes: option, count scope, project and order.
 pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     key: 2079,
-    value: 1_567_847,
+    value: 1_567_861,
     // Two operations per journal write, three creation rows and an orphan erase: 2 * 20,801 + 4.
     ops: 41_606,
     // 256 MiB values + 41,606 operations * (2,079 key + 9 framing) + 26 frame bytes.
@@ -409,7 +410,7 @@ pub(super) const STORE_KV: skein_kv::Limits = skein_kv::Limits {
     budget: 268_435_456,
     segment: 710_617_620,
     snapshot_after: 355_308_810,
-    chunk: 1_569_946,
+    chunk: 1_569_960,
     // Accounting ceiling for applications' derived pages: the shipped largest
     // admitted ordinary turn (1,590,046) plus current TurnRecord and frame (64).
     // No row, chunk, decoder, queue or read-slot capacity changes with it.
