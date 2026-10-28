@@ -452,9 +452,9 @@ impl Store {
     fn readback_request(&mut self, request: Request) -> Vec<Event> {
         let mut above = Queue::with_capacity(protocol::MAX_OUT_DOWN);
         let mut below = Below {
-            store: Queue::with_capacity(skein_kv::MAX_OUT.below),
-            secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
-            transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
+            store: Queue::uncapped(),
+            secrets: Queue::uncapped(),
+            transcripts: Queue::uncapped(),
         };
         let env = self.env();
         protocol::down(self.component.as_mut().expect("component exists"), &env, request, &mut above, &mut below);
