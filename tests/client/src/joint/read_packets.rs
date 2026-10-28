@@ -40,6 +40,7 @@ pub fn read_with_codec(
         reads::Answer::Setting(_) | reads::Answer::Revision(_) | reads::Answer::Revisions(_) => {
             return Err(Invalid::PendingValue);
         }
+        reads::Answer::Holds(page) => holds_page(what, page, limits)?,
         reads::Answer::Tasks(page) => task_page(what, page, limits)?,
         reads::Answer::None(why) => client::ReadResult::None(missing(*why)),
         reads::Answer::Page(value) => {
@@ -56,7 +57,8 @@ pub fn read_with_codec(
                 }
                 client::Read::Ended { task, .. } => wire::ledger_pages::ended(*task, value, limits),
                 client::Read::Spend { project, .. } => wire::ledger_pages::spend(*project, value, limits),
-                client::Read::Tasks { .. }
+                client::Read::Holds { .. }
+                | client::Read::Tasks { .. }
                 | client::Read::Me
                 | client::Read::Turn { .. }
                 | client::Read::Task { .. }
@@ -933,4 +935,19 @@ mod goal_query {
         assert_eq!(translated.err(), Some(Invalid::OwnerRoute));
         assert!(transport.reply(to).is_some(), "the unrelated route remains available");
     }
+}
+
+fn holds_page(what: &client::Read, page: &documents::ProjectHolds, limits: &Limits) -> Result<client::ReadResult, Invalid> {
+    let client::Read::Holds { project, .. } = what else { return Err(Invalid::OwnerRoute) };
+    if *project != page.project || page.rows.len() > limits.rows as usize { return Err(Invalid::PendingValue); }
+    let mut size = core::mem::size_of::<client::ProjectHolds>() as u64;
+    let mut rows = Vec::new();
+    for row in &page.rows {
+        if row.hold.reason.len() > limits.text as usize { return Err(Invalid::PendingValue); }
+        size = size.checked_add((core::mem::size_of::<client::HoldRow>() + row.hold.reason.len() + core::mem::size_of_val(row.exempt.as_ref())) as u64).ok_or(Invalid::PendingValue)?;
+        rows.push(client::HoldRow { hold: wire::chips::placed(&row.hold), held: row.held, exempt: row.exempt.clone() });
+    }
+    let after = page.after.as_ref().map(|cursor| wire::cursor::encode(cursor, limits.text)).transpose().map_err(|_| Invalid::PendingValue)?;
+    if size > limits.document_bytes { return Err(Invalid::PendingValue); }
+    Ok(client::ReadResult::Value(client::ReadValue::Holds(Box::new(client::ProjectHolds { project: page.project, rows: rows.into_boxed_slice(), after }))))
 }

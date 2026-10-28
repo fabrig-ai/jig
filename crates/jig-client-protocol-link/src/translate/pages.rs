@@ -27,7 +27,7 @@ fn text(value: &[u8], limits: &Limits) -> Result<c::Text, w::Problem> {
 pub(crate) fn receiving(limits: &Limits) -> Result<Limits, Undecodable> {
     let mut checked = super::documents::receiving(limits)?;
     checked.wire.project_holds_rows = limits.client.rows;
-    checked.wire.hold_row_exempt = match u32::try_from(limits.client.document_bytes / 8) { Ok(value) => value, Err(_) => return Err(Undecodable::TooLarge) };
+    checked.wire.hold_row_exempt = match u32::try_from(limits.client.document_bytes / 8) { Ok(value) => value.min(w::CEILINGS.hold_row_exempt), Err(_) => return Err(Undecodable::TooLarge) };
     receiving_part0(&mut checked, limits);
     receiving_part1(&mut checked, limits);
     receiving_part2(&mut checked, limits);

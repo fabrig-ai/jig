@@ -173,6 +173,16 @@ impl Party {
         }).expect("decoded final answer")
     }
 
+    fn holds(&mut self, world: &mut World, after: Option<c::Cursor>) -> Box<c::ProjectHolds> {
+        let requests = self.step(client::Event::Read {
+            handle: client::Handle { asker: client::Asker::JIG, number: 10 },
+            read: client::Readable::Jig(c::Read::Holds { project: 1, after }),
+        });
+        self.exchange(world, requests).into_iter().find_map(|request| {
+            if let client::Request::Told { told: client::Told::Page { page: client::Readout::Jig(c::ReadResult::Value(c::ReadValue::Holds(page))), .. } } = request { Some(page) } else { None }
+        }).expect("decoded project holds")
+    }
+
     fn task(&mut self, world: &mut World, task: u64) -> Box<c::Task> {
         let requests = self.step(client::Event::Read {
             handle: client::Handle { asker: client::Asker::JIG, number: 9 },
@@ -316,4 +326,45 @@ fn a_client_places_a_project_stop_and_is_answered_its_number() {
     assert_eq!(placed.scope, c::HoldScope::Project);
     assert_eq!(placed.mode, c::HoldMode::Stop);
     assert_eq!(placed.reason.as_ref(), reason);
+}
+
+#[test]
+fn a_client_reads_a_projects_holds_and_pages_them() {
+    let (config, mut limits) = jig_core_world::peers::fixture(988, 0);
+    limits.core.documents.rows = 1;
+    limits.core.tasks.placed_holds = 4;
+    limits.core.tasks.project_placed_holds = 4;
+    limits.core.tasks.party_placed_holds = 4;
+    jig_core_world::peers::journal(&mut limits);
+    let mut world = World::configured(988, false, config, limits);
+    world.reads = Some(reads::Parties::new(world.store.applied));
+    let sign_in = world.sign_in.expect("owner");
+    let coordinator = world.assignments[0];
+    let tasks::Party::Person(owner) = fixtures::live_row(&world, coordinator.0).requester else { panic!("owner") };
+    let mut party = Party::new(&mut world, sign_in, owner);
+    let mut numbers = Vec::new();
+    for reason in [b"first project stop".as_slice(), b"second project stop"] {
+        let c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::Placed { hold, .. })) = party.ask(&mut world, c::Ask::Hold { project: 1, mode: c::HoldMode::Stop, scope: c::HoldScope::Project, reason: c::Text::new(reason.into(), 4096).expect("reason") }) else { panic!("placed") };
+        numbers.push(hold);
+    }
+    let first = party.holds(&mut world, None);
+    assert_eq!(first.project, 1);
+    assert_eq!(first.rows.len(), 1);
+    let row = &first.rows[0];
+    assert_eq!(row.hold.number, numbers[0]);
+    assert_eq!(row.hold.reason.as_ref(), b"first project stop");
+    assert_eq!(row.hold.owner, c::HoldOwner::Party { person: owner });
+    assert!(row.hold.may_lift);
+    assert_eq!(row.held, 0);
+    assert!(row.exempt.is_empty());
+    let after = first.after.expect("first page continuation");
+    let second = party.holds(&mut world, Some(after));
+    assert_eq!(second.rows.len(), 1);
+    assert_eq!(second.rows[0].hold.number, numbers[1]);
+    assert_eq!(second.rows[0].hold.reason.as_ref(), b"second project stop");
+    assert!(second.after.is_none());
+    party.ask(&mut world, c::Ask::Lift { hold: numbers[0], revision: c::Revision { value: 1 }, with_tasks: false });
+    let fresh = party.holds(&mut world, None);
+    assert_eq!(fresh.rows[0].hold.number, numbers[1]);
+    assert!(fresh.after.is_none());
 }

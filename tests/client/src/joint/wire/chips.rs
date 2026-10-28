@@ -121,23 +121,7 @@ pub fn phase(value: &documents::PhaseLine, limits: &Limits) -> Result<client::Ow
 /// Refuses inconsistent executor facts or any whole nested chip allocation above the receiving bounds.
 pub fn held(value: &documents::HoldLine, limits: &Limits) -> Result<client::OwnerChipHold, owner::Invalid> {
     Ok(client::OwnerChipHold {
-        placed: value.placed.as_ref().map(|hold| client::PlacedHold {
-            number: hold.number,
-            owner: super::refusals::hold_owner(hold.owner),
-            mode: match hold.mode {
-                tasks::Mode::Stop => client::HoldMode::Stop,
-                tasks::Mode::Drain => client::HoldMode::Drain,
-            },
-            scope: match hold.scope {
-                tasks::Scope::Subtree { task } => client::HoldScope::Subtree { task },
-                tasks::Scope::Project => client::HoldScope::Project,
-            },
-            reason: hold.reason.clone(),
-            placed_at: hold.placed_at,
-            revision: client::Revision { value: hold.revision },
-            lifted: hold.lifted,
-            may_lift: hold.may_lift,
-        }),
+        placed: value.placed.as_ref().map(placed),
         circle: value.circle.as_ref().map(|circle| client::Circle { tasks: numbers(&circle.tasks), cut: circle.cut }),
         account: value.account.as_ref().map(|value| owner::part(value, limits)).transpose()?,
         source: value.source.as_ref().map(|value| owner::part(value, limits)).transpose()?,
@@ -653,4 +637,25 @@ pub(super) mod tests {
         );
         assert_eq!(source, before);
     }
+}
+
+#[must_use]
+pub fn placed(hold: &documents::PlacedLine) -> client::PlacedHold {
+    client::PlacedHold {
+            number: hold.number,
+            owner: super::refusals::hold_owner(hold.owner),
+            mode: match hold.mode {
+                tasks::Mode::Stop => client::HoldMode::Stop,
+                tasks::Mode::Drain => client::HoldMode::Drain,
+            },
+            scope: match hold.scope {
+                tasks::Scope::Subtree { task } => client::HoldScope::Subtree { task },
+                tasks::Scope::Project => client::HoldScope::Project,
+            },
+            reason: hold.reason.clone(),
+            placed_at: hold.placed_at,
+            revision: client::Revision { value: hold.revision },
+            lifted: hold.lifted,
+            may_lift: hold.may_lift,
+            }
 }

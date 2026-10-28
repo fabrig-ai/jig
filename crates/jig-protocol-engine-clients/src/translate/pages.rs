@@ -149,7 +149,14 @@ fn task_pieces(
     super::pieces(&pieces, bound, path)
 }
 
-pub(super) fn holds(page: &jig_domain_core::documents::ProjectHolds, limits: &w::Limits) -> Result<w::ReadValue, w::Problem> {
+pub fn holds(read: &reads::Read, page: &jig_domain_core::documents::ProjectHolds, limits: &w::Limits) -> Result<w::ReadValue, w::Problem> {
+    let invalid = w::Problem { path: w::Path::ReadValueTag, reason: skein_codec::Reason::Tag };
+    let reads::Read::Holds { project, .. } = read else { return Err(invalid) };
+    if *project != page.project { return Err(invalid); }
+    if let Some(after) = &page.after {
+        let reads::Cursor::Live { scope: reads::Scope::Holds { project: owner }, after: jig_domain_core::documents::Cursor::Number { number }, store_after: None } = after else { return Err(invalid) };
+        if owner != project || match page.rows.last() { Some(row) => row.hold.number != *number, None => true } { return Err(invalid); }
+    }
     let mut rows = skein_lib::List::with_capacity(u32::try_from(page.rows.len()).expect("bounded rows"));
     for row in &page.rows {
         let mut exempt = skein_lib::List::with_capacity(u32::try_from(row.exempt.len()).expect("bounded exemptions"));

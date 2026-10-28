@@ -64,16 +64,18 @@ impl Domain {
         }
         self.placed.get(&next?)
     }
-    /// Count live tasks still held by this placed hold, without a snapshot.
+    /// Borrow the next live task attached to a placed hold, in task number order.
     #[must_use]
-    pub fn placed_held(&self, hold: u64) -> u32 {
-        let mut count = 0;
-        for (_, id) in &self.names {
-            if self.tasks.get(*id).expect("live task name").record.placed == Some(hold) {
-                count += 1;
+    pub fn next_placed_task(&self, hold: u64, after: u64) -> Option<&TaskRecord> {
+        for (number, _) in &self.names {
+            if *number > after {
+                let row = record(self, *number).expect("live task name");
+                if row.placed == Some(hold) {
+                    return Some(row);
+                }
             }
         }
-        count
+        None
     }
     /// Borrow the placed hold currently holding this task, even under a cause of 5.5.
     #[must_use]

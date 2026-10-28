@@ -1802,7 +1802,13 @@ pub(super) fn holds(core: &Core, limits: &Limits, party: u64, project: u32, from
                 Ok(line) => line,
                 Err(Missing::TooLarge | Missing::Unknown | Missing::Ended | Missing::NotAllowed) => return Answer::None(Why::Busy),
             };
-            rows.push(documents::HoldRow { hold: line, held: core.tasks.placed_held(hold.number), exempt: hold.exempt.clone() }).expect("bounded holds page");
+            let mut held = 0;
+            let mut task_after = 0;
+            while let Some(task) = core.tasks.next_placed_task(hold.number, task_after) {
+                held += 1;
+                task_after = task.number;
+            }
+            rows.push(documents::HoldRow { hold: line, held, exempt: hold.exempt.clone() }).expect("bounded holds page");
             last_row = hold.number;
         }
         last = hold.number;

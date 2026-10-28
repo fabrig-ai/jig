@@ -145,7 +145,7 @@ pub fn cursors() -> Box<[(&'static str, reads::Cursor)]> {
     rows.into_boxed()
 }
 
-fn cursor_scopes() -> [(&'static str, reads::Scope); 17] {
+fn cursor_scopes() -> [(&'static str, reads::Scope); 18] {
     use jig_domain_notes as notes;
     use jig_domain_people as p;
     [
@@ -178,6 +178,7 @@ fn cursor_scopes() -> [(&'static str, reads::Scope); 17] {
             },
         ),
         ("Spend", reads::Scope::Spend { project: u32::MAX }),
+        ("Holds", reads::Scope::Holds { project: u32::MAX }),
     ]
 }
 fn inbox_cursors(rows: &mut List<(&'static str, reads::Cursor)>) {

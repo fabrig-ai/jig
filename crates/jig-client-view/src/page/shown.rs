@@ -406,7 +406,8 @@ pub(crate) fn context_read(domain: &mut Ui, what: &jig_client::contract::Read) {
             }
             _ => Some(Section::Conversations { project: query.project }),
         },
-        Read::Settings
+        Read::Holds { .. }
+        | Read::Settings
         | Read::Setting(_)
         | Read::Revision(_)
         | Read::Revisions(_)

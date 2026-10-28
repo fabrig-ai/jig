@@ -36,6 +36,7 @@ pub fn read_values(limits: &Limits) -> List<(&'static str, ReadValue)> {
     value!(values, limits, OwnerInbox, OwnerInboxPage, 8);
     value!(values, limits, Spend, SpendPage, 7);
     value!(values, limits, OwnerSpend, OwnerSpendPage, 7);
+    value!(values, limits, Holds, ProjectHolds, 9);
     value!(values, limits, Project, Project, 159);
     value!(values, limits, Notes, NotePage, 7);
     value!(values, limits, Deployment, Deployment, 24);

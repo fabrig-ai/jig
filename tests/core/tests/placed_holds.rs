@@ -843,3 +843,16 @@ fn a_holds_read_of_a_project_without_a_role_is_unknown() {
     s.world.send(root::Event::Core(core::Event::People(people::Event::Roles { project: 1, holdings: Box::new([]) })));
     assert_eq!(read_holds(&mut s, sign_in, None), core::reads::Answer::None(core::reads::Why::Unknown));
 }
+
+#[test]
+fn a_holds_pages_price_includes_whole_reasons_and_exemptions() {
+    use jig_protocol_config::profile::{profile, Profile};
+    for profile_name in [Profile::Small, Profile::Standard] {
+        let limits = profile(profile_name).core;
+        let before = core::documents::document_worst_case(&limits.documents).expect("document price");
+        let holds = core::documents::project_holds_worst_case(&limits).expect("holds price");
+        assert!(holds <= before, "the existing largest document covers this page");
+        let context = core::documents::document_with_context_worst_case(&limits).expect("context price");
+        eprintln!("{profile_name:?}: document before={before} after={before}; holds={holds}; context before={context} after={context}");
+    }
+}

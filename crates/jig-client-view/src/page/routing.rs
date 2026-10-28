@@ -550,7 +550,8 @@ fn read_value(
     lent: &jig_client::Client,
 ) {
     match value {
-        ReadValue::Me(_)
+        ReadValue::Holds(_)
+        | ReadValue::Me(_)
         | ReadValue::OwnerInbox(_)
         | ReadValue::OwnerEnded(_)
         | ReadValue::OwnerSpend(_)
@@ -1036,7 +1037,8 @@ fn historical_read_valid(domain: &Ui, env: &Env<crate::Limits>, token: Token, re
         ReadValue::OwnerSpend(page) => {
             let project = match &read.what {
                 Read::Spend { project, .. } => *project,
-                Read::Tasks { .. }
+                Read::Holds { .. }
+                | Read::Tasks { .. }
                 | Read::Me
                 | Read::Task { .. }
                 | Read::Proposal { .. }

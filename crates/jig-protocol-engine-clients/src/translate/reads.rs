@@ -175,7 +175,7 @@ pub(crate) fn answer(
             w::ReadRevisionAnswerParts { value: super::settings::revision(value, models, limits)? },
         )?),
         reads::Answer::Revisions(value) => w::ReadValue::Revisions(super::settings::revisions(value, limits)?),
-        reads::Answer::Holds(page) => pages::holds(page, limits)?,
+        reads::Answer::Holds(page) => pages::holds(read, page, limits)?,
         reads::Answer::Tasks(page) => pages::tasks(page, limits)?,
         reads::Answer::Page(page) => pages::page(models, read, page, limits)?,
         reads::Answer::Document(_) | reads::Answer::Historical(_) => objects::document(answer, models, limits)?,
