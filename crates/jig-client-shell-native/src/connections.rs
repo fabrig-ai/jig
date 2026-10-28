@@ -73,9 +73,7 @@ impl Connections {
         Self {
             limits: *limits,
             mapping: Mapping::new(b"/jig").expect("default mapping"),
-            heard: Queue::with_capacity(
-                limits.http.read.checked_mul(3).and_then(|v| v.checked_add(8)).expect("bounded stream outputs"),
-            ),
+            heard: Queue::uncapped(),
             host: host.to_owned(),
             next: 1,
             exchanges: BTreeMap::new(),
@@ -201,7 +199,17 @@ impl Connections {
     pub(crate) fn stream_memory(&self) -> u64 {
         mapping::worst_case(&self.stream_limits())
             .expect("stream memory")
-            .checked_add(Queue::<mapping::Heard>::worst_case(self.heard.capacity()).expect("stream output queue"))
+            .checked_add(
+                Queue::<mapping::Heard>::worst_case(
+                    self.limits
+                        .http
+                        .read
+                        .checked_mul(3)
+                        .and_then(|v| v.checked_add(8))
+                        .expect("bounded stream outputs"),
+                )
+                .expect("stream output queue"),
+            )
             .expect("stream memory fits")
     }
     fn env(&self, now: Time) -> Env<http::Limits> {
@@ -226,8 +234,8 @@ impl Connections {
                 None
             },
             machine: http::Client::new(&self.limits.http),
-            events: Queue::with_capacity(8),
-            below: Queue::with_capacity(8),
+            events: Queue::uncapped(),
+            below: Queue::uncapped(),
             upload: call.body,
             sent: 0,
             body: Vec::new(),

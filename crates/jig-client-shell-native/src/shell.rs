@@ -72,9 +72,9 @@ impl Shell {
             complete: Queue::with_capacity(room),
             submit: Queue::with_capacity(room),
             raw: Queue::with_capacity(room),
-            told: Queue::with_capacity(room),
-            requests: Queue::with_capacity(room),
-            events: Queue::with_capacity(room),
+            told: Queue::uncapped(),
+            requests: Queue::uncapped(),
+            events: Queue::uncapped(),
             held: VecDeque::new(),
             max,
             closing: false,
@@ -206,7 +206,7 @@ impl Transport {
             connections: Connections::new(limits, &engine.socket().expect("HTTP engine has an IP address").to_string()),
             engine,
             sockets: BTreeMap::new(),
-            below: Queue::with_capacity(sockets.checked_mul(64).expect("queue bound")),
+            below: Queue::uncapped(),
             owner,
             closing: false,
             max: sockets,
@@ -265,6 +265,7 @@ impl Transport {
     }
     /// Call once per host iteration, after io events and before io's reclaim.
     pub fn iterate(&mut self, now: Time, events: &mut Queue<client::Event>, requests: &mut Queue<io::Request>) {
+        // The caller may pass a capped request queue; keep room checks until callers adapt.
         if self.closing {
             while self.below.pop().is_some() {}
             for socket in self.sockets.values_mut() {
@@ -284,6 +285,7 @@ impl Transport {
         self.sockets.retain(|_, socket| !socket.closed && (!self.closing || socket.started));
     }
     fn pump(&mut self, requests: &mut Queue<io::Request>) {
+        // The caller may pass a capped request queue; keep room checks until callers adapt.
         while let Some((conn, down)) = self.below.pop() {
             if !self.sockets.contains_key(&conn) {
                 if matches!(down, Down::Finish) {
@@ -327,16 +329,10 @@ impl Shell {
     pub fn iterate(&mut self, now: Time, wall: Wall) {
         self.env.now = now;
         self.env.wall = wall;
-        while self.io.is_ready()
-            && self.told.room() >= io::MAX_OUT_RESUME.events
-            && self.raw.room() >= io::MAX_OUT_RESUME.submissions
-        {
+        while self.io.is_ready() && self.raw.room() >= io::MAX_OUT_RESUME.submissions {
             io::resume(&mut self.io, &self.env, &mut self.told, &mut self.raw);
         }
-        while !self.io.is_ready()
-            && self.told.room() >= io::MAX_OUT_UP.events
-            && self.raw.room() >= io::MAX_OUT_UP.submissions
-        {
+        while !self.io.is_ready() && self.raw.room() >= io::MAX_OUT_UP.submissions {
             let Some(complete) = self.complete.pop() else { break };
             if Files::owns(complete.op) {
                 self.files.complete(complete);
@@ -344,10 +340,7 @@ impl Shell {
                 io::up(&mut self.io, &self.env, complete, &mut self.told, &mut self.raw);
             }
         }
-        while self.io.is_due(now)
-            && self.told.room() >= io::MAX_OUT_FIRE.events
-            && self.raw.room() >= io::MAX_OUT_FIRE.submissions
-        {
+        while self.io.is_due(now) && self.raw.room() >= io::MAX_OUT_FIRE.submissions {
             io::fire(&mut self.io, &self.env, &mut self.told, &mut self.raw);
         }
         while let Some(event) = self.told.pop() {
@@ -434,7 +427,7 @@ impl Shell {
     pub fn worst_case(&self) -> u64 {
         io::worst_case(&self.env.limits).expect("io memory")
             + self.transport.worst_case(&self.env.limits)
-            + Queue::<io::Request>::worst_case(self.requests.capacity()).expect("io request queue")
+            + Queue::<io::Request>::worst_case(self.max * 64).expect("io request queue")
     }
 }
 impl Transport {

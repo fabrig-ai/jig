@@ -236,8 +236,7 @@ impl skein_shell::Host for Disk {
                     self.writes += 1;
                     self.answers.push(true);
                     if let Some(client) = &mut self.client {
-                        // The fixture uses the same output bound as the client.
-                        let mut out = Queue::with_capacity(client::max_out(&client_store::bounds()));
+                        let mut out = Queue::uncapped();
                         client.step(now, wall, client::Event::Stored, &mut out);
                         while let Some(request) = out.pop() {
                             if matches!(request, client::Request::Exchange { message: client::Message::Request(_), .. })

@@ -67,7 +67,7 @@ fn discard(out: &mut Queue<Request>) {
 pub(super) fn mixed_turn() -> (client::Client, Queue<Request>) {
     let bounds = bounds();
     let mut machine = client::Client::new(&bounds, 7).expect("client bounds");
-    let mut out = Queue::with_capacity(client::max_out(&bounds));
+    let mut out = Queue::uncapped();
     for event in [
         Event::Start { kept: List::with_capacity(0) },
         Event::SignIn { with: client::With::Held(Secret::new(Box::new(TOKEN))) },

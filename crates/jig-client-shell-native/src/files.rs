@@ -61,7 +61,7 @@ impl Files {
             token: None,
             credential: None,
             loaded: None,
-            events: Queue::with_capacity(16),
+            events: Queue::uncapped(),
             submissions: Queue::with_capacity(16),
             written: None,
             credential_written: None,

@@ -27,8 +27,8 @@ impl Stream {
             decoder: Decoder::new(Alphabet::Standard, decoded),
             active: true,
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: framing },
-            above: Queue::with_capacity(2),
-            below: Queue::with_capacity(2),
+            above: Queue::uncapped(),
+            below: Queue::uncapped(),
             decoded,
             line_start: true,
             comment: false,
@@ -84,8 +84,7 @@ impl Stream {
             self.comment = false;
         }
         sse::up(&mut self.reader, &self.env, Up::Bytes(bytes::copy_of(piece)), &mut self.above, &mut self.below);
-        for _ in 0..self.env.limits.chunk.saturating_mul(3).saturating_add(8) {
-            let Some(event) = self.above.pop() else { break };
+        while let Some(event) = self.above.pop() {
             match event {
                 sse::Event::Opened => self.data(),
                 sse::Event::Data(Up::Bytes(piece)) => {
@@ -119,8 +118,7 @@ impl Stream {
         sse::down(&mut self.reader, &self.env, request, &mut self.above, &mut self.below);
     }
     fn clear_demands(&mut self) {
-        for _ in 0_u32..2 {
-            let Some(request) = self.below.pop() else { break };
+        while let Some(request) = self.below.pop() {
             match request {
                 Down::Demand { read: Read::Line { .. }, room: 0 } => {}
                 Down::Demand { .. } | Down::Send(_) | Down::Finish => unreachable!("SSE only reads lines"),
