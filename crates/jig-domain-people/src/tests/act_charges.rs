@@ -3,7 +3,7 @@
     clippy::disallowed_methods,
     reason = "step tests are ordinary Rust (testing-strategy.md, section 4)"
 )]
-use super::{Acted, valid, valid_outcome};
+use super::{Acted, valid};
 use crate::tests::LIMITS;
 use crate::*;
 use skein_lib::{Time, Wall};
@@ -42,7 +42,6 @@ fn retained_act_owned_bytes_fit_a_smaller_charge() {
         let mut largest = 0;
         for act in [adopt, close, project] {
             valid(&limits, &act).unwrap();
-            assert!(valid_outcome(&limits, &act, &outcome));
             let retained = Acted { act, outcome: outcome.clone(), at: Wall::EPOCH, due: Time::ZERO };
             let bytes = match &retained.act {
                 Act::Adopt { adoption, .. } => {

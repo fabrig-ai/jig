@@ -209,7 +209,7 @@ fn refuses_before_switch(mut world: World, _child: &str) {
     let assignments = world.assignments.clone();
     world.skip_restart_oracle("this story deliberately seeds a record whose required link is absent");
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        world.restart_with_patch_sets(f::SEED, false, f::AFTER)
+        world.restart_with_patch_sets(f::SEED, false, f::AFTER);
     }));
     assert!(panic.is_err(), "an unmade link panics before the switch");
     assert_eq!(world.store.switch_requests, 0);
@@ -264,7 +264,7 @@ fn an_absent_account_panics_with_nothing_pending_too() {
     world.skip_restart_oracle("the fixture deliberately names an absent account");
     world.seed(Box::new([orphan_source()]));
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        world.restart_with_patch_sets(f::SEED, false, f::BEFORE)
+        world.restart_with_patch_sets(f::SEED, false, f::BEFORE);
     }));
     assert!(panic.is_err(), "active and pending generations make the same links");
 }
