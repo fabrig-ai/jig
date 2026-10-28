@@ -292,7 +292,12 @@ pub(super) fn tag_tasks(
                 }
                 continue;
             }
-            tasks::Request::EscalationNeeded { context } => {
+            tasks::Request::EscalationNeeded { context, restored } => {
+                if restored {
+                    // engine.md 6: activation rearms a committed decision; it
+                    // never repeats recipient selection or allocates an entry.
+                    continue;
+                }
                 let role = core.people.role(context.requester, context.project);
                 let Some(holder) = core.escalation_recipient(&env.limits, &context, role) else {
                     out.push(Request::Now(Box::new(Now::RestoreRefused)));

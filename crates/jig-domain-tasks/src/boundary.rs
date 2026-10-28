@@ -1828,11 +1828,14 @@ pub enum Request {
         /// Success or `NotReady` before any recheck output
         result: Result<(), Refusal>,
     },
-    /// Tasks asks root to resolve its new held person chat in this atomic
-    /// decision; no outward notice precedes commitment.
+    /// Tasks reports a held person chat in this atomic decision; no outward
+    /// notice precedes commitment.
     EscalationNeeded {
         /// Bounded held context; root drops it after routing
         context: Box<crate::EscalationContext>,
+        /// Restore has already rearmed the stored holder and deadline. Root
+        /// preserves that decision instead of selecting its recipient again.
+        restored: bool,
     },
     /// One semantic decision terminal; root commits accepted child writes,
     /// its history and people's keyed answer together.
