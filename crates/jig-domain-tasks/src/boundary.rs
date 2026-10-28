@@ -1142,6 +1142,9 @@ pub struct TaskRecord {
     pub refusals: u32,
     /// Current lifecycle or the ended historical outcome.
     pub phase: Phase,
+    /// Refused procedure batch's live-count condition and FIFO place. Kept in the
+    /// task row so a restart rebuilds the bounded waiters (domain/connectors.md, 6.2).
+    pub room_wait: Option<crate::RoomWait>,
 }
 
 pub use crate::index::Key;

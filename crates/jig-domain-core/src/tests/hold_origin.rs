@@ -387,4 +387,69 @@ fn a_refused_procedure_batch_sends_its_findings_to_its_connector() {
     }
     assert!(refused);
     assert!(core.tasks.task(1).unwrap().delegates.is_empty());
+    assert!(core.tasks.task(1).unwrap().room_wait.is_none());
+    assert!(core.tasks.procedure_due(1).is_some());
+}
+
+#[test]
+fn a_live_room_refusal_reaches_the_connector_with_its_durable_task_wait() {
+    for room in [tasks::LiveRoom::Deployment, tasks::LiveRoom::Project(1)] {
+        let (mut core, mut limits) = tree_core();
+        let mut parent = new_row(&core, 1, tasks::Funder::Period { project: 1, period: 1 }, None);
+        parent.executor = tasks::Executor::Procedure { connector: 2, code: 1 };
+        send_task(
+            &mut core,
+            &limits,
+            tasks::Event::Make {
+                reply_to: ReplyTo::new(Token::new(1)),
+                creator: tasks::Party::Person(1),
+                batch: Box::new([parent]),
+            },
+        );
+        match room {
+            tasks::LiveRoom::Deployment => limits.tasks.tasks = 1,
+            tasks::LiveRoom::Project(_) => limits.tasks.project_tasks = 1,
+        }
+        let child = new_row(&core, 2, tasks::Funder::Task(1), None);
+        let Requests::Out(mut out) = step(
+            &mut core,
+            &Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
+            Event::Tasks(tasks::Event::Procedure {
+                reply_to: ReplyTo::new(Token::new(2)),
+                task: 1,
+                step: 1,
+                read: None,
+                decision: tasks::ProcedureDecision {
+                    batch: Box::new([child]),
+                    ..tasks::ProcedureDecision::new(tasks::ProcedureEnd::Wait)
+                },
+            }),
+        );
+        let mut saved = false;
+        let mut told = false;
+        while let Some(request) = out.pop() {
+            match request {
+                Request::Write(Write::Save(Record::Tasks(tasks::Stored::Live(row)))) if row.number == 1 => {
+                    assert_eq!(row.room_wait.unwrap().room, room);
+                    saved = true;
+                }
+                Request::Ask {
+                    connector: 2,
+                    ask: Ask::StepRefused { task: 1, why: StepRefusal::Refused(problem), .. },
+                } => {
+                    assert_eq!(problem.freeing_count(), Some(room));
+                    told = true;
+                }
+                Request::ProjectMade { .. }
+                | Request::Write(_)
+                | Request::Ask { .. }
+                | Request::Held(_)
+                | Request::Now(_)
+                | Request::Decided => {}
+            }
+        }
+        assert!(saved && told, "wait is persisted alongside the exact connector refusal");
+        assert!(core.tasks.procedure_due(1).is_none());
+        assert!(core.tasks.task(2).is_none());
+    }
 }
