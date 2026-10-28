@@ -165,7 +165,7 @@ impl Core {
 
     /// A lost channel changes fleet topology without an external output.
     pub fn lost_channel(&mut self, env: &Env<Limits>, channel: Token) {
-        let mut out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+        let mut out = Queue::uncapped();
         fleet::step(
             &mut self.fleet,
             &Env { now: env.now, wall: env.wall, limits: env.limits.fleet },

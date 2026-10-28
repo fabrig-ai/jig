@@ -12,7 +12,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
     seed_projects(core);
     let owners = core::mem::replace(&mut core.seed_owners, Box::new([]));
     let mut identities = Map::with_capacity(env.limits.people.initial_owners);
-    let mut out = Queue::with_capacity(super::route_room(&env.limits));
+    let mut out = Queue::uncapped();
     if !crate::settings::restart::first_start(core, env, &mut out) {
         return Requests::Out(out);
     }
@@ -26,7 +26,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
             number: person,
             identity: people::Identity { key: owner.identity.clone(), login: Box::new([]), name: Box::new([]) },
         };
-        let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+        let mut child = Queue::uncapped();
         people::step(
             &mut core.people,
             &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -38,7 +38,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
         out.push(Request::Write(Write::Save(Record::People(record))));
         holdings.push(people::Holding { person, role: people::Role::Owner }).expect("configured owner roster");
     }
-    let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut child = Queue::uncapped();
     people::step(
         &mut core.people,
         &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -73,7 +73,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
             let person = *identities.get(&owner.identity).expect("configured owner person seeded");
             holdings.push(people::Holding { person, role: people::Role::Owner }).expect("configured owner roster");
         }
-        let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+        let mut child = Queue::uncapped();
         people::step(
             &mut core.people,
             &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -87,7 +87,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
             out.push(Request::Write(Write::Save(Record::People(record))));
         }
     }
-    let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut child = Queue::uncapped();
     people::step(
         &mut core.people,
         &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -104,7 +104,7 @@ pub(super) fn seed(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>) 
 pub(crate) fn seed_projects(core: &mut Core) {
     let projects = core::mem::replace(&mut core.seed_projects, Box::new([]));
     for project in projects {
-        let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
+        let mut facts = Queue::uncapped();
         authority::step(
             &mut core.authority,
             authority::Event::Policy { project: project.number, policy: project.policy.policy },

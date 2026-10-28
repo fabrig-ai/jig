@@ -21,7 +21,6 @@ pub(super) fn tag_tasks(
     core: &mut Core,
     env: &Env<Limits>,
     mut child: Queue<tasks::Request>,
-    room: u32,
     person_proposal: bool,
     task_escalation: bool,
     person_escalation: bool,
@@ -33,11 +32,11 @@ pub(super) fn tag_tasks(
         .expect("bounded task and party routes")
         .checked_add(crate::settings::release_writes(&env.limits).expect("release bound"))
         .expect("release route room");
-    let mut pending = Queue::with_capacity(route_room);
+    let mut pending = Queue::uncapped();
     for _ in 0..child.len() {
         pending.push(child.pop().expect("task output count"));
     }
-    let mut out = Queue::with_capacity(route_room.checked_add(1).expect("task output room"));
+    let mut out = Queue::uncapped();
     for _ in 0..route_room {
         let Some(next) = pending.pop() else { break };
         let request = match next {
@@ -71,7 +70,7 @@ pub(super) fn tag_tasks(
             tasks::Request::PersonProposed { reply_to, proposal } => {
                 let (event, stubs) = core.person_proposed(reply_to.into_token(), proposal);
                 for stub in stubs {
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -213,9 +212,7 @@ pub(super) fn tag_tasks(
                     tasks::Numbers { budget: context.authority.budget.spend, spent: 0, spent_below: 0, reserved: 0 },
                     context.tasks_left,
                     asked.into_boxed(),
-                    &mut Queue::with_capacity(
-                        authority::max_out(core.authority.limits()).expect("bounded authority findings"),
-                    ),
+                    &mut Queue::uncapped(),
                 );
                 if checked.answer != authority::Answer::Allow {
                     continue;
@@ -235,7 +232,7 @@ pub(super) fn tag_tasks(
                     numbers.push(number).expect("bounded recurring batch");
                 }
                 if numbers.len() == members {
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -279,7 +276,7 @@ pub(super) fn tag_tasks(
                 if core.claiming.remove(&task).is_some() {
                     core.restore_replaced_proof(task);
                     out.push(Request::Now(Box::new(Now::DropAssignment { task })));
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -315,7 +312,7 @@ pub(super) fn tag_tasks(
                     out.push(Request::Now(Box::new(Now::RestoreRefused)));
                     continue;
                 };
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -348,7 +345,7 @@ pub(super) fn tag_tasks(
                     out.push(Request::Now(Box::new(Now::RestoreRefused)));
                     continue;
                 };
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -374,7 +371,7 @@ pub(super) fn tag_tasks(
                     continue;
                 };
                 let revision = core.tasks.task(proposer).expect("pending proposer remains live").revision;
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -399,7 +396,7 @@ pub(super) fn tag_tasks(
                     continue;
                 }
                 let revision = core.tasks.task(proposer).expect("pending proposer remains live").revision;
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -443,7 +440,7 @@ pub(super) fn tag_tasks(
                 match core.made(request, tasks, person_proposal) {
                     crate::MadeRoute::Internal => {}
                     crate::MadeRoute::Tasks(event) | crate::MadeRoute::PersonProposal(event) => {
-                        let mut follow = Queue::with_capacity(room);
+                        let mut follow = Queue::uncapped();
                         tasks::step(
                             &mut core.tasks,
                             &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -456,7 +453,7 @@ pub(super) fn tag_tasks(
                     }
                     crate::MadeRoute::Person { event, stubs } => {
                         for stub in stubs {
-                            let mut follow = Queue::with_capacity(room);
+                            let mut follow = Queue::uncapped();
                             tasks::step(
                                 &mut core.tasks,
                                 &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -471,7 +468,7 @@ pub(super) fn tag_tasks(
                     }
                     crate::MadeRoute::Delegated { key, tasks, stubs, given } => {
                         for stub in stubs {
-                            let mut follow = Queue::with_capacity(room);
+                            let mut follow = Queue::uncapped();
                             tasks::step(
                                 &mut core.tasks,
                                 &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -611,7 +608,7 @@ pub(super) fn tag_tasks(
                     continue;
                 }
                 if let Some(event) = crate::effects::procedure_proposed(core, &mut out, token, true) {
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -627,7 +624,7 @@ pub(super) fn tag_tasks(
                     core.goal_routes
                         .insert(token, GoalRoute::Deciding { proposer, proposal, by })
                         .expect("party acceptance route");
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -657,7 +654,7 @@ pub(super) fn tag_tasks(
                             PersonProposalRoute::Deciding { request, proposer, proposal, by: person, moved: None },
                         )
                         .expect("person acceptance route room");
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -712,7 +709,7 @@ pub(super) fn tag_tasks(
                             core.routing_calls
                                 .insert(token, RoutedCall::Decide { key, proposal })
                                 .expect("acceptance route room");
-                            let mut follow = Queue::with_capacity(room);
+                            let mut follow = Queue::uncapped();
                             tasks::step(
                                 &mut core.tasks,
                                 &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -991,7 +988,7 @@ pub(super) fn tag_tasks(
                         drop(core.contexts.remove(&task.number));
                         drop(core.dependency_results.remove(&task.number));
                         drop(core.transcripts.remove(&task.number));
-                        let mut abandoned = Queue::with_capacity(brief::gather_max_out(&env.limits.brief));
+                        let mut abandoned = Queue::uncapped();
                         brief::gather_step(
                             &mut core.brief,
                             &Env { now: env.now, wall: env.wall, limits: env.limits.brief },
@@ -1013,7 +1010,7 @@ pub(super) fn tag_tasks(
                             }
                         }
                         if task.phase == tasks::Phase::Active(tasks::Active::Preparing) {
-                            let mut follow = Queue::with_capacity(room);
+                            let mut follow = Queue::uncapped();
                             tasks::step(
                                 &mut core.tasks,
                                 &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1193,7 +1190,7 @@ pub(super) fn tag_tasks(
                     }
                     tasks::Party::Task(parent) => {
                         let (kind, words) = result_notice(ending);
-                        let mut follow = Queue::with_capacity(room);
+                        let mut follow = Queue::uncapped();
                         tasks::step(
                             &mut core.tasks,
                             &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1262,7 +1259,7 @@ pub(super) fn tag_tasks(
                     continue;
                 }
                 if let Some(event) = crate::effects::procedure_proposed(core, &mut out, token, false) {
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1358,7 +1355,7 @@ pub(super) fn tag_tasks(
                 if core.claiming.remove(&token.raw()).is_some() {
                     core.restore_replaced_proof(token.raw());
                     out.push(Request::Now(Box::new(Now::DropAssignment { task: token.raw() })));
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     tasks::step(
                         &mut core.tasks,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1387,7 +1384,7 @@ pub(super) fn tag_tasks(
             tasks::Request::PersonStallDue { task } => {
                 let message =
                     crate::fresh(&mut core.counters, crate::Family::Message).expect("person stall number admitted");
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1402,7 +1399,7 @@ pub(super) fn tag_tasks(
             tasks::Request::MetDue { task, dependency, removed, by } => {
                 let message =
                     crate::fresh(&mut core.counters, crate::Family::Message).expect("met notice number admitted");
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1416,7 +1413,7 @@ pub(super) fn tag_tasks(
             }
             tasks::Request::Notify { task, subscription, target, state, words } => {
                 let event = core.notice(task, subscription, target, state, words, env.wall);
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1430,7 +1427,7 @@ pub(super) fn tag_tasks(
             }
             tasks::Request::Timer { task, subscription } => {
                 let event = core.notice_timer(task, subscription, env.wall);
-                let mut follow = Queue::with_capacity(room);
+                let mut follow = Queue::uncapped();
                 tasks::step(
                     &mut core.tasks,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1459,7 +1456,7 @@ pub(super) fn tag_tasks(
                     List::with_capacity(u32::try_from(core.connectors.len()).expect("connector count fits u32"));
                 for &connector in core.connectors.as_ref() {
                     let Some(entry) = crate::fresh(&mut core.counters, crate::Family::ConnectorRow) else {
-                        let mut follow = Queue::with_capacity(room);
+                        let mut follow = Queue::uncapped();
                         tasks::step(
                             &mut core.tasks,
                             &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
@@ -1508,24 +1505,25 @@ pub(super) fn tag_tasks(
         core.task_capacity_mark = capacity_mark;
         core.touch_deployment();
     }
+    assert!(pending.is_empty(), "finite task routes fit their bound");
     out.push(Request::Decided);
     Requests::Out(out)
 }
 
 pub(super) fn route_person_escalation(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+    let mut out = Queue::uncapped();
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, true)
+    tag_tasks(core, env, out, false, false, true)
 }
 
 pub(super) fn route_task_escalation(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+    let mut out = Queue::uncapped();
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, true, false)
+    tag_tasks(core, env, out, false, true, false)
 }
 
 pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: tasks::Event) -> Requests {
-    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+    let mut out = Queue::uncapped();
     if let tasks::Event::Make { batch, .. } | tasks::Event::MakeResultFollowups { batch, .. } = &event
         && let Err(problem) = core.batch_accounts(batch)
     {
@@ -1533,7 +1531,7 @@ pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: t
             unreachable!("checked batch event")
         };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false);
+        return tag_tasks(core, env, out, true, false, false);
     }
     if let tasks::Event::Amend { task, amendment, funder, .. } = &event
         && let Err(why) = core.amendment_account(*task, amendment, *funder)
@@ -1541,10 +1539,10 @@ pub(super) fn route_person_proposal(core: &mut Core, env: &Env<Limits>, event: t
         let problem = tasks::Problem::new(Some(*task), why);
         let tasks::Event::Amend { reply_to, .. } = event else { unreachable!("checked amendment event") };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false);
+        return tag_tasks(core, env, out, true, false, false);
     }
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
-    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), true, false, false)
+    tag_tasks(core, env, out, true, false, false)
 }
 
 #[expect(clippy::boxed_local, reason = "the moved route retains its owned event payload")]
@@ -1601,14 +1599,14 @@ pub(super) fn route_tasks(
     if let tasks::Event::Procedure { task, step, .. } = &event {
         return super::procedure_steps::apply(core, env, *task, *step, event);
     }
-    let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+    let mut out = Queue::uncapped();
     if let tasks::Event::Amend { task, amendment, funder, .. } = &event
         && let Err(why) = core.amendment_account(*task, amendment, *funder)
     {
         let problem = tasks::Problem::new(Some(*task), why);
         let tasks::Event::Amend { reply_to, .. } = event else { unreachable!("checked amendment event") };
         out.push(tasks::Request::Refused { reply_to, problem });
-        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+        return tag_tasks(core, env, out, false, false, false);
     }
     if let tasks::Event::Amend { task, amendment, .. } = &event
         && let Some(tasks::Tracking::Tracked { .. }) = amendment.tracked
@@ -1618,7 +1616,7 @@ pub(super) fn route_tasks(
     {
         let tasks::Event::Amend { task, reply_to, .. } = event else { unreachable!("checked amendment") };
         out.push(tasks::Request::Refused { reply_to, problem: tasks::Problem::new(Some(task), tasks::Refusal::Goals) });
-        return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+        return tag_tasks(core, env, out, false, false, false);
     }
     if let tasks::Event::Make { batch, .. } = &event {
         let mut tracked = 0_u32;
@@ -1640,13 +1638,13 @@ pub(super) fn route_tasks(
                 reply_to,
                 problem: tasks::Problem::capacity(None, tasks::Refusal::Live, capacity),
             });
-            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+            return tag_tasks(core, env, out, false, false, false);
         }
     }
     let event = if let tasks::Event::Make { reply_to, creator, mut batch } = event {
         if let Err(problem) = core.resolve_llm(&mut batch) {
             out.push(tasks::Request::Refused { reply_to, problem });
-            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+            return tag_tasks(core, env, out, false, false, false);
         }
         match crate::resources::defer(
             core,
@@ -1658,13 +1656,13 @@ pub(super) fn route_tasks(
         ) {
             Some(event) => event,
             None => {
-                return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+                return tag_tasks(core, env, out, false, false, false);
             }
         }
     } else if let tasks::Event::MakeResultFollowups { reply_to, proposer, proposal, mut batch } = event {
         if let Err(problem) = core.resolve_llm(&mut batch) {
             out.push(tasks::Request::Refused { reply_to, problem });
-            return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+            return tag_tasks(core, env, out, false, false, false);
         }
         match crate::resources::defer(
             core,
@@ -1676,7 +1674,7 @@ pub(super) fn route_tasks(
         ) {
             Some(event) => event,
             None => {
-                return tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false);
+                return tag_tasks(core, env, out, false, false, false);
             }
         }
     } else {
@@ -1684,7 +1682,7 @@ pub(super) fn route_tasks(
     };
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut out);
     crate::resources::resume(core, work);
-    tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false)
+    tag_tasks(core, env, out, false, false, false)
 }
 pub(super) fn result_words(result: tasks::TaskResult) -> Box<[u8]> {
     match result {

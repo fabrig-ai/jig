@@ -19,7 +19,7 @@ pub(super) fn route_holdings(
     connector: u16,
     holdings: Option<Box<[tasks::Holding]>>,
 ) -> Requests {
-    let mut out = Queue::with_capacity(env.limits.connectors.checked_add(1).expect("connector output bound"));
+    let mut out = Queue::uncapped();
     created_holdings(core, env, &mut out, work, request, connector, holdings);
     out.push(Request::Decided);
     Requests::Out(out)
@@ -39,7 +39,7 @@ pub(super) fn pool_route(
         pool_refused(work, request, why);
         return;
     }
-    if core.person_tasks.len() >= env.limits.tasks.tasks || work.room() < 2 {
+    if core.person_tasks.len() >= env.limits.tasks.tasks {
         super::refusals::pool_again(work, request, people::Again::Busy);
         return;
     }
@@ -277,22 +277,12 @@ pub(super) fn roles_route(
             return;
         }
     };
-    let changed = match core.roles_preflight(&env.limits, &contexts, &holdings) {
-        Ok(changed) => changed,
-        Err(why) => {
-            pool_refused(work, request, why);
-            return;
-        }
-    };
-    let handoffs = u32::try_from(contexts.len()).expect("bounded Waiting count").checked_add(1).expect("recheck room");
-    drop(contexts);
-    drop(holdings);
-    if work.room() < handoffs.checked_add(env.limits.tasks.tasks).expect("validated recheck bound")
-        || out.room() < changed.checked_add(2).expect("validated role cohort bound")
-    {
-        super::refusals::pool_again(work, request, people::Again::Busy);
+    if let Err(why) = core.roles_preflight(&env.limits, &contexts, &holdings) {
+        pool_refused(work, request, why);
         return;
     }
+    drop(contexts);
+    drop(holdings);
     if let Err(why) = core.role_allowed(person, project, env.limits.tasks.tree_tasks) {
         pool_refused(work, request, why);
         return;
@@ -300,7 +290,7 @@ pub(super) fn roles_route(
     core.touch_accounts(None);
     core.touch_deployment();
     core.touch_project_parties(project);
-    let mut applied = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut applied = Queue::uncapped();
     people::step(
         &mut core.people,
         &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -356,7 +346,7 @@ pub(super) fn make_service_request(
         Ok(()) if core.authority.role(project, service_role.number()).is_some() => {
             match crate::fresh(&mut core.counters, crate::Family::Person) {
                 Some(candidate) => {
-                    let mut follow = Queue::with_capacity(people::max_out(&env.limits.people));
+                    let mut follow = Queue::uncapped();
                     people::step(
                         &mut core.people,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -375,7 +365,7 @@ pub(super) fn make_service_request(
         Err(refusal) => Some(people::Outcome::Refused(refusal)),
     };
     if let Some(outcome) = outcome {
-        let mut follow = Queue::with_capacity(people::max_out(&env.limits.people));
+        let mut follow = Queue::uncapped();
         people::step(
             &mut core.people,
             &Env { now: env.now, wall: env.wall, limits: env.limits.people },
@@ -423,20 +413,6 @@ pub(super) fn change_policy_request(
     out: &mut Queue<Request>,
     change: people::PolicyChange,
 ) {
-    if work.room()
-        < env
-            .limits
-            .tasks
-            .tasks
-            .checked_add(env.limits.people.holdings)
-            .expect("task recheck and pool resize bound")
-            .checked_add(2)
-            .expect("period resize and decision bound")
-        || out.room() < 2
-    {
-        super::refusals::pool_again(work, request, people::Again::Busy);
-        return;
-    }
     let period = core.period(project);
     match core.change_policy(&env.limits, person, project, change) {
         Ok((snapshot, resize)) => {

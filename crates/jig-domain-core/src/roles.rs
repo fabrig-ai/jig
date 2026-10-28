@@ -70,7 +70,7 @@ impl Core {
         };
         let mut giving = translate::authority_value(context.authority);
         giving.budget.spend = left;
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("authority output"));
+        let mut findings = Queue::uncapped();
         let ask = authority::PersonAsk {
             project,
             role: holding.number(),
@@ -181,7 +181,7 @@ impl Core {
         } else {
             authority::PersonRequest::Release
         };
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("bounded findings"));
+        let mut findings = Queue::uncapped();
         let ask = authority::PersonAsk {
             project,
             role: holding.number(),
@@ -346,8 +346,7 @@ impl Core {
             Some(record) => record.numbers,
             None => tasks::Numbers { budget: 0, spent: 0, spent_below: 0, reserved: 0 },
         };
-        let mut findings =
-            Queue::with_capacity(authority::max_out(self.authority.limits()).expect("validated authority bound"));
+        let mut findings = Queue::uncapped();
         let ask = authority::PersonAsk {
             project,
             role: people::Role::Owner.number(),

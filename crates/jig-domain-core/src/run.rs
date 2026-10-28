@@ -111,8 +111,7 @@ impl Core {
                     .expect("provider bound");
             }
         }
-        let mut findings =
-            Queue::with_capacity(authority::max_out(self.authority.limits()).expect("authority check bound"));
+        let mut findings = Queue::uncapped();
         let mut current = List::with_capacity(self.authority.limits().writes);
         for mut write in writes {
             write.effect = crate::resources::effect(self, task.project, write.effect);

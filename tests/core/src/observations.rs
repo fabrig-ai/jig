@@ -1242,14 +1242,6 @@ fn person_scope(value: &people::Authority) -> r::Scope {
     }
 }
 
-/// Conservative heap price for this testing root's bounded journal and routes.
-/// A handed row is priced as a complete child bound, so nested owned payloads
-/// fit without teaching the generic referee the root's record vocabulary.
-#[must_use]
-pub fn root_bound(limits: &root::Limits) -> Option<u64> {
-    root::worst_case(limits)
-}
-
 // The most held of this world's stories, all binaries counting:
 // 9,195,220 bytes at jig 4cd5d46966, in conformance's
 // client_settings::an_owner_moves_running_work_through_the_client_and_hears_both_counts.

@@ -332,7 +332,7 @@ pub(crate) fn connector(
     work: &mut Queue<Event>,
     event: connector::Event,
 ) -> Requests {
-    let mut out = Queue::with_capacity(crate::route_bound(&env.limits).expect("validated core room"));
+    let mut out = Queue::uncapped();
     match event {
         connector::Event::DescribeBusy { owner } => describe_busy(core, env, work, &mut out, owner),
         connector::Event::DescribeRefused { owner } => describe_refused(core, env, work, &mut out, owner),
@@ -588,7 +588,7 @@ fn complete(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>, out: &m
         | EffectOrigin::Procedure { .. }
         | EffectOrigin::Accept { .. }) => origin,
     };
-    let mut findings = Queue::with_capacity(authority::max_out(&env.limits.authority).expect("authority output bound"));
+    let mut findings = Queue::uncapped();
     let mut checked = check(core, env, &origin, &description, flight.given.as_slice(), &mut findings);
     if flight.connector != description.connector {
         checked = authority::Answer::Refuse;

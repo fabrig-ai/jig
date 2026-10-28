@@ -18,9 +18,9 @@ pub(super) fn route_notes(
     work: &mut Queue<Event>,
     event: notes::Event,
 ) -> Requests {
-    let mut child = Queue::with_capacity(notes::max_out(&env.limits.notes));
+    let mut child = Queue::uncapped();
     notes::step(&mut core.notes, &Env { now: env.now, wall: env.wall, limits: env.limits.notes }, event, &mut child);
-    tag_notes(core, env, work, child)
+    tag_notes(core, work, child)
 }
 
 pub(super) fn person_note_scope(project: u32, scope: people::NoteScope) -> notes::Scope {
@@ -59,14 +59,8 @@ pub(super) fn person_note_change(change: people::NoteChange) -> notes::Change {
     }
 }
 
-pub(super) fn tag_notes(
-    core: &mut Core,
-    env: &Env<Limits>,
-    work: &mut Queue<Event>,
-    mut child: Queue<notes::Request>,
-) -> Requests {
-    let room = notes::max_out(&env.limits.notes).checked_add(3).expect("bounded note route");
-    let mut out = Queue::with_capacity(room);
+pub(super) fn tag_notes(core: &mut Core, work: &mut Queue<Event>, mut child: Queue<notes::Request>) -> Requests {
+    let mut out = Queue::uncapped();
     for _ in 0..child.len() {
         match child.pop().expect("note output count") {
             notes::Request::Save { record } => out.push(Request::Write(Write::Save(Record::Notes(record)))),

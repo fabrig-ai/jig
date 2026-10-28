@@ -54,7 +54,7 @@ fn an_unused_carried_value_leaves_before_the_rest_of_a_wide_route() {
     else {
         panic!("unused, erase, save, answer, owner drop, decision: {outputs:?}")
     };
-    assert!(matches!(unused.as_ref(), Held::CarriedUnused { number: VALUE }));
+    let Held::CarriedUnused { number: VALUE } = unused.as_ref() else { panic!("unused carried value is first") };
     assert_eq!(*erased, people::RequestKey { person: 1, key: KEY });
     assert_eq!(key, erased);
     let Held::PeopleReply { to, reply: people::Reply::Outcome(reply) } = answer.as_ref() else {

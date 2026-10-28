@@ -282,7 +282,7 @@ impl Core {
     }
     pub(crate) fn tell_replaced_settings(&mut self, env: &Env<Limits>, rules: bool, charters: bool) {
         if rules {
-            let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
+            let mut facts = Queue::uncapped();
             authority::step(
                 &mut self.authority,
                 authority::Event::Rules(Box::new(self.current.rules().clone())),
@@ -293,7 +293,7 @@ impl Core {
         let versions = charters || self.tasks.newest() != self.current.newest();
         if versions {
             let charters = crate::charters::held_models(self, &env.limits);
-            let mut tasks_out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+            let mut tasks_out = Queue::uncapped();
             tasks::step(
                 &mut self.tasks,
                 &Env { now: env.now, wall: env.wall, limits: super::task_limits(&env.limits) },
@@ -310,7 +310,7 @@ impl Core {
             return;
         }
         let needs = crate::fleet_needs::current(self, &env.limits);
-        let mut fleet_out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+        let mut fleet_out = Queue::uncapped();
         fleet::step(
             &mut self.fleet,
             &Env { now: env.now, wall: env.wall, limits: super::fleet_limits(&env.limits) },

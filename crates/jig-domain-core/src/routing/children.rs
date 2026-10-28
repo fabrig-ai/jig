@@ -2,7 +2,6 @@
 //! (`domain/engine.md`, section 4.4).
 
 use super::people_routes::tag_people;
-use super::route_room;
 use super::task_routes::tag_tasks;
 use crate::{Ask, Core, CoreRecord, Event, Held, Key, Limits, Now, Record, Request, Requests, Write};
 use alloc::boxed::Box;
@@ -15,7 +14,7 @@ use skein_lib::{Duration, Env, Queue, ReplyTo, Time, Token};
 
 pub(super) fn append_people(core: &mut Core, env: &Env<Limits>, event: people::Event, out: &mut Queue<Request>) {
     super::view_routes::touch_people_event(core, &env.limits, &event);
-    let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut child = Queue::uncapped();
     people::step(&mut core.people, &Env { now: env.now, wall: env.wall, limits: env.limits.people }, event, &mut child);
     let mut work = Queue::with_capacity(0);
     let Requests::Out(mut routed) = tag_people(core, env, child, &mut work);
@@ -35,10 +34,9 @@ pub(super) fn append_people(core: &mut Core, env: &Env<Limits>, event: people::E
 }
 
 pub(super) fn append_tasks(core: &mut Core, env: &Env<Limits>, event: tasks::Event, out: &mut Queue<Request>) {
-    let room = crate::settings::task_room(&env.limits);
-    let mut child = Queue::with_capacity(room);
+    let mut child = Queue::uncapped();
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut child);
-    let Requests::Out(mut routed) = tag_tasks(core, env, child, room, false, false, false);
+    let Requests::Out(mut routed) = tag_tasks(core, env, child, false, false, false);
     for _ in 0..routed.len() {
         match routed.pop().expect("task route count") {
             Request::Decided => {}
@@ -53,21 +51,8 @@ pub(super) fn append_tasks(core: &mut Core, env: &Env<Limits>, event: tasks::Eve
     }
 }
 
-pub(super) fn tag_brief(
-    core: &mut Core,
-    env: &Env<Limits>,
-    mut child: Queue<brief::GatherRequest>,
-    room: u32,
-) -> Requests {
-    let task_room = crate::settings::task_route_room(&env.limits).checked_mul(8).expect("bounded task routes");
-    let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
-    let total = room.checked_add(task_room).expect("brief and task room");
-    let total = total
-        .checked_add(party_room)
-        .expect("brief output room")
-        .checked_add(crate::settings::release_writes(&env.limits).expect("release writes"))
-        .expect("brief release room");
-    let mut out = Queue::with_capacity(total.checked_add(1).expect("brief output mark"));
+pub(super) fn tag_brief(core: &mut Core, env: &Env<Limits>, mut child: Queue<brief::GatherRequest>) -> Requests {
+    let mut out = Queue::uncapped();
     for _ in 0..child.len() {
         let request = match child.pop().expect("brief output count") {
             brief::GatherRequest::Gather { connector, section, budget } => {
@@ -124,16 +109,8 @@ pub(super) fn tag_fleet(
     room: u32,
 ) -> Requests {
     let marked = room.checked_mul(4).expect("bounded fleet routes");
-    let task_room = crate::settings::task_route_room(&env.limits).checked_mul(8).expect("bounded task routes");
-    let party_room = people::max_out(&env.limits.people).checked_mul(4).expect("bounded party routes");
-    let total = marked.checked_add(task_room).expect("fleet and task route room");
-    let total = total
-        .checked_add(party_room)
-        .expect("fleet and party route room")
-        .checked_add(crate::settings::release_writes(&env.limits).expect("release writes"))
-        .expect("fleet release room");
-    let mut out = Queue::with_capacity(total.checked_add(1).expect("fleet output room"));
-    let mut pending = Queue::with_capacity(marked);
+    let mut out = Queue::uncapped();
+    let mut pending = Queue::uncapped();
     for _ in 0..child.len() {
         pending.push(child.pop().expect("fleet output count"));
     }
@@ -182,7 +159,7 @@ pub(super) fn tag_fleet(
                 // Listings precede adoption during a cold start. Only an open
                 // core has the complete proofs needed to reject a stale run.
                 if core.restart_ready() && !claimed {
-                    let mut follow = Queue::with_capacity(room);
+                    let mut follow = Queue::uncapped();
                     fleet::step(
                         &mut core.fleet,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.fleet },
@@ -308,7 +285,7 @@ pub(super) fn tag_fleet(
                         },
                         &mut out,
                     );
-                    let mut cancelled = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+                    let mut cancelled = Queue::uncapped();
                     fleet::step(
                         &mut core.fleet,
                         &Env { now: env.now, wall: env.wall, limits: env.limits.fleet },
@@ -410,7 +387,7 @@ pub(super) fn tag_fleet(
                 Request::Held(Box::new(Held::Grant { channel, run, attempt, grant }))
             }
             fleet::Request::Turned { run, attempt, turn, body } if core.stopping => {
-                let mut follow = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+                let mut follow = Queue::uncapped();
                 fleet::step(
                     &mut core.fleet,
                     &Env { now: env.now, wall: env.wall, limits: env.limits.fleet },
@@ -446,6 +423,7 @@ pub(super) fn tag_fleet(
         };
         out.push(request);
     }
+    assert!(pending.is_empty(), "finite fleet routes fit their bound");
     out.push(Request::Decided);
     Requests::Out(out)
 }
@@ -494,11 +472,7 @@ pub(super) fn tag_account(
     work: &mut Queue<Event>,
     mut child: Queue<accounts::Request>,
 ) -> Requests {
-    let room = child
-        .capacity()
-        .checked_mul(fleet::max_out(&env.limits.fleet).checked_add(1).expect("grant routes"))
-        .expect("account output room");
-    let mut out = Queue::with_capacity(room.checked_add(1).expect("account decision"));
+    let mut out = Queue::uncapped();
     for _ in 0..child.len() {
         match child.pop().expect("account output count") {
             accounts::Request::Programs { names } => {
@@ -625,7 +599,7 @@ pub(super) fn route_account(
     event: accounts::Event,
 ) -> Requests {
     let party = account_party(core, &event);
-    let mut out = Queue::with_capacity(accounts::max_out(&env.limits.accounts));
+    let mut out = Queue::uncapped();
     accounts::step(
         &mut core.accounts,
         &Env { now: env.now, wall: env.wall, limits: env.limits.accounts },
@@ -639,14 +613,14 @@ pub(super) fn route_account(
 }
 
 pub(super) fn route_brief(core: &mut Core, env: &Env<Limits>, event: brief::GatherEvent) -> Requests {
-    let mut out = Queue::with_capacity(brief::gather_max_out(&env.limits.brief));
+    let mut out = Queue::uncapped();
     brief::gather_step(
         &mut core.brief,
         &Env { now: env.now, wall: env.wall, limits: env.limits.brief },
         event,
         &mut out,
     );
-    tag_brief(core, env, out, brief::gather_max_out(&env.limits.brief))
+    tag_brief(core, env, out)
 }
 
 pub(super) fn route_fleet(
@@ -658,7 +632,7 @@ pub(super) fn route_fleet(
     if let fleet::Event::Start { run, attempt, placement: Some(placement), .. } = &event
         && !core.fleet.placement_available(*placement)
     {
-        let mut out = Queue::with_capacity(route_room(&env.limits));
+        let mut out = Queue::uncapped();
         core.remember_unpriced_terminal(*run, *attempt, tasks::End::Recheck);
         append_tasks(
             core,
@@ -730,7 +704,7 @@ pub(super) fn route_fleet(
     }
     let shape = host_shape(&event);
     let draining = draining_hosts(core);
-    let mut out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+    let mut out = Queue::uncapped();
     fleet::step(&mut core.fleet, &Env { now: env.now, wall: env.wall, limits: env.limits.fleet }, event, &mut out);
     if shape || draining != draining_hosts(core) {
         core.touch_accounts(None);
@@ -738,8 +712,8 @@ pub(super) fn route_fleet(
     tag_fleet(core, env, work, out, fleet::max_out(&env.limits.fleet))
 }
 
-pub(super) fn route_projection_settled(core: &mut Core, env: &Env<Limits>, goal: u64, connector: u16) -> Requests {
-    let mut out = Queue::with_capacity(route_room(&env.limits).checked_add(1).expect("settlement mark"));
+pub(super) fn route_projection_settled(core: &mut Core, goal: u64, connector: u16) -> Requests {
+    let mut out = Queue::uncapped();
     crate::projections::settled(core, goal, connector, &mut out);
     out.push(Request::Decided);
     Requests::Out(out)

@@ -34,8 +34,7 @@ pub(super) fn subscribe(
         out.push(Request::Decided);
         return Requests::Out(out);
     }
-    let mut findings =
-        Queue::with_capacity(authority::max_out(&env.limits.authority).expect("validated findings room"));
+    let mut findings = Queue::uncapped();
     let answer = core.topic_admit(key, resources, &mut findings);
     if answer != authority::Answer::Allow {
         let part = CallPart::ToolDenied {

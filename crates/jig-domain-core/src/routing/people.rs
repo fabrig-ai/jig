@@ -81,7 +81,7 @@ pub(super) fn route_people(
         | people::Event::Restored) => other,
     };
     super::view_routes::touch_people_event(core, &env.limits, &event);
-    let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut child = Queue::uncapped();
     people::step(&mut core.people, &Env { now: env.now, wall: env.wall, limits: env.limits.people }, event, &mut child);
     super::application_routes::first(unused, tag_people(core, env, child, work))
 }
@@ -131,11 +131,11 @@ pub(super) fn tag_people(
         .checked_add(env.limits.people.inbox_tasks)
         .expect("bounded party routes")
         .max(crate::settings::writes_worst_case(&env.limits).expect("settings output room"));
-    let mut pending = Queue::with_capacity(room);
+    let mut pending = Queue::uncapped();
     for _ in 0..child.len() {
         pending.push(child.pop().expect("party output count"));
     }
-    let mut out = Queue::with_capacity(room.checked_add(1).expect("party output room"));
+    let mut out = Queue::uncapped();
     for _ in 0..room {
         let Some(next) = pending.pop() else { break };
         let request = match next {

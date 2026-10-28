@@ -186,8 +186,7 @@ impl Core {
             Some(record) => record.numbers,
             None => tasks::Numbers { budget: 0, spent: 0, spent_below: 0, reserved: 0 },
         };
-        let mut findings =
-            Queue::with_capacity(authority::max_out(self.authority.limits()).expect("checked authority output"));
+        let mut findings = Queue::uncapped();
         let ask = authority::PersonAsk {
             project: context.project,
             role: role.number(),
