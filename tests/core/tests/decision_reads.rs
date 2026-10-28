@@ -215,6 +215,29 @@ fn decisions_keep_their_offered_fence_and_room_across_each_restart_cut() {
 }
 
 #[test]
+fn a_passed_escalation_keeps_its_party_holder_after_restart() {
+    let (mut world, holder, child) = entry_world(false);
+    let entry = *proof(&world, holder.0).outstanding.first().expect("escalation offered to the holder");
+    decide(&mut world, holder, child, entry, false);
+    let before = live_row(&world, child).escalation.clone();
+    let (now, wall) = world.clocks();
+    world.set_clock(now, wall);
+    world.hold_switch = true;
+    world.restart_with(jig_core_world::faults::plan_fixture(DECISION_SEED).0);
+    assert_eq!(
+        world.domain.core().tasks.task(child).expect("linked child").escalation,
+        before,
+        "Live({child}) loads the committed party holder before activation"
+    );
+    world.finish_switch();
+    assert_eq!(
+        live_row(&world, child).escalation,
+        before,
+        "Live({child}) keeps the committed party holder after activation at the same clock"
+    );
+}
+
+#[test]
 fn an_old_proposal_passed_below_a_live_runs_high_water_is_not_an_offer() {
     let (config, limits) = jig_core_world::faults::plan_fixture(462);
     let mut world = World::configured(462, false, config, limits);
