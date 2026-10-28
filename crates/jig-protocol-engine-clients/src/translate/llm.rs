@@ -224,7 +224,7 @@ pub(crate) fn refused(
         | w::Ask::HandBack(_)
         | w::Ask::Decide(_)
         | w::Ask::Release(_)
-        | w::Ask::Lift(_)
+        | w::Ask::Hold(_) | w::Ask::Lift(_)
         | w::Ask::Stop(_)
         | w::Ask::Cancel(_)
         | w::Ask::MoveTask(_)

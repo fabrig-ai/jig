@@ -592,6 +592,7 @@ impl World {
                             RouteKind::TakePerson
                         }
                         Ask::Compound { .. }
+                        | Ask::Hold { .. }
                         | Ask::Lift { .. }
                         | Ask::MarkSeen { .. }
                         | Ask::Release { .. }
@@ -869,6 +870,19 @@ impl World {
                                     &mut self.out,
                                 );
                             }
+                            Ask::Hold { .. } => {
+                                let outcome = if self.settings.authority_refuses {
+                                    Outcome::Refused(Refusal::Authority { proposable: None, lacking: Lack::Shape })
+                                } else {
+                                    Outcome::Placed { hold: self.name(), revision: 1 }
+                                };
+                                people::step(
+                                    &mut self.domain,
+                                    &self.env,
+                                    Event::Decided { request, outcome },
+                                    &mut self.out,
+                                );
+                            }
                             Ask::Lift { hold, .. } => {
                                 let outcome = if self.settings.authority_refuses {
                                     Outcome::Refused(Refusal::Authority {
@@ -1000,6 +1014,7 @@ impl World {
                                         | Ask::Withdraw { .. }
                                         | Ask::Stop { .. }
                                         | Ask::Cancel { .. }
+                                        | Ask::Hold { .. }
                                         | Ask::Lift { .. }
                                         | Ask::Release { .. }
                                         | Ask::Move { .. }

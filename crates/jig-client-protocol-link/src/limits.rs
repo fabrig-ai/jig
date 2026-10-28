@@ -119,6 +119,7 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
     wire.policy_edit_projections_grants = u32::try_from(client.document_bytes).ok()?;
     wire.policy_edit_permissions_mappings = client.rows;
     wire.policy_edit_templates_overrides = client.rows.min(w::CEILINGS.policy_edit_templates_overrides);
+    wire.ask_hold_reason = client.text;
     wire.message_words = client.text;
     wire.answer_question_words = client.text;
     wire.amend_reason = client.text;

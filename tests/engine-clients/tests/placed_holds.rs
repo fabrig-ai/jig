@@ -143,3 +143,89 @@ fn a_lift_capacity_diagnostic_keeps_the_hold_identity() {
     assert_eq!(action.hold(), u64::MAX);
     assert_eq!(record.project(), &None);
 }
+
+#[test]
+fn hold_and_placed_cross_the_native_boundary() {
+    for mode in [w::HoldMode::Stop, w::HoldMode::Drain] {
+        for project_scope in [false, true] {
+            let limits = fixtures::limits().wire;
+            let reason = b"the complete reason, including \xe2\x98\x83";
+            let scope = if project_scope {
+                w::HoldScope::Project
+            } else {
+                w::HoldScope::Subtree(
+                    w::HoldScopeSubtree::new(&limits, w::HoldScopeSubtreeParts { task: u64::MAX }).expect("scope"),
+                )
+            };
+            let ask = w::Ask::Hold(
+                w::AskHold::new(
+                    &limits,
+                    w::AskHoldParts { project: u32::MAX, mode: mode.clone(), scope, reason: reason.as_slice().into() },
+                )
+                .expect("Hold"),
+            );
+            let mut bytes = Writer::new(ask.measure() as usize);
+            ask.encode(&mut bytes).expect("Hold encoding");
+            let keyed = w::Keyed::new(
+                &limits,
+                w::KeyedParts {
+                    key: [19; 16],
+                    owner: w::Owner::Jig,
+                    version: 19,
+                    request: bytes.finish(),
+                    value: None,
+                },
+            )
+            .expect("keyed Hold");
+            let mut bytes = Writer::new(keyed.measure() as usize);
+            keyed.encode(&mut bytes).expect("keyed bytes");
+            let mut peer = Peer::started(&fixtures::settings());
+            let bearer = fixtures::signed_in(&mut peer);
+            let socket = peer.post(b"/jig/v1/request", bytes.finish(), Some(&bearer));
+            let Some(core::Event::People(p::Event::Ask { reply_to, ask, .. })) = peer.take_core() else {
+                panic!("native Hold")
+            };
+            assert_eq!(
+                ask,
+                p::Ask::Hold {
+                    project: u32::MAX,
+                    mode: match mode {
+                        w::HoldMode::Stop => p::HoldMode::Stop,
+                        w::HoldMode::Drain => p::HoldMode::Drain,
+                    },
+                    scope: if project_scope { p::HoldScope::Project } else { p::HoldScope::Subtree { task: u64::MAX } },
+                    reason: reason.as_slice().into(),
+                }
+            );
+            peer.answer_request(reply_to, p::Reply::Outcome(p::Outcome::Placed { hold: u64::MAX, revision: u64::MAX }));
+            let w::KeyedAnswer::FinalAnswer(record) =
+                w::KeyedAnswer::decode(&limits, &mut Reader::new(peer.answered(socket).expect("durable Placed")))
+                    .expect("envelope")
+            else {
+                panic!("final")
+            };
+            let w::Final::Done(done) = w::Final::decode(&limits, &mut Reader::new(record.record())).expect("answer")
+            else {
+                panic!("done")
+            };
+            let w::Outcome::Owner(owner) = done.outcome() else { panic!("owner outcome") };
+            let w::OwnerOutcome::Placed(placed) = owner.value() else { panic!("Placed") };
+            assert_eq!((placed.hold(), placed.revision().value()), (u64::MAX, u64::MAX));
+        }
+    }
+}
+
+#[test]
+fn a_hold_capacity_diagnostic_carries_only_its_requested_project() {
+    let value = p::CapacityRefusal {
+        key: p::RequestKey { person: u64::MAX, key: [255; 16] },
+        project: Some(u32::MAX),
+        action: p::CapacityAction::Hold,
+        at: Wall::EPOCH,
+        cause: p::CapacityCause::Requests { limit: u32::MAX },
+    };
+    let record =
+        jig_protocol_engine_clients::translate::deployment::person_refusal(&value, &w::CEILINGS).expect("diagnostic");
+    assert_eq!(record.action(), &w::OwnerPersonCapacityAction::Hold);
+    assert_eq!(record.project(), &Some(u32::MAX));
+}

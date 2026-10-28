@@ -273,3 +273,47 @@ fn a_client_reads_a_stopped_goals_hold_and_only_its_owner_lifts_it() {
     assert!(owner_client.task(&mut world, goal).hold.is_none());
     assert!(owner_client.task(&mut world, child).hold.is_none());
 }
+
+#[test]
+fn a_client_places_a_project_stop_and_is_answered_its_number() {
+    let (mut config, mut limits) = jig_core_world::peers::fixture(977, 0);
+    config.core.seed_projects[0].policy.policy.roles[0].authority.budget.spend = 100;
+    limits.core.fleet.slots = 2;
+    jig_core_world::peers::journal(&mut limits);
+    let mut world = World::configured(977, false, config, limits);
+    world.reads = Some(reads::Parties::new(world.store.applied));
+    let sign_in = world.sign_in.expect("owner");
+    let coordinator = world.assignments[0];
+    let tasks::Party::Person(owner) = fixtures::live_row(&world, coordinator.0).requester else { panic!("owner") };
+    let mut goal = fixtures::member(&world, tasks::Executor::Agent { charter: 1 }, b"goal to hold");
+    goal.tracked = Some(1);
+    goal.authority.budget.spend = 20;
+    goal.authority.delegation = tasks::Delegation { kinds: Box::new([]), tasks: 0, depth: 0 };
+    let goal = fixtures::delegate(&mut world, coordinator, 1, goal);
+    let mut party = Party::new(&mut world, sign_in, owner);
+    let reason = b"a project stop placed through the client";
+    let answer = party.ask(
+        &mut world,
+        c::Ask::Hold {
+            project: 1,
+            mode: c::HoldMode::Stop,
+            scope: c::HoldScope::Project,
+            reason: c::Text::new(reason.as_slice().into(), 4096).expect("reason"),
+        },
+    );
+    let c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::Placed { hold, revision })) = answer else {
+        panic!("Placed: {answer:?}")
+    };
+    assert_ne!(hold, 0);
+    assert_eq!(revision.value, 1);
+    assert_eq!(fixtures::live_row(&world, goal).placed, Some(hold));
+    assert_eq!(fixtures::live_row(&world, coordinator.0).placed, None);
+    let task = party.task(&mut world, goal);
+    let placed = task.hold.as_ref().expect("held goal").placed().expect("placed facts");
+    assert_eq!(placed.number, hold);
+    assert_eq!(placed.revision, revision);
+    assert_eq!(placed.owner, c::HoldOwner::Party { person: owner });
+    assert_eq!(placed.scope, c::HoldScope::Project);
+    assert_eq!(placed.mode, c::HoldMode::Stop);
+    assert_eq!(placed.reason.as_ref(), reason);
+}

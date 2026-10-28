@@ -272,6 +272,7 @@ fn person_action(b: &mut Builder, words: &Words, value: OwnerPersonCapacityActio
             text(b, words, P::PersonCapacityActionAnswerPerson, &[]);
             field_number(b, words, P::Task, task);
         }
+        OwnerPersonCapacityAction::Hold => text(b, words, P::PersonCapacityActionStop, &[]),
         OwnerPersonCapacityAction::Stop { task } => {
             text(b, words, P::PersonCapacityActionStop, &[]);
             field_number(b, words, P::Task, task);

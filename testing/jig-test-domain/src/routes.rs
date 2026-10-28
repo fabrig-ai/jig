@@ -1028,6 +1028,7 @@ fn application_answer(outcome: people::Outcome) -> connector::ApplicationCoreAns
         | people::Outcome::AccountChanged
         | people::Outcome::AccountRemoved { .. }
         | people::Outcome::AccountSignedOut { .. }
+        | people::Outcome::Placed { .. }
         | people::Outcome::Lifted { .. }
         | people::Outcome::MarkedSeen { .. } => unreachable!("release core part returns a release terminal"),
     }

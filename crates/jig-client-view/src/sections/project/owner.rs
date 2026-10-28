@@ -72,6 +72,7 @@ pub fn edit(before: &Ask, field: Field, bytes: Box<[u8]>, text: u32) -> Option<A
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }
@@ -643,6 +644,7 @@ fn policy_request(ask: &Ask) -> Option<&PolicyEdit> {
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }
@@ -731,6 +733,7 @@ fn holdings_request(ask: &Ask) -> Option<&skein_lib::List<jig_client::contract::
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }
@@ -764,6 +767,7 @@ fn pool_request(ask: &Ask) -> bool {
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }
@@ -797,6 +801,7 @@ fn service_request(ask: &Ask) -> Option<(&jig_client::contract::Text, jig_client
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }
@@ -1249,6 +1254,7 @@ fn render_request(b: &mut Builder, ask: &Ask, words: &Words, text_limit: u32, ro
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }

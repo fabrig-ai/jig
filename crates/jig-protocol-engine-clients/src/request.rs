@@ -187,6 +187,7 @@ impl Component {
                     | w::Ask::SetRoles(_)
                     | w::Ask::SignIn(_)
                     | w::Ask::SignOut(_)
+                    | w::Ask::Hold(_)
                     | w::Ask::Lift(_)
                     | w::Ask::Stop(_)
                     | w::Ask::Take(_)
@@ -311,6 +312,7 @@ fn account_key_digest(ask: &w::Ask) -> Option<[u8; 32]> {
         | w::Ask::Decide(_)
         | w::Ask::Release(_)
         | w::Ask::Amend(_)
+        | w::Ask::Hold(_)
         | w::Ask::Lift(_)
         | w::Ask::Stop(_)
         | w::Ask::Cancel(_)
@@ -362,6 +364,7 @@ fn carried_bound(ask: &w::Ask, key_bytes: u32, moved_bytes: u64, redirect_bytes:
         | w::Ask::Decide(_)
         | w::Ask::Release(_)
         | w::Ask::Amend(_)
+        | w::Ask::Hold(_)
         | w::Ask::Lift(_)
         | w::Ask::Stop(_)
         | w::Ask::Cancel(_)
@@ -433,6 +436,7 @@ fn carried_kind(ask: &people::Ask) -> Option<crate::CarriedKind> {
         | people::Ask::Withdraw { .. }
         | people::Ask::Stop { .. }
         | people::Ask::Cancel { .. }
+        | people::Ask::Hold { .. }
         | people::Ask::Lift { .. }
         | people::Ask::Release { .. }
         | people::Ask::TakePerson { .. }

@@ -29,6 +29,10 @@ fn configuration(seed: u64) -> (root::Config, root::Limits) {
 
 fn story(seed: u64) -> Story {
     let (config, limits) = configuration(seed);
+    configured_story(seed, config, limits)
+}
+
+fn configured_story(seed: u64, config: root::Config, limits: root::Limits) -> Story {
     let mut world = World::configured(seed, false, config, limits);
     let owner_sign_in = world.sign_in.expect("owner signed in");
     let coordinator = world.assignments[0];
@@ -69,7 +73,7 @@ fn stop(s: &mut Story, sign_in: u64) -> u64 {
     hold
 }
 
-fn hold(s: &Story, number: u64) -> tasks::PlacedHold {
+fn placed_hold(s: &Story, number: u64) -> tasks::PlacedHold {
     let key = root::Key::Core(core::Key::Tasks(tasks::Key::PlacedHold(number)));
     let Some(root::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(row)))) = s.world.store.rows.get(&key)
     else {
@@ -99,7 +103,7 @@ fn action(s: &mut Story, completion: u32, action: core::NamedAction) {
 }
 
 fn propose(s: &mut Story, number: u64) -> u64 {
-    let revision = hold(s, number).revision;
+    let revision = placed_hold(s, number).revision;
     action(
         s,
         3,
@@ -299,7 +303,7 @@ fn pending_release_proposals_and_placed_holds_survive_a_restart() {
             valid: skein_lib::Duration::from_secs(60),
         },
     ))));
-    assert_eq!(hold(&s, number).owner, tasks::Owner::Party { person: s.owner });
+    assert_eq!(placed_hold(&s, number).owner, tasks::Owner::Party { person: s.owner });
     accept(&mut s, proposal);
     resumed(&s, number);
     transcripts(&s);
@@ -346,7 +350,7 @@ fn rejecting_a_release_proposal_keeps_the_goal_and_delegate_held() {
     for task in [s.goal, s.child] {
         assert_eq!(live_row(&s.world, task).placed, Some(number));
     }
-    assert!(!hold(&s, number).lifted);
+    assert!(!placed_hold(&s, number).lifted);
 }
 
 #[test]
@@ -385,4 +389,345 @@ fn a_maintainer_cannot_release_an_owners_hold_as_part_of_an_amendment() {
         Some(&people::Reply::Outcome(people::Outcome::CompoundRefused { at: 0, why: owner_refusal(number, s.owner) }))
     );
     assert_eq!(live_row(&s.world, s.goal), &before);
+}
+
+// A party places a hold explicitly, independently of the task's Stop control.
+fn hold(
+    s: &mut Story,
+    sign_in: u64,
+    key: u8,
+    mode: people::HoldMode,
+    scope: people::HoldScope,
+    reason: &[u8],
+) -> people::Outcome {
+    ask_as(&mut s.world, sign_in, key, people::Ask::Hold { project: 1, mode, scope, reason: reason.into() });
+    match s.world.people_answers.last() {
+        Some(people::Reply::Outcome(outcome)) => outcome.clone(),
+        Some(people::Reply::Refused(why)) => people::Outcome::Refused(why.clone()),
+        reply => panic!("Hold has a permanent answer: {reply:?}"),
+    }
+}
+
+fn placed_number(outcome: people::Outcome) -> u64 {
+    let people::Outcome::Placed { hold, revision } = outcome else { panic!("placed answer: {outcome:?}") };
+    assert_ne!(hold, 0);
+    assert_eq!(revision, 1);
+    hold
+}
+
+fn parked(s: &mut Story) {
+    for task in [s.goal, s.child] {
+        let attempt = live_row(&s.world, task).attempt;
+        s.world.send(root::Event::Answer {
+            read: None,
+            refused: Box::new([]),
+            channel: Token::new(7),
+            task,
+            attempt,
+            cumulative: 0,
+            end: tasks::End::Parked,
+        });
+    }
+}
+
+fn holds_count(s: &Story) -> usize {
+    s.world
+        .store
+        .rows
+        .values()
+        .filter(|row| matches!(row, root::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(_)))))
+        .count()
+}
+
+fn message_number(s: &Story) -> u64 {
+    s.world
+        .store
+        .rows
+        .values()
+        .find_map(|row| {
+            if let root::Record::Core(core::Record::Core(core::CoreRecord::Deployment(header))) = row {
+                Some(header.messages)
+            } else {
+                None
+            }
+        })
+        .expect("deployment high-water marks")
+}
+
+#[test]
+fn a_hold_over_a_goal_places_the_owners_stop_with_its_reason() {
+    let mut s = story(970);
+    let sign_in = s.owner_sign_in;
+    let scope = people::HoldScope::Subtree { task: s.goal };
+    let number = placed_number(hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, b"pause for inspection"));
+    let row = placed_hold(&s, number);
+    assert_eq!(row.owner, tasks::Owner::Party { person: s.owner });
+    assert_eq!(
+        (row.project, row.mode, row.scope, row.revision),
+        (1, tasks::Mode::Stop, tasks::Scope::Subtree { task: s.goal }, 1)
+    );
+    assert_eq!(row.reason.as_ref(), b"pause for inspection");
+    assert!(!row.lifted && row.exempt.is_empty());
+    for task in [s.goal, s.child] {
+        assert_eq!(live_row(&s.world, task).placed, Some(number));
+        assert!(
+            matches!(live_row(&s.world, task).phase, tasks::Phase::Held { why: tasks::Hold::Placed { hold }, .. } if hold == number)
+        );
+        assert!(s.world.cancellations.iter().any(|run| run.0 == task));
+    }
+    assert_eq!(holds_count(&s), 1);
+}
+
+#[test]
+fn a_project_hold_by_the_owner_holds_every_task_but_their_chat() {
+    let mut s = story(971);
+    let sign_in = s.owner_sign_in;
+    let chat = live_row(&s.world, s.coordinator.0).clone();
+    assert!(chat.flags.conversation);
+    assert_eq!(chat.requester, tasks::Party::Person(s.owner));
+    let number = placed_number(hold(
+        &mut s,
+        sign_in,
+        71,
+        people::HoldMode::Stop,
+        people::HoldScope::Project,
+        b"freeze this project",
+    ));
+    assert_eq!(placed_hold(&s, number).scope, tasks::Scope::Project);
+    assert_eq!(live_row(&s.world, s.coordinator.0), &chat);
+    assert!(!s.world.cancellations.iter().any(|run| run.0 == s.coordinator.0));
+    for task in [s.goal, s.child] {
+        assert_eq!(live_row(&s.world, task).placed, Some(number));
+        assert!(s.world.cancellations.iter().any(|run| run.0 == task));
+    }
+    parked(&mut s);
+    let ask = jig_core_world::fixtures::goal(
+        &s.world,
+        1,
+        b"a new goal under the hold".as_slice().into(),
+        people::TaskExecutor::Agent { charter: 1 },
+        jig_core_world::fixtures::Goal { budget: 5, priority: 1, deadline: None },
+    );
+    ask_as(&mut s.world, sign_in, 72, ask);
+    let Some(people::Reply::Outcome(people::Outcome::Created { first: later, .. })) = s.world.people_answers.last()
+    else {
+        panic!("goal created while project held: {:?}", s.world.people_answers.last())
+    };
+    let later = *later;
+    assert_eq!(live_row(&s.world, later).placed, Some(number));
+    assert!(!s.world.assignments.iter().any(|run| run.0 == later));
+    ask_as(&mut s.world, sign_in, 73, people::Ask::Lift { hold: number, revision: 1, with_tasks: true });
+    assert_eq!(
+        s.world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::Lifted { hold: number, released: 3 }))
+    );
+    for task in [s.goal, s.child, later] {
+        assert_eq!(live_row(&s.world, task).placed, None);
+    }
+}
+
+#[test]
+fn a_member_may_hold_a_task_in_their_tree_but_not_a_project() {
+    let mut s = story(972);
+    let member_sign_in = second_party(&mut s.world, b"member", people::Role::Member);
+    assert_eq!(
+        hold(&mut s, member_sign_in, 71, people::HoldMode::Stop, people::HoldScope::Project, b"pause"),
+        people::Outcome::Refused(people::Refusal::Role { held: Some(people::Role::Member) })
+    );
+    let scope = people::HoldScope::Subtree { task: s.goal };
+    let refused = hold(&mut s, member_sign_in, 72, people::HoldMode::Stop, scope, b"outside my tree");
+    let goal = s.goal;
+    ask_as(&mut s.world, member_sign_in, 73, people::Ask::Stop { project: 1, task: goal });
+    assert_eq!(refused, people::Outcome::Refused(people::Refusal::Unknown));
+    assert_eq!(s.world.people_answers.last(), Some(&people::Reply::Outcome(refused)));
+    assert_eq!(holds_count(&s), 0);
+    let ask = jig_core_world::fixtures::goal(
+        &s.world,
+        1,
+        b"member's own goal".as_slice().into(),
+        people::TaskExecutor::Agent { charter: 1 },
+        jig_core_world::fixtures::Goal { budget: 5, priority: 1, deadline: None },
+    );
+    ask_as(&mut s.world, member_sign_in, 74, ask);
+    let Some(people::Reply::Outcome(people::Outcome::Created { first: own, .. })) = s.world.people_answers.last()
+    else {
+        panic!("member's goal: {:?}", s.world.people_answers.last())
+    };
+    let own = *own;
+    let scope = people::HoldScope::Subtree { task: own };
+    let number = placed_number(hold(&mut s, member_sign_in, 75, people::HoldMode::Stop, scope, b"my own task"));
+    assert_eq!(live_row(&s.world, own).placed, Some(number));
+    assert_eq!(live_row(&s.world, s.goal).placed, None);
+}
+
+#[test]
+fn a_hold_without_a_reason_or_past_the_words_bound_is_refused() {
+    let mut s = story(973);
+    let sign_in = s.owner_sign_in;
+    let bound = configuration(s.seed).1.core.people.words;
+    let messages = message_number(&s);
+    for (key, reason, which) in [
+        (71, Vec::new(), people::LimitKind::Empty),
+        (72, vec![b'x'; usize::try_from(bound).expect("words bound") + 1], people::LimitKind::Words),
+    ] {
+        assert_eq!(
+            hold(&mut s, sign_in, key, people::HoldMode::Stop, people::HoldScope::Project, &reason),
+            people::Outcome::Refused(people::Refusal::Limit { which })
+        );
+    }
+    assert_eq!(holds_count(&s), 0);
+    assert_eq!(message_number(&s), messages);
+    let reason = vec![b'x'; usize::try_from(bound).expect("words bound")];
+    let number = placed_number(hold(&mut s, sign_in, 73, people::HoldMode::Stop, people::HoldScope::Project, &reason));
+    assert_eq!(placed_hold(&s, number).reason.as_ref(), reason);
+}
+
+#[test]
+fn a_drain_is_refused_before_anything_is_placed() {
+    let mut s = story(974);
+    let sign_in = s.owner_sign_in;
+    let messages = message_number(&s);
+    for (key, scope) in [(71, people::HoldScope::Project), (72, people::HoldScope::Subtree { task: s.goal })] {
+        assert_eq!(
+            hold(&mut s, sign_in, key, people::HoldMode::Drain, scope, b"drain later"),
+            people::Outcome::Refused(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape })
+        );
+    }
+    assert_eq!(holds_count(&s), 0);
+    assert_eq!(message_number(&s), messages);
+    assert_eq!(live_row(&s.world, s.goal).placed, None);
+    assert_eq!(live_row(&s.world, s.child).placed, None);
+    assert!(s.world.cancellations.is_empty());
+}
+
+#[test]
+fn a_hold_replayed_under_its_key_answers_the_same_hold() {
+    let mut s = story(975);
+    let sign_in = s.owner_sign_in;
+    let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Stop, people::HoldScope::Project, b"pause once");
+    let number = placed_number(outcome.clone());
+    let messages = message_number(&s);
+    assert_eq!(hold(&mut s, sign_in, 71, people::HoldMode::Stop, people::HoldScope::Project, b"pause once"), outcome);
+    assert_eq!(
+        hold(&mut s, sign_in, 71, people::HoldMode::Stop, people::HoldScope::Project, b"a different reason"),
+        people::Outcome::Refused(people::Refusal::KeyConflict)
+    );
+    assert_eq!(message_number(&s), messages);
+    assert_eq!(holds_count(&s), 1);
+    assert_eq!(placed_hold(&s, number).reason.as_ref(), b"pause once");
+}
+
+#[test]
+fn a_retained_hold_answer_survives_a_cold_restart() {
+    let mut s = story(976);
+    let sign_in = s.owner_sign_in;
+    let reason = b"pause across restart";
+    let scope = people::HoldScope::Subtree { task: s.goal };
+    let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, reason);
+    let number = placed_number(outcome.clone());
+    let before = placed_hold(&s, number);
+    parked(&mut s);
+    s.world.restart_with(configuration(s.seed).0);
+    assert!(s.world.domain.ready(), "cold engine ready");
+    assert_eq!(s.world.domain.restore_failure(), None);
+    assert_eq!(placed_hold(&s, number), before);
+    let key = people::RequestKey { person: s.owner, key: [71; 16] };
+    let Some(root::Record::Core(core::Record::People(people::Stored::Answer { ask, outcome: saved, .. }))) =
+        s.world.store.rows.get(&root::Key::Core(core::Key::People(people::Key::Answer(key))))
+    else {
+        panic!("retained Hold ask and Placed answer restored")
+    };
+    assert_eq!(
+        ask.as_ref(),
+        &people::Ask::Hold { project: 1, mode: people::HoldMode::Stop, scope, reason: reason.as_slice().into() }
+    );
+    assert_eq!(saved, &outcome);
+    assert_eq!(hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, reason), outcome);
+    for task in [s.goal, s.child] {
+        assert_eq!(live_row(&s.world, task).placed, Some(number));
+        assert!(matches!(live_row(&s.world, task).phase, tasks::Phase::Held { .. }));
+    }
+    assert_eq!(holds_count(&s), 1);
+}
+
+#[test]
+fn a_maintainer_may_hold_a_project_but_observer_and_policy_roles_may_not() {
+    for (seed, role) in
+        [(978, people::Role::Maintainer), (979, people::Role::Observer), (980, people::Role::Policy { role: 4 })]
+    {
+        let (mut config, limits) = configuration(seed);
+        if let people::Role::Policy { role } = role {
+            config.core.seed_projects[0].policy.policy.roles[3].number = role;
+        }
+        let mut s = configured_story(seed, config, limits);
+        let sign_in = second_party(&mut s.world, b"project holder", role);
+        let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Stop, people::HoldScope::Project, b"project review");
+        if role == people::Role::Maintainer {
+            let number = placed_number(outcome);
+            assert_eq!(live_row(&s.world, s.goal).placed, Some(number));
+            assert_eq!(live_row(&s.world, s.child).placed, Some(number));
+        } else {
+            assert_eq!(outcome, people::Outcome::Refused(people::Refusal::Role { held: Some(role) }));
+            assert_eq!(holds_count(&s), 0);
+        }
+    }
+}
+
+#[test]
+fn a_full_placed_hold_table_returns_the_existing_capacity_refusal() {
+    let mut s = story(981);
+    let sign_in = s.owner_sign_in;
+    let scope = people::HoldScope::Subtree { task: s.goal };
+    let number = placed_number(hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, b"first hold"));
+    let expected = people::Outcome::Refused(people::Refusal::Limit { which: people::LimitKind::PlacedHolds });
+    for _ in 0..2 {
+        assert_eq!(
+            hold(&mut s, sign_in, 72, people::HoldMode::Stop, people::HoldScope::Project, b"table is full"),
+            expected
+        );
+    }
+    assert_eq!(holds_count(&s), 1);
+    assert_eq!(live_row(&s.world, s.goal).placed, Some(number));
+    assert_eq!(placed_hold(&s, number).reason.as_ref(), b"first hold");
+}
+
+#[test]
+fn a_hold_rejects_a_zero_task_and_a_task_named_in_another_project() {
+    let mut s = story(982);
+    let sign_in = s.owner_sign_in;
+    assert_eq!(
+        hold(&mut s, sign_in, 71, people::HoldMode::Stop, people::HoldScope::Subtree { task: 0 }, b"invalid task"),
+        people::Outcome::Refused(people::Refusal::Unknown)
+    );
+    ask_as(
+        &mut s.world,
+        sign_in,
+        72,
+        people::Ask::Hold {
+            project: u32::MAX,
+            mode: people::HoldMode::Stop,
+            scope: people::HoldScope::Subtree { task: s.goal },
+            reason: b"wrong project".as_slice().into(),
+        },
+    );
+    assert_eq!(
+        s.world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Role { held: None })))
+    );
+    ask_as(
+        &mut s.world,
+        sign_in,
+        73,
+        people::Ask::Hold {
+            project: u32::MAX,
+            mode: people::HoldMode::Stop,
+            scope: people::HoldScope::Project,
+            reason: b"unknown project".as_slice().into(),
+        },
+    );
+    assert!(matches!(
+        s.world.people_answers.last(),
+        Some(people::Reply::Outcome(people::Outcome::Refused(people::Refusal::Unknown)))
+    ));
+    assert_eq!(holds_count(&s), 0);
 }

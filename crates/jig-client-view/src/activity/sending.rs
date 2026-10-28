@@ -35,6 +35,7 @@ fn message(ask: &Ask, task: u64) -> Option<(&Text, u32)> {
         | Ask::Take { .. }
         | Ask::HandBack { .. }
         | Ask::Decide { .. }
+        | Ask::Hold { .. }
         | Ask::Lift { .. }
         | Ask::Release { .. }
         | Ask::Amend { .. }

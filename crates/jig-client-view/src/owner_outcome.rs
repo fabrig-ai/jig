@@ -47,7 +47,7 @@ fn header(value: &OwnerOutcome) -> P {
         OwnerOutcome::NoteEdited { .. } => P::NoteEdited,
         OwnerOutcome::ServiceMade { .. } => P::ServiceMade,
         OwnerOutcome::Adopted { .. } => P::Adopted,
-        OwnerOutcome::Stopped { .. } => P::Stopped,
+        OwnerOutcome::Placed { .. } | OwnerOutcome::Stopped { .. } => P::Stopped,
         OwnerOutcome::Cancelled { .. } => P::Cancelled,
         OwnerOutcome::Released { .. } | OwnerOutcome::Lifted { .. } => P::Released,
         OwnerOutcome::PersonTaken { .. } => P::PersonTaken,
@@ -140,6 +140,7 @@ fn details(b: &mut Builder, value: &OwnerOutcome, words: &Words) {
         OwnerOutcome::AccountKeyKept { .. }
         | OwnerOutcome::AccountChanged
         | OwnerOutcome::AccountSignInStarted { .. }
+        | OwnerOutcome::Placed { .. }
         | OwnerOutcome::Lifted { .. } => {}
         OwnerOutcome::AccountFinishing { source } => number(b, words, P::SourceNumber, u64::from(*source)),
         OwnerOutcome::AccountMovedIn { account, .. } => number(b, words, P::AccountNumber, u64::from(*account)),

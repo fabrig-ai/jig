@@ -61,3 +61,40 @@ fn both_task_hold_forms_keep_every_placed_fact_and_their_independent_revisions()
         }
     }
 }
+
+use crate::translate::{asks, store};
+use skein_lib::Writer;
+
+#[test]
+fn holds_restore_both_modes_scopes_and_their_whole_reason() {
+    let limits = fixtures::limits();
+    for mode in [c::HoldMode::Stop, c::HoldMode::Drain] {
+        for scope in [c::HoldScope::Subtree { task: u64::MAX }, c::HoldScope::Project] {
+            let ask = c::Ask::Hold { project: u32::MAX, mode, scope, reason: fixtures::store_text() };
+            let wire = asks::ask(&ask, &limits.wire).unwrap();
+            let mut out = Writer::new(usize::try_from(wire.measure()).unwrap());
+            wire.encode(&mut out).unwrap();
+            let decoded = w::Ask::decode(&limits.wire, &mut Reader::new(&out.finish())).unwrap();
+            assert_eq!(store::restore_ask(decoded, &limits), Ok(ask));
+        }
+    }
+    assert_eq!(limits.wire.ask_hold_reason, limits.client.text);
+}
+
+#[test]
+fn a_hold_is_refused_in_a_compound_at_the_client() {
+    let limits = fixtures::limits();
+    for scope in [c::HoldScope::Subtree { task: 1 }, c::HoldScope::Project] {
+        let ask = c::Ask::Hold { project: 1, mode: c::HoldMode::Stop, scope, reason: fixtures::store_text() };
+        let wire = asks::ask(&ask, &limits.wire).unwrap();
+        let mut out = Writer::new(usize::try_from(wire.measure()).unwrap());
+        wire.encode(&mut out).unwrap();
+        let bytes = out.finish();
+        let mut pieces = Writer::new(bytes.len().checked_add(4).unwrap());
+        pieces.put(&u32::try_from(bytes.len()).unwrap().to_be_bytes()).unwrap();
+        pieces.put(&bytes).unwrap();
+        let compound =
+            w::Compound::new(&limits.wire, w::CompoundParts { project: 1, operations: pieces.finish() }).unwrap();
+        store::restore_ask(w::Ask::Compound(compound), &limits).expect_err("Hold is never a compound operation");
+    }
+}
