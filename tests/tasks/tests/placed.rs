@@ -679,7 +679,7 @@ fn check_rows(rows: Vec<Stored>, env: &skein_lib::Env<tasks::Limits>) -> Vec<tas
 }
 
 #[test]
-fn restart_refuses_missing_holds_missing_scope_roots_and_unheld_tasks_in_scope() {
+fn restart_asserts_missing_hold_links_and_loads_historical_scope_membership() {
     let mut w = World::new(920, LIMITS);
     goal_tree(&mut w);
     stop(&mut w, 1, 1, 100);
@@ -707,7 +707,21 @@ fn restart_refuses_missing_holds_missing_scope_roots_and_unheld_tasks_in_scope()
             }
             _ => unreachable!(),
         }
-        assert!(check_rows(rows, &w.env).iter().any(|reply| matches!(reply, tasks::Request::RestoreRefused { .. })));
+        if corruption < 2 {
+            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check_rows(rows, &w.env)))
+                .expect_err("a missing hold target is a writer bug");
+            let message = panic.downcast_ref::<String>().expect("formatted link assertion");
+            let expected = if corruption == 0 {
+                "tasks: Live(1) links to placed hold 100, which is absent"
+            } else {
+                "tasks: PlacedHold(100) links to subtree 99, which is absent"
+            };
+            assert_eq!(message, expected);
+        } else {
+            assert!(
+                !check_rows(rows, &w.env).iter().any(|reply| matches!(reply, tasks::Request::RestoreRefused { .. }))
+            );
+        }
     }
 }
 
