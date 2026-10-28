@@ -11,6 +11,13 @@ use skein_lib::{Env, List, Map, Queue, Time, Token, Wall, stream};
 use smith_host_domain as smith;
 use smith_host_protocol as host;
 
+/// Bounds the shared kernel hand-offs, which stay capped: twice the old
+/// small-profile output room of 1,053 entries.
+const KERNEL_HANDOFF_ENTRIES: u32 = 2_106;
+/// Plain payload pricing from the old service fixture's 2 x 753 entries;
+/// no admission reads it, until the per-process sums go (skein's draft 7.6).
+const PAYLOAD_PRICING_ENTRIES: u32 = 1_506;
+
 /// Shell-prepared directories, one descriptor for each worker in document order.
 #[derive(Debug)]
 pub struct WorkerRuntime {
@@ -198,9 +205,7 @@ impl Worker {
         }
     }
     pub(super) fn queue_room(&self) -> u32 {
-        // Shared kernel handoffs stay capped, independently of internal queue growth.
-        // Preserve the old small-profile channel fixture's 2 x 1,053 entries.
-        self.link_out.capacity().max(2_106)
+        self.link_out.capacity().max(KERNEL_HANDOFF_ENTRIES)
     }
     pub(super) fn room(&self) -> bool {
         self.backlog() < u64::from(self.env.limits.watermark)
@@ -730,7 +735,7 @@ pub(super) fn worst_case(worker: &config::Worker, agent: &Agent, root_bytes: usi
     // root::worst_case also prices its one transient hello handoff.
     let endpoint_copies = u64::try_from(agent.bounds.program_endpoints.len()).ok()?.checked_mul(4)?.checked_mul(2)?;
     // Payload pricing at the service fixture (2 x 753), independent of admission.
-    let room = 1_506_u32;
+    let room = PAYLOAD_PRICING_ENTRIES;
     let payload = smith::worst_case(&agent.host_limits)?.checked_add(host::worst_case(&agent.limits)?)?;
     let mut command = u64::try_from(root_bytes).ok()?.checked_add(u64::try_from(worker.agent.program.len()).ok()?)?;
     for argument in &worker.agent.arguments {
