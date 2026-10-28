@@ -171,7 +171,8 @@ impl Core {
         if !self.restart_checked() {
             return crate::Requests::Out(skein_lib::Queue::with_capacity(0));
         }
-        let mut expired = skein_lib::Queue::with_capacity(jig_domain_people::max_out(&env.limits.people));
+        // An internal child-to-core hop; the child still emits one expiry per step.
+        let mut expired = skein_lib::Queue::uncapped();
         jig_domain_people::fire(
             &mut self.people,
             &skein_lib::Env { now: env.now, wall: env.wall, limits: env.limits.people },
