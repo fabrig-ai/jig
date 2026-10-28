@@ -139,6 +139,8 @@ pub enum Write {
 /// Core output that must follow the decision's commit.
 #[derive(Debug)]
 pub enum Held {
+    /// Resume the core-selected restart stage after this batch is durable.
+    Restart(crate::RestartStep),
     /// Terminal deployment act answer, released once its decision is durable.
     Acted { to: ReplyTo, outcome: people::Outcome },
     /// Every earlier commit is durable when the journal releases this terminal.

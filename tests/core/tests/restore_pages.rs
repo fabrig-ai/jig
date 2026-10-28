@@ -218,6 +218,26 @@ fn a_linked_start_erases_expired_sign_ins_before_the_switch() {
 }
 
 #[test]
+fn each_expiry_batch_commits_before_the_sweep_continues() {
+    let (mut world, first) = world();
+    world.enable_tracing();
+    world.send(sign_in(7106));
+    let (second, _) = reply(&mut world, 7106);
+    let second = second.expect("second ordinary sign-in");
+    pause(&mut world);
+    world.advance(Duration::from_secs(75));
+    world.hold_switch = true;
+    world.store.fault(jig_test_store_files::Fault::Hold { commits: 1 });
+    world.finish_restore_pages();
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Sweep));
+    assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::People(people::Key::SignIn(first)))));
+    assert!(world.store.rows.contains_key(&root::Key::Core(core::Key::People(people::Key::SignIn(second)))));
+    world.release_commits();
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch), "{:?}", world.trace);
+    assert!(!world.store.rows.contains_key(&root::Key::Core(core::Key::People(people::Key::SignIn(second)))));
+}
+
+#[test]
 fn a_held_restore_expires_sign_ins_at_the_current_external_wall_time() {
     let (mut world, sign_in) = world();
     let rows = world.store.rows.clone();

@@ -120,6 +120,7 @@ fn a_first_start_takes_the_switch_step() {
 #[test]
 fn a_restart_refused_before_the_switch_leaves_the_old_generation_active() {
     let mut world = before();
+    world.skip_restart_oracle("this fixture deliberately restarts with a policy byte bound below its stored policy");
     let source = world.store.generation_contents(b"generations/1");
     let rows = world.store.rows.clone();
     let last = world.store.applied;
@@ -146,6 +147,7 @@ fn a_restart_refused_before_the_switch_leaves_the_old_generation_active() {
 #[test]
 fn a_refused_store_switch_stops_the_start() {
     let mut world = at_switch(f::BEFORE);
+    world.skip_restart_oracle("this fixture deliberately asks a nonpending store to switch and refuses the start");
     let since = world.commits.len();
     // A stale shell pending flag asks a real nonpending store to switch;
     // its OpenRefused terminal must stop the root through the normal route.
@@ -316,13 +318,14 @@ fn a_crash_during_the_restore_patches_a_fresh_copy_next() {
     world.store.patch_sets(f::AFTER);
     world.hold_restore_pages = true;
     world.restart_with(release_config());
-    // Crash after the first restore commit is durable, before acknowledging
-    // it: the root cannot yet release LoadInbox or reach the switch.
+    // Crash after the first post-link retention/release commit is durable,
+    // before acknowledging it: every link exists, but no switch is released.
     world.store.fault(Fault::Hold { commits: 1 });
     world.finish_restore_pages();
     let first_copy_commit = world.store.applied;
-    assert_eq!(world.restart_steps, [core::RestartStep::LoadCore]);
-    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::LoadInbox));
+    assert_eq!(world.restart_steps, RESTORES[..RESTORES.len() - 1]);
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
+    assert!(world.domain.core().tasks.checked(), "the crash cut follows every link");
     assert_eq!(world.domain.settings().newest(), 2);
     assert_eq!(world.store.file_bytes(b"active"), Some(b"1\n".to_vec()));
     assert_eq!(world.store.generation_contents(b"generations/1"), source);
