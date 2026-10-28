@@ -162,6 +162,9 @@ fn a_refused_store_switch_stops_the_start() {
 #[test]
 fn a_failed_mark_never_adopts_the_runs() {
     let mut world = at_switch(f::BEFORE);
+    world.skip_restart_oracle(
+        "this fixture deliberately fails the start mark, leaving an uncommitted header in a stopped root",
+    );
     let next = world.store.applied + 1;
     world.store.fault(Fault::Fail { commit: next });
     world.finish_switch();

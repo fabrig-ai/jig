@@ -85,9 +85,19 @@ impl Transients {
                     self.chip(&mut project.recurring.get_mut(index).expect("recurring index").chip);
                 }
             }
+            Document::Inbox(inbox) => {
+                for entries in [&mut inbox.needs, &mut inbox.updates] {
+                    for index in 0..entries.len() {
+                        let entry = entries.get_mut(index).expect("inbox entry index");
+                        self.link(&mut entry.task);
+                        if let Some(reply) = &mut entry.reply {
+                            self.chip(&mut reply.chip);
+                        }
+                    }
+                }
+            }
             // Fields without an evidenced transient declaration stay in the comparison.
             Document::Frame(_)
-            | Document::Inbox(_)
             | Document::Run(_)
             | Document::Lines(_)
             | Document::Proposal(_)

@@ -214,7 +214,7 @@ fn a_graces_ask_keeps_room_for_the_whole_cancellation_reason() {
 }
 
 #[test]
-fn a_restored_finish_word_requires_its_matching_grace() {
+fn a_restored_finish_word_loads_without_judging_its_grace() {
     const RESTORE_SEED: u64 = 194;
     let mut world = world();
     cancel(&mut world, Some(Duration::from_secs(5)), b"wrap up");
@@ -228,18 +228,9 @@ fn a_restored_finish_word_requires_its_matching_grace() {
     for record in [missing, wrong_name, ordinary] {
         let mut domain = jig_tasks_world::domain(&LIMITS, RESTORE_SEED);
         let mut out = skein_lib::Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-        jig_domain_tasks::step(
-            &mut domain,
-            &world.env,
-            Event::Restore { record: Stored::Live(Box::new(record)) },
-            &mut out,
-        );
-        let mut refusals = Vec::new();
-        while let Some(request) = out.pop() {
-            if let jig_domain_tasks::Request::RestoreRefused { problem } = request {
-                refusals.push(problem.why);
-            }
-        }
-        assert_eq!(refusals, [Refusal::Restore]);
+        let record = Stored::Live(Box::new(record));
+        jig_domain_tasks::step(&mut domain, &world.env, Event::Restore { record: record.clone() }, &mut out);
+        assert!(out.is_empty());
+        assert_eq!(domain.stored_record(&record.key()), Some(record));
     }
 }

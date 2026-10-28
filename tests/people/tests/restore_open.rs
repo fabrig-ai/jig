@@ -1,6 +1,6 @@
 use jig_domain_people::{
-    self as people, Ask, Domain, Event, Key, LimitKind, Outcome, Refusal, Reply, Request, RequestKey, Stored,
-    TaskExecutor, fire, max_out, step,
+    self as people, Ask, Domain, Event, Key, Outcome, Refusal, Reply, Request, RequestKey, Stored, TaskExecutor, fire,
+    max_out, step,
 };
 use jig_people_world::{LIMITS, fixtures::people_member, identity};
 use skein_lib::{Duration, Env, Queue, ReplyTo, Time, Token, Wall};
@@ -106,7 +106,7 @@ fn a_refused_malformed_create_replays_its_answer_after_restart() {
 }
 
 #[test]
-fn restoring_an_answer_refuses_malformed_open_members() {
+fn restoring_an_answer_loads_bounded_open_members_without_judging_their_shape() {
     let rows = [
         ("person", TaskExecutor::Person(people::PersonAddress::Person(PERSON)), true),
         ("procedure", TaskExecutor::Procedure { connector: 1, code: 1 }, true),
@@ -115,19 +115,18 @@ fn restoring_an_answer_refuses_malformed_open_members() {
     for (name, executor, conversation) in rows {
         for (ask, outcome) in answers(executor, conversation) {
             let (mut domain, env, mut out) = restoring();
-            step(&mut domain, &env, Event::Restore { record: answer(ask, outcome) }, &mut out);
-            step(&mut domain, &env, Event::Restored, &mut out);
-            assert!(!domain.ready(), "{name}");
-            assert_eq!(domain.next_deadline(), None, "no answer was retained: {name}");
-            assert_eq!(out.len(), 1, "{name}");
-            assert_eq!(
-                out.pop(),
-                Some(Request::RestoreRefused {
-                    key: Key::Answer(KEY),
-                    refusal: Refusal::Limit { which: LimitKind::Restore },
-                }),
-                "{name}"
+            let record = answer(ask, outcome);
+            step(&mut domain, &env, Event::Restore { record: record.clone() }, &mut out);
+            step(
+                &mut domain,
+                &env,
+                Event::Restore { record: Stored::Person { number: PERSON, identity: identity(PERSON) } },
+                &mut out,
             );
+            step(&mut domain, &env, Event::Restored, &mut out);
+            assert!(domain.ready(), "{name}");
+            assert_eq!(domain.stored_record(&record.key()), Some(record), "{name}");
+            assert!(out.is_empty(), "{name}");
         }
     }
 }

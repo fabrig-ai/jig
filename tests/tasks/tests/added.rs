@@ -632,7 +632,7 @@ fn a_proposal_below_a_kept_task_waits_at_the_holder_above() {
 }
 
 #[test]
-fn restore_refuses_added_entries_outside_or_out_of_order_in_the_dependency_list() {
+fn restore_loads_bounded_added_entries_without_judging_the_dependency_order() {
     let mut world = pair();
     world.make(Party::Person(9), vec![task(3, &[])]);
     assert_eq!(amend(&mut world, Party::Person(9), 1, &[2, 3]), Reply::Done);
@@ -642,10 +642,10 @@ fn restore_refuses_added_entries_outside_or_out_of_order_in_the_dependency_list(
         row.added = added.into_boxed_slice();
         let mut domain = jig_tasks_world::domain(&LIMITS, 859);
         let mut out = skein_lib::Queue::with_capacity(tasks::max_out(&LIMITS));
-        tasks::step(&mut domain, &world.env, Event::Restore { record: Stored::Live(Box::new(row)) }, &mut out);
-        assert!(
-            matches!(out.pop(), Some(tasks::Request::RestoreRefused { problem }) if problem.why == Refusal::Restore)
-        );
+        let record = Stored::Live(Box::new(row));
+        tasks::step(&mut domain, &world.env, Event::Restore { record: record.clone() }, &mut out);
+        assert!(out.is_empty());
+        assert_eq!(domain.stored_record(&record.key()), Some(record));
     }
 }
 
