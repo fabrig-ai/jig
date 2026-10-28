@@ -91,8 +91,8 @@ fn decode(store: &mut Store, row: skein_kv::Row) -> Option<(Row, Option<Row>, u6
 /// The restart's census join, shared with the check before the switch.
 pub(crate) fn ended(store: &mut Store, task: u64) -> Option<(Record, u64)> {
     let key = Key::Tasks(tasks::Key::Ended(task));
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.store,
         &crate::memory_env(store.limits.store),

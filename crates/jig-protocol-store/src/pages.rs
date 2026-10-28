@@ -96,8 +96,8 @@ fn load_map(store: &mut Store, map: KeptMap, range: Range) -> Option<Page> {
     // A valid maximum-length key's exclusive cursor has one extra byte.
     // This widens range endpoints only; stored keys retain their own bound.
     limits.key = limits.key.checked_add(1)?;
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     let kv = match map {
         KeptMap::Store => &mut store.stores.store,
         KeptMap::Secrets => &mut store.stores.secrets,

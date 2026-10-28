@@ -455,7 +455,7 @@ fn party_store() -> (Store, Box<[u8]>) {
         ]),
     );
     let turns = [fixtures::turn(CHILD, 1, 1, b"one"), fixtures::turn(CHILD, 1, 2, b"two")];
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         &mut store,
@@ -477,7 +477,7 @@ fn party_store() -> (Store, Box<[u8]>) {
 }
 
 fn party_submit(store: &mut Store, owner: Token, range: reads::Range) -> (Box<[Event]>, Below) {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(store, &fixtures::env(), Request::Read { owner, range }, &mut above, &mut below);
     (fixtures::events(&mut above), below)

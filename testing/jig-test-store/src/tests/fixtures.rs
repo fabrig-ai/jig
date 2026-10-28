@@ -173,7 +173,7 @@ pub fn component() -> Component {
     let store = jig_protocol_store::Store::over(&limits, crate::application(&root.connector), &[], stores);
     let mut component = Component { store, files: jig_test_store_files::Files::new(), limits };
     let root = component.files.root();
-    let mut above = skein_lib::Queue::with_capacity(jig_protocol_store::MAX_OUT_DOWN);
+    let mut above = skein_lib::Queue::uncapped();
     let open = jig_protocol_store::Request::Open { owner: Token::new(900), root, installation: [0; 16] };
     send(&mut component, open, &mut above);
     assert!(matches_opened(&mut above));
@@ -196,9 +196,9 @@ fn send(
     above: &mut skein_lib::Queue<jig_protocol_store::Event>,
 ) {
     let mut below = jig_protocol_store::Below {
-        store: skein_lib::Queue::with_capacity(skein_kv::MAX_OUT.below),
-        secrets: skein_lib::Queue::with_capacity(skein_kv::MAX_OUT.below),
-        transcripts: skein_lib::Queue::with_capacity(skein_kv::MAX_OUT.below),
+        store: skein_lib::Queue::uncapped(),
+        secrets: skein_lib::Queue::uncapped(),
+        transcripts: skein_lib::Queue::uncapped(),
     };
     let env = skein_lib::Env { now: skein_lib::Time::ZERO, wall: Wall::EPOCH, limits: component.limits };
     jig_protocol_store::down(&mut component.store, &env, request, above, &mut below);
@@ -225,9 +225,9 @@ pub fn routed(component: &mut Component, routes: &mut crate::route::Routes, out:
         let Some(request) = requests.pop() else {
             break;
         };
-        let mut above = skein_lib::Queue::with_capacity(jig_protocol_store::MAX_OUT_DOWN);
+        let mut above = skein_lib::Queue::uncapped();
         send(component, request, &mut above);
-        for _ in 0..jig_protocol_store::MAX_OUT_DOWN {
+        for _ in 0..above.len() {
             let Some(event) = above.pop() else {
                 break;
             };

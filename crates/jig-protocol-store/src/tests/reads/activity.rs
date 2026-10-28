@@ -37,7 +37,7 @@ fn transcript_page_with_last(last: &[u8]) -> (Store, Box<[u8]>) {
         fixtures::turn(CHILD, 1, 2, WORDS[1]),
         fixtures::turn(CHILD, 1, 3, last),
     ];
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         &mut store,

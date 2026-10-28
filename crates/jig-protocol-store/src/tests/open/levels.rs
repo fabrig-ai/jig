@@ -27,7 +27,7 @@ fn store(found: Levels, sets: PatchSets) -> Store {
     store
 }
 fn open(store: &mut Store) -> Box<[Event]> {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::open::open(store, Token::new(1), &mut above, &mut below);
     assert!(below.store.is_empty() && below.secrets.is_empty() && below.transcripts.is_empty(), "no file operation");

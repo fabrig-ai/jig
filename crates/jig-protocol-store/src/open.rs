@@ -150,8 +150,8 @@ fn restore_installation(
 }
 
 pub(crate) fn get(store: &mut Store, owner: Token, key: Box<[u8]>) -> Result<Option<Box<[u8]>>, OpenRefusal> {
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.store,
         &crate::memory_env(store.limits.store),

@@ -116,8 +116,7 @@ impl Engine {
         (match &self.drain {
             Some(drain) => drain.busy.room() >= self.max_out,
             None => true,
-        }) && self.store.room()
-            && self.outputs.room() >= self.max_out
+        }) && self.outputs.room() >= self.max_out
             && self.events.room()
                 >= self
                     .max_out

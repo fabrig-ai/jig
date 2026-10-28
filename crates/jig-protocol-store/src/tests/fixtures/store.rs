@@ -54,8 +54,8 @@ fn stores_with(limits: &Limits) -> Stores {
 }
 
 pub fn plant(stores: &mut Stores, ops: &[skein_kv::Op]) {
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut stores.store,
         &crate::memory_env(kv_limits()),
@@ -111,11 +111,11 @@ pub fn over(stores: Stores) -> Store {
 }
 
 pub fn run(store: &mut Store, request: Request) -> Box<[Event]> {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = below();
     crate::down(store, &env(), request, &mut above, &mut below);
-    let mut events = List::with_capacity(crate::MAX_OUT_DOWN);
-    for _ in 0..crate::MAX_OUT_DOWN {
+    let mut events = List::with_capacity(above.len());
+    for _ in 0..above.len() {
         if let Some(event) = above.pop() {
             events.push(event).expect("one terminal");
         }
@@ -151,8 +151,8 @@ pub fn save(record: Record) -> Write {
 }
 
 pub fn get_kv(store: &mut Store, key: &[u8]) -> Option<Box<[u8]>> {
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.store,
         &crate::memory_env(store.limits.store),
@@ -249,11 +249,7 @@ pub fn env() -> Env<Limits> {
     Env { now: skein_lib::Time::ZERO, wall: skein_lib::Wall::EPOCH, limits: limits() }
 }
 pub fn below() -> Below {
-    Below {
-        store: Queue::with_capacity(skein_kv::MAX_OUT.below),
-        secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
-        transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
-    }
+    Below { store: Queue::uncapped(), secrets: Queue::uncapped(), transcripts: Queue::uncapped() }
 }
 fn unseeded_driver() -> skein_io::file_layer::FileIo {
     skein_io::file_layer::FileIo::new(8, 1, 32, limits().store.deadline)
@@ -268,7 +264,7 @@ pub fn directory() -> (Store, Below) {
     );
     let mut store = Store::on_directory(&limits(), APPLICATION, &[], seeded);
     let mut below = below();
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     crate::down(
         &mut store,
         &env(),
@@ -280,14 +276,14 @@ pub fn directory() -> (Store, Below) {
     (store, below)
 }
 pub fn answer(store: &mut Store, io: Io) -> (Box<[Event]>, Below) {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = below();
     crate::up(store, &env(), io, &mut above, &mut below);
     (events(&mut above), below)
 }
 pub fn events(above: &mut Queue<Event>) -> Box<[Event]> {
-    let mut events = List::with_capacity(crate::MAX_OUT_DOWN);
-    for _ in 0..crate::MAX_OUT_DOWN {
+    let mut events = List::with_capacity(above.len());
+    for _ in 0..above.len() {
         if let Some(event) = above.pop() {
             events.push(event).expect("bounded events");
         }
@@ -337,8 +333,10 @@ pub enum Answer {
     NotFound,
 }
 pub fn script(store: &mut Store, mut below: Below, answers: &[Answer]) -> Box<[Event]> {
+    // A scripted file answer can produce a batch of store terminals.
+    const EVENTS_PER_ANSWER: u32 = 128;
     let count =
-        u32::try_from(answers.len()).expect("bounded script").checked_mul(crate::MAX_OUT_DOWN).expect("bounded events");
+        u32::try_from(answers.len()).expect("bounded script").checked_mul(EVENTS_PER_ANSWER).expect("bounded events");
     let mut found = List::with_capacity(count);
     let base =
         store.transcripts.touch.checked_mul(128).expect("bounded script").checked_add(1_000).expect("fixture token");

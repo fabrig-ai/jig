@@ -227,9 +227,6 @@ impl Store {
     }
 }
 
-/// Most terminals from a component step, including a store batch.
-pub const MAX_OUT_DOWN: u32 = skein_kv::MAX_OUT.above.saturating_mul(2);
-
 /// Whether these limits are representable: every edge bound they size
 /// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
@@ -301,9 +298,6 @@ fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
         .checked_add(skein_lib::Set::<u64>::worst_case(limits.joins)?)?
         .checked_add(u64::from(limits.store.commit))?
         .checked_add(skein_lib::List::<skein_kv::Op>::worst_case(limits.journal.writes.checked_add(1)?)?)?
-        .checked_add(Queue::<skein_kv::Event>::worst_case(skein_kv::MAX_OUT.above)?)?
-        .checked_add(Queue::<skein_io::file::Request>::worst_case(skein_kv::MAX_OUT.below)?)?
-        .checked_add(Queue::<Event>::worst_case(MAX_OUT_DOWN)?)?
         .checked_add(question_restore_worst_case(limits)?)?
         .checked_add(commits::worst_case(limits)?)?
         .checked_add(patching::switch::worst_case()?)?;

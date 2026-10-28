@@ -172,8 +172,8 @@ const LONG_NAME: &str = "012345678901234567890123456789012";
 fn wires_row(mut world: World) -> Vec<(Vec<u8>, u32)> {
     world.commit(Box::new([Write::Save(root::header(1)), Write::Wires]));
     let mut stores = world.into_stores();
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut files = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut events = Queue::uncapped();
+    let mut files = Queue::uncapped();
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: root::limits().store };
     skein_kv::down(
         &mut stores.store,
