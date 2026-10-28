@@ -322,6 +322,27 @@ impl Core {
     /// Settings rows precede tasks rows, so identity and head equality are checked
     /// only after both ranges restore, before the release withdraws anything.
     pub(crate) fn settings_proposals_consistent(&self) -> bool {
+        for (&(proposer, number), _) in &self.settings_proposals {
+            let present = match proposer {
+                jig_domain_people::Proposer::Party(person) => {
+                    match self.tasks.person_proposals().get(&u64::from(number)) {
+                        Some(row) => row.proposer == person,
+                        None => false,
+                    }
+                }
+                jig_domain_people::Proposer::Task(task) => match self.tasks.task(task) {
+                    Some(row) => match &row.proposal {
+                        Some(proposal) => proposal.number == u64::from(number),
+                        None => false,
+                    },
+                    None => false,
+                },
+            };
+            assert!(
+                present,
+                "core: SettingsProposal({proposer:?}, {number}) links to pending proposal, which is absent"
+            );
+        }
         for (_, row) in self.tasks.person_proposals() {
             if let tasks::PersonAction::Settings { .. } = &row.action {
                 let number = u32::try_from(row.number).expect("stored settings proposal number fits its codec");
