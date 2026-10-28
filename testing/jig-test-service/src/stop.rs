@@ -25,7 +25,7 @@ pub(super) enum Phase {
 
 pub(super) fn shutdown(engine: &mut Engine) {
     if engine.drain.is_none() {
-        engine.drain = Some(Drain { phase: Phase::Stopping, busy: Queue::with_capacity(engine.events.capacity()) });
+        engine.drain = Some(Drain { phase: Phase::Stopping, busy: Queue::uncapped() });
         if let Some(workers) = &mut engine.workers {
             workers.down(engine.env.now, jig_protocol_engine_workers::Event::Stop, &mut engine.events);
         }

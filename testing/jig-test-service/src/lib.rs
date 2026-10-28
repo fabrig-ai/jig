@@ -113,7 +113,7 @@ impl Service {
                     .checked_add(workers.len())
                     .expect("worker roots"),
             ),
-            told: Queue::with_capacity(queue),
+            told: Queue::uncapped(),
             engine,
             workers,
             ended: None,
@@ -463,23 +463,20 @@ impl Service {
             io::down(&mut self.io, &self.io_env, io::Request::Close { entity }, &mut self.raw_submissions);
         }
     }
-    fn room(&self, max: io::MaxOut) -> bool {
-        self.told.room() >= max.events && self.raw_submissions.room() >= max.submissions
-    }
 }
 
 pub fn iterate(service: &mut Service, now: Time, wall: Wall) {
     service.started = true;
     service.clock(now, wall);
     for _ in 0..service.io_env.limits.sockets.checked_add(service.io_env.limits.refusals).expect("io entries") {
-        if !service.io.is_ready() || !service.room(io::MAX_OUT_RESUME) {
+        if !service.io.is_ready() || service.raw_submissions.room() < io::MAX_OUT_RESUME.submissions {
             break;
         }
         io::resume(&mut service.io, &service.io_env, &mut service.told, &mut service.raw_submissions);
     }
     if !service.io.is_ready() {
         for _ in 0..service.completions.len() {
-            if !service.room(io::MAX_OUT_UP) {
+            if service.raw_submissions.room() < io::MAX_OUT_UP.submissions {
                 break;
             }
             let complete = service.completions.pop().expect("completion count");
@@ -488,7 +485,7 @@ pub fn iterate(service: &mut Service, now: Time, wall: Wall) {
         }
         if service.completions.is_empty() {
             for _ in 0..service.io_env.limits.sockets.checked_mul(2).expect("io timers") {
-                if !service.io.is_due(now) || !service.room(io::MAX_OUT_FIRE) {
+                if !service.io.is_due(now) || service.raw_submissions.room() < io::MAX_OUT_FIRE.submissions {
                     break;
                 }
                 io::fire(&mut service.io, &service.io_env, &mut service.told, &mut service.raw_submissions);
