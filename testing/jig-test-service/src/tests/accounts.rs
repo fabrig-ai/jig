@@ -387,3 +387,40 @@ fn a_restored_sources_wrong_kind_stops_the_engine() {
         let Some(crate::End::Stopped(_)) = &engine.end else { panic!("wrong restored kind must stop: {kind:?}") };
     }
 }
+
+#[test]
+fn closing_unstarted_accounts_discards_work_and_reports_closed_once() {
+    const TERMINALS: u32 = 2; // room to observe an accidental duplicate Closed
+    const SOURCE: u32 = 7;
+    const PROVIDER: u32 = 1;
+    const CARRIED: u64 = 41;
+    let mut service = fixtures::started(&fixtures::accounts_document());
+    let engine = fixtures::engine(&mut service);
+    let mut accounts = engine.accounts.take().expect("unstarted accounts");
+    let mut events = Queue::with_capacity(TERMINALS);
+    accounts.request(domain::Request::Signing(domain::Signing::Restore {
+        source: SOURCE,
+        provider: PROVIDER,
+        kind: domain::Kind::Key,
+    }));
+    accounts.request(domain::Request::Signing(domain::Signing::Keep {
+        source: SOURCE,
+        carried: CARRIED,
+        replaces: false,
+    }));
+    accounts.request(domain::Request::Signing(domain::Signing::Restored));
+    accounts.request(domain::Request::Component(domain::ToComponent::Want { account: SOURCE }));
+    accounts.request(domain::Request::Component(domain::ToComponent::Close));
+    accounts.request(domain::Request::Component(domain::ToComponent::Close));
+    accounts.iterate(Time::ZERO, Wall::EPOCH, &mut engine.values, &mut events, &mut engine.store);
+    let Some(root::Event::Core(core::Event::Account(domain::Event::Component(domain::FromComponent::Closed)))) =
+        events.pop()
+    else {
+        panic!("an unstarted component closes without making its driver")
+    };
+    assert!(events.is_empty(), "one close terminal, no failed or granted work");
+    assert!(accounts.component.is_none());
+    assert!(accounts.is_empty());
+    assert!(accounts.io.is_empty());
+    assert!(!engine.store.component.mark_durable());
+}
