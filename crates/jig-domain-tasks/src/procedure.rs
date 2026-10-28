@@ -148,7 +148,9 @@ fn apply(domain: &mut Domain, env: &Env<Limits>, fence: Fence, decision: Procedu
             if crate::placed::draining(domain, row) {
                 let hold = row.placed.expect("draining procedure has a hold");
                 task_mut(domain, number).expect("procedure task live").record.phase = Phase::Held {
-                    was: crate::Was::Active(Active::Due), why: crate::Hold::Placed { hold }, source: None,
+                    was: crate::Was::Active(Active::Due),
+                    why: crate::Hold::Placed { hold },
+                    source: None,
                 };
             }
             publish(domain, env, number, out);

@@ -1480,7 +1480,11 @@ pub(crate) fn make_admitted(
         task_mut(domain, number).expect("new task").record.placed = held;
         if let Some(hold) = held {
             let row = &mut task_mut(domain, number).expect("new task").record;
-            row.phase = Phase::Held { was: crate::run::was(row.phase.clone()), why: crate::Hold::Placed { hold }, source: None };
+            row.phase = Phase::Held {
+                was: crate::run::was(row.phase.clone()),
+                why: crate::Hold::Placed { hold },
+                source: None,
+            };
             fact(domain, Fact::Held { task: number, why: crate::Hold::Placed { hold } });
         }
         publish(domain, env, number, out);

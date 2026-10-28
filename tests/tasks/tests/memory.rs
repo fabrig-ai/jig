@@ -662,6 +662,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
     // Placed table and payloads, per-task placed identity, and bounded compound/walk scratch.
     const PLACED_HOLDS_BYTES: u64 = 16_032;
+    // Sixteen parking entries: four bounded B-tree nodes of 288 bytes each.
+    const DRAIN_PARKING_BYTES: u64 = 4 * 288;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -678,6 +680,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_REVISIONS_BYTES
                 + SETTINGS_MOVES_BYTES
                 + PLACED_HOLDS_BYTES
+                + DRAIN_PARKING_BYTES
         )
     );
 }
@@ -786,4 +789,70 @@ fn saturated_placed_records_reasons_and_exemptions_fit_and_measure_exactly() {
     let reply_to = measured.to();
     measured.event(Event::Lift { reply_to, by: Party::Person(1), hold: 100, revision, with_tasks: true });
     assert!(!measured.refused);
+}
+
+#[test]
+fn a_full_parking_table_and_its_cold_rebuild_fit() {
+    let limits = Limits { tasks: 4, ..LIMITS };
+    let mut measured = Measured::new(&limits);
+    measured.bootstrap();
+    let reply_to = measured.to();
+    measured.event(Event::Make {
+        reply_to,
+        creator: Party::Person(1),
+        batch: (1..=4).map(|number| pool_task(number, &[])).collect(),
+    });
+    assert!(!measured.refused);
+    for number in 1..=4 {
+        measured.claim(number);
+        assert!(!measured.refused);
+    }
+    let reply_to = measured.to();
+    measured.event(Event::Place {
+        reply_to,
+        hold: tasks::PlacedHold {
+            number: 100,
+            project: 1,
+            owner: tasks::Owner::Party { person: 1 },
+            mode: tasks::Mode::Drain,
+            scope: tasks::Scope::Project,
+            reason: vec![1; limits.message_bytes as usize].into_boxed_slice(),
+            placed_at: 0,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    });
+    assert!(!measured.refused);
+    let mut records = Vec::new();
+    for number in 1..=4 {
+        let row = measured.d.task(number).expect("draining live task");
+        assert!(tasks::draining(&measured.d, row));
+        records.push(Stored::Live(Box::new(row.clone())));
+    }
+    records.push(Stored::PlacedHold(Box::new(measured.d.placed_hold(100).unwrap().clone())));
+    for (_, ledger) in measured.d.funding_records() {
+        records.push(Stored::Ledger(*ledger));
+    }
+    drop(measured);
+    let mut measured = Measured::new(&limits);
+    for record in records {
+        measured.event(Event::Restore { record });
+    }
+    measured.event(Event::Check);
+    assert!(measured.d.checked());
+    measured.event(Event::Restored);
+    for number in 1..=4 {
+        let reply_to = measured.to();
+        measured.event(Event::Activation {
+            reply_to,
+            task: number,
+            attempt: number,
+            end: End::Parked,
+            saved: None,
+            cause: tasks::Cause::Unpriced,
+        });
+        assert!(!measured.refused);
+        assert!(matches!(measured.d.task(number).unwrap().phase, tasks::Phase::Held { .. }));
+    }
 }

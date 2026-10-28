@@ -180,8 +180,9 @@ pub fn draining(domain: &Domain, row: &TaskRecord) -> bool {
         return false;
     }
     match row.executor {
-        crate::Executor::Agent { .. } => crate::run::run_attempt(&row.phase).is_some()
-            || domain.parking.contains_key(&row.number),
+        crate::Executor::Agent { .. } => {
+            crate::run::run_attempt(&row.phase).is_some() || domain.parking.contains_key(&row.number)
+        }
         crate::Executor::Procedure { .. } => match row.phase {
             Phase::Waiting | Phase::Active(_) => true,
             Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_) => false,
@@ -200,10 +201,13 @@ pub(crate) fn enforce(domain: &mut Domain, number: u64) {
     let drain = domain.placed_hold(hold).expect("task's placed hold").mode == Mode::Drain;
     let wrap = match &row.phase {
         Phase::Waiting | Phase::Active(_) => true,
-        Phase::Closing(closing) => !drain && match closing.ending {
-            crate::Ending::Cancelled { .. } => false,
-            crate::Ending::Done(_) | crate::Ending::Failed { .. } => true,
-        },
+        Phase::Closing(closing) => {
+            !drain
+                && match closing.ending {
+                    crate::Ending::Cancelled { .. } => false,
+                    crate::Ending::Done(_) | crate::Ending::Failed { .. } => true,
+                }
+        }
         Phase::Held { .. } | Phase::Ended(_) => false,
     };
     if wrap {
@@ -351,7 +355,16 @@ pub(crate) fn apply_place(domain: &mut Domain, env: &Env<Limits>, plan: Placemen
             }
         }
         let row = record(domain, number).expect("selected live task");
-        if row.placed.is_some() {
+        if let Some(current) = row.placed {
+            if mode == Mode::Stop && reason(&row.phase).is_none() {
+                let row = &mut task_mut(domain, number).expect("selected live task").record;
+                row.phase = Phase::Held {
+                    was: crate::run::was(row.phase.clone()),
+                    why: Hold::Placed { hold: current },
+                    source: None,
+                };
+                publish(domain, env, number, out);
+            }
             continue;
         }
         task_mut(domain, number).expect("selected live task").record.placed = Some(hold);
@@ -359,34 +372,18 @@ pub(crate) fn apply_place(domain: &mut Domain, env: &Env<Limits>, plan: Placemen
         let continues = draining(domain, row) || (mode == Mode::Drain && ending(&row.phase));
         let row = &mut task_mut(domain, number).expect("selected live task").record;
         if !continues && reason(&row.phase).is_none() {
-            row.phase = Phase::Held {
-                was: crate::run::was(row.phase.clone()),
-                why: Hold::Placed { hold },
-                source: None,
-            };
+            row.phase =
+                Phase::Held { was: crate::run::was(row.phase.clone()), why: Hold::Placed { hold }, source: None };
             fact(domain, Fact::Held { task: number, why: Hold::Placed { hold } });
         }
-        wake_procedure(domain, env, number, out);
         publish(domain, env, number, out);
+        crate::domain::wake_procedure(domain, env, number, out);
     }
 }
 
 fn park(domain: &mut Domain, task: u64, attempt: u64, out: &mut Queue<Request>) {
     domain.parking.insert(task, attempt).expect("one parked attempt per live task");
     out.push(Request::Park { task, attempt });
-}
-
-/// An idle procedure must ask its connector whether its work has drained.
-fn wake_procedure(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue<Request>) {
-    let row = record(domain, number).expect("drain task live");
-    if draining(domain, row)
-        && row.phase == Phase::Active(crate::Active::Idle)
-        && let crate::Executor::Procedure { .. } = row.executor
-    {
-        task_mut(domain, number).expect("drain task live").record.phase = Phase::Active(crate::Active::Due);
-        publish(domain, env, number, out);
-        crate::domain::activate(domain, number, out);
-    }
 }
 
 /// Reassert the volatile park intent only after restoration is ready.
@@ -546,6 +543,12 @@ pub(crate) fn apply_changes(
                 released = released.checked_add(1).expect("bounded tasks");
             }
         } else {
+            if let Some(hold) = next
+                && domain.placed_hold(hold).expect("replacement hold").mode == Mode::Stop
+                && let Some(attempt) = crate::run::run_attempt(&record(domain, number).expect("selected task").phase)
+            {
+                out.push(Request::Stop { task: number, attempt });
+            }
             publish(domain, env, number, out);
         }
     }
@@ -587,7 +590,8 @@ pub(crate) fn lift(domain: &mut Domain, env: &Env<Limits>, to: ReplyTo, lift: Li
         for (task, _) in &domain.names {
             let row = record(domain, *task).expect("live drain task");
             if row.placed == Some(number) && reason(&row.phase).is_none() {
-                tasks.push((*task, covering(domain, &Staged::new(0), *task, Some(number))))
+                tasks
+                    .push((*task, covering(domain, &Staged::new(0), *task, Some(number))))
                     .expect("one replacement per live task");
             }
         }
@@ -670,8 +674,9 @@ pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
                 u64::from(limits.message_bytes).checked_add(u64::from(limits.exemptions).checked_mul(8)?)?,
             )?,
         )?
-        // Placement selection, replacement walk, and hold erasure snapshot.
+        // Volatile attempts asked to park, rebuilt from live drain rows on restart.
         .checked_add(Map::<u64, u64>::worst_case(limits.tasks)?)?
+        // Placement selection, replacement walk, and hold erasure snapshot.
         .checked_add(List::<u64>::worst_case(limits.tasks)?)?
         .checked_add(List::<(u64, Option<u64>)>::worst_case(limits.tasks)?)?
         .checked_add(List::<u64>::worst_case(limits.placed_holds)?)
@@ -732,7 +737,7 @@ pub(crate) fn check(domain: &Domain, limits: &Limits) -> bool {
             if !hold.lifted
                 && covers(domain, &staged, hold, *number)
                 && !hold.exempt.contains(number)
-                && row.placed.is_none()
+                && (row.placed.is_none() || (hold.mode == Mode::Stop && reason(&row.phase).is_none()))
                 && !ending(&row.phase)
             {
                 return false;

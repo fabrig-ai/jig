@@ -546,3 +546,36 @@ fn a_procedure_delegate_naming_no_deadline_ends_with_its_procedures() {
     let child = make_delegate(&mut world, procedure);
     assert_eq!(live_row(&world, child).authority.budget.deadline, deadline);
 }
+
+#[test]
+fn a_draining_procedure_hears_the_context_and_its_idle_step_is_held() {
+    let (mut world, procedure) = procedure_world(478);
+    decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Wait));
+    let sign_in = world.sign_in.expect("owner signed in");
+    place_drain(&mut world, sign_in, procedure);
+    assert!(world.procedure_inputs.last().unwrap().3.draining);
+    decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Wait));
+    assert_eq!(live_row(&world, procedure).phase, tasks::Phase::Active(tasks::Active::Idle));
+    world.send(root::Event::Core(core::Event::Tasks(tasks::Event::WakeProcedure { task: procedure })));
+    assert!(world.procedure_inputs.last().unwrap().3.draining);
+    decide(&mut world, procedure, core::ProcedureStep::new(core::StepEnd::Idle));
+    assert!(matches!(live_row(&world, procedure).phase, tasks::Phase::Held { why: tasks::Hold::Placed { .. }, .. }));
+}
+
+fn place_drain(world: &mut World, sign_in: u64, procedure: u64) {
+    jig_core_world::fixtures::ask_as(
+        world,
+        sign_in,
+        71,
+        jig_domain_people::Ask::Hold {
+            project: 1,
+            mode: jig_domain_people::HoldMode::Drain,
+            scope: jig_domain_people::HoldScope::Subtree { task: procedure },
+            reason: b"finish existing work".as_slice().into(),
+        },
+    );
+    assert!(matches!(
+        world.people_answers.last(),
+        Some(jig_domain_people::Reply::Outcome(jig_domain_people::Outcome::Placed { .. }))
+    ));
+}

@@ -444,7 +444,11 @@ pub(crate) fn activation(
                 let task = task_mut(domain, number).expect("terminal names live task");
                 task.record.tries = Tries::NONE;
                 task.record.refusals = 0;
-                if (narrowed || draining) && !kept.blocks_claims() { Phase::Active(Active::Due) } else { Phase::Active(Active::Idle) }
+                if (narrowed || draining) && !kept.blocks_claims() {
+                    Phase::Active(Active::Due)
+                } else {
+                    Phase::Active(Active::Idle)
+                }
             }
             End::Exceeded(value) => exceeded(domain, number, value),
             End::Failed(class) => failure(domain, env, number, class),

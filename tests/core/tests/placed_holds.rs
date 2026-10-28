@@ -583,21 +583,84 @@ fn a_hold_without_a_reason_or_past_the_words_bound_is_refused() {
 }
 
 #[test]
-fn a_drain_is_refused_before_anything_is_placed() {
-    let mut s = story(974);
-    let sign_in = s.owner_sign_in;
-    let messages = message_number(&s);
-    for (key, scope) in [(71, people::HoldScope::Project), (72, people::HoldScope::Subtree { task: s.goal })] {
-        assert_eq!(
-            hold(&mut s, sign_in, key, people::HoldMode::Drain, scope, b"drain later"),
-            people::Outcome::Refused(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape })
-        );
+fn a_drain_is_placed_where_t5b_refused_it() {
+    for scope in [people::HoldScope::Project, people::HoldScope::Subtree { task: 2 }] {
+        let mut s = story(974);
+        let sign_in = s.owner_sign_in;
+        let scope = match scope {
+            people::HoldScope::Project => people::HoldScope::Project,
+            people::HoldScope::Subtree { .. } => people::HoldScope::Subtree { task: s.goal },
+        };
+        let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Drain, scope, b"finish existing work");
+        let number = placed_number(&outcome);
+        assert_eq!(holds_count(&s), 1);
+        assert_eq!(placed_hold(&s, number).mode, tasks::Mode::Drain);
+        for task in [s.goal, s.child] {
+            assert_eq!(live_row(&s.world, task).placed, Some(number));
+            assert_eq!(
+                live_row(&s.world, task).phase,
+                tasks::Phase::Active(tasks::Active::Running { attempt: live_row(&s.world, task).attempt })
+            );
+            assert!(s.world.parks.iter().any(|run| run.0 == task));
+        }
+        assert!(s.world.cancellations.is_empty());
     }
-    assert_eq!(holds_count(&s), 0);
-    assert_eq!(message_number(&s), messages);
+}
+
+#[test]
+fn a_party_drains_a_project_and_a_run_mid_turn_is_parked_at_its_turn() {
+    let mut s = story(989);
+    let sign_in = s.owner_sign_in;
+    let chat = live_row(&s.world, s.coordinator.0).clone();
+    let run = (s.goal, live_row(&s.world, s.goal).attempt);
+    s.world.store.fault(jig_test_store_files::Fault::Hold { commits: 1 });
+    ask_as(
+        &mut s.world,
+        sign_in,
+        71,
+        people::Ask::Hold {
+            project: 1,
+            mode: people::HoldMode::Drain,
+            scope: people::HoldScope::Project,
+            reason: b"finish the current turns".as_slice().into(),
+        },
+    );
+    assert!(s.world.parks.is_empty(), "park is held behind placement's commit");
+    s.world.release_commits();
+    let Some(people::Reply::Outcome(outcome)) = s.world.people_answers.last() else { panic!("placed answer") };
+    let number = placed_number(outcome);
+    assert_eq!(s.world.parks, vec![run, (s.child, live_row(&s.world, s.child).attempt)]);
+    assert_eq!(live_row(&s.world, s.coordinator.0), &chat);
+    // The park command leaves the current attempt able to commit its selected turn.
+    s.world.send(root::Event::Turn {
+        opens_window: false,
+        refused: Box::new([]),
+        channel: Token::new(7),
+        task: run.0,
+        attempt: run.1,
+        turn: 2,
+        cumulative: 0,
+        read: None,
+        transcript: b"selected drain turn".as_slice().into(),
+    });
+    assert_eq!(live_row(&s.world, s.goal).turn, 2);
+    parked(&mut s);
+    for task in [s.goal, s.child] {
+        let row = live_row(&s.world, task);
+        assert_eq!(row.placed, Some(number));
+        assert!(matches!(row.phase, tasks::Phase::Held { was: tasks::Was::Active(tasks::Active::Due),
+            why: tasks::Hold::Placed { hold }, .. } if hold == number));
+        assert_eq!(row.tries, tasks::Tries::NONE);
+    }
+    let assigned = s.world.assignments.len();
+    ask_as(&mut s.world, sign_in, 72, people::Ask::Lift { hold: number, revision: 1, with_tasks: true });
+    assert_eq!(
+        s.world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::Lifted { hold: number, released: 2 }))
+    );
+    assert!(s.world.assignments.len() > assigned);
+    assert!(s.world.assignments[assigned..].iter().any(|run| run.0 == s.goal));
     assert_eq!(live_row(&s.world, s.goal).placed, None);
-    assert_eq!(live_row(&s.world, s.child).placed, None);
-    assert!(s.world.cancellations.is_empty());
 }
 
 #[test]
@@ -879,5 +942,63 @@ fn a_holds_pages_price_includes_whole_reasons_and_exemptions() {
         eprintln!(
             "{profile_name:?}: document before={before} after={before}; holds={holds}; context before={context} after={context}"
         );
+    }
+}
+
+#[test]
+fn a_party_can_exempt_a_live_draining_run_before_it_parks() {
+    let mut s = story(990);
+    let sign_in = s.owner_sign_in;
+    let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Drain, people::HoldScope::Project, b"finish turns");
+    let number = placed_number(&outcome);
+    let before = live_row(&s.world, s.goal).phase.clone();
+    release(&mut s, sign_in, 72);
+    assert_eq!(
+        s.world.people_answers.last(),
+        Some(&people::Reply::Outcome(people::Outcome::Released { task: s.goal }))
+    );
+    assert_eq!(live_row(&s.world, s.goal).placed, None);
+    assert_eq!(live_row(&s.world, s.goal).phase, before);
+    assert_eq!(placed_hold(&s, number).exempt.as_ref(), &[s.goal]);
+    let assigned = s.world.assignments.len();
+    parked(&mut s);
+    assert!(s.world.assignments[assigned..].iter().any(|run| run.0 == s.goal));
+    assert!(matches!(live_row(&s.world, s.child).phase, tasks::Phase::Held { .. }));
+}
+
+#[test]
+fn a_project_drain_reasserts_its_parks_after_the_core_adopts_restored_runs() {
+    use jig_domain_fleet as fleet;
+    let mut s = story(991);
+    let sign_in = s.owner_sign_in;
+    let outcome = hold(&mut s, sign_in, 71, people::HoldMode::Drain, people::HoldScope::Project, b"finish turns");
+    let number = placed_number(&outcome);
+    let hosting = [s.coordinator.0, s.goal, s.child].map(|task| fleet::Hosted {
+        run: Token::new(task),
+        attempt: Token::new(live_row(&s.world, task).attempt),
+        phase: fleet::Phase::Active,
+    });
+    s.world.parks.clear();
+    s.world.restart_with(configuration(s.seed).0);
+    s.world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello {
+        worker: 0,
+        channel: Token::new(7),
+        hello: fleet::Hello {
+            bounds: jig_core_world::fixtures::bounds(),
+            stop_bound: skein_lib::Duration::from_millis(100),
+            slots: 3,
+            workstreams: Box::new([]),
+            hosting: Box::new(hosting),
+        },
+    })));
+    assert_eq!(s.world.parks.len(), 2);
+    for task in [s.goal, s.child] {
+        assert!(s.world.parks.iter().any(|run| run.0 == task));
+        assert_eq!(live_row(&s.world, task).placed, Some(number));
+    }
+    assert_eq!(live_row(&s.world, s.coordinator.0).placed, None);
+    parked(&mut s);
+    for task in [s.goal, s.child] {
+        assert!(matches!(live_row(&s.world, task).phase, tasks::Phase::Held { .. }));
     }
 }

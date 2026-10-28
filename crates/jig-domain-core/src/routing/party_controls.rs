@@ -487,7 +487,10 @@ pub(super) fn hold_request(
             number,
             project,
             owner: tasks::Owner::Party { person },
-            mode: match mode { people::HoldMode::Stop => tasks::Mode::Stop, people::HoldMode::Drain => tasks::Mode::Drain },
+            mode: match mode {
+                people::HoldMode::Stop => tasks::Mode::Stop,
+                people::HoldMode::Drain => tasks::Mode::Drain,
+            },
             scope: match scope {
                 people::HoldScope::Subtree { task } => tasks::Scope::Subtree { task },
                 people::HoldScope::Project => tasks::Scope::Project,

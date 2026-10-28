@@ -81,6 +81,7 @@ pub(super) fn admit(core: &Core, limits: &Limits, party: u64, act: Act, number: 
             if act == Act::Release {
                 match row.phase {
                     tasks::Phase::Held { .. } => {}
+                    tasks::Phase::Waiting | tasks::Phase::Active(_) if tasks::draining(&core.tasks, row) => {}
                     tasks::Phase::Waiting
                     | tasks::Phase::Active(_)
                     | tasks::Phase::Closing(_)

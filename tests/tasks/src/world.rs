@@ -444,7 +444,7 @@ impl World {
             | Request::TurnAcknowledged { .. }
             | Request::Activate { .. }
             | Request::Stop { .. }
-                | Request::Park { .. }
+            | Request::Park { .. }
             | Request::Adopt { .. }
             | Request::Close { .. }
             | Request::Release { .. }

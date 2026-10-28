@@ -404,7 +404,9 @@ impl Expectations for Tasks {
                     judge.fail("live task limit exceeded");
                 }
             }
-            Seen::Placed { live, holds, stops, parks, draining, limits } => placed(&live, &holds, &stops, &parks, &draining, &limits, judge),
+            Seen::Placed { live, holds, stops, parks, draining, limits } => {
+                placed(&live, &holds, &stops, &parks, &draining, &limits, judge)
+            }
             Seen::Stored { live, limits } => {
                 stored(&live, &limits, judge);
                 self.preparing.clear();
@@ -772,11 +774,16 @@ fn placed(
             continue;
         }
         for row in live.iter().filter(|row| in_scope(live, row.number, hold) && !hold.exempt.contains(&row.number)) {
-            if row.placed.is_none() && !matches!(row.phase, Phase::Closing(_)) {
+            if (row.placed.is_none()
+                || (hold.mode == jig_domain_tasks::Mode::Stop && !matches!(row.phase, Phase::Held { .. })))
+                && !matches!(row.phase, Phase::Closing(_))
+            {
                 judge.fail("standing hold missed a task");
             }
             let attempt = match row.phase {
-                Phase::Active(jig_domain_tasks::Active::Claimed { attempt } | jig_domain_tasks::Active::Running { attempt }) => Some(attempt),
+                Phase::Active(
+                    jig_domain_tasks::Active::Claimed { attempt } | jig_domain_tasks::Active::Running { attempt },
+                ) => Some(attempt),
                 Phase::Held {
                     was:
                         Was::Active(
@@ -790,7 +797,9 @@ fn placed(
             if let Some(attempt) = attempt
                 && !(match hold.mode {
                     jig_domain_tasks::Mode::Stop => stops.contains(&(row.number, attempt)),
-                    jig_domain_tasks::Mode::Drain => parks.contains(&(row.number, attempt)) || stops.contains(&(row.number, attempt)),
+                    jig_domain_tasks::Mode::Drain => {
+                        parks.contains(&(row.number, attempt)) || stops.contains(&(row.number, attempt))
+                    }
                 })
             {
                 judge.fail("standing stop left a run uncancelled");
