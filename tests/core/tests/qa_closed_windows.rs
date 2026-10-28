@@ -53,6 +53,7 @@ fn unread_closed_tail_starts_without_counting_a_failure() {
     let refused = fixtures::live_row(&world, task).refusals;
     windows::restart(&mut world, windows::AFTER);
     world.store.unread_transcript(task);
+    world.skip_restart_oracle("this fixture deliberately makes its committed transcript unread");
     let assignments = world.assignments.len();
     wake(&mut world);
     windows::fresh(&world);
