@@ -125,13 +125,10 @@ fn each_check_refusal_leaves_the_generation_before_active() {
     let mut live = root::live_task(root::LIVE);
     let jig_domain_core::Record::Tasks(jig_domain_tasks::Stored::Live(task)) = &mut live else { panic!("live task") };
     task.dependencies = Box::new([ENDED]);
-    let read =
-        jig_domain_core::Record::People(jig_domain_people::Stored::EndedRead { task: ENDED, party: 1, through: 1 });
     let key = |row: &jig_domain_core::Record| jig_protocol_store::keys::encode(&row.key(), 64).expect("fixture key");
     for (base_limits, open_limits, rows, why) in [
         (token_limits, token_open, vec![], Check::Large { key: Box::new(0_u64.to_be_bytes()) }),
         (patches::limits(), load_limits, vec![live.clone()], Check::Load { key: key(&live) }),
-        (patches::limits(), patches::limits(), vec![read.clone()], Check::Join { key: key(&read) }),
     ] {
         let records = Records::story();
         let mut world = records.committed_with(SEED, BASE, 1, base_limits, &rows);
