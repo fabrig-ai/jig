@@ -1936,8 +1936,10 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     // The codec limits live inline in Store, whose alignment rounds that addition up.
     let settings_refusal_limit = size_of::<u32>().next_multiple_of(align_of::<Store>());
     // The combined inbox/credit list removes one u32 codec limit; alignment
-    // returns eight inline bytes from the retained Store.
-    assert_eq!(size_of::<Store>(), 4_144 + settings_refusal_limit - 8);
+    // returned eight inline bytes from the retained Store on F5's earlier tuple.
+    // Main's HoldAccount.words adds one u32 codec limit; on the merged schema
+    // alignment retains those eight bytes, so Store keeps main's inline size.
+    assert_eq!(size_of::<Store>(), 4_144 + settings_refusal_limit);
     assert_eq!(size_of::<crate::codec::component::Layouts>(), 320);
     // store.md 9: typed SecretValue makes each SecretRow 64 rather than 32 bytes.
     assert_eq!(size_of::<crate::SecretRow>(), 64);
@@ -1962,9 +1964,11 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     let hold_account_growth = 15_033_331_712;
     // Packing words and credits removes one 32-byte List header from the
     // generated row envelope. The two decoded copies save 64 bytes at each
-    // page byte and join; removing the codec limit returns eight inline bytes.
+    // page byte and join. The earlier tuple also returned eight inline bytes
+    // from the removed codec limit; HoldAccount.words and alignment retain
+    // those bytes on the merged schema, as checked by size_of::<Store>() above.
     let limits = fixtures::store_limits();
-    let packed_saving = 64 * (u64::from(limits.store.page.bytes) + u64::from(limits.joins)) + 8;
+    let packed_saving = 64 * (u64::from(limits.store.page.bytes) + u64::from(limits.joins));
     assert_eq!(
         crate::worst_case(&limits),
         Some(581_545_605_062_293 + settings_refusal_limit + hold_account_growth - packed_saving)
