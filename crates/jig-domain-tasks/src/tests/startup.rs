@@ -81,26 +81,32 @@ fn a_delegates_words_from_a_person_restore() {
 }
 
 #[test]
-fn a_delegates_question_or_answer_from_a_person_refuses() {
+fn a_delegates_retained_question_or_answer_loads_without_sender_rejudgment() {
     for kind in [crate::MessageKind::Question, crate::MessageKind::Answer { question: WORD }] {
         let source = delegate_with_person_word(kind);
-        refused_delegate(&source);
+        loaded_delegate(&source);
     }
 }
 
 #[test]
-fn a_delegates_words_from_person_zero_refuse() {
+fn a_delegates_retained_words_load_before_person_links() {
     let mut source = delegate_with_person_word(crate::MessageKind::Words);
     let Some(Stored::Live(row)) = source.stored.get_mut(&Key::Live(DELEGATE)) else { panic!("delegate fixture") };
     row.inbox[0].from = crate::Party::Person(0);
-    refused_delegate(&source);
+    loaded_delegate(&source);
 }
 
-fn refused_delegate(source: &Harness) {
-    let mut cold = Harness::new();
-    cold.domain = Domain::new(&LIMITS, 91, source.domain.newest(), super::charters(), Box::new([0]));
-    let row = source.stored.get(&Key::Live(DELEGATE)).expect("delegate row").clone();
-    refusal(&cold.send(Event::Restore { record: row }), Refusal::Restore);
+fn loaded_delegate(source: &Harness) {
+    // Identity links belong to core; this child loads the whole bounded row
+    // without rejudging the sender authorized when its word was written.
+    let Some(Stored::Live(before)) = source.stored.get(&Key::Live(DELEGATE)) else { panic!("delegate row") };
+    let mut restored = cold(source);
+    assert_eq!(restored.domain.task(DELEGATE), Some(before.as_ref()));
+    let out = restored.send(Event::Check);
+    assert!(restored.domain.checked(), "{out:?}");
+    assert_eq!(restored.domain.task(DELEGATE), Some(before.as_ref()));
+    assert!(!restored.domain.ready());
+    assert!(!out.iter().any(lifecycle), "linking does not activate the delegate");
 }
 
 #[test]
