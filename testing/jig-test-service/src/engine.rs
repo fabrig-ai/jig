@@ -28,7 +28,7 @@ pub struct Engine {
     pub(crate) restart_reads: Option<(u16, u32)>,
     pub(crate) drain: Option<stop::Drain>,
     pub(super) blocked: bool,
-    pending: Option<Box<root::Event>>,
+    held: Queue<root::Event>,
     ready: bool,
     pub(crate) first_periods: skein_lib::List<(u32, u64)>,
     pub(crate) root_steps: u64,
@@ -82,7 +82,7 @@ impl Engine {
             restart_reads: None,
             drain: None,
             blocked: false,
-            pending: None,
+            held: Queue::uncapped(),
             ready: true,
             first_periods: skein_lib::List::with_capacity(limits.core.authority.projects),
             root_steps: 0,
@@ -143,9 +143,9 @@ impl Engine {
             None => None,
         };
         if let Err(event) = root::try_step(&mut self.domain, &self.env, event) {
-            self.pending = Some(Box::new(event));
+            self.held.push(event);
             self.blocked = true;
-        } else {
+        } else if watcher.is_some() {
             self.admission = watcher;
         }
     }
@@ -173,7 +173,7 @@ impl Engine {
         }
         let mut next = crate::accounts::earliest(self.store.next_deadline(), self.values.accounts.next_expiry());
         for (timer, deadline) in self.domain.core_deadlines(self.env.now, self.env.wall) {
-            if self.domain.stopping() && timer.waits_while_stopping() {
+            if (self.domain.stopping() && timer.waits_while_stopping()) || (!self.held.is_empty() && timer.new_work()) {
                 continue;
             }
             if let Some(deadline) = deadline {
@@ -228,10 +228,18 @@ impl Engine {
                 && (self.begin
                     || (!self.first_periods.is_empty() && self.domain.ready() && !self.blocked)
                     || !self.parties.is_empty()
-                    || ((!self.events.is_empty() || self.pending.is_some()) && !self.blocked)
+                    || ((!self.events.is_empty() || !self.held.is_empty()) && !self.blocked)
+                    || (!self.held.is_empty() && self.passing())
                     || self.ready
-                    || (due && !self.blocked)))
+                    || (due && (!self.blocked || !self.held.is_empty()))))
     }
+    fn passing(&self) -> bool {
+        match self.events.iter().next() {
+            Some(event) => root::class(event) != root::Class::New,
+            None => false,
+        }
+    }
+
     pub(crate) fn io_room(&self) -> bool {
         self.events.room() >= jig_protocol_engine_workers::MAX_OUT_DOWN
             && match &self.workers {
@@ -362,15 +370,20 @@ pub fn iterate(engine: &mut Engine, now: Time, wall: Wall) {
     if engine.begin {
         engine.begin = false;
         engine.step(root::Event::RestartBegin { pending: engine.store.pending });
-    } else if !engine.blocked && engine.pending.is_some() {
-        let event = engine.pending.take().expect("held component input");
-        engine.step(*event);
+    } else if !engine.blocked && !engine.held.is_empty() {
+        // A refused retry remains ahead of every younger held remainder.
+        let mut younger = ::core::mem::replace(&mut engine.held, Queue::uncapped());
+        let event = younger.pop().expect("oldest held component input");
+        engine.step(event);
+        for _ in 0..younger.len() {
+            engine.held.push(younger.pop().expect("younger held component input"));
+        }
     } else if !engine.blocked && engine.domain.ready() && !engine.first_periods.is_empty() {
         let last = engine.first_periods.len().checked_sub(1).expect("configured first period");
         let (project, budget) = *engine.first_periods.get(last).expect("configured first period");
         engine.first_periods.truncate(last);
         engine.step(root::Event::Core(core::Event::Period { project, period: 1, budget, next: None }));
-    } else if !engine.blocked && !engine.events.is_empty() {
+    } else if engine.held.is_empty() && !engine.blocked && !engine.events.is_empty() {
         let event = engine.events.pop().expect("ready component input");
         engine.step(event);
     } else if let Some(event) = engine.parties.pop() {
@@ -378,11 +391,31 @@ pub fn iterate(engine: &mut Engine, now: Time, wall: Wall) {
         if let Err(event) = root::try_step(&mut engine.domain, &engine.env, root::Event::Core(event)) {
             engine.outputs.push(PartyOutput::Busy(Box::new(event)));
         }
-    } else if !engine.blocked {
+    } else if !engine.blocked || !engine.held.is_empty() {
         fire(engine);
     }
+    pass(engine);
     release(engine);
     clients_pass(engine);
+}
+
+/// Completions pass held work in arrival order, up to the next new event.
+/// A mixed event adds its new remainder behind the held events and ends this walk.
+fn pass(engine: &mut Engine) {
+    if engine.held.is_empty() {
+        return;
+    }
+    for _ in 0..engine.events.len() {
+        if !engine.room() || !engine.passing() {
+            break;
+        }
+        let event = engine.events.pop().expect("passing component input");
+        let mixed = root::class(&event) == root::Class::Mixed;
+        engine.step(event);
+        if mixed {
+            break;
+        }
+    }
 }
 
 fn clients_pass(engine: &mut Engine) {
@@ -447,7 +480,7 @@ fn release(engine: &mut Engine) {
 
 fn fire(engine: &mut Engine) {
     for (timer, deadline) in engine.domain.core_deadlines(engine.env.now, engine.env.wall) {
-        if engine.domain.stopping() && timer.waits_while_stopping() {
+        if (engine.domain.stopping() && timer.waits_while_stopping()) || (!engine.held.is_empty() && timer.new_work()) {
             continue;
         }
         if let Some(deadline) = deadline

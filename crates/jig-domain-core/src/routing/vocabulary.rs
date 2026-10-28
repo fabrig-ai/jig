@@ -782,8 +782,7 @@ pub enum EscalationChoice {
     Pass,
 }
 
-/// One due child timer. The caller reserves journal room before a timer whose
-/// route may change durable state.
+/// One due child timer, classed before root admission (programming-model.md, 7.1).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Timer {
     /// Sign-in and retained keyed-answer expiration.
@@ -806,4 +805,359 @@ pub enum StepRefusal {
     Moved { task: u64, now: people::Moved },
     Refused(tasks::Problem),
     Denied { answer: authority::Answer, findings: Box<[authority::Finding]> },
+}
+
+impl Event {
+    /// Whether this event brings new work, which waits at a root's
+    /// watermark (programming-model.md, 7.1). Other events finish or
+    /// advance admitted work and are taken at any backlog.
+    #[must_use]
+    pub fn new_work(&self) -> bool {
+        match self {
+            Self::EffectConnector(event) => effectconnector_new_work(event),
+            Self::Tasks(event) => tasks_new_work(event),
+            Self::People(event) => people_new_work(event),
+            Self::Fleet(event) => fleet_new_work(event),
+            Self::Account(event) => account_new_work(event),
+            Self::View(event) => view_new_work(event),
+            Self::Notes(event) => notes_new_work(event),
+            Self::ChangeSettings { .. }
+            | Self::ProposeSettings { .. }
+            | Self::Act { .. }
+            | Self::Read { .. }
+            | Self::Application { .. }
+            | Self::Key { .. }
+            | Self::EffectStart { .. }
+            | Self::SubscribeTopic { .. }
+            | Self::SignIn { .. }
+            | Self::Watch { .. }
+            | Self::WatchRun { .. }
+            | Self::StartRecurring { .. }
+            | Self::Period { .. }
+            | Self::NamedAction { .. } => true,
+            Self::SettingsCommit { .. }
+            | Self::Fill { .. }
+            | Self::Stopping
+            | Self::Marked { .. }
+            | Self::ReadLoaded { .. }
+            | Self::ApplicationPart { .. }
+            | Self::ApplicationFinished { .. }
+            | Self::ProjectionSettled { .. }
+            | Self::SettledCall { .. }
+            | Self::EffectDeadline
+            | Self::Unwatch { .. }
+            | Self::Delivered { .. }
+            | Self::StreamDelivered { .. }
+            | Self::RunCall { .. }
+            | Self::RunInput { .. }
+            | Self::RunText { .. }
+            | Self::StartBrief { .. }
+            | Self::BriefNotes { .. }
+            | Self::BriefAssembled { .. }
+            | Self::WorkspacePrepared { .. }
+            | Self::ClaimPrepared { .. }
+            | Self::ClaimRefused { .. }
+            | Self::ConnectorRepair { .. }
+            | Self::PreparationFailed { .. }
+            | Self::TranscriptUnread { .. }
+            | Self::PersonProposal(..)
+            | Self::PersonEscalation(..)
+            | Self::TaskEscalation(..)
+            | Self::TurnPayload { .. }
+            | Self::AnswerPayload { .. }
+            | Self::AcceptedTurn { .. }
+            | Self::RefusedPayload { .. }
+            | Self::Activate { .. }
+            | Self::PreparedAgent { .. }
+            | Self::Forget { .. }
+            | Self::SeenConversationLoaded { .. }
+            | Self::EndedReadLoaded { .. }
+            | Self::DecidedProposal { .. }
+            | Self::HistoricalProposal { .. }
+            | Self::EndedTaskLoaded { .. }
+            | Self::PartyInputsLoaded { .. }
+            | Self::HistoricalPersonTask { .. }
+            | Self::HistoricalEscalation { .. }
+            | Self::NamedAnswer { .. }
+            | Self::DelegateValidated { .. }
+            | Self::DelegateInputFailed { .. }
+            | Self::DelegateHoldings { .. }
+            | Self::ProcedureHoldings { .. }
+            | Self::ProcedureStep { .. }
+            | Self::Brief(..)
+            | Self::Holdings { .. } => false,
+        }
+    }
+}
+
+fn tasks_new_work(event: &tasks::Event) -> bool {
+    match event {
+        tasks::Event::Place { .. }
+        | tasks::Event::Lift { .. }
+        | tasks::Event::MoveToNewest { .. }
+        | tasks::Event::Compound { .. }
+        | tasks::Event::Resource { .. }
+        | tasks::Event::ResourceAccess { .. }
+        | tasks::Event::Kinds { .. }
+        | tasks::Event::Slots { .. }
+        | tasks::Event::AllocationGone { .. }
+        | tasks::Event::ProposePerson { .. }
+        | tasks::Event::WithdrawPersonProposal { .. }
+        | tasks::Event::DecidePersonProposal { .. }
+        | tasks::Event::TickRecurring { .. }
+        | tasks::Event::RenewStanding { .. }
+        | tasks::Event::TakePerson { .. }
+        | tasks::Event::HandBackPerson { .. }
+        | tasks::Event::AnswerPerson { .. }
+        | tasks::Event::Propose { .. }
+        | tasks::Event::DecideProposal { .. }
+        | tasks::Event::WithdrawProposal { .. }
+        | tasks::Event::Control { .. }
+        | tasks::Event::Amend { .. }
+        | tasks::Event::Move { .. }
+        | tasks::Event::Subscribe { .. }
+        | tasks::Event::SubscribeTopic { .. }
+        | tasks::Event::Unsubscribe { .. }
+        | tasks::Event::Notice { .. }
+        | tasks::Event::Introduce { .. }
+        | tasks::Event::Message { .. }
+        | tasks::Event::AuthorizedMessage { .. }
+        | tasks::Event::PeriodNext { .. }
+        | tasks::Event::OpenPeriod { .. }
+        | tasks::Event::CarvePool { .. }
+        | tasks::Event::ResizePool { .. }
+        | tasks::Event::ResizePeriod { .. }
+        | tasks::Event::Make { .. }
+        | tasks::Event::Hold { .. }
+        | tasks::Event::HoldFrom { .. } => true,
+        tasks::Event::Charters { .. }
+        | tasks::Event::WakeProcedure { .. }
+        | tasks::Event::RecurringBatch { .. }
+        | tasks::Event::Procedure { .. }
+        | tasks::Event::DecideSettingsProposal { .. }
+        | tasks::Event::StalledProposal { .. }
+        | tasks::Event::DelegateResult { .. }
+        | tasks::Event::RememberStub { .. }
+        | tasks::Event::InspectEscalations { .. }
+        | tasks::Event::RecheckEscalations { .. }
+        | tasks::Event::RoutedEscalation { .. }
+        | tasks::Event::DecideEscalation { .. }
+        | tasks::Event::ChargeEffect { .. }
+        | tasks::Event::Turn { .. }
+        | tasks::Event::Refusals { .. }
+        | tasks::Event::MakeResultFollowups { .. }
+        | tasks::Event::Prepare { .. }
+        | tasks::Event::Claim { .. }
+        | tasks::Event::ReadAfresh { .. }
+        | tasks::Event::EffectInFlight { .. }
+        | tasks::Event::EffectSettled { .. }
+        | tasks::Event::Started { .. }
+        | tasks::Event::Activation { .. }
+        | tasks::Event::PreparationWaiting { .. }
+        | tasks::Event::PreparationFailed { .. }
+        | tasks::Event::PreparationUnread { .. }
+        | tasks::Event::EffectsSettled { .. }
+        | tasks::Event::Retained { .. }
+        | tasks::Event::Settled { .. }
+        | tasks::Event::PersonStallNotice { .. }
+        | tasks::Event::MetNotice { .. }
+        | tasks::Event::Restore { .. }
+        | tasks::Event::Check
+        | tasks::Event::Restored => false,
+    }
+}
+
+fn fleet_new_work(event: &fleet::Event) -> bool {
+    match event {
+        fleet::Event::Needs(..)
+        | fleet::Event::CleanupPrograms { .. }
+        | fleet::Event::CheckProgram { .. }
+        | fleet::Event::SignOutProgram { .. }
+        | fleet::Event::Sources { .. }
+        | fleet::Event::Check { .. }
+        | fleet::Event::SignOut { .. }
+        | fleet::Event::Relay { .. } => true,
+        fleet::Event::Logins { .. }
+        | fleet::Event::SignedOut { .. }
+        | fleet::Event::Start { .. }
+        | fleet::Event::Inbound { .. }
+        | fleet::Event::Adopt { .. }
+        | fleet::Event::Cross { .. }
+        | fleet::Event::Cancel { .. }
+        | fleet::Event::Relayed { .. }
+        | fleet::Event::Acknowledge { .. }
+        | fleet::Event::Loaded
+        | fleet::Event::Grant { .. }
+        | fleet::Event::Unauthorized { .. }
+        | fleet::Event::Limited { .. }
+        | fleet::Event::AccountRefused { .. }
+        | fleet::Event::Hello { .. }
+        | fleet::Event::Lost { .. }
+        | fleet::Event::Answer { .. }
+        | fleet::Event::Turn { .. }
+        | fleet::Event::TurnKept { .. }
+        | fleet::Event::TurnBusy { .. }
+        | fleet::Event::Observe { .. } => false,
+    }
+}
+
+fn people_new_work(event: &people::Event) -> bool {
+    match event {
+        people::Event::Act { .. }
+        | people::Event::Seed { .. }
+        | people::Event::SignedIn { .. }
+        | people::Event::Whose { .. }
+        | people::Event::SignOut { .. }
+        | people::Event::Roles { .. }
+        | people::Event::Ask { .. } => true,
+        people::Event::MoveChat { .. }
+        | people::Event::ChatState { .. }
+        | people::Event::ConversationSeen { .. }
+        | people::Event::Forget { .. }
+        | people::Event::MakeService { .. }
+        | people::Event::Waiting { .. }
+        | people::Event::ApplyRoles { .. }
+        | people::Event::Decided { .. }
+        | people::Event::Restore { .. }
+        | people::Event::Restored => false,
+    }
+}
+
+fn account_new_work(event: &accounts::Event) -> bool {
+    match event {
+        accounts::Event::Want
+        | accounts::Event::Change { .. }
+        | accounts::Event::Credential { .. }
+        | accounts::Event::SignIn { .. }
+        | accounts::Event::SignOut { .. } => true,
+        accounts::Event::Restore { .. }
+        | accounts::Event::ProgramTargets { .. }
+        | accounts::Event::ProgramSignedOut { .. }
+        | accounts::Event::Component(..)
+        | accounts::Event::Unauthorized { .. }
+        | accounts::Event::Limited { .. }
+        | accounts::Event::Refused { .. }
+        | accounts::Event::RunFailed { .. }
+        | accounts::Event::Visited { .. }
+        | accounts::Event::Finishing { .. }
+        | accounts::Event::FinishRefused { .. }
+        | accounts::Event::SignedIn { .. }
+        | accounts::Event::SignInFailed { .. }
+        | accounts::Event::SignedOut { .. }
+        | accounts::Event::Withdrawn { .. }
+        | accounts::Event::Opened { .. }
+        | accounts::Event::NotOurs { .. }
+        | accounts::Event::Adopted { .. }
+        | accounts::Event::Close => false,
+    }
+}
+
+fn view_new_work(event: &views::Event) -> bool {
+    match event {
+        views::Event::Watch { .. } => true,
+        views::Event::EndWatch { .. }
+        | views::Event::Changed { .. }
+        | views::Event::Made { .. }
+        | views::Event::Delivered { .. }
+        | views::Event::StreamDelivered { .. }
+        | views::Event::Text { .. }
+        | views::Event::Input { .. }
+        | views::Event::Called { .. }
+        | views::Event::TurnCommitted { .. }
+        | views::Event::RunEnded { .. }
+        | views::Event::Unwatch { .. }
+        | views::Event::Gone { .. } => false,
+    }
+}
+
+fn notes_new_work(event: &notes::Event) -> bool {
+    match event {
+        notes::Event::Index { .. }
+        | notes::Event::Recall { .. }
+        | notes::Event::Write { .. }
+        | notes::Event::Edit { .. } => true,
+        notes::Event::LoadFailed { .. }
+        | notes::Event::Loaded { .. }
+        | notes::Event::Restore { .. }
+        | notes::Event::Restored => false,
+    }
+}
+
+fn effectconnector_new_work(event: &crate::connector::Event) -> bool {
+    match event {
+        crate::connector::Event::Resource { .. }
+        | crate::connector::Event::PoolSlots { .. }
+        | crate::connector::Event::News { .. }
+        | crate::connector::Event::Drift { .. } => true,
+        crate::connector::Event::Described { .. }
+        | crate::connector::Event::DescribeRefused { .. }
+        | crate::connector::Event::DescribeBusy { .. }
+        | crate::connector::Event::Verdict { .. }
+        | crate::connector::Event::Procedure { .. }
+        | crate::connector::Event::Outbox { .. }
+        | crate::connector::Event::ProjectionOutbox { .. }
+        | crate::connector::Event::SectionReady { .. }
+        | crate::connector::Event::WorkspaceReady { .. }
+        | crate::connector::Event::Adopted { .. }
+        | crate::connector::Event::Closed { .. }
+        | crate::connector::Event::RestartDone { .. } => false,
+    }
+}
+
+impl Timer {
+    /// Whether firing starts new work rather than advancing admitted work
+    /// (programming-model.md, 7.1). Tasks also starts standing work.
+    #[must_use]
+    pub const fn new_work(self) -> bool {
+        match self {
+            Self::Tasks => true,
+            Self::People | Self::Fleet | Self::Brief | Self::Account | Self::View => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::{Event, Timer};
+    use jig_domain_fleet as fleet;
+    use jig_domain_people as people;
+    use skein_lib::{ReplyTo, Token};
+
+    #[test]
+    fn completions_and_requests_have_distinct_admission() {
+        let reply_to = ReplyTo::new(Token::new(1));
+        for (event, new) in [
+            (Event::Stopping, false),
+            (Event::Fill { bytes: 0 }, false),
+            (Event::Unwatch { watcher: Token::new(1) }, false),
+            (Event::Fleet(fleet::Event::Lost { channel: Token::new(1) }), false),
+            (
+                Event::People(people::Event::Ask {
+                    reply_to,
+                    sign_in: 1,
+                    key: [1; 16],
+                    models: Box::new([]),
+                    ask: people::Ask::MarkSeen { seen: people::Seen::Results { through: 0 } },
+                }),
+                true,
+            ),
+            (Event::Period { project: 1, period: 1, budget: 0, next: None }, true),
+        ] {
+            assert_eq!(event.new_work(), new, "the variant fixes its admission");
+        }
+    }
+
+    #[test]
+    fn only_the_tasks_timer_starts_work() {
+        for (timer, new) in [
+            (Timer::People, false),
+            (Timer::Fleet, false),
+            (Timer::Brief, false),
+            (Timer::Account, false),
+            (Timer::View, false),
+            (Timer::Tasks, true),
+        ] {
+            assert_eq!(timer.new_work(), new, "the timer's work fixes its admission");
+        }
+    }
 }

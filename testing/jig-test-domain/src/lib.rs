@@ -841,7 +841,8 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 route_core(domain, env, &mut decision, requests, &mut work);
             }
             Work::WriterRead { connector, resource, event } => {
-                if let connector::SystemEvent::Fact { resource: observed, fact, .. } = &event
+                if let connector::SystemEvent::Fact { resource: observed, fact, .. }
+                | connector::SystemEvent::Settle { resource: observed, fact } = &event
                     && !fact.pending
                     && observed.segments() == resource.path.as_ref()
                 {
@@ -1120,7 +1121,7 @@ use routes::{route_connector, route_core};
 mod limits;
 pub use limits::{max_out, worst_case};
 mod admission;
-pub use admission::try_step;
+pub use admission::{Class, class, try_step};
 
 mod census;
 pub use census::inbox_census;

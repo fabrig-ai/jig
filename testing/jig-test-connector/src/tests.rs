@@ -764,3 +764,110 @@ fn validity_does_not_price_retained_heap() {
     let limits = Limits { tasks: u32::MAX, resources_per_task: u32::MAX, ..LIMITS };
     assert!(crate::valid(&limits));
 }
+
+const DRIFT_TASK: u64 = 9;
+const DRIFT_JUDGE: skein_lib::Token = skein_lib::Token::new(5);
+const BEFORE_DRIFT: u64 = 2;
+const AFTER_DRIFT: u64 = 3;
+const OLD_OBSERVATION: u64 = 10;
+const FRESH_OBSERVATION: u64 = 20; // Past the fixture requirement's five-nanosecond freshness.
+
+fn waiting_drift() -> Domain {
+    let mut connector = domain();
+    for event in [
+        Event::Adopt { project: 1, resource: service(), role: ResourceRole::Owned },
+        Event::Names { project: 1, task: DRIFT_TASK, resources: Box::new([service()]) },
+        Event::System(SystemEvent::Fact {
+            resource: service(),
+            fact: crate::Fact {
+                state: Some(BEFORE_DRIFT),
+                observed: Wall::from_nanos(OLD_OBSERVATION),
+                pending: false,
+            },
+            origin: Origin::Own,
+        }),
+    ] {
+        drop(run_at(&mut connector, OLD_OBSERVATION, event));
+    }
+    drop(run_at(
+        &mut connector,
+        FRESH_OBSERVATION,
+        Event::Judge { token: DRIFT_JUDGE, requirement: 4, resources: Box::new([service()]), state: AFTER_DRIFT },
+    ));
+    connector
+}
+
+fn drift_fact() -> crate::Fact {
+    crate::Fact { state: Some(AFTER_DRIFT), observed: Wall::from_nanos(FRESH_OBSERVATION), pending: false }
+}
+
+#[test]
+fn a_settle_answers_its_waiting_judge_and_a_drift_reports_the_change() {
+    let mut connector = waiting_drift();
+    let (settle, drift) = crate::split(&connector, service(), drift_fact(), Origin::Other);
+    let settled = run_at(&mut connector, FRESH_OBSERVATION, Event::System(settle));
+    assert_eq!(
+        settled.as_ref(),
+        [
+            Request::Changed { resource: service() },
+            Request::Verdict {
+                token: DRIFT_JUDGE,
+                verdict: crate::Verdict::Met {
+                    state: AFTER_DRIFT,
+                    observed: Wall::from_nanos(FRESH_OBSERVATION),
+                    guarded: true
+                }
+            },
+        ],
+        "settlement answers the retained judge without drift"
+    );
+    let reported = run_at(&mut connector, FRESH_OBSERVATION, Event::System(drift.expect("the kept state changed")));
+    assert_eq!(
+        reported.as_ref(),
+        [Request::DriftResource { tasks: Box::new([DRIFT_TASK]), resource: service() }],
+        "the new part reports drift once"
+    );
+    let mut separate = List::with_capacity(MAX_OUT);
+    for request in settled {
+        separate.push(request).expect("the split's bounded settlement");
+    }
+    for request in reported {
+        separate.push(request).expect("the split's bounded drift");
+    }
+    let mut whole = waiting_drift();
+    assert_eq!(
+        run_at(
+            &mut whole,
+            FRESH_OBSERVATION,
+            Event::System(SystemEvent::Fact { resource: service(), fact: drift_fact(), origin: Origin::Other })
+        )
+        .as_ref(),
+        separate.as_slice(),
+        "whole and split facts keep settlement before drift"
+    );
+}
+
+#[test]
+fn a_drift_waiting_through_a_return_to_its_old_state_is_obsolete() {
+    let mut connector = waiting_drift();
+    let (settle, drift) = crate::split(&connector, service(), drift_fact(), Origin::Other);
+    drop(run_at(&mut connector, FRESH_OBSERVATION, Event::System(settle)));
+    drop(run_at(
+        &mut connector,
+        FRESH_OBSERVATION,
+        Event::System(SystemEvent::Fact {
+            resource: service(),
+            origin: Origin::Own,
+            fact: crate::Fact {
+                state: Some(BEFORE_DRIFT),
+                observed: Wall::from_nanos(FRESH_OBSERVATION),
+                pending: false,
+            },
+        }),
+    ));
+    assert!(
+        run_at(&mut connector, FRESH_OBSERVATION, Event::System(drift.expect("the original change had drift")))
+            .is_empty(),
+        "a delayed drift checks the fact the connector keeps now"
+    );
+}

@@ -506,6 +506,10 @@ pub enum Origin {
 pub enum SystemEvent {
     /// A fresh system read or hint for one resource.
     Fact { resource: Path, fact: Fact, origin: Origin },
+    /// A split fact's admitted part: keep it, answer judges and mark subjects.
+    Settle { resource: Path, fact: Fact },
+    /// Report drift if the resource's kept state still differs from this prior state.
+    Drift { resource: Path, from: Option<u64> },
     /// The system withdrew access; re-adoption is required to restore it.
     Unavailable { project: u32, resource: Path },
     /// A pool changed size; named allocations no longer present drift.
@@ -902,4 +906,20 @@ pub enum StepRefusal {
     Kept { pending: Box<[u64]> },
     Moved { revision: u64 },
     Refused,
+}
+
+/// Split a fact into its admitted settlement and, only for another hand's
+/// change of a previously kept state, its new drift (programming-model.md, 7.1).
+#[must_use]
+pub fn split(domain: &crate::Domain, resource: Path, fact: Fact, origin: Origin) -> (SystemEvent, Option<SystemEvent>) {
+    let drift = match origin {
+        Origin::Own => None,
+        Origin::Other => match crate::requirements::current(domain, &resource) {
+            Some(previous) if previous.state != fact.state => {
+                Some(SystemEvent::Drift { resource: resource.clone(), from: previous.state })
+            }
+            Some(_) | None => None,
+        },
+    };
+    (SystemEvent::Settle { resource, fact }, drift)
 }

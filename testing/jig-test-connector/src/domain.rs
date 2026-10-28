@@ -545,6 +545,8 @@ fn system_event(domain: &mut Domain, env: &Env<Limits>, event: SystemEvent, out:
         SystemEvent::Fact { resource, fact, origin } => {
             crate::requirements::fact(domain, env, resource, fact, origin, out);
         }
+        SystemEvent::Settle { resource, fact } => crate::requirements::settle(domain, env, resource, fact, out),
+        SystemEvent::Drift { resource, from } => crate::requirements::drift(domain, env, resource, from, out),
         SystemEvent::Pool { path, slots, lost } => {
             if u32::try_from(lost.len()).unwrap_or(u32::MAX) > env.limits.lost_per_pool
                 || !domain.pools.contains_key(&path)

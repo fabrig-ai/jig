@@ -104,9 +104,12 @@ fn a_fact_settles_under_load_and_its_drift_waits() {
     let event = root::Event::Connector { number: 1, event: connector::Event::System(changed_fact(&driver)) };
     let rest = root::try_step(&mut driver.domain, &driver.env, event).expect_err("drift waits");
     assert!(
-        !matches!(
+        matches!(
             &rest,
-            root::Event::Connector { event: connector::Event::System(connector::SystemEvent::Fact { .. }), .. }
+            root::Event::Connector {
+                number: 1,
+                event: connector::Event::System(connector::SystemEvent::Drift { from: Some(OLD_STATE), .. })
+            }
         ),
         "only the new drift returns; the fact has been settled"
     );
@@ -138,7 +141,7 @@ fn a_lost_writers_read_completes_under_load_and_its_drift_waits() {
     assert_eq!(drift_writes(&driver, task), 0, "the read settles before its new drift");
     driver.send(rest);
     driver.settle();
-    assert_eq!(drift_writes(&driver, task), ONCE, "the resource owner drifts once after admission");
+    assert_eq!(drift_writes(&driver, task), ONCE, "the resource owner drifts in one decision after admission");
 }
 
 fn drift_writes(driver: &Driver, task: u64) -> usize {
@@ -279,12 +282,23 @@ fn worker_notices(driver: &Driver) -> Vec<Option<u32>> {
     driver
         .released
         .iter()
-        .filter_map(|request| match request {
-            root::Request::Deliver(root::Delivery::Core(core::Held::AcknowledgeTurn {
-                channel: WORKER, turn, ..
-            })) => Some(Some(*turn)),
-            root::Request::Deliver(root::Delivery::Core(core::Held::Acknowledge { channel: WORKER, .. })) => Some(None),
-            _ => None,
+        .filter_map(|request| {
+            if let root::Request::Deliver(root::Delivery::Core(core::Held::AcknowledgeTurn {
+                channel: WORKER,
+                turn,
+                ..
+            })) = request
+            {
+                Some(Some(*turn))
+            } else if let root::Request::Deliver(root::Delivery::Core(core::Held::Acknowledge {
+                channel: WORKER,
+                ..
+            })) = request
+            {
+                Some(None)
+            } else {
+                None
+            }
         })
         .collect()
 }

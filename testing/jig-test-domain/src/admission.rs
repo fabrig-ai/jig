@@ -1,11 +1,144 @@
-//! Admission at the service boundary by backlog watermark (skein's draft `dynamic-memory.md`, 4).
+//! Root admission by variant and backlog (programming-model.md, 7.1–7.2).
 use crate::{Domain, Event, Limits, step};
 use alloc::boxed::Box;
 use jig_domain_core as core;
+use jig_domain_host as host;
+use jig_test_connector as connector;
 use skein_lib::Env;
 
-/// Return an unadmitted input to its owner; a store terminal always enters its root-owned queue.
-#[expect(clippy::result_large_err, reason = "the service admission boundary returns the original event by value")]
+/// How the root takes an event (programming-model.md, 7.1).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Class {
+    /// Finishes or advances admitted work, taken at any backlog.
+    Admitted,
+    /// New work, handed back unchanged at the watermark.
+    New,
+    /// Its admitted part is stepped; its new part waits at the watermark.
+    Mixed,
+}
+
+/// Class an event by its variant and payload alone.
+#[must_use]
+pub fn class(event: &Event) -> Class {
+    match event {
+        Event::Core(event) => {
+            if event.new_work() {
+                Class::New
+            } else {
+                Class::Admitted
+            }
+        }
+        Event::Timer(timer) => {
+            if timer.new_work() {
+                Class::New
+            } else {
+                Class::Admitted
+            }
+        }
+        Event::Link { link, .. } => match link {
+            crate::link::Event::Hello { .. } | crate::link::Event::Lost => Class::Admitted,
+            crate::link::Event::Up(record) => match record {
+                host::LinkUp::Call { .. } => Class::New,
+                host::LinkUp::Piece { .. }
+                | host::LinkUp::Logins { .. }
+                | host::LinkUp::SignedOut { .. }
+                | host::LinkUp::Activity { .. }
+                | host::LinkUp::Unauthorized { .. }
+                | host::LinkUp::Limited { .. }
+                | host::LinkUp::AccountRefused { .. }
+                | host::LinkUp::Turn { .. }
+                | host::LinkUp::Answer { .. } => Class::Admitted,
+            },
+        },
+        Event::Connector { event, .. } => connector_class(event),
+        Event::WriterRead { event, .. } => match event {
+            connector::SystemEvent::Fact { origin: connector::Origin::Other, .. } => Class::Mixed,
+            connector::SystemEvent::Fact { origin: connector::Origin::Own, .. }
+            | connector::SystemEvent::Settle { .. }
+            | connector::SystemEvent::Drift { .. }
+            | connector::SystemEvent::Applied { .. }
+            | connector::SystemEvent::Looked { .. }
+            | connector::SystemEvent::News { .. }
+            | connector::SystemEvent::Unavailable { .. }
+            | connector::SystemEvent::Pool { .. } => Class::Admitted,
+        },
+        Event::WatchApplication { .. }
+        | Event::ReadApplication { .. }
+        | Event::Application { .. }
+        | Event::RestartBegin { .. }
+        | Event::Credential { .. }
+        | Event::ProjectionEffect { .. }
+        | Event::TopicCall { .. }
+        | Event::EffectCall { .. } => Class::New,
+        Event::ResultRead { .. }
+        | Event::Stop
+        | Event::ConnectorTimer { .. }
+        | Event::Switched
+        | Event::RestartDone(..)
+        | Event::CallAnswered { .. }
+        | Event::Text { .. }
+        | Event::Turn { .. }
+        | Event::Answer { .. }
+        | Event::TranscriptLoaded { .. }
+        | Event::Committed { .. }
+        | Event::Failed { .. } => Class::Admitted,
+    }
+}
+
+fn connector_class(event: &connector::Event) -> Class {
+    match event {
+        connector::Event::System(event) => match event {
+            connector::SystemEvent::Fact { origin: connector::Origin::Other, .. } => Class::Mixed,
+            connector::SystemEvent::Fact { origin: connector::Origin::Own, .. }
+            | connector::SystemEvent::Settle { .. }
+            | connector::SystemEvent::Applied { .. }
+            | connector::SystemEvent::Looked { .. } => Class::Admitted,
+            connector::SystemEvent::Drift { .. }
+            | connector::SystemEvent::News { .. }
+            | connector::SystemEvent::Unavailable { .. }
+            | connector::SystemEvent::Pool { .. } => Class::New,
+        },
+        connector::Event::DocumentPrepare { .. }
+        | connector::Event::DocumentForget { .. }
+        | connector::Event::Document { .. }
+        | connector::Event::ReadDocument { .. }
+        | connector::Event::ApplicationPrepare { .. }
+        | connector::Event::ApplicationDrop { .. }
+        | connector::Event::Application { .. }
+        | connector::Event::ApplicationCore { .. }
+        | connector::Event::Close { .. }
+        | connector::Event::EffectDecision { .. }
+        | connector::Event::Judge { .. }
+        | connector::Event::Procedure { .. }
+        | connector::Event::StepMade { .. }
+        | connector::Event::StepRefused { .. }
+        | connector::Event::Read { .. }
+        | connector::Event::Gather { .. }
+        | connector::Event::Cut { .. }
+        | connector::Event::Items { .. }
+        | connector::Event::HandOver { .. }
+        | connector::Event::Restart(..)
+        | connector::Event::Names { .. }
+        | connector::Event::Unnamed { .. }
+        | connector::Event::Adopt { .. }
+        | connector::Event::DescribeTopic { .. }
+        | connector::Event::Subscribe { .. }
+        | connector::Event::Unsubscribe { .. }
+        | connector::Event::Describe { .. }
+        | connector::Event::Keep { .. }
+        | connector::Event::DescribeProposal { .. }
+        | connector::Event::KeepProposal { .. }
+        | connector::Event::DropProposal { .. }
+        | connector::Event::Drop { .. }
+        | connector::Event::Make { .. }
+        | connector::Event::Resolve { .. }
+        | connector::Event::Withdraw { .. }
+        | connector::Event::Restore { .. } => Class::Admitted,
+    }
+}
+
+/// Return new work to its owner at the watermark; store answers keep arrival order.
+#[expect(clippy::result_large_err, reason = "the admission boundary returns the original owned event")]
 pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<(), Event> {
     match event {
         event @ (Event::Committed { .. } | Event::Failed { .. }) => {
@@ -18,43 +151,130 @@ pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<
         | Event::Core(
             core::Event::ReadLoaded { .. }
             | core::Event::EndedReadLoaded { .. }
+            | core::Event::EndedTaskLoaded { .. }
             | core::Event::SeenConversationLoaded { .. }
             | core::Event::HistoricalPersonTask { .. }
             | core::Event::PartyInputsLoaded { .. }
             | core::Event::HistoricalProposal { .. }
             | core::Event::DecidedProposal { .. }
-            | core::Event::HistoricalEscalation { .. }
-            | core::Event::Notes(_),
+            | core::Event::HistoricalEscalation { .. },
         )) => {
+            domain.store_answers.push(Box::new(event));
+            Ok(())
+        }
+        event @ Event::Core(core::Event::Notes(_)) if class(&event) == Class::Admitted => {
             domain.store_answers.push(Box::new(event));
             Ok(())
         }
         event @ (Event::Link { .. }
         | Event::ResultRead { .. }
         | Event::Stop
+        | Event::WatchApplication { .. }
+        | Event::ReadApplication { .. }
         | Event::Application { .. }
-        | Event::ConnectorTimer { .. }
         | Event::WriterRead { .. }
+        | Event::ConnectorTimer { .. }
         | Event::RestartBegin { .. }
+        | Event::Timer(..)
+        | Event::Core(..)
+        | Event::Credential { .. }
+        | Event::Connector { .. }
         | Event::ProjectionEffect { .. }
         | Event::TopicCall { .. }
         | Event::EffectCall { .. }
-        | Event::Timer(_)
-        | Event::Core(_)
-        | Event::Credential { .. }
-        | Event::WatchApplication { .. }
-        | Event::ReadApplication { .. }
         | Event::CallAnswered { .. }
-        | Event::Connector { .. }
         | Event::Text { .. }
         | Event::Turn { .. }
-        | Event::Answer { .. }) => {
-            if !admits(domain, &env.limits) {
-                return Err(event);
+        | Event::Answer { .. }) => match class(&event) {
+            Class::Admitted => {
+                step(domain, env, event);
+                Ok(())
             }
-            step(domain, env, event);
-            Ok(())
+            Class::New => {
+                if !admits(domain, &env.limits) {
+                    return Err(event);
+                }
+                step(domain, env, event);
+                Ok(())
+            }
+            Class::Mixed => {
+                if admits(domain, &env.limits) {
+                    step(domain, env, event);
+                    return Ok(());
+                }
+                let (admitted, rest) = split(domain, event);
+                step(domain, env, admitted);
+                match rest {
+                    Some(rest) => Err(rest),
+                    None => Ok(()),
+                }
+            }
+        },
+    }
+}
+
+#[expect(clippy::manual_map, reason = "step code wraps owned remainders without closures")]
+fn split(domain: &mut Domain, event: Event) -> (Event, Option<Event>) {
+    match event {
+        Event::Connector {
+            number,
+            event: connector::Event::System(connector::SystemEvent::Fact { resource, fact, origin }),
+        } => {
+            let (settle, drift) = connector::split(crate::numbered(domain, number), resource, fact, origin);
+            let rest = match drift {
+                Some(event) => Some(Event::Connector { number, event: connector::Event::System(event) }),
+                None => None,
+            };
+            (Event::Connector { number, event: connector::Event::System(settle) }, rest)
         }
+        Event::WriterRead {
+            connector: number,
+            resource,
+            event: connector::SystemEvent::Fact { resource: observed, fact, origin },
+        } => {
+            // A read the existing route would ignore has no work to defer either.
+            if fact.pending || observed.segments() != resource.path.as_ref() {
+                return (
+                    Event::WriterRead {
+                        connector: number,
+                        resource,
+                        event: connector::SystemEvent::Fact { resource: observed, fact, origin },
+                    },
+                    None,
+                );
+            }
+            let (settle, drift) = connector::split(crate::numbered(domain, number), observed, fact, origin);
+            let rest = match drift {
+                Some(event) => Some(Event::Connector { number, event: connector::Event::System(event) }),
+                None => None,
+            };
+            (Event::WriterRead { connector: number, resource, event: settle }, rest)
+        }
+        Event::Link { .. }
+        | Event::ResultRead { .. }
+        | Event::Stop
+        | Event::WatchApplication { .. }
+        | Event::ReadApplication { .. }
+        | Event::Application { .. }
+        | Event::WriterRead { .. }
+        | Event::ConnectorTimer { .. }
+        | Event::RestartBegin { .. }
+        | Event::Switched
+        | Event::RestartDone(..)
+        | Event::Timer(..)
+        | Event::Core(..)
+        | Event::Credential { .. }
+        | Event::Connector { .. }
+        | Event::ProjectionEffect { .. }
+        | Event::TopicCall { .. }
+        | Event::EffectCall { .. }
+        | Event::CallAnswered { .. }
+        | Event::Text { .. }
+        | Event::Turn { .. }
+        | Event::Answer { .. }
+        | Event::TranscriptLoaded { .. }
+        | Event::Committed { .. }
+        | Event::Failed { .. } => unreachable!("only a mixed fact is split"),
     }
 }
 
@@ -130,7 +350,7 @@ mod expiry_tests {
     use skein_lib::{Env, Queue, Time, Wall};
 
     #[test]
-    fn refused_wall_expiry_timer_keeps_membership_and_both_deadlines_due() {
+    fn wall_expiry_is_taken_at_the_watermark() {
         let mut env = fixtures::env();
         let mut domain = fixtures::domain();
         let expiry = Wall::from_nanos(10);
@@ -159,7 +379,6 @@ mod expiry_tests {
             people::Event::Restored,
             &mut ignored,
         );
-        let elapsed = domain.core.people.next_deadline();
         assert!(domain.core.people.ready());
         let commits = fixtures::fill_to_watermark(&mut domain, &env);
         for _ in 0..commits {
@@ -167,18 +386,8 @@ mod expiry_tests {
         }
         env.now = Time::from_nanos(2);
         env.wall = expiry;
-        let projected = domain.core_deadlines(env.now, env.wall);
-        assert!(projected.contains(&(core::Timer::People, Some(env.now))));
-        assert!(super::try_step(&mut domain, &env, Event::Timer(core::Timer::People)).is_err());
-        assert_eq!(domain.core_deadlines(env.now, env.wall), projected, "refusal retains the service deadline");
-        assert_eq!(domain.core.people.sign_in_person(1), Some(1));
-        assert_eq!(domain.core.people.next_wall_expiry(), Some(expiry));
-        assert_eq!(domain.core.people.next_deadline(), elapsed);
-        assert!(crate::timers_due(&domain, &env));
-        super::try_step(&mut domain, &env, Event::Committed { number: 1, fill: 0 })
-            .expect("admitted timer or durable terminal");
         super::try_step(&mut domain, &env, Event::Timer(core::Timer::People))
-            .expect("admitted timer or durable terminal");
+            .expect("sign-in expiry advances admitted work even at the watermark");
         assert_eq!(domain.core.people.sign_in_person(1), None);
         assert_eq!(domain.core.people.next_wall_expiry(), None);
         assert_eq!(domain.core.people.next_deadline(), None);

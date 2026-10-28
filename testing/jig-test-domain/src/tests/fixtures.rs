@@ -353,7 +353,7 @@ fn held_records() -> [(core::Held, host::LinkDown); 4] {
 pub fn fill_to_watermark(domain: &mut Domain, env: &Env<Limits>) -> u32 {
     for commits in 0..=env.limits.watermark {
         if crate::admission::backlog(domain) >= u64::from(env.limits.watermark) {
-            crate::try_step(domain, env, crate::Event::Timer(core::Timer::People))
+            crate::try_step(domain, env, crate::Event::Timer(core::Timer::Tasks))
                 .expect_err("new work is handed back at the watermark");
             return commits;
         }

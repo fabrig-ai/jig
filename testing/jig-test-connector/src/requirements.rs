@@ -86,6 +86,16 @@ pub(crate) fn fact(
     origin: Origin,
     out: &mut Queue<Request>,
 ) {
+    let (crate::SystemEvent::Settle { resource, fact }, rest) = crate::split(domain, resource, fact, origin) else {
+        unreachable!("a split always keeps its admitted settlement");
+    };
+    settle(domain, env, resource, fact, out);
+    if let Some(crate::SystemEvent::Drift { resource, from }) = rest {
+        drift(domain, env, resource, from, out);
+    }
+}
+
+pub(crate) fn settle(domain: &mut Domain, env: &Env<Limits>, resource: Path, fact: Fact, out: &mut Queue<Request>) {
     if resource_spec(&domain.config, &resource).is_none()
         || domain.facts.len() >= env.limits.facts && !domain.facts.contains_key(&resource)
     {
@@ -96,24 +106,6 @@ pub(crate) fn fact(
         return;
     }
     out.push(Request::Changed { resource: resource.clone() });
-    let changed = match old {
-        Some(previous) => previous.state != fact.state,
-        None => false,
-    };
-    if origin == Origin::Other && changed {
-        let mut tasks: List<u64> = List::with_capacity(env.limits.tasks);
-        for (task, record) in &domain.tasks {
-            if let Record::Task { project, resources, .. } = record
-                && resources.contains(&resource)
-                && domain.adoptions.get(&(*project, resource.clone())) == Some(&ResourceRole::Owned)
-            {
-                tasks.push(*task).expect("one task per live row");
-            }
-        }
-        if !tasks.is_empty() {
-            out.push(Request::DriftResource { tasks: tasks.into_boxed(), resource: resource.clone() });
-        }
-    }
     let mut answered: List<Token> = List::with_capacity(env.limits.judges);
     for (token, question) in &domain.judges {
         if question.resource == resource {
@@ -126,5 +118,24 @@ pub(crate) fn fact(
     }
     for token in &answered {
         domain.judges.remove(token);
+    }
+}
+
+pub(crate) fn drift(domain: &Domain, env: &Env<Limits>, resource: Path, from: Option<u64>, out: &mut Queue<Request>) {
+    let Some(fact) = current(domain, &resource) else { return };
+    if fact.state == from {
+        return;
+    }
+    let mut tasks: List<u64> = List::with_capacity(env.limits.tasks);
+    for (task, record) in &domain.tasks {
+        if let Record::Task { project, resources, .. } = record
+            && resources.contains(&resource)
+            && domain.adoptions.get(&(*project, resource.clone())) == Some(&ResourceRole::Owned)
+        {
+            tasks.push(*task).expect("one task per live row");
+        }
+    }
+    if !tasks.is_empty() {
+        out.push(Request::DriftResource { tasks: tasks.into_boxed(), resource: resource.clone() });
     }
 }

@@ -798,7 +798,7 @@ fn pass_files(driven: &mut fixtures::Driven, next_file: &mut i32) {
             Done::Count(
                 u32::try_from(bytes.len()).expect("fixture frame").checked_sub(*from).expect("unwritten suffix"),
             )
-        } else if matches!(&submit.kind, Op::Sync { .. } | Op::Close { .. } | Op::Remove { .. }) {
+        } else if let Op::Sync { .. } | Op::Close { .. } | Op::Remove { .. } = &submit.kind {
             Done::Nothing
         } else {
             panic!("unexpected transcript operation {:?}", submit.kind);
