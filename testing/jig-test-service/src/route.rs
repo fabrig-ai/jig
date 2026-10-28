@@ -136,10 +136,8 @@ fn restart(engine: &mut Engine, step: core::RestartStep) {
             };
             crate::store::request(engine, jig_test_store::StoreOut::Restart { step, census });
         }
-        core::RestartStep::Sweep
-        | core::RestartStep::AdoptRuns
-        | core::RestartStep::SettleOutbox { .. }
-        | core::RestartStep::Open => {
+        core::RestartStep::Sweep => engine.events.push(root::Event::RestartDone(step)),
+        core::RestartStep::AdoptRuns | core::RestartStep::SettleOutbox { .. } | core::RestartStep::Open => {
             stop::invalid_restore(engine);
         }
     }
