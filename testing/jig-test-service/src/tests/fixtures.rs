@@ -188,6 +188,15 @@ pub fn memory_store(engine: &mut crate::Engine) {
 pub fn turn(service: &mut Service) {
     iterate(service, Time::from_nanos(1), Wall::from_nanos(1));
 }
+pub fn finish_start(service: &mut Service) {
+    for _ in 0_u32..64 {
+        turn(service);
+        if engine(service).store.component.mark_durable() {
+            return;
+        }
+    }
+    panic!("fixture start must commit its mark");
+}
 pub fn problem(document: &[u8]) -> jig_protocol_config::Problem {
     let found = crate::startup(document, &Files { entries: List::with_capacity(0) }, None, &seeds(), None, None)
         .err()
