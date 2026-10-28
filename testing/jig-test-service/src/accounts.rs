@@ -331,6 +331,22 @@ impl Accounts {
     }
     /// The domain's request: to the driver once it runs, held until then.
     pub fn request(&mut self, request: domain::Request) {
+        if self.closed {
+            return;
+        }
+        if let Phase::Loading { .. } = self.phase
+            && let domain::Request::Component(domain::ToComponent::Close) = &request
+        {
+            // No driver exists before the mark. Its owner has already answered
+            // callers at close; end its deferred work and report the same Closed.
+            self.phase = Phase::Running;
+            for _ in 0..self.early.len() {
+                let _unstarted = self.early.pop();
+            }
+            self.closed = true;
+            self.above.push(driver::Event::Closed);
+            return;
+        }
         match request {
             domain::Request::Component(_) | domain::Request::Signing(_) => {
                 self.early.push(request);
