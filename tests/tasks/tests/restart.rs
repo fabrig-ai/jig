@@ -313,10 +313,21 @@ fn dependency_progress_survives_restore_without_loading_historical_ends() {
     assert_eq!(w.results.len(), 3);
 }
 
+fn load_without_judgment(seed: u64, rows: &[Stored], env: &skein_lib::Env<jig_domain_tasks::Limits>) {
+    let mut domain = jig_tasks_world::domain(&env.limits, seed);
+    let mut out = skein_lib::Queue::with_capacity(jig_domain_tasks::max_out(&env.limits));
+    for record in rows {
+        jig_domain_tasks::step(&mut domain, env, Event::Restore { record: record.clone() }, &mut out);
+        assert_eq!(domain.stored_record(&record.key()), Some(record.clone()));
+    }
+    jig_domain_tasks::step(&mut domain, env, Event::Check, &mut out);
+    assert!(domain.checked());
+    assert!(out.is_empty(), "linking neither judges historical rules nor activates work: {out:?}");
+}
+
 #[test]
-fn restore_refuses_unrepresentable_eventual_funding_postings() {
-    use jig_domain_tasks::{Cause, Funder, Request, step};
-    use skein_lib::Queue;
+fn restore_loads_bounded_funding_without_judging_eventual_postings() {
+    use jig_domain_tasks::{Cause, Funder};
     let mut source = World::new(30, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[])]);
     source.claim(1, 1);
@@ -325,7 +336,7 @@ fn restore_refuses_unrepresentable_eventual_funding_postings() {
         End::Finished { result: TaskResult::Report { words: Box::new([1]) }, cancel_delegates: false },
         Cause::Priced { cumulative: 1 },
     );
-    let mut rows = source.records.values().cloned().collect::<Vec<_>>();
+    let mut rows = source.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
     for row in &mut rows {
         if let Stored::Ledger(ledger) = row
             && ledger.funder == (Funder::Period { project: 1, period: 0 })
@@ -337,13 +348,7 @@ fn restore_refuses_unrepresentable_eventual_funding_postings() {
             ledger.numbers.spent_below = u64::MAX;
         }
     }
-    let mut domain = jig_tasks_world::domain(&LIMITS, 30);
-    let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-    for record in rows {
-        step(&mut domain, &source.env, Event::Restore { record }, &mut out);
-    }
-    step(&mut domain, &source.env, Event::Check, &mut out);
-    assert!(std::iter::from_fn(|| out.pop()).any(|request| matches!(request, Request::RestoreRefused { .. })));
+    load_without_judgment(30, &rows, &source.env);
 }
 
 #[test]
@@ -363,13 +368,11 @@ fn bounded_unfinished_dependencies_load_without_subset_judgments() {
 }
 
 #[test]
-fn restore_refuses_a_missing_unfinished_live_dependency_before_activation() {
-    use jig_domain_tasks::{Request, step};
-    use skein_lib::Queue;
+fn restore_loads_the_committed_unfinished_subset_before_activation() {
     let mut source = World::new(32, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[]), task(2, &[1])]);
     for phase in [Phase::Waiting, Phase::Active(Active::Due), Phase::Active(Active::Preparing)] {
-        let mut rows = source.records.values().cloned().collect::<Vec<_>>();
+        let mut rows = source.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
         for row in &mut rows {
             if let Stored::Live(task) = row
                 && task.number == 2
@@ -378,18 +381,7 @@ fn restore_refuses_a_missing_unfinished_live_dependency_before_activation() {
                 task.phase = phase.clone();
             }
         }
-        let mut domain = jig_tasks_world::domain(&LIMITS, 32);
-        let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-        for record in rows {
-            step(&mut domain, &source.env, Event::Restore { record }, &mut out);
-        }
-        step(&mut domain, &source.env, Event::Check, &mut out);
-        let mut refused = false;
-        while let Some(request) = out.pop() {
-            assert!(!matches!(request, Request::Activate { .. } | Request::Adopt { .. }));
-            refused |= matches!(request, Request::RestoreRefused { .. });
-        }
-        assert!(refused, "corrupt unfinished subset refuses before activation");
+        load_without_judgment(32, &rows, &source.env);
     }
 }
 
@@ -433,12 +425,11 @@ fn historical_settled_live_and_ledger_states_load_without_judgment() {
 }
 
 #[test]
-fn restore_refuses_task_funding_outside_its_requester_ancestry() {
-    use jig_domain_tasks::{Funder, Request, step};
-    use skein_lib::Queue;
+fn restore_links_task_funding_without_judging_requester_ancestry() {
+    use jig_domain_tasks::Funder;
     let mut source = World::new(34, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[]), task(2, &[])]);
-    let mut rows = source.records.values().cloned().collect::<Vec<_>>();
+    let mut rows = source.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
     for row in &mut rows {
         match row {
             Stored::Live(task) if task.number == 1 => task.numbers.reserved = 100,
@@ -464,13 +455,7 @@ fn restore_refuses_task_funding_outside_its_requester_ancestry() {
             | Stored::PersonProposal(_) => {}
         }
     }
-    let mut domain = jig_tasks_world::domain(&LIMITS, 34);
-    let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-    for record in rows {
-        step(&mut domain, &source.env, Event::Restore { record }, &mut out);
-    }
-    step(&mut domain, &source.env, Event::Check, &mut out);
-    assert!(std::iter::from_fn(|| out.pop()).any(|request| matches!(request, Request::RestoreRefused { .. })));
+    load_without_judgment(34, &rows, &source.env);
 }
 
 #[test]
