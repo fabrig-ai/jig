@@ -238,6 +238,7 @@ fn a_refused_withdrawal_releases_its_written_answer_place() {
 #[test]
 fn closing_accounts_releases_the_unwritten_moves_answer_place() {
     let (mut world, _, source, _) = moving(WHOLE_MOVE);
+    world.skip_restart_oracle("this fixture deliberately closes the accounts child while leaving the root open");
     world.send(root::Event::Core(core::Event::Account(accounts::Event::Close)));
     // The request reaches the closed accounts child instead of failing people's capacity check.
     assert_eq!(retry(&mut world, source), Some(people::Reply::Again(people::Again::NotReady)));

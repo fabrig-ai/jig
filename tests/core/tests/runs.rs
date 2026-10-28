@@ -244,6 +244,7 @@ fn a_closed_windows_unread_tail_starts_fresh_without_counting() {
     f::restart(&mut world, f::AFTER);
     f::restart(&mut control, f::BEFORE);
     world.store.unread_transcript(f::proof(&world).task);
+    world.skip_restart_oracle("this fixture deliberately makes its committed transcript unreadable");
     world.say(87);
     control.say(87);
     f::fresh(&world);
@@ -710,6 +711,7 @@ fn a_transcript_read_as_unread_fails_the_run_and_the_next_starts_fresh() {
     park_chat(&mut world, 1);
     let task = current_window_proof(&world).task;
     world.store.unread_transcript(task);
+    world.skip_restart_oracle("this fixture deliberately makes its committed transcript unreadable");
     let assigned = world.assignments.len();
     world.say(89);
     assert_eq!(world.assignments.len(), assigned);
