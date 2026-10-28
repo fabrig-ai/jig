@@ -1,4 +1,4 @@
-use jig_domain_tasks::{self as tasks, Event, Executor, Party, PersonAddress, Refusal, Stored};
+use jig_domain_tasks::{self as tasks, Event, Executor, Party, PersonAddress, Stored};
 use jig_tasks_world::{LIMITS, World, task};
 use skein_lib::Queue;
 
@@ -62,17 +62,17 @@ fn batch(record: &mut Stored) -> &mut [tasks::New] {
     }
 }
 
-/// Core refuses this shape live (`Malformed::EndedBy`); restore refuses it because only a restored store can hold it.
+/// Admission checks the live request; restore trusts bounded committed member shapes.
 #[test]
-fn restoring_a_proposal_requires_its_open_members_shape() {
+fn restoring_a_proposal_preserves_its_bounded_open_members() {
     let rows = [
-        ("person", Executor::Person(PersonAddress::Person(PERSON)), true, false),
-        ("procedure", Executor::Procedure { connector: 1, code: 1 }, true, false),
-        ("no conversation", Executor::Agent { charter: 1 }, false, false),
-        ("agent conversation", Executor::Agent { charter: 1 }, true, true),
+        ("person", Executor::Person(PersonAddress::Person(PERSON)), true),
+        ("procedure", Executor::Procedure { connector: 1, code: 1 }, true),
+        ("no conversation", Executor::Agent { charter: 1 }, false),
+        ("agent conversation", Executor::Agent { charter: 1 }, true),
     ];
     for (original, supporting) in proposals() {
-        for (name, executor, conversation, accepted) in rows {
+        for (name, executor, conversation) in rows {
             let mut record = original.clone();
             for member in batch(&mut record) {
                 member.executor = executor;
@@ -97,27 +97,10 @@ fn restoring_a_proposal_requires_its_open_members_shape() {
                     saves.push(record);
                 }
             }
-            if accepted {
-                assert!(refusals.is_empty(), "{name}: {refusals:?}");
-                if let Stored::PersonProposal(row) = record {
-                    assert_eq!(domain.person_proposals().len(), 1, "{name}");
-                    assert_eq!(domain.person_proposal(PERSON, PROPOSAL), Some(*row), "{name}");
-                    assert!(domain.task(OWNER).is_none(), "{name}");
-                } else if let Stored::Live(row) = record {
-                    assert_eq!(domain.person_proposals().len(), 0, "{name}");
-                    assert_eq!(domain.task(OWNER).expect("restored owner").proposal, row.proposal, "{name}");
-                    assert!(domain.task(MEMBER).is_none(), "a proposal creates no member");
-                } else {
-                    panic!("proposal fixture")
-                }
-            } else {
-                assert_eq!(refusals, [Refusal::Restore], "{name}");
-                assert!(saves.is_empty(), "{name}");
-                assert!(domain.task(OWNER).is_none(), "{name}");
-                assert!(domain.task(MEMBER).is_none(), "{name}");
-                assert_eq!(domain.person_proposals().len(), 0, "{name}");
-                assert_eq!(domain.funding_records().len(), 0, "{name}");
-            }
+            assert!(refusals.is_empty(), "{name}: {refusals:?}");
+            assert!(saves.is_empty(), "{name}");
+            assert_eq!(domain.stored_record(&record.key()), Some(record), "{name}");
+            assert!(domain.task(MEMBER).is_none(), "a proposal creates no member");
         }
     }
 }
