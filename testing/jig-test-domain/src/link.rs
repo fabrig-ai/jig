@@ -483,6 +483,7 @@ pub(super) enum Work {
         call: core::SettledCall,
     },
     SwitchChecked,
+    Sweep,
     AdoptRestored,
     AdoptDone,
     WriterRead {
