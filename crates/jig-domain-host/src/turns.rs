@@ -9,7 +9,11 @@ use crate::boundary::Turn;
 use crate::limits::Limits;
 
 /// Parking drains retention without issuing another agent read credit.
-pub(crate) enum Mode { Live, Stopping, Parking }
+pub(crate) enum Mode {
+    Live,
+    Stopping,
+    Parking,
+}
 
 /// A turn's name on the engine link.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

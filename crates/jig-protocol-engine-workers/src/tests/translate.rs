@@ -193,7 +193,7 @@ fn down(record: jig_domain_host::LinkDown) -> translate::Down {
         | LinkDown::TurnKept { .. }
         | LinkDown::Acknowledge { .. }
         | LinkDown::Cancel { .. }
-                    | LinkDown::Park { .. } => translate::down(record, &[], Box::new([]), &codec()),
+        | LinkDown::Park { .. } => translate::down(record, &[], Box::new([]), &codec()),
     };
     translated.expect("complete output")
 }

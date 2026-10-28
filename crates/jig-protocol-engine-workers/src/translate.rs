@@ -540,9 +540,9 @@ pub(crate) fn down(
         host::LinkDown::Cancel { run, attempt } => Some(Down::Cancel(
             wire::Cancel::new(limits, wire::CancelParts { task: run.raw(), attempt: attempt.raw() }).ok()?,
         )),
-        host::LinkDown::Park { run, attempt } => Some(Down::Park(
-            wire::Park::new(limits, wire::ParkParts { run: run.raw(), attempt: attempt.raw() }).ok()?,
-        )),
+        host::LinkDown::Park { run, attempt } => {
+            Some(Down::Park(wire::Park::new(limits, wire::ParkParts { run: run.raw(), attempt: attempt.raw() }).ok()?))
+        }
         host::LinkDown::Grant { run, attempt, grant } => {
             let value = values.into_iter().next()??;
             let grant = grant_record(grant, value, limits)?;

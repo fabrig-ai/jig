@@ -523,18 +523,24 @@ pub(crate) fn park(domain: &mut Domain, run: Token, attempt: Token, out: &mut Qu
                 resend_park(entry, &domain.channels, out);
             }
         }
-        State::Cancelled { .. } | State::Crossed { .. } | State::Handed { .. }
-        | State::Acknowledged { .. } | State::Stray { .. } | State::Kept { .. }
-        | State::Fenced { .. } | State::Closed => {}
+        State::Cancelled { .. }
+        | State::Crossed { .. }
+        | State::Handed { .. }
+        | State::Acknowledged { .. }
+        | State::Stray { .. }
+        | State::Kept { .. }
+        | State::Fenced { .. }
+        | State::Closed => {}
     }
 }
 
 fn resend_park(entry: &Attempt, channels: &Slab<Channel>, out: &mut Queue<Request>) {
-    if entry.parking {
-        if let State::Claimed { at: Where::On(channel), .. } = entry.state {
-            let channel = channels.get(channel).expect("claimed channel is in contact").token;
-            out.push(Request::Park { channel, run: entry.run, attempt: entry.token });
-        }
+    if !entry.parking {
+        return;
+    }
+    if let State::Claimed { at: Where::On(channel), .. } = entry.state {
+        let channel = channels.get(channel).expect("claimed channel is in contact").token;
+        out.push(Request::Park { channel, run: entry.run, attempt: entry.token });
     }
 }
 

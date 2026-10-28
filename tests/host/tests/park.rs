@@ -39,7 +39,7 @@ fn a_waiting_run_parks_once_its_turns_are_kept() {
     world.commit_turn(1);
     let answer = world.answer().expect("all retained turns committed");
     assert!(matches!(answer.ending, Ending::Parked { .. }));
-    assert_eq!((answer.turns, answer.spent), (2, 51));
+    assert_eq!((answer.turns, answer.spent), (2, 34));
 }
 
 #[test]
@@ -71,7 +71,11 @@ fn a_run_that_finishes_before_its_park_keeps_its_ending() {
         world.hold_stop();
         world.park();
         world.turn(1, b"last");
-        if let Some(failure) = failure { world.fail(1, failure); } else { world.finish(1, false); }
+        if let Some(failure) = failure {
+            world.fail(1, failure);
+        } else {
+            world.finish(1, false);
+        }
         world.gone();
         world.commit_turn(1);
         let ending = &world.answer().expect("run's own ending").ending;
@@ -86,8 +90,10 @@ fn a_cancel_after_a_park_cancels_at_once() {
     world.park();
     world.cancel();
     assert_eq!(world.stats().stops, 1);
-    assert!(matches!(world.answer().expect("immediate cancellation").ending,
-        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
+    assert!(matches!(
+        world.answer().expect("immediate cancellation").ending,
+        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }
+    ));
 }
 
 #[test]
@@ -97,8 +103,10 @@ fn a_cancel_after_the_selected_turn_does_not_wait_for_commit() {
     world.park();
     world.turn(1, b"selected");
     world.cancel();
-    assert!(matches!(world.answer().expect("cancel releases commit wait").ending,
-        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
+    assert!(matches!(
+        world.answer().expect("cancel releases commit wait").ending,
+        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }
+    ));
 }
 
 #[test]
@@ -126,8 +134,10 @@ fn a_park_after_a_cancel_changes_nothing() {
     world.cancel();
     world.park();
     world.gone();
-    assert!(matches!(world.answer().expect("cancel wins").ending,
-        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
+    assert!(matches!(
+        world.answer().expect("cancel wins").ending,
+        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }
+    ));
 }
 
 #[test]
@@ -162,13 +172,13 @@ fn a_runs_own_park_and_accounting_win_while_it_stops() {
     world.turn(1, b"one");
     world.park();
     world.turn(2, b"selected");
-    world.finish(2, true);
+    world.finish_with_spend(2, true, 40);
     world.gone();
     world.commit_turn(1);
     world.commit_turn(2);
     let answer = world.answer().expect("own park");
     assert!(matches!(answer.ending, Ending::Parked { .. }));
-    assert_eq!(answer.spent, 34, "the agent's last report replaces the turn tally of 51");
+    assert_eq!(answer.spent, 40, "the agent's last report replaces its previous cumulative report of 34");
 }
 
 #[test]
@@ -182,6 +192,8 @@ fn a_cancel_while_the_park_saves_keeps_the_cancellation_ending() {
     assert_eq!(world.stats().saves, 1);
     world.cancel();
     world.saved();
-    assert!(matches!(world.answer().expect("saved cancellation").ending,
-        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
+    assert!(matches!(
+        world.answer().expect("saved cancellation").ending,
+        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }
+    ));
 }

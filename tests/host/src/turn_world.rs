@@ -377,15 +377,22 @@ impl World {
             finish_requested: false,
         }));
     }
-    pub fn park(&mut self) { self.park_attempt(ATTEMPT); }
+    pub fn park(&mut self) {
+        self.park_attempt(ATTEMPT);
+    }
     pub fn park_attempt(&mut self, attempt: Token) {
         self.send(Event::Down(LinkDown::Park { run: RUN, attempt }));
     }
     pub fn cancel(&mut self) {
         self.send(Event::Down(LinkDown::Cancel { run: RUN, attempt: ATTEMPT }));
     }
-    pub fn yield_run(&mut self) { self.send(Event::Yielded { owner: self.owner() }); }
-    pub fn starting(&mut self) { self.start_waits = true; self.assign(false); }
+    pub fn yield_run(&mut self) {
+        self.send(Event::Yielded { owner: self.owner() });
+    }
+    pub fn starting(&mut self) {
+        self.start_waits = true;
+        self.assign(false);
+    }
     pub fn started(&mut self) {
         self.start_waits = false;
         self.send(Event::Started { owner: self.owner(), agent: AGENT });
@@ -481,14 +488,12 @@ impl World {
     }
 
     pub fn finish(&mut self, turns: u32, parked: bool) {
+        self.finish_with_spend(turns, parked, u64::from(turns) * 17);
+    }
+
+    pub fn finish_with_spend(&mut self, turns: u32, parked: bool, spent: u64) {
         let finish = if parked { Finish::Parked } else { Finish::Ended { outcome: Box::from(&b"done"[..]) } };
-        self.send(Event::Finished {
-            read: self.last_read,
-            owner: self.owner.expect("assigned"),
-            turns,
-            spent: u64::from(turns) * 17,
-            finish,
-        });
+        self.send(Event::Finished { read: self.last_read, owner: self.owner.expect("assigned"), turns, spent, finish });
     }
     pub fn fail(&mut self, turns: u32, failure: host::RunFailure) {
         self.send(Event::Finished {
@@ -513,7 +518,6 @@ impl World {
         self.save_pending = false;
         self.send(Event::Saved { owner: self.owner(), at: Some(Token::new(8)) });
     }
-
 
     pub fn gone(&mut self) {
         assert!(self.stop_pending && self.agent_live);
@@ -742,7 +746,9 @@ impl World {
             Request::Abort { owner } => {
                 self.space_live = false;
                 self.events.push_back(Event::Unprepared {
-                    owner, failure: host::Preparation::Transient, detail: Box::new([]),
+                    owner,
+                    failure: host::Preparation::Transient,
+                    detail: Box::new([]),
                 });
             }
             Request::CancelRelay { .. } => {
@@ -779,7 +785,9 @@ impl World {
         self.agent_live = true;
         self.reading = true;
         self.started_state = Some(StartedState { live, identity, messages, activation, turns, answered });
-        if !self.start_waits { self.events.push_back(Event::Started { owner, agent: AGENT }); }
+        if !self.start_waits {
+            self.events.push_back(Event::Started { owner, agent: AGENT });
+        }
     }
 
     fn receive_turn(&mut self, turn: Turn) {
@@ -827,7 +835,9 @@ impl World {
             }
         }
         while let Some(fact) = self.host.pop_fact() {
-            if matches!(fact, host::Fact::Failed { .. }) { self.stats.failures += 1; }
+            if matches!(fact, host::Fact::Failed { .. }) {
+                self.stats.failures += 1;
+            }
         }
     }
 }

@@ -567,17 +567,22 @@ fn parking_every_slot_stays_within_the_hosts_memory_bound() {
     let mut host = Measured::new(LIMITS);
     let mut owners = Vec::new();
     for run in 0..u64::from(LIMITS.slots) {
-        let [Asked::Prepare { owner }] = host.step(jig_host_world::fixtures::assign(assignment(run, &LIMITS)))[..] else {
+        let [Asked::Prepare { owner }] = host.step(jig_host_world::fixtures::assign(assignment(run, &LIMITS)))[..]
+        else {
             panic!("admitted");
         };
         owners.push(owner);
     }
     for (run, owner) in owners.into_iter().enumerate() {
         let run = u64::try_from(run).expect("small fixture");
-        assert_eq!(host.step(Event::Down(LinkDown::Park { run: Token::new(run), attempt: Token::new(run + 1000) })).len(), 1);
-        assert!(matches!(&host.step(Event::Unprepared {
-            owner, failure: Preparation::Transient, detail: Box::new([]),
-        })[..], [Asked::RunEnding { answer: Ending::Parked { .. } }]));
+        assert_eq!(
+            host.step(Event::Down(LinkDown::Park { run: Token::new(run), attempt: Token::new(run + 1000) })).len(),
+            1
+        );
+        assert!(matches!(
+            &host.step(Event::Unprepared { owner, failure: Preparation::Transient, detail: Box::new([]) })[..],
+            [Asked::RunEnding { answer: Ending::Parked { .. } }]
+        ));
     }
     host.acknowledge_answers();
 }

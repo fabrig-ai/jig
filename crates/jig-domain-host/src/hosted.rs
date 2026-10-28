@@ -339,20 +339,30 @@ pub(crate) fn cancel(domain: &mut Domain, env: &Env<Limits>, run: Token, attempt
 pub(crate) fn park(domain: &mut Domain, env: &Env<Limits>, run: Token, attempt: Token, out: &mut Queue<Request>) {
     let Some(id) = fenced(&domain.names, &domain.hosted, run, attempt) else { return };
     let entry = domain.hosted.get_mut(id).expect("fenced run");
-    if entry.parking { return; }
+    if entry.parking {
+        return;
+    }
     let active = match entry.state {
         State::Active { .. } => true,
         State::Preparing { .. } | State::Starting { .. } | State::Waiting { .. } => false,
-        State::Cancelling { .. } | State::Unwanted { .. } | State::Stopping { .. }
-        | State::Saving { .. } | State::Closed => return,
+        State::Cancelling { .. }
+        | State::Unwanted { .. }
+        | State::Stopping { .. }
+        | State::Saving { .. }
+        | State::Closed => return,
     };
     entry.parking = true;
-    if !active { stop(domain, env, id, Reason::Engine, out); }
+    if !active {
+        stop(domain, env, id, Reason::Engine, out);
+    }
 }
 
 fn stopped(entry: &Hosted, reason: Reason) -> RunEnding {
-    if entry.parking { RunEnding::Parking }
-    else { RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) } }
+    if entry.parking {
+        RunEnding::Parking
+    } else {
+        RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) }
+    }
 }
 
 pub(crate) fn is_hosting(domain: &Domain, run: Token, attempt: Token) -> bool {
@@ -699,7 +709,9 @@ pub(crate) fn yielded(domain: &mut Domain, env: &Env<Limits>, owner: Token, out:
         | State::Saving { .. }
         | State::Closed => unreachable!("only an agent that has started and not gone yields"),
     };
-    if entry.parking { stop(domain, env, id, Reason::Engine, out); }
+    if entry.parking {
+        stop(domain, env, id, Reason::Engine, out);
+    }
     conclude(domain, id, out);
 }
 
@@ -948,8 +960,12 @@ fn conclude(domain: &mut Domain, id: Id<Hosted>, out: &mut Queue<Request>) {
     *refusals_lost = refusals_lost.saturating_add(entry.refusals.lost);
     entry.refusals.lost = 0;
     let settled = match &entry.state {
-        State::Stopping { gone, .. } => *gone && entry.delivery.is_none() && entry.relays.is_empty()
-            && (!entry.parking || !turns.has_run(entry.run, entry.attempt)),
+        State::Stopping { gone, .. } => {
+            *gone
+                && entry.delivery.is_none()
+                && entry.relays.is_empty()
+                && (!entry.parking || !turns.has_run(entry.run, entry.attempt))
+        }
         State::Preparing { .. }
         | State::Cancelling { .. }
         | State::Starting { .. }
@@ -1348,7 +1364,7 @@ pub(crate) fn turned(
     } else {
         entry.runtime.turns = turn.turn;
         entry.runtime.read = turn.read;
-        entry.runtime.spent = entry.runtime.spent.saturating_add(turn.spent);
+        entry.runtime.spent = turn.spent;
         true
     };
     if valid {
@@ -1357,9 +1373,16 @@ pub(crate) fn turned(
         domain.turns.retain(agent, run, attempt, turn);
         let parking = entry.parking;
         let stopping = matches!(entry.state, State::Stopping { .. });
-        if parking && !stopping { stop(domain, env, id, Reason::Engine, out); }
-        let mode = if parking { crate::turns::Mode::Parking }
-            else if stopping { crate::turns::Mode::Stopping } else { crate::turns::Mode::Live };
+        if parking && !stopping {
+            stop(domain, env, id, Reason::Engine, out);
+        }
+        let mode = if parking {
+            crate::turns::Mode::Parking
+        } else if stopping {
+            crate::turns::Mode::Stopping
+        } else {
+            crate::turns::Mode::Live
+        };
         domain.turns.admit(run, attempt, mode, &env.limits, out);
     } else {
         faulted(domain, env, owner, AgentFailure::Rules, out);
@@ -1377,10 +1400,15 @@ pub(crate) fn acknowledge_turn(
 ) {
     domain.turns.acknowledge(run, attempt, turn);
     let id = fenced(&domain.names, &domain.hosted, run, attempt);
-    let parking = match id { Some(id) => domain.hosted.get(id).expect("fenced run").parking, None => false };
+    let parking = match id {
+        Some(id) => domain.hosted.get(id).expect("fenced run").parking,
+        None => false,
+    };
     let mode = if parking { crate::turns::Mode::Parking } else { crate::turns::Mode::Live };
     domain.turns.admit(run, attempt, mode, &env.limits, out);
-    if let Some(id) = id { conclude(domain, id, out); }
+    if let Some(id) = id {
+        conclude(domain, id, out);
+    }
 }
 
 #[expect(clippy::too_many_arguments, reason = "one last word carries its fence and accounting")]

@@ -33,8 +33,12 @@ impl World {
         while let Some(request) = self.out.pop() {
             if let Request::Sources { channel, sources } = request {
                 assert!(sources.is_empty());
-                fleet::step(&mut self.domain, &self.env,
-                    Event::Logins { channel, logins: Box::new([]) }, &mut self.out);
+                fleet::step(
+                    &mut self.domain,
+                    &self.env,
+                    Event::Logins { channel, logins: Box::new([]) },
+                    &mut self.out,
+                );
             } else {
                 requests.push(request);
             }
@@ -45,20 +49,30 @@ impl World {
     }
 
     fn start(&mut self) {
-        assert!(self.step(Event::Start {
-            reply_to: ReplyTo::new(ATTEMPT), run: RUN, attempt: ATTEMPT,
-            workstream: RUN.raw(), kinds: fleet::Kinds::Workers,
-            version: fleet::Version { charter: 1, revision: 1 }, placement: None,
-            assignment: fleet::Assignment { turns: Token::new(0), answered: Token::new(0) },
-            grants: Box::new([]),
-        }).is_empty());
+        assert!(
+            self.step(Event::Start {
+                reply_to: ReplyTo::new(ATTEMPT),
+                run: RUN,
+                attempt: ATTEMPT,
+                workstream: RUN.raw(),
+                kinds: fleet::Kinds::Workers,
+                version: fleet::Version { charter: 1, revision: 1 },
+                placement: None,
+                assignment: fleet::Assignment { turns: Token::new(0), answered: Token::new(0) },
+                grants: Box::new([]),
+            })
+            .is_empty()
+        );
     }
 
     fn hello(&mut self, channel: Token, phase: Option<Phase>) -> Vec<Request> {
         self.step(Event::Hello {
-            worker: 0, channel,
+            worker: 0,
+            channel,
             hello: fleet::Hello {
-                slots: 1, stop_bound: skein_lib::Duration::ZERO, workstreams: Box::new([]),
+                slots: 1,
+                stop_bound: skein_lib::Duration::ZERO,
+                workstreams: Box::new([]),
                 bounds: jig_fleet_world::fixtures::bounds(),
                 hosting: phase.map(|phase| Hosted { run: RUN, attempt: ATTEMPT, phase }).into_iter().collect(),
             },
@@ -132,8 +146,11 @@ fn a_park_after_the_answer_changes_nothing() {
     let mut world = World::placed();
     world.park();
     let answered = world.step(Event::Answer {
-        channel: CHANNEL, run: RUN, attempt: ATTEMPT,
-        answer: fleet::Answer::Parked, payload: Token::new(99),
+        channel: CHANNEL,
+        run: RUN,
+        attempt: ATTEMPT,
+        answer: fleet::Answer::Parked,
+        payload: Token::new(99),
     });
     assert!(matches!(&answered[..], [Request::Answered { answer: fleet::Answer::Parked, .. }]));
     assert!(world.park().is_empty());
