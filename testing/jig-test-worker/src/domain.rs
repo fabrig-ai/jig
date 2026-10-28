@@ -10,6 +10,10 @@ use jig_domain_host as host;
 use skein_lib::{Env, Map, Queue, Time, Token};
 use smith_host_domain as smith;
 
+/// A hand-off goes to the hub or a capability, back, and at most once
+/// more back and forth (the worker's design, 3): rounds enough for that.
+const HAND_OFF_ROUNDS: u32 = 4;
+
 #[derive(Debug)]
 pub(crate) struct Call {
     owner: Token,
@@ -225,16 +229,17 @@ fn decoded(domain: &mut Domain, env: &Env<Limits>, owner: Token, start: Result<B
 }
 
 fn route(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
-    for _ in 0..crate::max_out(&env.limits) {
-        if let Some(request) = domain.hub_out.pop() {
+    for _ in 0..HAND_OFF_ROUNDS {
+        for _ in 0..domain.hub_out.len() {
+            let request = domain.hub_out.pop().expect("hub output count");
             down(domain, env, request, out);
-        } else if let Some(request) = domain.agent_out.pop() {
+        }
+        for _ in 0..domain.agent_out.len() {
+            let request = domain.agent_out.pop().expect("agent output count");
             match request {
                 smith::Output::Process(request) => out.push(Request::Process(Box::new(request))),
                 smith::Output::Parent(request) => up(domain, env, request, out),
             }
-        } else {
-            break;
         }
     }
     for _ in 0..env.limits.hub.told {
