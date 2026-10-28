@@ -178,8 +178,6 @@ pub enum Output {
     Agent(host::ToAgent),
     /// Feed this released continuation back as an event.
     ToChild(Released),
-    /// Admission failed before a child changed; the sender retains its input.
-    Busy,
     /// A failed journal commit or refused restart stopped this engine.
     Stop,
 }

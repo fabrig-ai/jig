@@ -1,5 +1,6 @@
 //! Copy this entry-point shape. Every child hand-off belongs to the admitted
-//! decision; no child receives an event before its whole route fits (domain/root.md, 3–4).
+//! decision, and its synchronous route finishes before the next entrance
+//! (domain/root.md, 3–4; skein's draft `dynamic-memory.md`, 4.6).
 use crate::boundary::Payload;
 use crate::{Event, Limits, Output, Record, Released, Store, Write};
 use alloc::boxed::Box;
@@ -92,8 +93,6 @@ impl Domain {
     /// # Errors
     /// The core's configured workers exceed the priced membership bounds.
     pub fn new(config: Config, limits: &Limits) -> Result<Self, core::Problem> {
-        let room = crate::limits::room(limits).expect("finite root route");
-        assert!(room.writes <= limits.journal.writes && room.held <= limits.journal.held, "admit the complete route");
         assert!(limits.routes > 0 && limits.journal.now > 0, "nonempty route and door");
         assert!(limits.host.slots == limits.core.fleet.engine_slots, "engine slot agreement");
         assert!(
@@ -157,7 +156,7 @@ impl Domain {
                 .with_leads(&limits.observability, config.lead_templates),
             infrastructure: infrastructure::Domain::new(config.backend, &limits.infrastructure),
             host: host::Domain::new(&limits.host),
-            journal: Journal::new(&limits.journal),
+            journal: Journal::uncapped(limits.journal.release, 0),
             charter_endpoints: config.charter_endpoints,
             assignments: Map::with_capacity(limits.core.tasks.tasks),
             briefs: Map::with_capacity(limits.core.tasks.tasks),
@@ -277,34 +276,11 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
 }
 
 fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
-    let room = match &first {
-        // A read only keeps or consumes a volatile callback. It needs no
-        // durable slot, including while a commit is in flight.
-        Work::Event(
-            Event::ConnectorRead { .. }
-            | Event::Core(core::Event::Fleet(fleet::Event::Relay { call: fleet::Call { writes: false, .. }, .. }))
-            | Event::Host(host::Event::Called { ask: host::Ask::Relay { writes: false, .. }, .. })
-            | Event::Observability(
-                observability::Event::Read { .. }
-                | observability::Event::System(observability::SystemEvent::ReadDone { .. }),
-            ),
-        ) => skein_lib::JournalRoom { writes: 0, held: 0 },
-        Work::Event(_)
-        | Work::Core(_)
-        | Work::Finish
-        | Work::ResumeFleet
-        | Work::Infrastructure(_)
-        | Work::Observability(_)
-        | Work::Host(_)
-        | Work::Restart(_)
-        | Work::SwitchChecked
-        | Work::AdoptClaims
-        | Work::AdoptDone => crate::limits::room(&env.limits).expect("validated route room"),
-    };
-    let Some(mut decision) = domain.journal.decision(&room) else {
-        let _accepted = domain.journal.now(Output::Busy);
+    // A stopped journal takes no decision and moves no child.
+    if domain.journal.stopped() {
         return;
-    };
+    }
+    let mut decision = domain.journal.decide();
     domain.wrote = false;
     let finish_only = match &first {
         Work::Finish => true,
@@ -355,7 +331,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
     domain.journal.accept(decision);
     if let Some(commits) = domain.restored_commits.take() {
         assert!(domain.journal.idle(), "the deployment header is the first cold-start row");
-        domain.journal = Journal::from_durable(&env.limits.journal, commits);
+        domain.journal = Journal::uncapped(env.limits.journal.release, commits);
     }
 }
 
@@ -443,10 +419,10 @@ fn timers_due(domain: &Domain, env: &Env<Limits>) -> bool {
 
 pub(crate) fn write(domain: &mut Domain, decision: &mut Decision<Write, Output>, write: Write) {
     domain.wrote = true;
-    decision.write(write).expect("reserved whole-route writes");
+    decision.push_write(write);
 }
 pub(crate) fn held(decision: &mut Decision<Write, Output>, value: Output) {
-    decision.hold(value).expect("reserved whole-route outputs");
+    decision.push_held(value);
 }
 pub(crate) fn child(decision: &mut Decision<Write, Output>, value: Released) {
     held(decision, Output::ToChild(value));

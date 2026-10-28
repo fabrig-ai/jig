@@ -54,6 +54,7 @@ impl Driver {
         if let Some(commits) = commits {
             limits.journal.commits = commits;
         }
+        limits.watermark = limits.journal.commits;
         let rows = jig_core_world::fixtures::account_rows(&configuration.core.settings.llm_providers);
         let seeded = jig_core_world::fixtures::seeded_project_rows(&configuration.core);
         let mut world = Self {
@@ -167,18 +168,9 @@ impl Driver {
         self.collect();
     }
 
-    // Phase 1: Event is not Clone. Busy has already consumed it, so count and
-    // drop the refusal here; even send_retaining cannot recover that ownership.
-    // Only this seam changes when the root gains its ownership-returning entrance.
-    #[expect(clippy::result_large_err, reason = "the admission seam returns the original event in phase 2")]
+    #[expect(clippy::result_large_err, reason = "the service admission boundary returns the original event by value")]
     fn offer(&mut self, event: root::Event) -> Result<(), root::Event> {
-        root::step(&mut self.domain, &self.env, event);
-        self.collect();
-        if matches!(self.released.last(), Some(root::Output::Busy)) {
-            self.released.pop();
-            self.returned += 1;
-        }
-        Ok(())
+        root::try_step(&mut self.domain, &self.env, event)
     }
 
     /// Release once; store submissions wait, child callbacks join the input tail.
@@ -238,7 +230,6 @@ impl Driver {
                 | root::Output::Read { .. }
                 | root::Output::Agent(_)
                 | root::Output::ProjectMade { .. }
-                | root::Output::Busy
                 | root::Output::Stop) => self.released.push(other),
             }
         }

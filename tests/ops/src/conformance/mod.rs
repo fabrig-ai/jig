@@ -343,8 +343,7 @@ impl Application for Ops {
                 | root::Output::Read { .. }
                 | root::Output::Agent(_)
                 | root::Output::ToChild(_)
-                | root::Output::ProjectMade { .. }
-                | root::Output::Busy) => outputs.push(Output::Deliver(Delivery::Root(Box::new(other)))),
+                | root::Output::ProjectMade { .. }) => outputs.push(Output::Deliver(Delivery::Root(Box::new(other)))),
             }
         }
         outputs
@@ -735,8 +734,7 @@ impl Application for Ops {
             | root::Output::Core(_)
             | root::Output::Now(_)
             | root::Output::CoreLoad(_)
-            | root::Output::ProjectMade { .. }
-            | root::Output::Busy => Vec::new(),
+            | root::Output::ProjectMade { .. } => Vec::new(),
             root::Output::Agent(request) => protocol::agent(peers, request),
             root::Output::Commit { .. } | root::Output::Stop => unreachable!("harness consumed commit/stop"),
         }

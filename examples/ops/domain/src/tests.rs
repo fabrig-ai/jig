@@ -1,6 +1,6 @@
 //! Entry-point checks for the reference journal and routes.
 mod host_tools;
-use crate::{Config, Domain, Event, Limits, Output, Released, Store, release, step};
+use crate::{Config, Domain, Event, Limits, Output, Released, Store, release, step, try_step};
 use alloc::boxed::Box;
 use jig_domain_accounts as accounts;
 use jig_domain_core as core;
@@ -46,6 +46,7 @@ fn fixture_with_commits(commits: u32) -> (Domain, Env<Limits>) {
         charter: smith_charter::v4::CEILINGS,
         endpoints: 1,
         journal: JournalLimits { commits, writes: 20000, held: 20000, now: 128, release: 128 },
+        watermark: commits,
         routes: 256,
     };
     let mut config = Config {
@@ -89,26 +90,63 @@ fn name(task: u64) -> Event {
 
 #[test]
 fn admission_precedes_a_connectors_change_and_its_outputs_wait_for_the_commit() {
+    const FIRST_COMMIT: u64 = 1;
+    const RETRY_COMMIT: u64 = 2;
+    const SUBSCRIBER: u64 = 2;
+    const ONCE: usize = 1;
     let (mut domain, env) = fixture();
-    step(&mut domain, &env, name(1));
+    try_step(&mut domain, &env, name(1)).expect("first decision enters");
     let first = take(&mut domain, &env);
     match first.as_ref() {
-        [Output::Commit { number: 1, .. }] => {}
+        [Output::Commit { number: FIRST_COMMIT, .. }] => {}
         other => panic!("one commit: {other:?}"),
     }
-    step(&mut domain, &env, name(2));
-    let denied = take(&mut domain, &env);
-    match denied.as_ref() {
-        [Output::Busy] => {}
-        other => panic!("busy: {other:?}"),
-    }
-    step(&mut domain, &env, Event::Store(Store::Committed { number: 1, fill: 0 }));
+    // An independent subscription starts new work, rather than injecting a
+    // connector's Names continuation as the rejected probe.
+    let event = Event::Observability(observability::Event::Subscribe {
+        task: SUBSCRIBER,
+        topic: observability::Topic::Alerts(jig_ops_world::service()),
+        wake_at: 5,
+        keep_at: 1,
+    });
+    let event = try_step(&mut domain, &env, event).expect_err("new work waits at the watermark");
+    let Event::Observability(observability::Event::Subscribe { task, topic, .. }) = &event else {
+        panic!("the caller retains its original subscription")
+    };
+    assert_eq!(*task, SUBSCRIBER);
+    assert_eq!(*topic, observability::Topic::Alerts(jig_ops_world::service()));
+    assert!(take(&mut domain, &env).is_empty(), "refusal changes no child and emits no output");
+    try_step(&mut domain, &env, Event::Store(Store::Committed { number: FIRST_COMMIT, fill: 0 }))
+        .expect("commit completion enters at the watermark");
     take(&mut domain, &env);
-    step(&mut domain, &env, name(2));
+    try_step(&mut domain, &env, event).expect("the same owned input enters after drain");
     let retry = take(&mut domain, &env);
-    let Output::Commit { number, mut writes } = retry.into_iter().next().unwrap() else { panic!("retry commits") };
-    assert_eq!(number, 2);
-    assert!(writes.pop().is_some(), "the refused event is admitted once retried");
+    let [Output::Commit { number, writes }] = retry.as_ref() else { panic!("retry commits before any system output") };
+    assert_eq!(*number, RETRY_COMMIT);
+    let mut subscriptions = 0_usize;
+    for write in writes {
+        if let crate::Write::Save(crate::Record::Observability(observability::Record::Subscription { task, .. })) =
+            write
+            && *task == SUBSCRIBER
+        {
+            subscriptions = subscriptions.checked_add(1).expect("one subscription record");
+        }
+    }
+    assert_eq!(subscriptions, ONCE, "the refused event is admitted exactly once when retried");
+    assert!(!writes.is_empty(), "the retried decision retains its writes");
+}
+
+fn connector_read(token: Token) -> Event {
+    const READ_BYTES: u32 = 128;
+    Event::Observability(observability::Event::Read {
+        token,
+        read: observability::Read::Logs {
+            service: jig_ops_world::service(),
+            window: observability::Window { from: 0, through: 1 },
+            filter: Box::new([]),
+            max_bytes: READ_BYTES,
+        },
+    })
 }
 
 #[test]
@@ -134,57 +172,55 @@ fn a_failed_commit_stops_the_reference_root_before_held_system_requests_leave() 
         other => panic!("stop: {other:?}"),
     }
     assert!(take(&mut domain, &env).is_empty());
+    // Even an always-taken read must stop before touching a child; routing it
+    // would attempt to use the stopped journal's door.
+    try_step(&mut domain, &env, connector_read(Token::new(92))).expect("completion class still enters");
+    assert!(try_step(&mut domain, &env, name(2)).is_err(), "new work is handed back after stop");
+    assert!(take(&mut domain, &env).is_empty(), "a stopped journal moves no child");
 }
 
 #[test]
 fn a_connector_read_answer_uses_the_door_and_makes_no_commit() {
+    const READ: Token = Token::new(91);
+    const INITIAL_COMMIT: u64 = 1;
+    const COMMIT: u64 = 2;
     let (mut domain, env) = fixture();
-    step(&mut domain, &env, name(1));
+    // Persist the fixture's initially dirty deployment counters first.
+    try_step(&mut domain, &env, name(1)).expect("initial deployment write");
     take(&mut domain, &env);
-    step(&mut domain, &env, Event::Store(Store::Committed { number: 1, fill: 0 }));
+    try_step(&mut domain, &env, Event::Store(Store::Committed { number: INITIAL_COMMIT, fill: 0 }))
+        .expect("initial deployment durability");
     take(&mut domain, &env);
-    step(&mut domain, &env, name(2));
-    match take(&mut domain, &env).as_ref() {
-        [Output::Commit { number: 2, .. }] => {}
-        other => panic!("unrelated pending commit: {other:?}"),
-    }
-    step(
-        &mut domain,
-        &env,
-        Event::Observability(observability::Event::Read {
-            token: Token::new(91),
-            read: observability::Read::Logs {
-                service: jig_ops_world::service(),
-                window: observability::Window { from: 0, through: 1 },
-                filter: Box::new([]),
-                max_bytes: 128,
-            },
-        }),
-    );
-    // Both the request and its returned bytes use the door.
+    // Admit the request before the unrelated write fills the backlog.
+    try_step(&mut domain, &env, connector_read(READ)).expect("admit read request");
     match take(&mut domain, &env).as_ref() {
         [Output::Observability(observability::SystemRequest::Read { .. })] => {}
-        other => panic!("read leaves while the unrelated commit is in flight: {other:?}"),
+        other => panic!("read request uses the door: {other:?}"),
     }
-    step(
+    try_step(&mut domain, &env, name(2)).expect("unrelated write enters");
+    match take(&mut domain, &env).as_ref() {
+        [Output::Commit { number: COMMIT, .. }] => {}
+        other => panic!("unrelated pending commit: {other:?}"),
+    }
+    try_step(
         &mut domain,
         &env,
         Event::Observability(observability::Event::System(observability::SystemEvent::ReadDone {
-            token: Token::new(91),
+            token: READ,
             bytes: Box::from(&b"log bytes"[..]),
         })),
-    );
+    )
+    .expect("the admitted read's completion enters under pressure");
     match take(&mut domain, &env).as_ref() {
         [Output::Read { owner, bytes }] => {
-            assert_eq!(*owner, Token::new(91));
+            assert_eq!(*owner, READ);
             assert_eq!(bytes.as_ref(), b"log bytes");
         }
-        other => panic!("read answer: {other:?}"),
+        other => panic!("read answer uses the door without another commit: {other:?}"),
     }
 }
 
 #[test]
-#[expect(clippy::too_many_lines, reason = "one cold-start story checks every output through the commit barrier")]
 fn cold_restart_loads_every_child_before_opening_decisions() {
     let (mut original, env) = fixture();
     step(&mut original, &env, name(1));
@@ -220,7 +256,6 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
             | Output::Agent(_)
             | Output::ToChild(_)
             | Output::ProjectMade { .. }
-            | Output::Busy
             | Output::Stop => panic!("one initial commit"),
         }
     }
@@ -269,7 +304,6 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
                 | Output::Read { .. }
                 | Output::Agent(_)
                 | Output::ProjectMade { .. }
-                | Output::Busy
                 | Output::Stop) => panic!("empty restart has no other work: {other:?}"),
             }
         }
@@ -333,7 +367,6 @@ fn settle(domain: &mut Domain, env: &Env<Limits>) -> Box<[Output]> {
                 | Output::Read { .. }
                 | Output::Agent(_)
                 | Output::ProjectMade { .. }
-                | Output::Busy
                 | Output::Stop) => seen.push(other).unwrap(),
             }
         }
@@ -416,7 +449,6 @@ fn started_chat() -> (Domain, Env<Limits>, Token) {
             | Output::Agent(_)
             | Output::ToChild(_)
             | Output::ProjectMade { .. }
-            | Output::Busy
             | Output::Stop => {}
         }
     }
@@ -454,7 +486,6 @@ fn started_chat() -> (Domain, Env<Limits>, Token) {
             | Output::Read { .. }
             | Output::ToChild(_)
             | Output::ProjectMade { .. }
-            | Output::Busy
             | Output::Stop => {}
         }
     }
@@ -593,7 +624,6 @@ fn connector_documents_and_reads_share_the_last_connector_commit_barrier() {
             | Output::Agent(_)
             | Output::ToChild(_)
             | Output::ProjectMade { .. }
-            | Output::Busy
             | Output::Stop => {}
         }
     }

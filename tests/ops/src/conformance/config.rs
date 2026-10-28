@@ -57,6 +57,7 @@ pub fn root_for(seed: u64, environment_chat: bool) -> (Config, Limits) {
     core_limits.brief.brief_bytes = 8192;
     core_limits.brief.read_bytes = 8192;
     core_limits.call_answer_bytes = 1024;
+    let journal = JournalLimits { commits: 4, writes: 20000, held: 20000, now: 128, release: 128 };
     let mut limits = Limits {
         core: core_limits,
         infrastructure: crate::infrastructure_limits(),
@@ -85,7 +86,8 @@ pub fn root_for(seed: u64, environment_chat: bool) -> (Config, Limits) {
         },
         charter: smith_charter::v4::CEILINGS,
         endpoints: 1,
-        journal: JournalLimits { commits: 4, writes: 20000, held: 20000, now: 128, release: 128 },
+        journal,
+        watermark: journal.commits,
         routes: 256,
     };
     let mut config = Config {

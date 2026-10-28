@@ -1,4 +1,4 @@
-//! Copy the checked sum and reserve a whole route before changing a child.
+//! Admission paces new work by the journal backlog watermark.
 //! Connector and endpoint limits are application configuration (domain/root.md, 10).
 use crate::boundary::Payload;
 use crate::domain::{Assignment, HostCall, ReadCall, Work};
@@ -10,9 +10,9 @@ use jig_domain_host as host;
 use jig_ops_domain_infrastructure as infrastructure;
 use jig_ops_domain_observability as observability;
 use jig_protocol_charter as charter;
-use skein_lib::{Journal, JournalLimits, JournalRoom, Map, Queue, Token};
+use skein_lib::{Journal, JournalLimits, Map, Queue, Token};
 
-/// Each child receives its own limits and the journal reserves their sum.
+/// Each child receives its own limits; the root owns its admission pacing.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     /// The core and its children.
@@ -29,20 +29,12 @@ pub struct Limits {
     pub endpoints: u32,
     /// The one commit barrier.
     pub journal: JournalLimits,
+    /// New external work waits while the backlog is at or past this many
+    /// entries (skein's draft `dynamic-memory.md`, 4.4); a pacing limit,
+    /// not a memory one.
+    pub watermark: u32,
     /// Maximum synchronous continuations for one admitted event.
     pub routes: u32,
-}
-
-/// The whole child route, including every synchronous hand-off.
-#[must_use]
-pub fn room(limits: &Limits) -> Option<JournalRoom> {
-    let core = core::room_max(&limits.core)?;
-    let children =
-        infrastructure::MAX_OUT.checked_add(observability::MAX_OUT)?.checked_add(host::max_out(&limits.host))?;
-    Some(JournalRoom {
-        writes: core.writes.checked_add(children)?.checked_add(1)?,
-        held: core.held.checked_add(children)?,
-    })
 }
 
 /// Child states, journal, and bounded child-requested continuations.

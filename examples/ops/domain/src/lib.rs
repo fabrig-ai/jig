@@ -11,11 +11,12 @@
 //! | --- | --- | --- | --- |
 //! | open | admitted event | decision gathered | at most one commit |
 //! | waiting | durable acknowledgement | outputs eligible | journal releases in order |
-//! | open | no journal room | unchanged | busy |
+//! | open | backlog at the watermark | unchanged | input returned |
 //! | waiting | failed commit | stopped | no later held output |
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 extern crate alloc;
+mod admission;
 mod assemble;
 mod boundary;
 mod client_documents;
@@ -27,6 +28,7 @@ mod route;
 mod steps;
 mod store;
 mod translate;
+pub use admission::try_step;
 pub use boundary::{AgentContent, ClientDocument, ClientMissing, ClientSubject, Event, Output, Released, Store, Timer};
 pub use domain::{Config, Domain, fire, release, step};
 pub use limits::{Limits, worst_case};
