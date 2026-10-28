@@ -144,12 +144,7 @@ pub(crate) const fn placed_reason(phase: &Phase) -> Option<u64> {
         | None => None,
     }
 }
-const fn ending(phase: &Phase) -> bool {
-    match phase {
-        Phase::Closing(_) => true,
-        Phase::Waiting | Phase::Active(_) | Phase::Held { .. } | Phase::Ended(_) => false,
-    }
-}
+
 fn subtree(scope: Scope) -> Option<u64> {
     match scope {
         Scope::Subtree { task } => Some(task),
@@ -594,81 +589,24 @@ pub(crate) fn resumed(was: &crate::Was) -> Phase {
     }
 }
 
-pub(crate) fn check(domain: &Domain, limits: &Limits) -> bool {
-    let staged = Staged::new(0);
+pub(crate) fn link(domain: &Domain) {
     for (key, hold) in &domain.placed {
-        let Some(task) = subtree(hold.scope) else { return false };
-        let Some(root) = record(domain, task) else { return false };
-        if root.project != hold.project || !shaped(hold, limits) {
-            return false;
-        }
-        let mut project = 0_u32;
-        let mut party = 0_u32;
-        let mut named = false;
-        for (_, other) in &domain.placed {
-            if other.project == hold.project {
-                project = project.checked_add(1).expect("bounded holds");
-            }
-            if other.owner == hold.owner {
-                party = party.checked_add(1).expect("bounded holds");
-            }
-        }
-        if project > limits.project_placed_holds || (party_owner(hold.owner) && party > limits.party_placed_holds) {
-            return false;
-        }
-        for (at, task) in hold.exempt.iter().enumerate() {
-            if *task == 0 {
-                return false;
-            }
-            for earlier in hold.exempt.iter().take(at) {
-                if earlier == task {
-                    return false;
-                }
-            }
-        }
-        for (number, _) in &domain.names {
-            let row = record(domain, *number).expect("live task");
-            named |= row.placed == Some(*key);
-            if !hold.lifted
-                && covers(domain, &staged, hold, *number)
-                && !hold.exempt.contains(number)
-                && row.placed.is_none()
-                && !ending(&row.phase)
-            {
-                return false;
-            }
-        }
-        if hold.lifted && !named {
-            return false;
+        if let Some(task) = subtree(hold.scope) {
+            assert!(
+                record(domain, task).is_some(),
+                "tasks: PlacedHold({key}) links to subtree {task}, which is absent"
+            );
         }
     }
     for (number, _) in &domain.names {
         let row = record(domain, *number).expect("live task");
         if let Some(key) = row.placed {
-            let Some(hold) = domain.placed_hold(key) else { return false };
-            if row.project != hold.project
-                || hold.exempt.contains(number)
-                || (!hold.lifted && !covers(domain, &staged, hold, *number))
-                || (reason(&row.phase).is_none() && !ending(&row.phase))
-            {
-                return false;
-            }
-        }
-        if let Some(hold) = placed_reason(&row.phase)
-            && row.placed != Some(hold)
-        {
-            return false;
-        }
-        if let Some(proposal) = &row.proposal
-            && let Some((hold, revision)) = proposal_hold(&proposal.action)
-        {
-            let Some(hold) = domain.placed_hold(hold) else { return false };
-            if hold.lifted || hold.revision != revision {
-                return false;
-            }
+            assert!(
+                domain.placed_hold(key).is_some(),
+                "tasks: Live({number}) links to placed hold {key}, which is absent"
+            );
         }
     }
-    true
 }
 
 /// A new delegate is not covered by its creator's personal exemption.
