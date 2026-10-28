@@ -66,10 +66,10 @@ impl Domain {
             agent: smith::Domain::new(&limits.agent),
             agents: Map::with_capacity(limits.hub.slots),
             calls: Map::with_capacity(limits.hub.slots.checked_mul(limits.agent.calls).expect("validated calls")),
-            pending: Queue::with_capacity(crate::limits::pending(limits).expect("validated continuations")),
+            pending: Queue::uncapped(),
             gone: Map::with_capacity(limits.hub.slots),
-            hub_out: Queue::with_capacity(host::max_out(&limits.hub)),
-            agent_out: Queue::with_capacity(smith::max_out(&limits.agent)),
+            hub_out: Queue::uncapped(),
+            agent_out: Queue::uncapped(),
             workspace: Workspace::new(limits.hub.slots),
             stopping: false,
         }
@@ -83,6 +83,14 @@ impl Domain {
     pub fn reclaim(&mut self) {
         self.hub.reclaim();
         self.agent.reclaim();
+    }
+
+    /// Entries still being routed or awaiting a payload hand-out return.
+    #[must_use]
+    pub fn backlog(&self) -> u64 {
+        u64::from(self.hub_out.len())
+            .saturating_add(u64::from(self.agent_out.len()))
+            .saturating_add(u64::from(self.pending.len()))
     }
 
     #[must_use]
@@ -225,7 +233,7 @@ fn decoded(domain: &mut Domain, env: &Env<Limits>, owner: Token, start: Result<B
 }
 
 fn route(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
-    for _ in 0..crate::max_out(&env.limits) {
+    loop {
         if let Some(request) = domain.hub_out.pop() {
             down(domain, env, request, out);
         } else if let Some(request) = domain.agent_out.pop() {
@@ -241,7 +249,10 @@ fn route(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
         let Some(activity) = domain.hub.pop_activity() else { break };
         out.push(Request::Link(activity));
     }
-    assert!(domain.hub_out.is_empty() && domain.agent_out.is_empty(), "bounded child hand-offs finish in one step");
+    assert!(
+        domain.hub_out.is_empty() && domain.agent_out.is_empty(),
+        "child hand-offs finish before the next entrance"
+    );
     if domain.stopping_ready() {
         out.push(Request::Stop);
         domain.stopping = false;

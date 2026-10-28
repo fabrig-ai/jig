@@ -6,6 +6,7 @@ use jig_protocol_worker_wire as wire;
 #[test]
 fn link_records_follow_the_assignment_they_name_under_load() {
     let outcome = worker_orders::run(true);
+    assert!(outcome.admission_waits > 0, "worker records waited at admission");
     let assignment =
         outcome.records.iter().position(|kind| *kind == wire::Kind::Assignment.number()).expect("assignment");
     let cancel = outcome.records.iter().position(|kind| *kind == wire::Kind::Cancel.number()).expect("cancel");
@@ -22,6 +23,7 @@ fn link_records_follow_the_assignment_they_name_under_load() {
 #[test]
 fn a_run_ends_after_its_last_hand_out_under_load() {
     let outcome = worker_orders::run(false);
+    assert!(outcome.admission_waits > 0, "worker records waited at admission");
     let turn = outcome.records.iter().position(|kind| *kind == wire::Kind::Turn.number()).expect("turn");
     let answer = outcome.records.iter().position(|kind| *kind == wire::Kind::Answer.number()).expect("answer");
     assert!(turn < answer);

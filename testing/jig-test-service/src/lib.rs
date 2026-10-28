@@ -451,11 +451,6 @@ impl Service {
         {
             return false;
         }
-        for worker in &self.workers {
-            if !worker.room() {
-                return false;
-            }
-        }
         true
     }
     fn close_signals(&mut self) {
@@ -520,7 +515,7 @@ pub fn iterate(service: &mut Service, now: Time, wall: Wall) {
         } {
             worker.abort();
         }
-        if started && worker.room() {
+        if started {
             worker.iterate(now, wall);
         }
     }

@@ -56,7 +56,14 @@ pub fn limits() -> Limits {
         inbox: 8,
         unacknowledged: 8,
     };
-    Limits { hub, agent, bounds, stop_bound: Duration::from_secs(20), workstreams: Box::new([1]) }
+    Limits {
+        watermark: crate::WATERMARK,
+        hub,
+        agent,
+        bounds,
+        stop_bound: Duration::from_secs(20),
+        workstreams: Box::new([1]),
+    }
 }
 
 // Smith's smallest v4 golden, used by its agent-process world's charter fixture.
@@ -233,7 +240,7 @@ pub struct Worker {
 
 impl Worker {
     pub fn new(limits: Limits) -> Self {
-        let out = Queue::with_capacity(crate::max_out(&limits));
+        let out = Queue::uncapped();
         Self {
             domain: Domain::new(&limits),
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
