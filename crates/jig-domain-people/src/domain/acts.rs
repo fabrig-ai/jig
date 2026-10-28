@@ -12,9 +12,9 @@ pub(crate) struct PendingAct {
 }
 #[derive(Debug)]
 pub(crate) struct Acted {
-    act: Act,
-    outcome: Outcome,
-    at: Wall,
+    pub(super) act: Act,
+    pub(super) outcome: Outcome,
+    pub(super) at: Wall,
     due: Time,
 }
 
