@@ -239,9 +239,17 @@ fn pending_reviews_survive_restart_and_a_release_withdraws_them() {
             root::Key::Core(core::Key::Tasks(tasks::Key::PersonProposal(proposal)))
         };
         inconsistent.erase(missing).expect("one side of the durable pair");
-        inconsistent.restart_with(configuration().0);
-        assert!(!inconsistent.domain.ready(), "missing set: {erase_set}");
-        assert!(inconsistent.stopped, "inconsistent pending settings must refuse startup");
+        inconsistent.skip_restart_oracle("this fixture deliberately erases one side of a pending settings link");
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            inconsistent.restart_with(configuration().0);
+        }))
+        .expect_err("an absent settings-proposal link is a writer assertion");
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .expect("link panic text");
+        assert!(message.contains("links to") && message.contains("absent"), "{message}");
     }
 }
 #[test]
@@ -879,6 +887,7 @@ fn a_runs_pending_settings_proposal_survives_a_restart_and_is_accepted() {
 #[test]
 fn exhausted_stale_outcome_numbers_refuse_before_changing_settings() {
     let (mut world, signed, task) = proposing_run(true);
+    world.skip_restart_oracle("this fixture deliberately exhausts the message sequence and refuses the next release");
     let item = run_charter(&world, b"Pending instructions");
     let proposal = run_proposed(&run_propose(&mut world, 1, Box::new([item])));
     let header_key = root::Key::Core(core::Key::Core(core::CoreKey::Deployment));
