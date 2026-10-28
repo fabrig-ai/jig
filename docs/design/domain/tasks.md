@@ -1531,7 +1531,10 @@ by the grace's end; no amendment or release is made against a revision
 that moved; nothing becomes a proposal unasked but a result's
 follow-ups; no committed message is lost, and none is refused once
 committed; every proposal and escalation waits where a holder can decide
-it; nothing beyond a task's limits is held, goals per project
+it, and keeps across a restart the holder, entry and time it was routed
+to, since a restart decides nothing again (engine.md, section 6): only
+a new escalation, a pass or a decline routes one; nothing beyond a
+task's limits is held, goals per project
 included; every task's revision was the newest when it was made, or
 the newest when it moved.
 
