@@ -151,7 +151,7 @@ pub struct World {
     /// The boundary at which the last drain paused.
     pub reached_cut: Option<Cut>,
     hold_kinds: Vec<(u16, Box<[tasks::Kind]>)>,
-    wall: u64,
+    pub(crate) wall: u64,
     wall_lag: u64,
     supplied_wall: Option<Wall>,
 }

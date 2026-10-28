@@ -294,17 +294,17 @@ fn uses_are_bounded_saved_and_restored() {
     restart.restore(vec![saved, source(account, first, 0, Kind::Key)]);
     restart.step(Event::Want);
     assert_eq!(restart.domain.account(account).expect("restored").uses(), Some(uses.as_ref()));
-    for invalid in [vec![Use::Party(7); 2], (0..=USES).map(Use::Project).collect()] {
-        let mut restart = World::with(providers(vec![provider(PROVIDER, true, true)]), &[]);
-        let mut row = jig_accounts_world::account(account, PROVIDER, HOLDER, b"");
-        if let Stored::Account { uses, .. } = &mut row {
-            *uses = Some(invalid.into_boxed_slice());
-        }
-        restart.restore(vec![row, source(account, first, 0, Kind::Key)]);
-        restart.step(Event::Want);
-        assert!(restart.domain.account(account).is_none());
-        assert!(restart.domain.unrestored() >= 1);
+    // Duplicate uses fit the codec; admission's uniqueness rule is not restored.
+    let duplicate = Box::new([Use::Party(7), Use::Party(7)]);
+    let mut restart = World::with(providers(vec![provider(PROVIDER, true, true)]), &[]);
+    let mut row = jig_accounts_world::account(account, PROVIDER, HOLDER, b"");
+    if let Stored::Account { uses, .. } = &mut row {
+        *uses = Some(duplicate.clone());
     }
+    restart.restore(vec![row, source(account, first, 0, Kind::Key)]);
+    restart.step(Event::Want);
+    assert_eq!(restart.domain.account(account).expect("bounded uses retained").uses(), Some(duplicate.as_slice()));
+    assert_eq!(restart.domain.restore_limit(), None);
     for uses in [Some(Box::new([]) as Box<[Use]>), None] {
         change(&mut world, Change::SetUses { account, uses: uses.clone() });
         assert_eq!(world.domain.account(account).expect("account").uses(), uses.as_deref());

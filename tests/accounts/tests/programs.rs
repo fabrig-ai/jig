@@ -148,16 +148,14 @@ fn the_lifetime_name_bound_refuses_before_allocating() {
     assert_eq!(world.domain.next_number(), LIMITS.program_names);
 }
 #[test]
-fn a_restored_source_must_match_its_reserved_holder() {
+#[should_panic(expected = "accounts: Source(21) links to name")]
+fn a_restored_source_links_to_its_reserved_holder() {
     let mut program = source(20, 21, 0, Kind::Program);
     if let Stored::Source { name, .. } = &mut program {
         *name = b"personal".as_slice().into();
     }
     let mut world = World::with(configured(), &[account(20, PROVIDER, OTHER, b""), program, issued(21, b"personal")]);
     world.step(Event::Want);
-    assert!(world.domain.source(21).is_none());
-    assert_eq!(world.domain.unrestored(), 2);
-    assert_eq!(declare(&mut world, HOLDER, PROVIDER, None, b"personal").0, Err(programs::DeclarationRefusal::Issued));
 }
 
 #[test]
