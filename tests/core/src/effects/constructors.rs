@@ -93,6 +93,7 @@ impl World {
     pub fn first_start_with_accounts(configuration: root::Config, limits: &root::Limits) -> World {
         let rows = crate::fixtures::account_rows(&configuration.core.settings.llm_providers);
         let mut world = Self::empty(configuration, limits);
+        world.fixture_accounts.clone_from(&rows);
         let env = world.env();
         for row in rows {
             assert!(root::restore_record(&mut world.domain, &env, row));
@@ -227,6 +228,7 @@ impl World {
         world.seed(rows.into_boxed_slice());
         world.move_provider =
             configuration.core.settings.llm_providers.providers.first().map(|provider| provider.number);
+        world.oracle_configuration = Some(super::oracle::copy_configuration(&configuration));
         world.domain = root::Domain::new(configuration, limits);
         world.send(root::Event::RestartBegin { pending: world.store.generation_pending });
         world.hello_engine();
@@ -296,6 +298,9 @@ impl World {
         let move_provider = configuration.core.settings.llm_providers.providers.first().map(|provider| provider.number);
         World {
             bootstrap_owners: Vec::new(),
+            oracle_hellos: Vec::new(),
+            oracle_configuration: Some(super::oracle::copy_configuration(&configuration)),
+            oracle_skip: None,
             fixture_accounts: Box::new([]),
             domain: root::Domain::new(configuration, limits),
             store,

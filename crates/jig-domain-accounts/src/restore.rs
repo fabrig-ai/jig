@@ -1,28 +1,26 @@
-//! The store's records, restored before the child starts (engine.md, 5.4). A record that keeps
-//! the accounts' rules is taken; any other is counted and left, never trusted, so that a provider
-//! configured again finds its accounts. Every number a record carries moves the counter past it,
-//! taken or not, so that no number is given twice.
+//! Load bounded accounts and attach sources to their accounts (engine.md, 6).
 use crate::domain::{Account, Domain, Hold, Source, settle};
-use crate::records::{program_name, within};
-use crate::{DISPLAY, Deadline, Fact, Held, Kind, Limits, SUBJECT, Stored};
-use skein_lib::{Duration, Env, List, Map, Queue, Wall};
+use crate::{Deadline, Fact, Held, Limits, Stored};
+use skein_lib::{Duration, Env, Map, Queue, Wall};
 
 pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored) {
-    let taken = match record {
+    if domain.restore_limit.is_some() {
+        return;
+    }
+    let (taken, which) = match record {
         Stored::Issued { number, holder, name, signed_out } => {
             domain.past(number);
-            crate::programs::restore(domain, number, holder, name, signed_out)
+            (crate::programs::restore(domain, number, holder, name, signed_out), crate::RestoreLimit::ProgramNames)
         }
         Stored::Next { number } => {
             domain.next = domain.next.max(number);
             domain.kept = number;
-            true
+            (true, crate::RestoreLimit::Accounts)
         }
         Stored::Account { number, provider, holder, place, uses, subject, display } => {
             domain.past(number);
-            // An account of a provider no longer configured waits for it.
-            domain.providers.get(provider).is_some()
-                && account(
+            (
+                account(
                     domain,
                     env,
                     number,
@@ -36,53 +34,32 @@ pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored) {
                         display,
                         sources: Map::with_capacity(0),
                     },
-                )
+                ),
+                crate::RestoreLimit::Accounts,
+            )
         }
         Stored::Source { account, number, place, kind, name, held } => {
             domain.past(number);
             let mut entry = Source::new(account, kind, name, &env.limits);
             hold(&mut entry, env, held);
-            source(domain, env, number, place, entry)
+            (source(domain, env, number, place, entry), crate::RestoreLimit::Sources)
         }
     };
     if !taken {
-        domain.unrestored = domain.unrestored.saturating_add(1);
+        if domain.restore_limit.is_none() {
+            domain.restore_limit = Some(which);
+        }
     }
 }
 
-/// The start drops each account left with no source: none of its records says how it is used.
-pub(crate) fn finish(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<crate::Request>) {
+/// Finish source-name links before any cleanup can run.
+pub(crate) fn finish(domain: &mut Domain, _env: &Env<Limits>, out: &mut Queue<crate::Request>) {
     crate::programs::finish_restore(domain, out);
-    let mut empty = List::with_capacity(env.limits.accounts);
-    for (number, account) in &domain.accounts {
-        if account.sources.is_empty() {
-            empty.push(*number).expect("one per account");
-        }
-    }
-    for number in &empty {
-        drop(domain.accounts.remove(number).expect("a listed account"));
-        domain.unrestored = domain.unrestored.saturating_add(1);
-    }
 }
 
 /// A free number, a bounded subject and display name, and a subject no other account of its
 /// provider holds (accounts.md, 3.1 and 3.2).
 fn account(domain: &mut Domain, env: &Env<Limits>, number: u32, mut entry: Account) -> bool {
-    if !free(domain, number)
-        || domain.issued.contains_key(&number)
-        || !within(&entry.subject, SUBJECT)
-        || !within(&entry.display, DISPLAY)
-        || !crate::records::valid_uses(entry.uses.as_deref())
-    {
-        return false;
-    }
-    if !entry.subject.is_empty() {
-        for (_, other) in &domain.accounts {
-            if other.provider == entry.provider && other.subject == entry.subject {
-                return false;
-            }
-        }
-    }
     entry.sources = Map::with_capacity(env.limits.sources);
     match domain.accounts.insert(number, entry) {
         Ok(old) => old.is_none(),
@@ -93,41 +70,25 @@ fn account(domain: &mut Domain, env: &Env<Limits>, number: u32, mut entry: Accou
 /// A free number, a kept account with room at a free place, one signed-in source an account, and
 /// a program's name valid and unique in the deployment (accounts.md, 3.4).
 fn source(domain: &mut Domain, env: &Env<Limits>, number: u32, place: u32, entry: Source) -> bool {
-    if !free(domain, number) {
+    assert!(
+        domain.accounts.contains_key(&entry.account),
+        "accounts: Source({number}) links to account {}, which is absent",
+        entry.account
+    );
+    let account = domain.accounts.get(&entry.account).expect("linked source account");
+    if account.sources.len() >= account.sources.capacity() {
+        domain.restore_limit = Some(crate::RestoreLimit::SourcePlaces);
         return false;
     }
-    let Some(account) = domain.accounts.get(&entry.account) else { return false };
-    if account.sources.contains_key(&place) || account.sources.len() >= account.sources.capacity() {
-        return false;
-    }
-    match entry.kind {
-        Kind::Program => {
-            if !program_name(&entry.name) {
-                return false;
-            }
-            for (_, other) in &domain.sources {
-                if other.kind == Kind::Program && other.name == entry.name {
-                    return false;
-                }
-            }
-        }
-        Kind::SignIn => {
-            if !entry.name.is_empty() {
-                return false;
-            }
-            for (_, other) in &account.sources {
-                if domain.sources.get(other).expect("an account's sources are kept").kind == Kind::SignIn {
-                    return false;
-                }
-            }
-        }
-        Kind::Key | Kind::None => {
-            if !entry.name.is_empty() {
-                return false;
-            }
-        }
-    }
-    let plan = domain.providers.get(account.provider).expect("a restored provider").plan(entry.kind);
+    assert!(
+        !account.sources.contains_key(&place),
+        "accounts: Source({number}) links to occupied place {place} of account {}",
+        entry.account
+    );
+    let plan = match domain.providers.get(account.provider) {
+        Some(provider) => provider.plan(entry.kind),
+        None => false,
+    };
     let account = entry.account;
     if domain.sources.insert(number, entry) != Ok(None) {
         return false;
@@ -138,11 +99,6 @@ fn source(domain: &mut Domain, env: &Env<Limits>, number: u32, place: u32, entry
     assert!(places.insert(place, number) == Ok(None), "a free place with room, checked above");
     let _: Fact = settle(domain, env, number);
     true
-}
-
-/// A number neither an account nor a source holds; the counter never gives `u32::MAX`.
-fn free(domain: &Domain, number: u32) -> bool {
-    number != u32::MAX && !domain.accounts.contains_key(&number) && !domain.sources.contains_key(&number)
 }
 
 /// A kept hold means the same after a restart: a reset passed while the child was down has

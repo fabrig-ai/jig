@@ -274,85 +274,25 @@ pub(crate) fn end(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut
     }
 }
 
-pub(crate) fn links(domain: &Domain, bound: u32) -> bool {
+pub(crate) fn link(domain: &Domain) {
     for (funder, ledger) in &domain.funding {
-        let mut reserved = 0_u64;
-        for (_, other) in &domain.funding {
-            if other.parent == Some(*funder) {
-                let Some(sum) = reserved.checked_add(other.numbers.budget) else {
-                    return false;
-                };
-                reserved = sum;
-            }
-        }
-        for (number, _) in &domain.names {
-            let task = record(domain, *number).expect("live name");
-            if task.funder == *funder {
-                let Some(sum) = reserved.checked_add(task.numbers.budget) else {
-                    return false;
-                };
-                reserved = sum;
-            }
-        }
-        if reserved != ledger.numbers.reserved {
-            return false;
-        }
-        if let Some(parent) = ledger.parent
-            && !domain.funding.contains_key(&parent)
-        {
-            return false;
+        if let Some(parent) = ledger.parent {
+            assert!(
+                domain.funding.contains_key(&parent),
+                "tasks: Ledger({funder:?}) links to ledger {parent:?}, which is absent"
+            );
         }
     }
     for (number, _) in &domain.names {
         let task = record(domain, *number).expect("live name");
-        let mut reserved = task.run_reserved;
-        for (child, _) in &domain.names {
-            let child = record(domain, *child).expect("live name");
-            if child.funder == Funder::Task(*number) {
-                let Some(total) = reserved.checked_add(child.numbers.budget) else {
-                    return false;
-                };
-                reserved = total;
+        let present = match task.funder {
+            Funder::Task(parent) => record(domain, parent).is_some(),
+            Funder::Pool { .. } | Funder::Period { .. } | Funder::Recurring { .. } => {
+                domain.funding.contains_key(&task.funder)
             }
-        }
-        if reserved != task.numbers.reserved || available(task.numbers).is_none() {
-            return false;
-        }
-        let mut at = Some(*number);
-        for hop in 0..bound {
-            let Some(current) = at else {
-                break;
-            };
-            let Some(node) = record(domain, current) else {
-                return false;
-            };
-            if node.project != task.project {
-                return false;
-            }
-            at = match node.funder {
-                Funder::Task(parent) => {
-                    let ancestor = match node.requester {
-                        crate::Party::Task(requester) => below(domain, requester, parent, bound),
-                        crate::Party::Person(_) | crate::Party::Deployment { .. } => false,
-                    };
-                    if !ancestor {
-                        return false;
-                    }
-                    if parent == *number || hop.saturating_add(1) == bound {
-                        return false;
-                    }
-                    Some(parent)
-                }
-                Funder::Pool { project, .. } | Funder::Period { project, .. } | Funder::Recurring { project, .. } => {
-                    if project != task.project || !domain.funding.contains_key(&node.funder) {
-                        return false;
-                    }
-                    None
-                }
-            };
-        }
+        };
+        assert!(present, "tasks: Live({number}) links to funder {:?}, which is absent", task.funder);
     }
-    true
 }
 
 /// Owned finite external period or person-pool accounting; tasks mutates the authentic counters and
@@ -612,24 +552,7 @@ pub(crate) fn carve_recurring(
 }
 
 pub(crate) fn restore_funding(domain: &mut Domain, ledger: FundingRecord) -> bool {
-    if domain.funding.contains_key(&ledger.funder)
-        || domain.funding.len() == domain.funding.capacity()
-        || total(ledger.numbers).is_none()
-        || available(ledger.numbers).is_none()
-        || ledger.closed
-        || ledger.numbers.spent != 0
-        || ledger.made > domain.names.capacity()
-    {
-        return false;
-    }
-    let valid = match ledger.funder {
-        Funder::Task(_) => false,
-        Funder::Period { .. } => ledger.period.is_some() && ledger.parent.is_none(),
-        Funder::Pool { project, period, .. } | Funder::Recurring { project, period, .. } => {
-            ledger.period.is_none() && ledger.parent == Some(Funder::Period { project, period })
-        }
-    };
-    if !valid {
+    if domain.funding.contains_key(&ledger.funder) || domain.funding.len() == domain.funding.capacity() {
         return false;
     }
     assert!(domain.funding.insert(ledger.funder, ledger) == Ok(None), "restored ledger admitted");

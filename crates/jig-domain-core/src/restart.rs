@@ -90,17 +90,15 @@ pub enum HeldLimit {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartRequest {
+    AccountsPastLimit {
+        which: jig_domain_accounts::RestoreLimit,
+    },
     /// Held settings revisions or charter versions past a limit lowered since the stop
     /// (engine.md, 17.7, "past limits").
     HeldPastLimit {
         which: HeldLimit,
         held: u32,
         limit: u32,
-    },
-    /// A live task records a settings revision the store holds no record of.
-    UnheldRevision {
-        task: u64,
-        revision: u32,
     },
     Settings {
         failure: crate::settings::Failure,
@@ -109,12 +107,6 @@ pub enum RestartRequest {
     /// A saved project policy exceeds the current byte budget or cannot be accounted.
     ProjectPolicy {
         project: u32,
-    },
-    /// A restored record whose references or child rules cannot be resolved
-    /// before the switch (domain/engine.md, 6). Accounts counts rows left.
-    Unresolved {
-        child: RestoreChild,
-        records: u32,
     },
     Step(RestartStep),
     Idle,
@@ -148,44 +140,30 @@ impl Core {
             let _request = self.restart_refuse();
             return false;
         }
-        if !self.tasks.checked() {
-            self.restart_unresolved(RestoreChild::Tasks, 1);
-            return false;
-        }
-        // Both roots send Want at LoadInbox. It finishes terminal program
-        // rows and drops empty accounts before the census or connectors run.
-        if !self.accounts.restore_finished() {
+        assert!(self.tasks.checked(), "tasks: link pass must finish before the switch");
+        if let Some(which) = self.accounts.restore_limit() {
+            self.restore_failure = Some(RestartRequest::AccountsPastLimit { which });
             let _request = self.restart_refuse();
             return false;
         }
-        if self.restart_pending && self.accounts.unrestored() != 0 {
-            let records = u32::try_from(self.accounts.unrestored()).unwrap_or(u32::MAX);
-            self.restart_unresolved(RestoreChild::Accounts, records);
-            return false;
+        self.link_tasks();
+        for ((party, task), _) in self.people.read_conversations() {
+            assert!(
+                self.tasks.task(*task).is_some(),
+                "people: ReadConversation({party}, {task}) links to task {task}, which is absent"
+            );
         }
-        let records = self.unresolved_tasks();
-        if records != 0 {
-            self.restart_unresolved(RestoreChild::Tasks, records);
-            return false;
+        for (task, _) in &self.proofs {
+            assert!(self.tasks.task(*task).is_some(), "core: RunProof({task}) links to task {task}, which is absent");
         }
-        let mut records = 0_u32;
-        for ((_, task), _) in self.people.read_conversations() {
-            if self.tasks.task(*task).is_none() {
-                records = records.saturating_add(1);
-            }
-        }
-        if records != 0 {
-            self.restart_unresolved(RestoreChild::People, records);
-            return false;
+        for (key, _) in &self.call_parts {
+            assert!(
+                self.proofs.contains_key(&key.task),
+                "core: Call({key:?}) links to proof {}, which is absent",
+                key.task
+            );
         }
         true
-    }
-
-    pub(crate) fn restart_unresolved(&mut self, child: RestoreChild, records: u32) {
-        if self.restore_failure.is_none() {
-            self.restore_failure = Some(RestartRequest::Unresolved { child, records });
-        }
-        let _request = self.restart_refuse();
     }
 
     /// Check all loaded claims together before the fleet can settle any of
@@ -283,9 +261,13 @@ impl Core {
         }
         let next = match done {
             RestartStep::LoadCore => {
-                if !self.restoring_proofs.is_empty() || !self.settings_proposals_consistent() {
-                    return self.restart_refuse();
+                for (task, _) in &self.restoring_proofs {
+                    assert!(
+                        self.proofs.contains_key(task),
+                        "core: Live({task}) links to run proof {task}, which is absent"
+                    );
                 }
+                self.restoring_proofs = skein_lib::Map::with_capacity(self.restoring_proofs.capacity());
                 self.counters.finish_restore();
                 RestartStep::LoadInbox
             }

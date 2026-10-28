@@ -1397,7 +1397,7 @@ fn held_revisions_past_a_lowered_limit_refuse_the_start_naming_the_limit() {
 }
 
 #[test]
-fn an_unheld_task_or_run_revision_refuses_the_start_naming_the_task() {
+fn an_unheld_task_or_run_revision_panics_naming_the_task() {
     for run in [false, true] {
         let (mut world, _, goal) = held_run();
         world.end(jig_domain_tasks::End::Parked, 0);
@@ -1412,12 +1412,10 @@ fn an_unheld_task_or_run_revision_refuses_the_start_naming_the_task() {
         world.observer = jig_core_world::observations::Observer::recording(&held_restart_configuration());
         world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
         let before = world.store.applied;
-        world.restart_with(held_restart_configuration());
-        assert_eq!(
-            world.domain.restore_failure(),
-            Some(core::RestartRequest::UnheldRevision { task: goal, revision: 91 })
-        );
-        assert!(world.stopped);
+        world.skip_restart_oracle("this fixture deliberately names a settings revision absent from the store");
+        let panic =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| world.restart_with(held_restart_configuration())));
+        assert!(panic.is_err(), "an unmade revision link panics");
         assert_eq!(world.store.applied, before);
     }
 }
