@@ -60,17 +60,3 @@ fn a_named_file_missing_from_those_handed_is_refused() {
         Some(&Problem { path: Path::root().member(b"application").member(b"credential"), what: What::Unreadable })
     );
 }
-
-#[test]
-fn a_worst_case_past_the_memory_is_refused_saying_by_how_much() {
-    let bytes = fixtures::service_bytes(&engine_document());
-    let memory = fixtures::decimal(bytes.checked_sub(1).expect("nonempty service"));
-    let document = with(&engine_document(), b"1152921504606846976", &memory);
-    let found = crate::startup(&document, &fixtures::files(&document), None, &fixtures::seeds(), None, None)
-        .err()
-        .expect("startup refused");
-    assert_eq!(
-        found.problems.get(0),
-        Some(&Problem { path: Path::root().member(b"engine").member(b"memory_bytes"), what: What::Memory { over: 1 } })
-    );
-}

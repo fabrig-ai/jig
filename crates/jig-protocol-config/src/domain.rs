@@ -223,23 +223,11 @@ pub(crate) fn whole(engine: &crate::Engine, problems: &mut Problems) {
     if let Err(problem) = check_effective_limits(limits) {
         problems.push(problem.path, problem.what);
     }
-    let mut shares = List::with_capacity(3);
-    if let Some(bytes) = jig_domain_core::worst_case(limits) {
-        shares.push(crate::Share { name: b"core", bytes }).expect("three memory shares");
-    } else {
+    if jig_domain_core::worst_case(limits).is_none() {
         problems.push(Path::root().member(b"limits"), What::Bound);
     }
-    if let Some(bytes) = jig_domain_host::worst_case(&engine.limits.hub) {
-        shares.push(crate::Share { name: b"hub", bytes }).expect("three memory shares");
-    } else {
+    if jig_domain_host::worst_case(&engine.limits.hub).is_none() {
         problems.push(Path::root().member(b"limits"), What::Bound);
-    }
-    match provider_terms_bytes(&engine.llm.providers) {
-        Some(bytes) => shares.push(crate::Share { name: b"provider terms", bytes }).expect("three memory shares"),
-        None => problems.push(Path::root().member(b"llm").member(b"providers"), What::Bound),
-    }
-    if let Err(what) = crate::fits(engine.memory, shares.as_slice()) {
-        problems.push(Path::root().member(b"memory_bytes"), what);
     }
 }
 
@@ -410,23 +398,6 @@ fn requirement_refs(
         connector(engine, requirement.connector, &path.member(b"connector"), problems);
         connector(engine, requirement.judge.connector, &path.member(b"judge").member(b"connector"), problems);
     }
-}
-
-/// The parser's added terms and the two runtime copies (settings and accounts).
-/// Charge a full provider's inline size per copy, including padding; the original
-/// configured name was already present, while runtime names and all URLs are new.
-fn provider_terms_bytes(providers: &[crate::llm::Provider]) -> Option<u64> {
-    let mut total = 0_u64;
-    for provider in providers {
-        let address = match &provider.manage_usage {
-            Some(value) => u64::try_from(value.len()).ok()?,
-            None => 0,
-        };
-        let inline = u64::try_from(size_of::<jig_domain_accounts::Provider>()).ok()?.checked_mul(3)?;
-        let names = u64::try_from(provider.name.len()).ok()?.checked_mul(2)?;
-        total = total.checked_add(inline)?.checked_add(names)?.checked_add(address.checked_mul(3)?)?;
-    }
-    Some(total)
 }
 
 /// Check the effective core limits that will be handed to the store (configuration.md, 6).

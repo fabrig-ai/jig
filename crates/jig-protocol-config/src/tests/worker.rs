@@ -111,7 +111,7 @@ fn the_small_worker_document_parses_whole() {
     assert_eq!(worker.stop_bound, Duration::from_secs(75));
     assert_eq!(worker.agent.program.as_ref(), b"jig-test");
     assert_eq!(worker.agent.arguments.as_ref(), &[Box::from(&b"agent"[..])]);
-    assert_eq!(worker.memory, 1_073_741_824);
+    assert_eq!(worker.memory, Some(1_073_741_824));
 }
 fn an_agent_without_a_program_is_refused() {
     refuses(br#""program": "jig-test", "#, b"", fixtures::path(&[b"agent", b"program"]), What::Missing);
@@ -158,11 +158,29 @@ fn an_argument_that_is_not_text_is_refused_at_its_index() {
     );
 }
 #[test]
-fn a_worker_refuses_memory_below_its_hubs_worst_case() {
+fn a_workers_memory_bytes_is_handed_on_unchecked() {
     let bytes = fixtures::with(fixtures::WORKER_SMALL, b"1073741824", b"1");
-    let problems = worker(&bytes).unwrap_err();
-    assert_eq!(problems.problems.get(0).unwrap().path, fixtures::path(&[b"memory_bytes"]));
+    assert_eq!(worker(&bytes).unwrap().memory, Some(1));
+}
+#[test]
+fn a_worker_without_memory_bytes_parses() {
+    let bytes = fixtures::with(fixtures::WORKER_SMALL, br#", "memory_bytes": 1073741824"#, b"");
+    assert_eq!(worker(&bytes).unwrap().memory, None);
+}
+#[test]
+fn a_workers_present_memory_bytes_must_be_an_unsigned_integer() {
+    for (value, what) in [(br#""1""#.as_slice(), What::Kind), (b"18446744073709551616", What::Bound)] {
+        refuses(b"1073741824", value, fixtures::path(&[b"memory_bytes"]), what);
+    }
+}
+#[test]
+fn a_workers_hub_guard_runs_without_memory_bytes() {
+    let mut limits = crate::profile(crate::Profile::Small);
+    limits.hub.source_timeout = Duration::ZERO;
+    let mut problems = crate::Problems::empty();
+    crate::check::worker(&limits, Some(graces()), &mut problems);
     assert_eq!(problems.problems.len(), 1);
+    assert_eq!(problems.problems.get(0), Some(&Problem { path: fixtures::path(&[b"limits"]), what: What::Bound }));
 }
 
 #[test]
