@@ -103,6 +103,8 @@ pub use positions::{AnswerLine, ProposalRow, QuestionLine};
 mod person;
 mod person_proposals;
 mod procedure;
+mod room;
+pub use room::{LiveRoom, RoomWait};
 mod proposals;
 mod recurring;
 mod refs;

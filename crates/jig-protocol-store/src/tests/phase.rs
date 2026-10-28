@@ -1958,8 +1958,10 @@ fn pending_state_and_wires_have_their_exact_resident_price() {
     let settings_refusal_limit = u64::try_from(settings_refusal_limit).expect("resident limit fits u64");
     // Retained connector account bytes and the wider task/document/commit carriers.
     let hold_account_growth = 15_033_331_712;
+    // Durable room conditions and FIFO places widen task, decoded/joined and commit carriers.
+    let room_wait_growth = 536_904_704;
     assert_eq!(
         crate::worst_case(&fixtures::store_limits()),
-        Some(581_545_605_062_293 + settings_refusal_limit + hold_account_growth)
+        Some(581_545_605_062_293 + settings_refusal_limit + hold_account_growth + room_wait_growth)
     );
 }

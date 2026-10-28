@@ -319,6 +319,7 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
     assert!(task.delegates.is_empty(), "all delegates ended before requester");
     let ending = ending.clone();
     let requester = task.requester;
+    let project = task.project;
     let status = status(&ending);
     let endings = task.ended_below.ended(status);
     let subscriptions = task.subscriptions.clone();
@@ -339,6 +340,7 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
     }
     crate::person_proposals::ended(domain, env, number, out);
     crate::funders::end(domain, env, number, out);
+    ended.room_wait = None;
     ended.phase = Phase::Ended(ending.clone());
     end_milestone(&mut ended, env.wall, out);
     ended.ended_at = Some(env.wall);
@@ -468,6 +470,7 @@ fn end_task(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue
     crate::subscriptions::notify_state(domain, number, state, words, out);
     out.push(Request::Ended { task: number, requester, ending });
     fact(domain, Fact::Ended { task: number, status });
+    crate::room::freed(domain, env, project, out);
 }
 
 fn end_milestone(ended: &mut crate::TaskRecord, at: skein_lib::Wall, out: &mut Queue<Request>) {
