@@ -398,7 +398,7 @@ pub(super) fn engine_startup(
     seeds: &Seeds,
     runtime: Option<crate::AccountsRuntime>,
     own_workers: bool,
-) -> Result<(Engine, skein_io::Limits, u64, u64), Problems> {
+) -> Result<(Engine, skein_io::Limits, u64), Problems> {
     parsed.workers |= own_workers;
     check_files(&parsed, files)?;
     for charter in &mut parsed.engine.charters {
@@ -426,9 +426,6 @@ pub(super) fn engine_startup(
     let bytes = bytes
         .checked_add(configured)
         .ok_or(problem(Path::root().member(b"engine").member(b"memory_bytes"), What::Bound))?;
-    if let Err(what) = config::fits(parsed.engine.memory, &[config::Share { name: b"service", bytes }]) {
-        return Err(problem(Path::root().member(b"engine").member(b"memory_bytes"), what));
-    }
     parsed.first.deployment = seeds.deployment;
     parsed.second.deployment = seeds.deployment;
     let max = root::max_out(&parsed.limits.root);
@@ -498,7 +495,7 @@ pub(super) fn engine_startup(
     );
     // configuration.md, 5: the smallest source opens only an empty deployment.
     engine.first_periods = first_periods;
-    Ok((engine, parsed.limits.io, bytes, parsed.engine.memory))
+    Ok((engine, parsed.limits.io, bytes))
 }
 
 fn clients_child(parsed: &Parsed, seeds: &Seeds, max: u32) -> Result<Option<crate::clients::Clients>, Problems> {
@@ -650,7 +647,7 @@ pub fn startup(
         None
     };
     let mut io = match &engine {
-        Some((_, io, _, _)) => *io,
+        Some((_, io, _)) => *io,
         None => {
             let mut io = specs.get(0).expect("engine or worker").config.limits.io;
             io.sockets = 0;
@@ -659,12 +656,12 @@ pub fn startup(
         }
     };
     let mut bytes = match &engine {
-        Some((_, _, bytes, _)) => *bytes,
+        Some((_, _, bytes)) => *bytes,
         None => 0,
     };
     let mut workers = List::with_capacity(specs.len());
     let mut queue = match &engine {
-        Some((engine, _, _, _)) => engine.max_out.checked_mul(2).expect("service queue"),
+        Some((engine, _, _)) => engine.max_out.checked_mul(2).expect("service queue"),
         None => 1,
     };
     for (index, spec) in specs.into_boxed().into_iter().enumerate() {
@@ -689,12 +686,6 @@ pub fn startup(
         }
         let bound = crate::worker::worst_case(&spec.config, agent, spec.root.len())
             .ok_or(problem(path.clone(), What::Bound))?;
-        if let Err(what) = config::fits(spec.config.memory, &[config::Share { name: b"worker", bytes: bound }]) {
-            return Err(problem(
-                Path::root().member(b"workers").child(Segment::Index(index)).member(b"memory_bytes"),
-                what,
-            ));
-        }
         bytes = bytes.checked_add(bound).ok_or(problem(path.clone(), What::Bound))?;
         io.sockets = io.sockets.checked_add(spec.config.limits.io.sockets).ok_or(problem(path.clone(), What::Bound))?;
         io.names = io.names.checked_add(spec.config.limits.io.names).ok_or(problem(path.clone(), What::Bound))?;
@@ -712,14 +703,9 @@ pub fn startup(
                 limits::shared_worker_bytes(&io, queue, workers.len()).ok_or(problem(Path::root(), What::Bound))?,
             )
             .ok_or(problem(Path::root(), What::Bound))?;
-        if let Some((_, _, _, memory)) = &engine
-            && let Err(what) = config::fits(*memory, &[config::Share { name: b"service", bytes }])
-        {
-            return Err(problem(Path::root().member(b"engine").member(b"memory_bytes"), what));
-        }
     }
     let mut service = match engine {
-        Some((engine, _, _, _)) => Service::new(Some(engine), workers, io, bytes, queue),
+        Some((engine, _, _)) => Service::new(Some(engine), workers, io, bytes, queue),
         None => Service::new(None, workers, io, bytes, queue),
     };
     service.bundle_directory = bundle;

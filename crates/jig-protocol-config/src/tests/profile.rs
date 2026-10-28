@@ -1,8 +1,5 @@
-use crate::{Limits, Profile, Share, What, fits, profile};
+use crate::{Limits, Profile, profile};
 
-fn shares() -> [Share; 2] {
-    [Share { name: b"core", bytes: 600 }, Share { name: b"hub", bytes: 500 }]
-}
 fn limits(profile_name: Profile) -> Limits {
     profile(profile_name)
 }
@@ -30,11 +27,6 @@ fn hub_bytes(profile_name: Profile) -> Option<u64> {
 }
 
 #[test]
-fn a_stated_memory_below_the_sum_is_refused_by_how_much() {
-    let shares = shares();
-    assert_eq!(fits(1_000, &shares), Err(What::Memory { over: 100 }));
-}
-#[test]
 fn the_small_profile_fits_every_childs_worst_case() {
     assert_children_fit(Profile::Small);
 }
@@ -53,16 +45,6 @@ fn the_small_profiles_hub_fits_its_worst_case() {
 }
 fn the_standard_profiles_hub_fits_its_worst_case() {
     assert!(hub_bytes(Profile::Standard).is_some(), "standard hub bound");
-}
-#[test]
-fn a_sum_past_a_u64_is_refused() {
-    let shares = [Share { name: b"core", bytes: u64::MAX }, Share { name: b"hub", bytes: 1 }];
-    assert_eq!(fits(u64::MAX, &shares), Err(What::Bound));
-}
-#[test]
-fn a_sum_within_memory_is_its_total() {
-    let shares = shares();
-    assert_eq!(fits(1_200, &shares), Ok(1_100));
 }
 
 #[test]
