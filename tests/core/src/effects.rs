@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 mod bootstrap;
 mod constructors;
 mod deliveries;
+mod oracle;
 mod store;
 pub use constructors::fixture;
 
@@ -42,6 +43,9 @@ pub struct AssignedTranscript {
 #[expect(clippy::struct_excessive_bools, reason = "independently held peer traffic and crash cuts")]
 pub struct World {
     bootstrap_owners: Vec<people::InitialOwner>,
+    oracle_hellos: Vec<(u32, Token, fleet::Hello)>,
+    oracle_configuration: Option<root::Config>,
+    oracle_skip: Option<&'static str>,
     fixture_accounts: Box<[root::Record]>,
     pub domain: root::Domain,
     pub store: Store,
@@ -280,6 +284,7 @@ impl World {
             let env = self.env();
             self.observer.systems(self.wall, &self.systems);
             if let Some(mut event) = self.events.pop_front() {
+                self.remember_oracle_hello(&event);
                 self.observer.inbound(&self.store, self.wall, &mut event);
                 if let Some(offers) = &mut self.offers {
                     offers.inbound(&mut event);
