@@ -1169,21 +1169,11 @@ fn a_party_release_proposal_to_a_task_owned_hold_waits_among_its_entries_and_the
     parked(&mut s);
     let goal = s.goal;
     let proposal = party_propose(&mut s, sign_in, goal, number, 80);
-    // A new run reads the virtual proposal entry as a real holder entry.
+    // The live holder receives its virtual decision entry without consuming an inbox reservation.
     let coordinator = s.coordinator;
-    s.world.send(root::Event::Answer {
-        read: None,
-        refused: Box::new([]),
-        channel: Token::new(7),
-        task: coordinator.0,
-        attempt: coordinator.1,
-        cumulative: 0,
-        end: tasks::End::Parked,
-    });
-    let run = s.world.assignments.iter().rev().find(|run| run.0 == coordinator.0).copied().expect("holder woken");
-    s.coordinator = run;
-    assert!(s.world.assigned.as_ref().expect("holder assignment").messages.iter().any(|word|
-        word.from == tasks::Party::Person(person) && matches!(word.kind, tasks::MessageKind::Proposal { proposer, proposal: named, kind: tasks::ProposalKind::Release } if proposer == person && named == proposal)));
+    assert!(s.world.inbound.iter().any(|word| word.from == tasks::Party::Person(person)
+        && matches!(word.kind, tasks::MessageKind::Proposal { proposer, proposal: named, kind: tasks::ProposalKind::Release }
+            if proposer == person && named == proposal)));
     action(
         &mut s,
         20,
@@ -1337,7 +1327,7 @@ fn party_release_admission_checks_the_reason_standing_hold_and_revision() {
                 reason: reason.into(),
             },
         );
-        refusal(&s.world, people::Refusal::Limit { which });
+        assert_eq!(s.world.people_answers.last(), Some(&people::Reply::Refused(people::Refusal::Limit { which })));
     }
     ask_as(
         &mut s.world,

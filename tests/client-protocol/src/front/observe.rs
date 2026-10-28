@@ -106,7 +106,9 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
                     value.revision().value(),
                 )),
                 w::Ask::Propose(value) => match value.action() {
-                    w::ProposeAction::Settings(_) | w::ProposeAction::Batch(_) => None,
+                    w::ProposeAction::Settings(_) | w::ProposeAction::Batch(_) | w::ProposeAction::ReleasePlaced(_) => {
+                        None
+                    }
                     w::ProposeAction::Amendment(v) => Some((c::ObjectKey::Task(v.task()), 1, v.revision().value())),
                 },
                 w::Ask::Hold(_)

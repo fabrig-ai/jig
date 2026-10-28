@@ -494,7 +494,7 @@ fn a_client_proposes_a_release_and_the_owner_reads_it_in_their_inbox() {
             &mut world,
             c::Ask::Decide {
                 project: 1,
-                on: c::DecideOn::Proposal { proposal: key, decision: c::Decision::Accept, running: None },
+                on: c::DecideOn::Proposal { proposal: key, decision: c::Decision::Accepted, running: None },
             }
         ),
         c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::ProposalDecided { .. }))

@@ -188,7 +188,7 @@ pub struct PersonProposal {
 pub const PROPOSAL_WITHOUT_TASK: u64 = 0;
 
 impl PersonProposal {
-    /// Proposed roots in their durable order; empty for amendments and settings.
+    /// Proposed roots in their durable order; empty for amendments, releases and settings.
     #[must_use]
     pub fn batch(&self) -> &[New] {
         match &self.action {
@@ -196,7 +196,7 @@ impl PersonProposal {
             PersonAction::Amend { .. } | PersonAction::Settings { .. } | PersonAction::ReleasePlaced { .. } => &[],
         }
     }
-    /// The amended task or first root for the inbox link; zero when there is no task.
+    /// The amended or released task, or first root, for the inbox link; zero when there is no task.
     #[must_use]
     pub fn first(&self) -> u64 {
         match &self.action {

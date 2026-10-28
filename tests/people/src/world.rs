@@ -586,7 +586,11 @@ impl World {
                         Ask::MakeService { .. } => RouteKind::Service,
                         Ask::DecideProposal { .. }
                         | Ask::Propose {
-                            action: people::Action::Amend { .. } | people::Action::Settings { .. }, ..
+                            action:
+                                people::Action::Amend { .. }
+                                | people::Action::Settings { .. }
+                                | people::Action::ReleasePlaced { .. },
+                            ..
                         } => RouteKind::Proposal,
                         Ask::TakePerson { .. } | Ask::HandBackPerson { .. } | Ask::AnswerPerson { .. } => {
                             RouteKind::TakePerson
@@ -810,6 +814,15 @@ impl World {
                                     &mut self.domain,
                                     &self.env,
                                     Event::Decided { request, outcome: Outcome::Proposed { proposal, to: 0 } },
+                                    &mut self.out,
+                                );
+                            }
+                            Ask::Propose { action: people::Action::ReleasePlaced { .. }, .. } => {
+                                let proposal = self.name();
+                                people::step(
+                                    &mut self.domain,
+                                    &self.env,
+                                    Event::Decided { request, outcome: Outcome::ReleaseProposed { proposal } },
                                     &mut self.out,
                                 );
                             }

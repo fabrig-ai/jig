@@ -1,4 +1,4 @@
-//! Party release proposals wait only for the placed hold owner (tasks.md, 5.9).
+//! Party release proposals wait only for the placed hold owner (domain/tasks.md, 5.9).
 use crate::{CallKey, Core, Event, GoalRoute, Limits, ProposalChoice, Request, Requests, RoutedCall};
 use alloc::boxed::Box;
 use jig_domain_people as people;

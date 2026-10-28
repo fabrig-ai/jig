@@ -8,7 +8,7 @@ use skein_lib::{Env, List, Queue, ReplyTo};
 pub(crate) fn valid_action(proposal: &PersonProposal, limits: &Limits) -> bool {
     let batch = match &proposal.action {
         PersonAction::ReleasePlaced { task, hold, revision } => {
-            return proposal.project != 0 && *task != 0 && *hold != 0 && *revision != 0;
+            return proposal.project != 0 && *task != 0 && *hold != 0 && *revision != 0 && !proposal.reason.is_empty();
         }
         PersonAction::Settings { against, items } => {
             return proposal.project == 0 && *against > 0 && valid_settings(items);
@@ -149,7 +149,7 @@ pub(crate) fn ended(domain: &mut Domain, env: &Env<Limits>, task: u64, out: &mut
 
 pub(crate) fn check(domain: &Domain, env: &Env<Limits>, proposal: &PersonProposal) -> Result<(), Box<crate::Problem>> {
     if let PersonAction::ReleasePlaced { .. } = proposal.action {
-        return match release_plan(domain, env, proposal, crate::Party::Person(proposal.proposer)) {
+        return match release_basis(domain, proposal) {
             Ok(_) => Ok(()),
             Err(why) => Err(Box::new(crate::Problem::new(Some(proposal.first()), why))),
         };
@@ -219,7 +219,17 @@ pub(crate) fn release_plan(
     proposal: &PersonProposal,
     by: crate::Party,
 ) -> Result<Option<crate::control::ReleasePlan>, Refusal> {
-    let PersonAction::ReleasePlaced { task, hold, revision } = proposal.action else { return Ok(None) };
+    let PersonAction::ReleasePlaced { task, .. } = proposal.action else { return Ok(None) };
+    release_basis(domain, proposal)?;
+    if !crate::control::allowed(domain, task, by, env.limits.tasks) {
+        return Err(Refusal::Reference);
+    }
+    let plan = crate::control::check_release(domain, &crate::compound::Staged::new(0), env, task, by, None, None)?;
+    Ok(Some(plan))
+}
+
+fn release_basis(domain: &Domain, proposal: &PersonProposal) -> Result<(), Refusal> {
+    let PersonAction::ReleasePlaced { task, hold, revision } = proposal.action else { return Ok(()) };
     let current = domain.placed_hold(hold).ok_or(Refusal::Unknown)?;
     if current.lifted || current.revision != revision {
         return Err(Refusal::HoldRevision { revision: current.revision });
@@ -228,9 +238,8 @@ pub(crate) fn release_plan(
     if target.project != proposal.project || target.placed != Some(hold) {
         return Err(Refusal::State);
     }
-    if !crate::control::allowed(domain, task, by, env.limits.tasks) {
-        return Err(Refusal::Reference);
+    if !matches!(target.phase, crate::Phase::Held { .. }) && !crate::placed::draining(domain, target) {
+        return Err(Refusal::State);
     }
-    let plan = crate::control::check_release(domain, &crate::compound::Staged::new(0), env, task, by, None, None)?;
-    Ok(Some(plan))
+    Ok(())
 }

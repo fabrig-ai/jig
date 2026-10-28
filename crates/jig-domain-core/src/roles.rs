@@ -407,7 +407,9 @@ pub(crate) const fn hold_owner(owner: tasks::Owner) -> people::HoldOwner {
 impl Core {
     pub(crate) fn party_release_admit(&self, person: u64, hold: &tasks::PlacedHold) -> Result<(), people::Refusal> {
         let mut result = self.party_hold_admit(person, hold);
-        if let Err(people::Refusal::Authority { proposable, .. }) = &mut result {
+        if !hold.lifted
+            && let Err(people::Refusal::Authority { proposable, .. }) = &mut result
+        {
             *proposable = Some(people::Accepter::HoldOwner);
         }
         result

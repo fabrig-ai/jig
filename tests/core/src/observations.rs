@@ -787,6 +787,15 @@ impl Observer {
                     if matches!(value.state, tasks::PersonProposalState::Pending { .. }) =>
                 {
                     snapshot.party_proposals.insert(value.number, value.proposer);
+                    if let tasks::PersonAction::ReleasePlaced { hold, .. } = value.action {
+                        let key = root::Key::Core(core::Key::Tasks(tasks::Key::PlacedHold(hold)));
+                        if let Some(root::Record::Core(core::Record::Tasks(tasks::Stored::PlacedHold(hold)))) =
+                            store.rows.get(&key)
+                            && let tasks::Owner::Task { task } = hold.owner
+                        {
+                            snapshot.receipts.insert(r::Receipt::Word(task, value.number));
+                        }
+                    }
                 }
                 root::Record::Core(core::Record::Tasks(tasks::Stored::Live(value) | tasks::Stored::Ended(value))) => {
                     let mut snapshot_task = task(value);
