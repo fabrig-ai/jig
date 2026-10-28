@@ -250,7 +250,7 @@ pub fn worst_case_with_patches(limits: &Limits, sets: &PatchSets) -> Option<u64>
 /// Shared resident state and the additional serving peak (store.md 13).
 fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
     let state = u64::try_from(size_of::<Store>()).ok()?;
-    let rows = u64::from(limits.store.value).checked_add(u64::from(limits.store.key))?.checked_mul(2)?;
+    let rows = sizes::restore_bytes(&limits.store);
     let decoded = decoded_worst_case(limits)?;
     // One byte per encoded row bounds carrier counts. Count wire values and
     // their translated records together, including the census's fetched task.
