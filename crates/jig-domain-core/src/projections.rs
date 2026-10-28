@@ -524,3 +524,27 @@ fn restore_milestone(core: &mut Core, limits: &Limits, goal: u64, milestone: Pro
     state.milestones = milestones.into_boxed();
     true
 }
+
+impl Core {
+    pub(crate) fn stored_projection(&self, key: ProjectionKey) -> Option<ProjectionRecord> {
+        match key {
+            ProjectionKey::Goal(number) => Some(header(self.projections.get(&number)?)),
+            ProjectionKey::Task { goal, task } => {
+                for row in &self.projections.get(&goal)?.plan {
+                    if row.number == task {
+                        return Some(ProjectionRecord::Task { goal, task: row.clone() });
+                    }
+                }
+                None
+            }
+            ProjectionKey::Lifecycle { goal, .. } | ProjectionKey::Revision { goal, .. } => {
+                for row in &self.projections.get(&goal)?.milestones {
+                    if milestone_key(goal, row.identity) == key {
+                        return Some(ProjectionRecord::Milestone { goal, milestone: row.clone() });
+                    }
+                }
+                None
+            }
+        }
+    }
+}
