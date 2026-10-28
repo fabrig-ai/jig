@@ -303,6 +303,7 @@ fn core_held(
                 | jig_domain_people::Outcome::ServiceMade { .. }
                 | jig_domain_people::Outcome::Adopted { .. }
                 | jig_domain_people::Outcome::Proposed { .. }
+                | jig_domain_people::Outcome::ReleaseProposed { .. }
                 | jig_domain_people::Outcome::Withdrawn { .. }
                 | jig_domain_people::Outcome::Stopped { .. }
                 | jig_domain_people::Outcome::Cancelled { .. }
