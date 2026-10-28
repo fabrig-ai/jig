@@ -4,7 +4,7 @@ use smith_fake_claude::{Decision, End, Seen, Step, Story, Turn};
 fn finish() -> Turn {
     Turn {
         steps: vec![],
-        end: End::Success { structured_output: Some(json!({"form":"report","text":"Hello","fields":{}})) },
+        end: End::Success { structured_output: Some(json!({"outcome":{"form":"report","text":"Hello","fields":{}}})) },
     }
 }
 fn story(turns: Vec<Turn>) -> Story {
