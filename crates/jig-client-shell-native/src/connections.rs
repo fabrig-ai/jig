@@ -396,7 +396,7 @@ impl Connections {
         }
     }
     fn read(env: &Env<http::Limits>, value: &mut Exchange) {
-        let read = if matches!(value.owner, Owner::Stream) {
+        let read = if matches!(value.owner, Owner::Stream) && value.status == 200 {
             Read::Line { max: env.limits.read.min(1024) }
         } else {
             match value.remaining {

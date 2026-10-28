@@ -642,3 +642,18 @@ fn http_streams_past_the_call_bound_are_refused_naming_the_override() {
         What::Override,
     );
 }
+
+#[test]
+fn http_calls_override_leaves_room_beside_eight_streams() {
+    let limits =
+        parse(br#"{"profile":"small","overrides":{"clients_http.calls":12,"clients_http.streams":8}}"#).unwrap();
+    assert_eq!(limits.clients_http.calls, 12);
+    assert_eq!(limits.clients_http.streams, 8);
+    for document in [
+        br#"{"profile":"small","overrides":{"clients_http.calls":0}}"#.as_slice(),
+        br#"{"profile":"small","overrides":{"clients_http.calls":4294967296}}"#.as_slice(),
+        br#"{"profile":"small","overrides":{"clients_http.calls":1}}"#.as_slice(),
+    ] {
+        problem(document, &[b"limits", b"overrides", b"clients_http.calls"], What::Override);
+    }
+}

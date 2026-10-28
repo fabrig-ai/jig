@@ -507,3 +507,17 @@ fn transport_tags_socket_events_and_waits_for_connection() {
         assert!(matches!(requests.pop(), Some(skein_io::Request::Stream { stream, .. }) if stream == socket));
     }
 }
+
+#[test]
+fn a_binary_409_stream_refusal_reaches_the_client_without_a_line_ending() {
+    let mut peer = Peer::new();
+    peer.shell.down(Time::ZERO, client::Request::OpenStream { credential: None }, &mut peer.below);
+    peer.respond(b"HTTP/1.1 409 Conflict\r\nContent-Length: 5\r\n\r\n\x01\0\0\0\x02");
+    assert_eq!(
+        peer.up.pop(),
+        Some(client::Event::Streamed {
+            message: client::Streamed::Full(client::StreamFull { bound: client::StreamBound::Transport, size: 2 })
+        })
+    );
+    assert!(peer.up.is_empty());
+}

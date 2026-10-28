@@ -60,6 +60,7 @@ pub fn apply(limits: &mut Limits, name: &[u8], value: u64) -> Result<(), What> {
             }
             match field {
                 b"streams" => limits.clients_http.streams = count,
+                b"calls" => limits.clients_http.calls = count,
                 _ => return Err(What::Override),
             }
             Ok(())
