@@ -14,6 +14,7 @@ impl Neighbours {
                 store.ask(StoreOut::Restart { step, census });
                 Vec::new()
             }
+            core::RestartStep::Sweep => vec![Input::Event(root::Event::RestartDone(step))],
             core::RestartStep::Switch => {
                 if store.generation_pending {
                     store.ask(StoreOut::Restart { step, census: None });
