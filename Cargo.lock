@@ -727,6 +727,7 @@ dependencies = [
  "jig-domain-brief",
  "jig-domain-core",
  "jig-domain-fleet",
+ "jig-domain-host",
  "jig-domain-notes",
  "jig-domain-people",
  "jig-domain-tasks",

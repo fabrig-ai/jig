@@ -584,3 +584,240 @@ fn a_replayed_call_uses_its_original_key_for_the_name() {
         }]
     );
 }
+
+// The story has one live worker and one turn followed by one terminal.
+const PASS_CHANNEL: skein_lib::Token = skein_lib::Token::new(17);
+const PASS_CHAT: u64 = 9801;
+const PASS_TURN: u32 = 1;
+const PASS_SPENT: u64 = 3;
+const PASS_BODY: &[u8] = b"pass-by turn";
+const PASS_RESULT: &[u8] = b"done";
+const PASS_COMMITS: u32 = 2;
+const PASS_REMAINING: u32 = 2; // The second call, followed by its text.
+const PASS_STEPS: u32 = 64; // The startup fixtures' finite settlement budget.
+
+#[test]
+fn completions_pass_a_held_call_in_order() {
+    use jig_domain_tasks as tasks;
+    use jig_test_domain as root;
+    let (mut driven, task, attempt) = pass_by_run();
+    let _next_period = fill_to_watermark(&mut driven);
+    let pressure = driven.commits.len();
+    let engine = fixtures::engine(&mut driven.service);
+    for event in [
+        pass_call(task, attempt, b"first"),
+        root::Event::Turn {
+            channel: PASS_CHANNEL,
+            task,
+            attempt,
+            turn: PASS_TURN,
+            cumulative: PASS_SPENT,
+            read: None,
+            refused: Box::new([]),
+            opens_window: true,
+            transcript: PASS_BODY.into(),
+        },
+        root::Event::Answer {
+            channel: PASS_CHANNEL,
+            task,
+            attempt,
+            cumulative: PASS_SPENT,
+            read: None,
+            refused: Box::new([]),
+            end: tasks::End::Finished {
+                result: tasks::TaskResult::Report { words: PASS_RESULT.into() },
+                cancel_delegates: false,
+            },
+        },
+        pass_call(task, attempt, b"second"),
+        root::Event::Text { task, attempt, turn: PASS_TURN, offset: 0, text: b"later".as_slice().into() },
+    ] {
+        engine.events.push(event);
+    }
+    // File completions persist the transcript, but commit answers stay withheld.
+    let mut next_file = PASS_FIRST_FILE;
+    for _ in 0..PASS_STEPS {
+        driven.turn(false);
+        pass_files(&mut driven, &mut next_file);
+    }
+    assert_eq!(
+        driven.commits.len(),
+        pressure.checked_add(PASS_COMMITS).expect("pressure plus the two completions"),
+        "turn and terminal commit behind the held call"
+    );
+    assert_eq!(
+        fixtures::engine(&mut driven.service).events.len(),
+        PASS_REMAINING,
+        "the second call and the text behind it stay in arrival order"
+    );
+    let Some(core::Record::Tasks(tasks::Stored::Ended(row))) =
+        pass_get(&mut driven, core::Key::Tasks(tasks::Key::Ended(task)))
+    else {
+        panic!("the terminal followed the turn")
+    };
+    assert_eq!((row.turn, row.last_answer), (PASS_TURN, Some(attempt)), "the terminal includes the preceding turn");
+    driven.commit_all();
+    for _ in 0..PASS_STEPS {
+        driven.turn(true);
+        pass_files(&mut driven, &mut next_file);
+    }
+    assert!(fixtures::engine(&mut driven.service).events.is_empty(), "both held calls and the later text drain");
+    let key = core::CallKey { task, attempt, completion: PASS_TURN, position: 0 };
+    assert_eq!(
+        pass_get(&mut driven, core::Key::Core(core::CoreKey::Call(key))),
+        None,
+        "a call passed by its attempt's terminal acts for no ended attempt"
+    );
+    assert_eq!(driven.end(), None);
+}
+
+fn pass_by_run() -> (fixtures::Driven, u64, u64) {
+    use jig_domain_host as host;
+    use jig_domain_people as people;
+    use jig_domain_tasks as tasks;
+    use jig_test_domain as root;
+    use skein_lib::Duration;
+    let document = fixtures::with(&fixtures::engine_document(), br#""sources":{"keys":true}"#, br#""sources":{}"#);
+    let mut driven = fixtures::Driven::started(&document);
+    // This story withholds pressure commits plus two admitted completions.
+    driven.commits = skein_lib::Queue::uncapped();
+    let engine = fixtures::engine(&mut driven.service);
+    // This peer supplies its records directly at the root's worker boundary.
+    engine.events.push(root::Event::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
+    engine.events.push(root::Event::Link {
+        channel: PASS_CHANNEL,
+        link: root::link::Event::Hello {
+            worker: 0,
+            hello: host::Hello {
+                slots: 1,
+                stop_bound: Duration::ZERO,
+                workstreams: Box::new([]),
+                hosting: Box::new([]),
+                bounds: host::Bounds {
+                    program_endpoints: Box::new([]),
+                    models: Box::new([host::ModelBound {
+                        name: b"small".as_slice().into(),
+                        window: 8192,
+                        output: 1024,
+                    }]),
+                    turns: u32::MAX,
+                    spend: u64::MAX,
+                    time: Duration::from_secs(60),
+                    waiting: Duration::from_secs(60),
+                    checks: Duration::from_nanos(1),
+                    message_bytes: u32::MAX,
+                    inbox: u32::MAX,
+                    unacknowledged: u32::MAX,
+                },
+            },
+        },
+    });
+    engine.events.push(root::Event::Link {
+        channel: PASS_CHANNEL,
+        link: root::link::Event::Up(host::LinkUp::Logins { logins: Box::new([]) }),
+    });
+    for _ in 0..PASS_STEPS {
+        driven.turn(true);
+    }
+    driven.chat(PASS_CHAT, b"pass-by chat");
+    for _ in 0..PASS_STEPS {
+        driven.turn(true);
+    }
+    let Some(people::Reply::Outcome(people::Outcome::Created { first: task, .. })) = driven.reply else {
+        let engine = fixtures::engine(&mut driven.service);
+        panic!(
+            "the chat was admitted: {:?}, room {}, blocked {}, events {}, parties {}, end {:?}",
+            driven.reply,
+            engine.room(),
+            engine.blocked,
+            engine.events.len(),
+            engine.parties.len(),
+            engine.end
+        );
+    };
+    let Some(core::Record::Tasks(tasks::Stored::Live(row))) =
+        pass_get(&mut driven, core::Key::Tasks(tasks::Key::Live(task)))
+    else {
+        panic!("the live chat is stored")
+    };
+    assert!(row.attempt > 0, "the live chat has its assigned worker: {:?}", row.phase);
+    (driven, task, row.attempt)
+}
+
+fn pass_call(task: u64, attempt: u64, name: &[u8]) -> jig_test_domain::Event {
+    jig_test_domain::Event::Link {
+        channel: PASS_CHANNEL,
+        link: jig_test_domain::link::Event::Up(jig_domain_host::LinkUp::Call {
+            run: skein_lib::Token::new(task),
+            attempt: skein_lib::Token::new(attempt),
+            call: name.into(),
+            tool: b"read".as_slice().into(),
+            writes: false,
+            input: b"{}".as_slice().into(),
+            deadline: skein_lib::Duration::from_secs(1),
+        }),
+    }
+}
+
+fn pass_get(driven: &mut fixtures::Driven, key: core::Key) -> Option<core::Record> {
+    let engine = fixtures::engine(&mut driven.service);
+    engine.store.ask(jig_protocol_store::Request::Get {
+        owner: skein_lib::Token::new(PASS_CHAT),
+        key: jig_protocol_store::Get::Jig(key),
+    });
+    let Some(StoreEvent::Got { row, .. }) = engine.store.above.pop() else { panic!("store get") };
+    match row {
+        Some(jig_protocol_store::Row::Jig(record)) => Some(record),
+        Some(jig_protocol_store::Row::Application { .. }) => panic!("jig row"),
+        None => None,
+    }
+}
+
+// The scripted transcript has a pre-existing empty file. These descriptors are
+// distinct from the fixture's root descriptor (1); only writes are exercised.
+const PASS_FIRST_FILE: i32 = 100;
+
+fn pass_files(driven: &mut fixtures::Driven, next_file: &mut i32) {
+    use skein_io::kernel::{Complete, Done, Fd, Op};
+    let service = &mut driven.service;
+    for _ in 0..service.submissions.len() {
+        let submit = service.submissions.pop().expect("transcript operation");
+        let done = if let Op::Open { .. } = &submit.kind {
+            let fd = Fd::new(*next_file);
+            *next_file = next_file.checked_add(1).expect("fixture descriptor");
+            Done::Fd(fd)
+        } else if let Op::Stat { .. } = &submit.kind {
+            Done::Stat(skein_io::kernel::Stat {
+                kind: skein_io::kernel::Kind::File,
+                size: 0,
+                mode: 0o600,
+                owner: 0,
+                links: 1,
+            })
+        } else if let Op::Write { bytes, from, .. } = &submit.kind {
+            Done::Count(
+                u32::try_from(bytes.len()).expect("fixture frame").checked_sub(*from).expect("unwritten suffix"),
+            )
+        } else if matches!(&submit.kind, Op::Sync { .. } | Op::Close { .. } | Op::Remove { .. }) {
+            Done::Nothing
+        } else {
+            panic!("unexpected transcript operation {:?}", submit.kind);
+        };
+        let complete = service
+            .kernel
+            .complete(Complete { op: submit.op, kind: submit.kind, result: Ok(done) }, &service.raw_submissions);
+        service.complete_record(complete);
+    }
+    let engine = fixtures::engine(service);
+    engine.store.iterate();
+    // Capture these before iterate can route them back to the root.
+    for _ in 0..engine.store.above.len() {
+        let event = engine.store.above.pop().expect("store answer after file progress");
+        if let StoreEvent::Committed { number, .. } = &event {
+            driven.commits.push(*number);
+            driven.held.insert(*number, event);
+        } else {
+            engine.store.above.push(event);
+        }
+    }
+}

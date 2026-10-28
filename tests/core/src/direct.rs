@@ -73,6 +73,114 @@ impl Driver {
         Self::configured_chat(configuration, &limits)
     }
 
+    /// A live chat named as owner of the first connector's first resource.
+    #[must_use]
+    pub fn resource_owner(seed: u64) -> Self {
+        let mut driver = Self::chat(seed);
+        let task = driver.assignment().task;
+        let resource = jig_test_connector_world::path(1, 1);
+        driver.send(root::Event::Connector {
+            number: 1,
+            event: jig_test_connector::Event::Adopt {
+                project: 1,
+                resource: resource.clone(),
+                role: jig_test_connector::ResourceRole::Owned,
+            },
+        });
+        driver.settle();
+        driver.send(root::Event::Connector {
+            number: 1,
+            event: jig_test_connector::Event::Names { task, project: 1, resources: Box::new([resource.clone()]) },
+        });
+        driver.settle();
+        driver.send(root::Event::Connector {
+            number: 1,
+            event: jig_test_connector::Event::System(jig_test_connector::SystemEvent::Fact {
+                resource,
+                fact: jig_test_connector::Fact { state: Some(10), observed: driver.env.wall, pending: false },
+                origin: jig_test_connector::Origin::Own,
+            }),
+        });
+        driver.settle();
+        driver
+    }
+
+    /// A real resource-bearing run lost while its connector's fresh read is withheld.
+    #[must_use]
+    pub fn lost_resource_writer(seed: u64) -> (Self, u64) {
+        let (configuration, limits) = crate::faults::plan_fixture(seed);
+        let mut world = effects::World::configured(seed, false, configuration, limits);
+        fixtures::configure_resources(&mut world);
+        let parent = world.assignments[0];
+        let spec = fixtures::resource_member(&world, 1, b"writer that disappears");
+        let child = fixtures::delegate(&mut world, parent, 1, spec);
+        world.send(root::Event::Connector {
+            number: 1,
+            event: jig_test_connector::Event::Names {
+                task: child,
+                project: 1,
+                resources: Box::new([jig_test_connector_world::path(1, 1)]),
+            },
+        });
+        let assignment = world.assigned.take().expect("the resource's assigned writer");
+        let resource = jig_test_connector_world::path(1, 1);
+        world.send(root::Event::Connector {
+            number: 1,
+            event: jig_test_connector::Event::System(jig_test_connector::SystemEvent::Fact {
+                resource: resource.clone(),
+                fact: jig_test_connector::Fact { state: Some(10), observed: world.wall_time(), pending: false },
+                origin: jig_test_connector::Origin::Own,
+            }),
+        });
+        world.hold_lost_reads = true;
+        world.send(root::Event::Core(core::Event::Fleet(fleet::Event::Lost { channel: WORKER })));
+        world.advance(Duration::from_secs(6));
+        // Fleet fires one expired attempt at a time: the caller, then its writer.
+        world.send(root::Event::Timer(core::Timer::Fleet));
+        let writer = world
+            .store
+            .rows
+            .values()
+            .find_map(|row| {
+                if let root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Writer(slot))) = row
+                    && slot.lost
+                    && slot.resource.path.as_ref() == resource.segments()
+                {
+                    Some(slot.number)
+                } else {
+                    None
+                }
+            })
+            .expect("the lost writer's read is still owed");
+        let (now, wall) = world.clocks();
+        let signed_in = world
+            .people_answers
+            .iter()
+            .find(|reply| matches!(reply, people::Reply::SignedIn { .. }))
+            .expect("the writer's party is signed in")
+            .clone();
+        let released = vec![
+            root::Request::Deliver(root::Delivery::Assigned { channel: WORKER, assignment }),
+            root::Request::Deliver(root::Delivery::Core(core::Held::PeopleReply {
+                to: ReplyTo::new(SIGN_IN),
+                reply: signed_in,
+            })),
+        ];
+        let driver = Self {
+            domain: world.domain,
+            env: Env { now, wall, limits },
+            events: VecDeque::new(),
+            returned: 0,
+            released,
+            pending: VecDeque::new(),
+            transactions: Vec::new(),
+            stopped: false,
+            store: world.store,
+            serial: 1000,
+        };
+        (driver, writer)
+    }
+
     fn configured_chat(configuration: root::Config, limits: &root::Limits) -> Self {
         let creating = fixtures::Creating::new(&configuration.core, limits.core.tasks.tree_tasks);
         let bootstrap = effects::World::first_start_with_accounts(configuration, limits);
