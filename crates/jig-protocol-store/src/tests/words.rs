@@ -142,9 +142,7 @@ fn level_and_patch_refusals_say_the_designs_words() {
 fn check_refusals_say_the_designs_words() {
     for (why, start) in [
         (Check::Large { key: Box::new([]) }, "- `Check { why: Large }`: \""),
-        (Check::Count { family: "fixture-label", before: 3, after: 2 }, "- `Check { why: Count }`: \""),
         (Check::Load { key: Box::new([]) }, "- `Check { why: Load }`: \""),
-        (Check::Join { key: Box::new([]) }, "- `Check { why: Join }`: \""),
         (Check::Private { name: Box::new([]) }, "- `Check { why: Private }`: \""),
     ] {
         says(OpenRefusal::Check { why }, start, "\"");

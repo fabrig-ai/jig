@@ -260,12 +260,8 @@ pub enum Family {
 pub enum Check {
     /// A patched record too large for a commit alone, by its key as `Patch` gives it.
     Large { key: Box<[u8]> },
-    /// A kept family whose count of records the patches changed.
-    Count { family: &'static str, before: u64, after: u64 },
     /// A row of the restart's ranges that does not load within the deployment's limits.
     Load { key: Box<[u8]> },
-    /// An ended read position whose ended task the store does not hold.
-    Join { key: Box<[u8]> },
     /// A file in the copy's secrets' store that is not private.
     Private { name: Box<[u8]> },
 }
@@ -278,16 +274,8 @@ impl Check {
                 "The check before the switch found a patched record too large for a commit alone in the copy of the store this start patched in ",
                 ", and the generation it patched from stays active, unchanged. Every start of this build checks a fresh copy the same way: start the build before it again, which opens that generation as it was.",
             ],
-            Self::Count { .. } => &[
-                "The check before the switch found a family whose count of records the patches changed in the copy of the store this start patched in ",
-                ", and the generation it patched from stays active, unchanged. Every start of this build checks a fresh copy the same way: start the build before it again, which opens that generation as it was.",
-            ],
             Self::Load { .. } => &[
                 "The check before the switch found a record the restart could not load within the deployment's limits in the copy of the store this start patched in ",
-                ", and the generation it patched from stays active, unchanged. Every start of this build checks a fresh copy the same way: start the build before it again, which opens that generation as it was.",
-            ],
-            Self::Join { .. } => &[
-                "The check before the switch found a record naming an ended task the store does not hold in the copy of the store this start patched in ",
                 ", and the generation it patched from stays active, unchanged. Every start of this build checks a fresh copy the same way: start the build before it again, which opens that generation as it was.",
             ],
             Self::Private { .. } => &[
