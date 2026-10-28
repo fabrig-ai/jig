@@ -136,7 +136,10 @@ fn a_step_s_records_leave_in_one_save() {
     let mut first = Client::signed_in();
     first.step(Event::StreamGone);
     first.step(Event::Send { name: None, key: STOP, request: fixtures::stop() });
-    let mut kept = fixtures::saved(first.requests());
+    let mut kept = skein_lib::List::with_capacity(2);
+    for record in fixtures::saved(first.requests()).into_boxed() {
+        kept.push(record).unwrap();
+    }
     first.step(Event::Send { name: None, key: SECOND, request: fixtures::stop() });
     for record in fixtures::saved(first.requests()).into_boxed() {
         kept.push(record).unwrap();

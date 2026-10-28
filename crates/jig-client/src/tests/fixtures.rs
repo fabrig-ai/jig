@@ -103,13 +103,13 @@ impl Client {
     }
     pub fn with_kept(kept: List<Record>) -> Self {
         let limits = limits();
-        Self::with_limits(limits, kept, max_out(&limits))
+        Self::with_limits(limits, kept)
     }
-    pub fn with_limits(limits: Limits, kept: List<Record>, outputs: u32) -> Self {
+    pub fn with_limits(limits: Limits, kept: List<Record>) -> Self {
         let mut c = Self {
             machine: crate::Client::new(&limits, 7).unwrap(),
-            out: Queue::with_capacity(outputs),
-            requests: List::with_capacity(outputs),
+            out: Queue::uncapped(),
+            requests: List::with_capacity(0),
         };
         c.step(Event::Start { kept });
         c
@@ -130,7 +130,7 @@ impl Client {
             },
             exchanges: 5,
         };
-        let mut c = Self::with_limits(limits, List::with_capacity(0), 16);
+        let mut c = Self::with_limits(limits, List::with_capacity(0));
         c.sign_in();
         c
     }
@@ -150,6 +150,7 @@ impl Client {
     pub fn step(&mut self, event: Event) {
         self.requests.clear();
         self.machine.step(Time::ZERO, Wall::EPOCH, event, &mut self.out);
+        self.requests = List::with_capacity(self.out.len());
         while let Some(request) = self.out.pop() {
             self.requests.push(request).unwrap();
         }
@@ -157,6 +158,7 @@ impl Client {
     pub fn fire(&mut self, now: Time) {
         self.requests.clear();
         self.machine.fire(now, Wall::EPOCH, &mut self.out);
+        self.requests = List::with_capacity(self.out.len());
         while let Some(request) = self.out.pop() {
             self.requests.push(request).unwrap();
         }
@@ -210,7 +212,13 @@ pub fn read_none(why: w::ReadNone) -> Box<[u8]> {
 }
 
 pub fn saved(requests: &[Request]) -> List<Record> {
-    let mut records = List::with_capacity(max_out(&limits()));
+    let mut count = 0_u32;
+    for request in requests {
+        if let Request::Save { records } = request {
+            count = count.checked_add(records.len()).expect("collected records fit");
+        }
+    }
+    let mut records = List::with_capacity(count);
     for request in requests {
         if let Request::Save { records: rows } = request {
             for record in rows {
@@ -236,7 +244,7 @@ pub fn other_store_version(record: &mut Record) {
 }
 
 pub fn answers(requests: &[Request]) -> List<(Key, Outcome)> {
-    let mut answers = List::with_capacity(max_out(&limits()));
+    let mut answers = List::with_capacity(u32::try_from(requests.len()).unwrap());
     for request in requests {
         if let Request::Told { told: Told::Answered { key, outcome } } = request {
             answers.push((*key, outcome.clone())).unwrap();
@@ -274,7 +282,7 @@ pub fn sign_out_answer(record: &w::SignOutAnswer) -> Box<[u8]> {
     out.finish()
 }
 pub fn ended(requests: &[Request]) -> List<(Handle, Why)> {
-    let mut ended = List::with_capacity(max_out(&limits()));
+    let mut ended = List::with_capacity(u32::try_from(requests.len()).unwrap());
     for request in requests {
         if let Request::Told { told: Told::Ended { handle, why } } = request {
             ended.push((*handle, *why)).unwrap();
@@ -283,7 +291,7 @@ pub fn ended(requests: &[Request]) -> List<(Handle, Why)> {
     ended
 }
 pub fn pages(requests: &[Request]) -> List<(Handle, Readout)> {
-    let mut pages = List::with_capacity(max_out(&limits()));
+    let mut pages = List::with_capacity(u32::try_from(requests.len()).unwrap());
     for request in requests {
         if let Request::Told { told: Told::Page { handle, page } } = request {
             pages.push((*handle, page.clone())).unwrap();

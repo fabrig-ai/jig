@@ -62,11 +62,7 @@ fn a_request_parked_offline_is_sent_once_me_returns() {
     assert_eq!(c.machine.pending(STOP).unwrap().progress, Progress::Parked);
     assert_eq!(fixtures::keyed_count(c.requests()), 0);
     c.step(Event::Stored);
-    c.machine.fire(
-        skein_lib::Time::from_nanos(100_000_000),
-        skein_lib::Wall::EPOCH,
-        &mut skein_lib::Queue::with_capacity(max_out(&fixtures::limits())),
-    );
+    c.machine.fire(skein_lib::Time::from_nanos(100_000_000), skein_lib::Wall::EPOCH, &mut skein_lib::Queue::uncapped());
     c.stream(fixtures::hello(jig_client_protocol_wire::VERSION));
     let watch = c.opened_watch();
     c.step(Event::Stored);

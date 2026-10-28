@@ -16,12 +16,8 @@ pub(super) struct Store {
     held: Queue<Held>,
 }
 impl Store {
-    pub(super) fn new(limits: &Limits) -> Self {
-        Self {
-            waiting: false,
-            failed: false,
-            held: Queue::with_capacity(limits.exchanges.checked_add(1).expect("validated store queue")),
-        }
+    pub(super) fn new(_limits: &Limits) -> Self {
+        Self { waiting: false, failed: false, held: Queue::uncapped() }
     }
 }
 /// Whether these limits are representable: every edge bound they size
@@ -104,13 +100,7 @@ impl Link {
                 out.push(Request::NotKept { attempt: attempt.token });
             }
         } else if self.store.waiting {
-            if self.store.held.len() == self.store.held.capacity() {
-                if let Some(attempt) = self.attempts.remove(&exchange) {
-                    out.push(Request::NotKept { attempt: attempt.token });
-                }
-            } else {
-                self.store.held.push(Held { exchange, message, credential: self.credential.clone() });
-            }
+            self.store.held.push(Held { exchange, message, credential: self.credential.clone() });
         } else {
             out.push(Request::Exchange { exchange, message, credential: self.credential.clone() });
         }
@@ -160,8 +150,8 @@ impl Link {
     pub(super) fn written(&mut self, out: &mut Queue<Request>) {
         self.store.waiting = false;
         self.store.failed = false;
-        for _ in 0..self.store.held.capacity() {
-            let Some(value) = self.store.held.pop() else { break };
+        // Durability releases held exchanges in FIFO order, skipping stale attempts.
+        while let Some(value) = self.store.held.pop() {
             if self.attempts.contains_key(&value.exchange) {
                 out.push(Request::Exchange {
                     exchange: value.exchange,
@@ -174,8 +164,7 @@ impl Link {
     pub(super) fn write_failed(&mut self, out: &mut Queue<Request>) {
         self.store.waiting = false;
         self.store.failed = false;
-        for _ in 0..self.store.held.capacity() {
-            let Some(value) = self.store.held.pop() else { break };
+        while let Some(value) = self.store.held.pop() {
             if let Some(attempt) = self.attempts.remove(&value.exchange) {
                 out.push(Request::NotKept { attempt: attempt.token });
             }

@@ -6,11 +6,10 @@ const ENGINE_KEY: skein_lib::RequestKey = [1; 16];
 const RETENTION: Duration = Duration::from_secs(60);
 fn new() -> Client {
     let limits = fixtures::limits();
-    let bound = max_out(&limits);
     Client {
         machine: crate::Client::unlinked(&limits, 7).unwrap(),
-        out: Queue::with_capacity(bound),
-        requests: List::with_capacity(bound),
+        out: Queue::uncapped(),
+        requests: List::with_capacity(0),
     }
 }
 fn client() -> Client {

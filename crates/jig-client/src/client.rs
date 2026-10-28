@@ -97,8 +97,8 @@ pub struct Client {
     signing_out: bool,
     sign_out_lost: bool,
     rng: Rng,
-    saves: List<Record>,
-    erases: List<Box<[u8]>>,
+    saves: Queue<Record>,
+    erases: Queue<Box<[u8]>>,
     reads: Queue<DeferredRead>,
 }
 /// Payload-free admission counters, copied only for an explicit diagnostic.
@@ -140,13 +140,12 @@ impl Client {
         Ok(Self::build(limits, seed, None))
     }
     fn build(limits: &Limits, seed: u64, link: Option<link::Link>) -> Self {
-        let bound = crate::max_out(limits);
         Self {
             domain: domain::Domain::new(&limits.domain, seed),
             link,
             limits: *limits,
-            domain_out: Queue::with_capacity(bound),
-            link_out: Queue::with_capacity(bound),
+            domain_out: Queue::uncapped(),
+            link_out: Queue::uncapped(),
             store: crate::store::Store::new(limits.domain.requests.requests),
             service: None,
             signing_link: false,
@@ -156,9 +155,9 @@ impl Client {
             signing_out: false,
             sign_out_lost: false,
             rng: Rng::new(seed),
-            saves: List::with_capacity(bound),
-            erases: List::with_capacity(bound),
-            reads: Queue::with_capacity(limits.domain.reads),
+            saves: Queue::uncapped(),
+            erases: Queue::uncapped(),
+            reads: Queue::uncapped(),
         }
     }
     pub fn step(&mut self, now: Time, wall: Wall, event: Event, out: &mut Queue<Request>) {
@@ -451,13 +450,12 @@ impl Client {
             self.link_step(now, link::Event::Read { read, what });
             return;
         }
-        assert!(self.reads.room() > 0, "one queued demand per current domain read");
         self.reads.push(DeferredRead { read, what });
     }
     fn drain(&mut self, env: &Env<DomainLimits>, out: &mut Queue<Request>) {
         self.prune_reads();
-        let bound = self.domain_out.capacity();
-        for _ in 0..bound {
+        loop {
+            // link_requests_dispatched: route the link's consequences before the next domain request.
             if let Some(request) = self.link_out.pop() {
                 self.route_link(env, request, out);
             } else if let Some(request) = self.domain_out.pop() {
@@ -514,14 +512,25 @@ impl Client {
             }
         }
         self.prune_reads();
-        assert!(self.link_out.is_empty() && self.domain_out.is_empty(), "bounded composition settles");
+        assert!(
+            self.link_out.is_empty() && self.domain_out.is_empty(),
+            "client_settled: link and domain outputs empty; deferred reads may wait on exchange credit"
+        );
         if !self.saves.is_empty() {
             self.store.write();
-            out.push(Request::Save { records: core::mem::replace(&mut self.saves, List::with_capacity(bound)) });
+            let mut records = List::with_capacity(self.saves.len());
+            while let Some(record) = self.saves.pop() {
+                records.push(record).expect("gathered saves fit");
+            }
+            out.push(Request::Save { records });
         }
         if !self.erases.is_empty() {
             self.store.write();
-            out.push(Request::Erase { records: core::mem::replace(&mut self.erases, List::with_capacity(bound)) });
+            let mut records = List::with_capacity(self.erases.len());
+            while let Some(key) = self.erases.pop() {
+                records.push(key).expect("gathered erases fit");
+            }
+            out.push(Request::Erase { records });
         }
     }
     fn route_link(&mut self, env: &Env<DomainLimits>, request: link::Request, out: &mut Queue<Request>) {
@@ -537,8 +546,8 @@ impl Client {
                 }
             }
             link::Request::CloseStream => out.push(Request::CloseStream),
-            link::Request::Save { record } => self.saves.push(record).expect("bounded step saves"),
-            link::Request::Erase { key } => self.erases.push(key).expect("bounded step erases"),
+            link::Request::Save { record } => self.saves.push(record),
+            link::Request::Erase { key } => self.erases.push(key),
             link::Request::Answer { attempt, envelope, answer, why } => {
                 self.up(env, Up::Answer { attempt, envelope, answer, why });
             }

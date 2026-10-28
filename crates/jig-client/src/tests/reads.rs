@@ -7,7 +7,7 @@ fn client() -> Client {
     let mut limits = fixtures::limits();
     limits.exchanges = 1;
     limits.domain.reads = 2;
-    let mut client = Client::with_limits(limits, List::with_capacity(0), crate::max_out(&limits));
+    let mut client = Client::with_limits(limits, List::with_capacity(0));
     client.step(Event::SignIn { with: With::Held(Secret::new(Box::new([7; 40]))) });
     client.stream(fixtures::hello(jig_client_protocol_wire::VERSION));
     let opening = client.exchange();
@@ -200,10 +200,9 @@ fn a_peer_version_refusal_ends_queued_reads_instead_of_admitting_them() {
 /// O2: the old link's consequences leave before the new domain's requests.
 #[test]
 fn link_consequences_precede_the_next_domain_request() {
-    const ORDER_OUTPUTS: u32 = 32;
     let mut limits = fixtures::limits();
     limits.exchanges = 3;
-    let mut client = Client::with_limits(limits, List::with_capacity(0), ORDER_OUTPUTS);
+    let mut client = Client::with_limits(limits, List::with_capacity(0));
     client.sign_in();
     for task in [20, 21] {
         client.step(Event::Watch {
@@ -260,7 +259,9 @@ fn link_consequences_precede_the_next_domain_request() {
         assert_eq!(sent.as_slice(), &[project]);
     }
     client.step(Event::Lost { exchange: opening });
-    assert!(
-        client.requests().iter().all(|request| !matches!(request, Request::Exchange { message: Message::Read(_), .. }))
-    );
+    for request in client.requests() {
+        if let Request::Exchange { message: Message::Read(_), .. } = request {
+            panic!("releasing another exchange sends no read twice");
+        }
+    }
 }

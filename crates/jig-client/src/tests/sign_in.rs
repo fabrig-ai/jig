@@ -410,12 +410,12 @@ fn a_signed_out_read_visibly_ends_itself_and_other_reads_once() {
 // Exceeds the domain fixture's output allowance without a reads term, with no watch handles.
 const INDEPENDENT_READS: u32 = 64;
 #[test]
-fn independent_read_room_and_pages_fit_the_composed_queues() {
+fn independent_reads_refuse_cancel_once_and_reuse_room() {
     let limits = Limits {
         domain: DomainLimits { handles: 0, watches: 1, reads: INDEPENDENT_READS, ..fixtures::domain_limits() },
         exchanges: INDEPENDENT_READS,
     };
-    let mut c = Client::with_limits(limits, skein_lib::List::with_capacity(0), max_out(&limits));
+    let mut c = Client::with_limits(limits, skein_lib::List::with_capacity(0));
     let mut expected = skein_lib::List::with_capacity(INDEPENDENT_READS);
     for number in 0..u64::from(INDEPENDENT_READS) {
         let handle = Handle { asker: Asker::JIG, number };
@@ -427,7 +427,6 @@ fn independent_read_room_and_pages_fit_the_composed_queues() {
     assert_eq!(fixtures::pages(c.requests()).as_slice(), &[(extra, Readout::Limit)]);
     c.step(Event::SignIn { with: With::Held(fixtures::credential(&NEW_CREDENTIAL)) });
     assert_eq!(fixtures::pages(c.requests()).as_slice(), expected.as_slice());
-    assert!(u32::try_from(c.requests().len()).unwrap() <= max_out(&limits));
     assert_no_read_exchange(&c);
     c.read(TASK);
     assert_read_credential(&c, Some(&fixtures::credential(&NEW_CREDENTIAL)));
