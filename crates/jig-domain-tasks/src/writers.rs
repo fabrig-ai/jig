@@ -215,11 +215,13 @@ pub(crate) fn effect_settled(
 }
 
 pub(crate) fn restore(domain: &mut Domain, limits: &Limits, slot: WriterSlot) -> bool {
-    if slot.number == 0
-        || !crate::holds::valid_name(limits, &slot.resource)
-        || domain.writers.contains_key(&slot.resource)
-        || domain.writers.len() == domain.writers.capacity()
-    {
+    assert!(
+        !domain.writers.contains_key(&slot.resource),
+        "tasks: Writer({}) links to resource {:?}, already reserved by another writer",
+        slot.number,
+        slot.resource
+    );
+    if !crate::holds::valid_name(limits, &slot.resource) || domain.writers.len() == domain.writers.capacity() {
         return false;
     }
     domain.next_writer = domain.next_writer.max(slot.number);
