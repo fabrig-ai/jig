@@ -72,6 +72,7 @@ fn the_restart_script_waits_for_each_step_and_each_connector() {
         core::RestartStep::LoadInbox,
         core::RestartStep::RestoreConnector { connector: 1 },
         core::RestartStep::RestoreConnector { connector: 2 },
+        core::RestartStep::Sweep,
         core::RestartStep::Switch,
         core::RestartStep::AdoptRuns,
         core::RestartStep::ReadAfresh { connector: 1 },
@@ -707,6 +708,7 @@ fn a_restart_without_connectors_still_switches_before_adoption() {
         for step in [
             core::RestartStep::LoadCore,
             core::RestartStep::LoadInbox,
+            core::RestartStep::Sweep,
             core::RestartStep::Switch,
             core::RestartStep::AdoptRuns,
             core::RestartStep::Open,
