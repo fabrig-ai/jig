@@ -16,6 +16,11 @@ pub fn fixture(seed: u64, requirement: bool) -> (root::Config, root::Limits) {
     let mut limits = crate::world::limits();
     limits.core.authority.segments = 2;
     limits.core.people.requests = 16;
+    // Only this story fixture installs Owner, Member and Observer memberships.
+    // Give each its policy definition without changing the shared world profile.
+    const FIXTURE_ROLES: u32 = 3;
+    limits.core.authority.roles = FIXTURE_ROLES;
+    limits.core.documents.roles = FIXTURE_ROLES;
     limits.connector.write_lifetime = Duration::from_secs(1);
     let mut configuration = crate::world::config(seed);
     let mut rules = configuration.core.defaults.rules.clone();
@@ -24,6 +29,16 @@ pub fn fixture(seed: u64, requirement: bool) -> (root::Config, root::Limits) {
     policy.ceiling.grants = Box::new([grant()]);
     policy.roles[0].authority.grants = Box::new([grant()]);
     policy.roles[0].authority.budget.spend = 300;
+    let mut roles = policy.roles.to_vec();
+    for role in [people::Role::Member, people::Role::Observer] {
+        let mut value = policy.roles[0].clone();
+        value.number = role.number();
+        value.requests = authority::Requests(0);
+        value.decides = authority::Proposals(0);
+        value.period_spend = 0;
+        roles.push(value);
+    }
+    policy.roles = roles.into_boxed_slice();
     if requirement {
         policy.requirements = Box::new([authority::Requirement {
             connector: 1,
