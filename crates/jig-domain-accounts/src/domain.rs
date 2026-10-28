@@ -292,6 +292,10 @@ impl Domain {
     pub fn restore_finished(&self) -> bool {
         self.phase == Phase::Wanted
     }
+    /// Attach restored source names before any child is allowed to sweep.
+    pub fn link_restored(&self) {
+        crate::programs::link(self);
+    }
     /// The live set that does not fit the current configuration.
     #[must_use]
     pub const fn restore_limit(&self) -> Option<crate::RestoreLimit> {
