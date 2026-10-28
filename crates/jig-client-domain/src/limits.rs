@@ -44,23 +44,6 @@ pub struct Limits {
     pub parts: u32,
     pub heartbeat: Duration,
 }
-#[must_use]
-pub fn max_out(limits: &Limits) -> u32 {
-    limits
-        .handles
-        .checked_mul(2)
-        .expect("validated handles")
-        .checked_add(limits.watches)
-        .expect("validated output bound")
-        .checked_add(limits.reads)
-        .expect("validated read output")
-        .checked_add(limits.requests.out)
-        .expect("validated table output")
-        .checked_add(limits.requests.requests.checked_mul(2).expect("validated request count"))
-        .expect("validated progress output")
-        .checked_add(1)
-        .expect("validated drop output")
-}
 /// Whether these limits are representable: every edge bound they size
 /// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
@@ -80,7 +63,7 @@ pub fn valid(limits: &Limits) -> bool {
     if u32::try_from(limits.owners.len()).is_err() {
         return false;
     }
-    output_bound(limits).is_some()
+    true
 }
 
 #[must_use]
@@ -114,15 +97,4 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     own.checked_add(
         u64::from(limits.handles.checked_add(limits.watches)?).checked_mul(limits.document_bytes.checked_mul(2)?)?,
     )
-}
-
-fn output_bound(limits: &Limits) -> Option<u32> {
-    limits
-        .handles
-        .checked_mul(2)?
-        .checked_add(limits.watches)?
-        .checked_add(limits.reads)?
-        .checked_add(limits.requests.out)?
-        .checked_add(limits.requests.requests.checked_mul(2)?)?
-        .checked_add(1)
 }

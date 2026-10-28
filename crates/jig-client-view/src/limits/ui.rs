@@ -59,7 +59,6 @@ pub fn valid(limits: &Limits) -> bool {
         return false;
     }
     limits.watches.checked_add(limits.reads).is_some()
-        && output_bound(limits).is_some()
         && timers(limits).is_some()
         && tree_names(limits).is_some()
         && crate::page::conversations::valid(limits)
@@ -127,14 +126,4 @@ pub fn timers(limits: &Limits) -> Option<u32> {
 /// One task and every bounded proposal name per retained tree row.
 pub(crate) fn tree_names(limits: &Limits) -> Option<u32> {
     limits.rows.checked_mul(limits.rows.checked_add(1)?)?.checked_add(1)
-}
-
-fn output_bound(limits: &Limits) -> Option<u32> {
-    limits
-        .watches
-        .checked_mul(2)?
-        .checked_add(limits.objects)?
-        .checked_add(limits.parts.checked_mul(2)?)?
-        .checked_add(limits.records)?
-        .checked_add(16)
 }

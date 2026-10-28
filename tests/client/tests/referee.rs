@@ -124,9 +124,6 @@ impl<const BAD: u8> App for Broken<BAD> {
     fn unsent(_: Wire) -> Option<Event> {
         None
     }
-    fn max_out((): &()) -> u32 {
-        1
-    }
     fn view_limits(_: &View) -> skein_ui::Limits {
         LIMITS
     }

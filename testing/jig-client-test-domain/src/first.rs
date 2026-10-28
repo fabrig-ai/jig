@@ -782,7 +782,6 @@ pub fn reclaim(side: &mut Side) {
 pub fn valid(limits: &Limits) -> bool {
     limits.retry != skein_lib::Duration::ZERO
         && limits.watches.checked_add(limits.reads).is_some()
-        && checked_max_out(limits).is_some()
         && limits.objects.checked_mul(2).is_some()
         && limits.rows.checked_add(1).is_some()
         && crate::connector_bounds::document_worst_case(&limits.connector).is_some()
@@ -817,13 +816,6 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<Subject>::worst_case(limits.objects)?)?
         .checked_add(List::<Id<Watching>>::worst_case(limits.watches)?)?;
     total.checked_add(List::<jig_client::contract::ObjectKey>::worst_case(limits.rows.checked_add(1)?)?)
-}
-#[must_use]
-pub fn max_out(limits: &Limits) -> u32 {
-    checked_max_out(limits).expect("side output capacities are checked")
-}
-pub(crate) fn checked_max_out(limits: &Limits) -> Option<u32> {
-    limits.objects.checked_mul(6)?.checked_add(limits.watches.checked_mul(2)?)?.checked_add(16)
 }
 
 fn read_result(side: &mut Side, env: &Env<Limits>, read: Token, result: ReadResult, out: &mut Queue<Request>) {

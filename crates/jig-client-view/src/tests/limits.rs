@@ -35,13 +35,11 @@ fn valid_refuses_each_unrepresentable_limit() {
         Limits { conversation_words: base.intents - 1, ..base },
         Limits { reads: u32::MAX, ..base },
         Limits { watches: u32::MAX, ..base },
-        Limits { parts: u32::MAX, ..base },
         Limits { records: u32::MAX, ..base },
         Limits { objects: u32::MAX, ..base },
         Limits { notices: u32::MAX, ..base },
         Limits { rows: u32::MAX, ..base },
-        // The output's fixed tail, the timer's tick and the tree's final name must fit.
-        Limits { parts: (u32::MAX - base.watches * 2 - base.objects - base.records) / 2, ..base },
+        // The timer's tick and the tree's final name must fit.
         Limits { notices: u32::MAX - base.objects - base.records, ..base },
         Limits { rows: 65_536, ..base },
     ];
