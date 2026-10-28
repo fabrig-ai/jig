@@ -281,22 +281,22 @@ fn only_an_agents_grants_refusal_carries_the_grants_start_cause() {
 }
 
 #[test]
-fn hello_endpoint_storage_is_priced_at_its_actual_length() {
+fn hello_endpoints_keep_uniqueness_and_count_checks() {
     let mut limits = fixtures::limits();
-    let before = crate::worst_case(&limits).expect("native bounds");
+    assert!(crate::valid(&limits));
     let mut endpoints = skein_lib::List::with_capacity(host::PROGRAM_ENDPOINTS);
     for endpoint in 0..host::PROGRAM_ENDPOINTS {
         endpoints.push(endpoint).expect("bounded endpoint list");
     }
     limits.bounds.program_endpoints = endpoints.into_boxed();
-    assert_eq!(crate::worst_case(&limits), Some(before + u64::from(host::PROGRAM_ENDPOINTS) * 4));
+    assert!(crate::valid(&limits));
     limits.bounds.program_endpoints = Box::new([0, 0]);
-    assert_eq!(crate::worst_case(&limits), None);
+    assert!(!crate::valid(&limits));
     let past_cap = host::PROGRAM_ENDPOINTS + 1;
     let mut endpoints = skein_lib::List::with_capacity(past_cap);
     for endpoint in 0..past_cap {
         endpoints.push(endpoint).expect("one slot per endpoint");
     }
     limits.bounds.program_endpoints = endpoints.into_boxed();
-    assert_eq!(crate::worst_case(&limits), None);
+    assert!(!crate::valid(&limits));
 }

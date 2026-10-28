@@ -93,7 +93,9 @@ impl Worker {
             stop_bound: config.stop_bound,
             workstreams: Box::default(),
         };
-        root::worst_case(&root_limits).ok_or(problem(index, b"limits", What::Bound))?;
+        if !root::valid(&root_limits) {
+            return Err(problem(index, b"limits", What::Bound));
+        }
         host::Process::new(Token::new(0), &agent.limits, agent.host_limits.detail_bytes, agent.endpoints.clone())
             .or(Err(problem(index, b"agent", What::Bound)))?;
         let link_limits = crate::limits::worker_link(&config);

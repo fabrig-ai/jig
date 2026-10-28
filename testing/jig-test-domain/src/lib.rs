@@ -1118,7 +1118,7 @@ mod stopping;
 use routes::{route_connector, route_core};
 
 mod limits;
-pub use limits::{max_out, worst_case};
+pub use limits::{max_out, valid};
 mod admission;
 pub use admission::try_step;
 

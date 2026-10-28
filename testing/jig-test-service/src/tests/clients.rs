@@ -305,7 +305,7 @@ fn prepared(clients: bool) -> crate::Service {
     limits.root.journal = f::journal(&limits.root);
     limits.root.watermark = root::default_watermark(&limits.root.journal);
     config.limits.journal = limits.root.journal;
-    assert!(root::worst_case(&limits.root).is_some(), "test root pricing: {:?}", limits.root);
+    assert!(root::valid(&limits.root), "test root limits: {:?}", limits.root);
     let seeds = f::seeds();
     let root = root::Config { core: jig_protocol_config::core(&config, seeds.deployment, seeds.seed), first, second };
     let clients = if clients {

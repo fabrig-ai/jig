@@ -339,15 +339,6 @@ fn cold_restart_loads_every_child_before_opening_decisions() {
     assert!(domain.ready());
 }
 
-#[test]
-fn the_reference_root_reports_a_finite_sum_and_refuses_overflow() {
-    let (_, env) = fixture();
-    assert!(crate::worst_case(&env.limits).is_some());
-    let mut limits = env.limits;
-    limits.core.fleet.attempts = u32::MAX;
-    assert!(crate::worst_case(&limits).is_none());
-}
-
 fn settle(domain: &mut Domain, env: &Env<Limits>) -> Box<[Output]> {
     let mut seen = List::with_capacity(4096);
     for _ in 0..64_u32 {

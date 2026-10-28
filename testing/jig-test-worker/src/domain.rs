@@ -64,7 +64,7 @@ pub struct Domain {
 impl Domain {
     #[must_use]
     pub fn new(limits: &Limits) -> Self {
-        assert!(crate::worst_case(limits).is_some(), "worker child bounds are representable");
+        assert!(crate::valid(limits), "worker child bounds are representable");
         Self {
             hub: host::Domain::new(&limits.hub),
             agent: smith::Domain::new(&limits.agent),

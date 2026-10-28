@@ -13,7 +13,7 @@ mod workspace;
 
 pub use boundary::{Encodable, Encoded, Event, Invalid, Request};
 pub use domain::{Domain, fire, step};
-pub use limits::{Limits, WATERMARK, worst_case};
+pub use limits::{Limits, WATERMARK, valid};
 pub use workspace::Content;
 
 #[cfg(test)]
