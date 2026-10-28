@@ -119,6 +119,11 @@ fn a_stream_full_refusal_reaches_the_caller_through_retries_until_hello() {
 #[test]
 fn a_full_exchange_reaches_the_caller_as_a_named_refusal() {
     let mut c = Client::signed_in();
+    c.step(Event::Full {
+        exchange: skein_lib::Token::new(u64::MAX),
+        full: StreamFull { bound: StreamBound::Exchanges, size: 99 },
+    });
+    assert_eq!(c.machine.link().stream_full, None, "stale full callbacks are ignored");
     c.step(Event::Read { handle: TASK, read: Readable::Jig(contract::Read::Project { project: PROJECT }) });
     let full = StreamFull { bound: StreamBound::Exchanges, size: 8 };
     c.step(Event::Full { exchange: c.exchange(), full });

@@ -132,11 +132,10 @@ impl Link {
             Event::Read { read, what } => self.read(now, read, what, out),
             Event::Reply { exchange, message } => self.answered(exchange, &message, out),
             Event::Full { exchange, full } => {
+                let Some(attempt) = self.attempts.remove(&exchange) else { return };
                 self.stream_full = Some(full);
                 out.push(Request::Fact { fact: Fact::StreamFull { full } });
-                if let Some(attempt) = self.attempts.remove(&exchange) {
-                    self.failure(attempt, out);
-                }
+                self.failure(attempt, out);
                 self.drop_stream(now, out);
             }
             Event::Lost { exchange } => {
