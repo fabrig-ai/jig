@@ -106,6 +106,8 @@ pub fn finite_world(seed: u64) -> (World, u64, u64) {
 pub fn task_proposal(world: &mut World, member: u64) -> u64 {
     let number = propose(world, member, 32, Box::new([span_member()]));
     let batch = person_proposal(world, number).batch().into();
+    // This setup borrows allocated batch identities, not a second pending review.
+    ask_as(world, member, 36, people::Ask::Withdraw { project: PROJECT, proposal: number });
     world.send(jig_test_domain::Event::Core(jig_domain_core::Event::Tasks(jig_domain_tasks::Event::Propose {
         reply_to: skein_lib::ReplyTo::new(skein_lib::Token::new(8300)),
         proposal: jig_domain_tasks::Proposal {
