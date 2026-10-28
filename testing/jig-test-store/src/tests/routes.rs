@@ -152,3 +152,34 @@ fn a_window_read_reaches_the_root_as_transcript_pages() {
     }
     assert_eq!(pages, 2);
 }
+
+#[test]
+#[should_panic(expected = "store: restore range LoadCore did not advance cursor")]
+fn a_restore_page_cannot_repeat_its_empty_cursor() {
+    let mut routes = fixtures::routes();
+    let request = route::down(&mut routes, StoreOut::Restart { step: core::RestartStep::LoadCore, census: None })
+        .expect("restore request");
+    let jig_protocol_store::Request::Restore { owner, .. } = request else { panic!("restore") };
+    let mut into = skein_lib::Queue::with_capacity(8);
+    let cursor = jig_protocol_store::Cursor { interval: 1, after: Box::from(&b"last row"[..]) };
+    route::up(
+        &mut routes,
+        jig_protocol_store::Event::Restored { owner, rows: Box::new([]), next: Some(cursor.clone()) },
+        &mut into,
+    );
+    route::up(
+        &mut routes,
+        jig_protocol_store::Event::Restored { owner, rows: Box::new([]), next: Some(cursor) },
+        &mut into,
+    );
+}
+
+#[test]
+fn restore_pages_use_store_capacity_instead_of_read_allowance() {
+    const STORE_ROW_PAIR: u64 = 33_556_480; // 2 * (fixture key 1024 + value 16777216).
+    let mut routes = fixtures::routes();
+    let request = route::down(&mut routes, StoreOut::Restart { step: core::RestartStep::LoadCore, census: None })
+        .expect("restore request");
+    let jig_protocol_store::Request::Restore { bytes, .. } = request else { panic!("restore") };
+    assert_eq!(bytes, STORE_ROW_PAIR);
+}

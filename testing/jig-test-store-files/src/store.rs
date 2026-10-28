@@ -107,7 +107,7 @@ impl Store {
         };
         component.patch_sets(sets);
         let mut routes = route::Routes::new(limits.routes);
-        routes.configure(limits);
+        routes.configure(limits, &component_limits.store);
         let mut store = Store {
             applied: 0,
             generation_pending: false,
@@ -263,7 +263,7 @@ impl Store {
         self.component.as_mut().expect("rebuilt component").patch_sets(self.sets);
         assert!(self.component.as_mut().expect("rebuilt component").wires(self.wires));
         self.routes = route::Routes::new(self.limits.routes);
-        self.routes.configure(&self.limits);
+        self.routes.configure(&self.limits, &self.component_limits.store);
         self.pending.clear();
         self.held.clear();
         self.inflight.clear();
