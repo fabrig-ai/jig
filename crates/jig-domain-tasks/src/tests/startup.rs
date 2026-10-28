@@ -119,7 +119,10 @@ fn restored_escalation_keeps_its_original_stall_deadline() {
     let out = restored.send(Event::Restored);
     assert_eq!(restored.domain.escalation_alarms.next(), Some(deadline));
     assert_eq!(restored.domain.task(DUE).expect("restored task").escalation, before);
-    assert!(!out.iter().any(|request| matches!(request, Request::Save { .. })));
+    assert!(!out.iter().any(|request| match request {
+        Request::Save { .. } => true,
+        _ => false,
+    }));
 }
 
 fn refusal(out: &[Request], why: Refusal) {

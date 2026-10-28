@@ -8,6 +8,7 @@ type Answer = (u64, Subject, Result<DurableView, Missing>);
 
 impl World {
     /// End a story by restoring its actual store and reading the same public documents.
+    #[expect(clippy::too_many_lines, reason = "one cold restart retains surviving peer facts and compares both sides")]
     pub fn restart_oracle(&mut self, configuration: root::Config) {
         self.oracle_skip = Some("the oracle already owns the story's teardown");
         self.cut = None;
@@ -43,24 +44,20 @@ impl World {
                         if proof.placement != Some(*channel) {
                             return None;
                         }
-                        let live = match &row.phase {
+                        let live = matches!(
+                            &row.phase,
                             jig_domain_tasks::Phase::Active(
                                 jig_domain_tasks::Active::Claimed { .. } | jig_domain_tasks::Active::Running { .. },
-                            )
-                            | jig_domain_tasks::Phase::Closing(jig_domain_tasks::Closing {
+                            ) | jig_domain_tasks::Phase::Closing(jig_domain_tasks::Closing {
                                 stage: jig_domain_tasks::Stage::Run { .. },
                                 ..
-                            })
-                            | jig_domain_tasks::Phase::Held {
-                                was:
-                                    jig_domain_tasks::Was::Active(
-                                        jig_domain_tasks::Active::Claimed { .. }
-                                        | jig_domain_tasks::Active::Running { .. },
-                                    ),
+                            }) | jig_domain_tasks::Phase::Held {
+                                was: jig_domain_tasks::Was::Active(
+                                    jig_domain_tasks::Active::Claimed { .. } | jig_domain_tasks::Active::Running { .. },
+                                ),
                                 ..
-                            } => true,
-                            _ => false,
-                        };
+                            }
+                        );
                         live.then_some(fleet::Hosted {
                             run: skein_lib::Token::new(*task),
                             attempt: skein_lib::Token::new(proof.attempt),
@@ -98,7 +95,14 @@ impl World {
                     State::NeedsSignIn => Failure::SignInAgain,
                     State::Misconfigured => Failure::Misconfigured,
                     State::Unloaded { at, why } => Failure::Unloaded { at, why },
-                    _ => return None,
+                    State::Asking
+                    | State::Granted
+                    | State::Later { .. }
+                    | State::Limited { .. }
+                    | State::Refused
+                    | State::Cancelled
+                    | State::Closing
+                    | State::Moving => return None,
                 };
                 Some(FromComponent::Failed { account: source.source, failure })
             })
@@ -144,13 +148,13 @@ impl World {
         for (key, row) in stored {
             match row {
                 root::Record::Core(core::Record::Tasks(Tasks::Live(row))) => {
-                    assert_eq!(core.tasks.task(row.number), Some(row.as_ref()), "tasks stored view {key:?}")
+                    assert_eq!(core.tasks.task(row.number), Some(row.as_ref()), "tasks stored view {key:?}");
                 }
                 root::Record::Core(core::Record::Tasks(Tasks::Ledger(row))) => {
-                    assert_eq!(core.tasks.funding_records().get(&row.funder), Some(row), "ledger stored view {key:?}")
+                    assert_eq!(core.tasks.funding_records().get(&row.funder), Some(row), "ledger stored view {key:?}");
                 }
                 root::Record::Core(core::Record::People(People::Person { number, identity })) => {
-                    assert_eq!(core.people.identity(*number), Some(identity), "people stored view {key:?}")
+                    assert_eq!(core.people.identity(*number), Some(identity), "people stored view {key:?}");
                 }
                 root::Record::Core(core::Record::People(People::Roles { project, holdings })) => assert_eq!(
                     core.people.project_members(*project),
@@ -158,9 +162,9 @@ impl World {
                     "roles stored view {key:?}"
                 ),
                 root::Record::Core(core::Record::Core(core::CoreRecord::RunProof(row))) => {
-                    assert_eq!(core.proofs.get(&row.task), Some(row), "proof stored view {key:?}")
+                    assert_eq!(core.proofs.get(&row.task), Some(row), "proof stored view {key:?}");
                 }
-                _ => {}
+                root::Record::Core(_) | root::Record::Connector { .. } => {}
             }
         }
     }

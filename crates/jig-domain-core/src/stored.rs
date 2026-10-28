@@ -423,7 +423,6 @@ impl Core {
         use jig_domain_tasks as tasks;
 
         match row {
-            tasks::Stored::PersonProposal(_) | tasks::Stored::PlacedHold(_) | tasks::Stored::Stub(_) => true,
             tasks::Stored::Live(task) => {
                 let number = match task.executor {
                     jig_domain_tasks::Executor::Agent { charter } => Some(charter),
@@ -480,7 +479,12 @@ impl Core {
                 }
                 true
             }
-            tasks::Stored::Ledger(_) | tasks::Stored::Writer(_) | tasks::Stored::Pool(_) => true,
+            tasks::Stored::PersonProposal(_)
+            | tasks::Stored::PlacedHold(_)
+            | tasks::Stored::Stub(_)
+            | tasks::Stored::Ledger(_)
+            | tasks::Stored::Writer(_)
+            | tasks::Stored::Pool(_) => true,
             tasks::Stored::Result(_)
             | tasks::Stored::EndedByParty(_)
             | tasks::Stored::EndedByProject(_)

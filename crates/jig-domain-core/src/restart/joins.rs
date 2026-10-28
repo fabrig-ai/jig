@@ -83,10 +83,9 @@ impl Core {
             self.link_party(task, "inbox.from", word.from);
         }
         if let Some(number) = row.placed {
-            let hold = match self.tasks.placed_hold(number) {
-                Some(hold) => hold,
-                None => panic!("core: Live({task}).placed links to PlacedHold({number}), which is absent"),
-            };
+            let hold = self.tasks.placed_hold(number);
+            assert!(hold.is_some(), "core: Live({task}).placed links to PlacedHold({number}), which is absent");
+            let hold = hold.expect("placed hold linked above");
             assert!(
                 self.authority.policy(hold.project).is_some(),
                 "core: PlacedHold({number}).project links to project {}, which is absent",
@@ -114,10 +113,10 @@ impl Core {
         if let Some(proposal) = &row.proposal {
             match proposal.state {
                 tasks::ProposalState::Pending { holder: tasks::ProposalHolder::Person(person), .. } => {
-                    self.link_person(task, "proposal.holder", person)
+                    self.link_person(task, "proposal.holder", person);
                 }
                 tasks::ProposalState::Accepted { by } | tasks::ProposalState::Rejected { by, .. } => {
-                    self.link_party(task, "proposal.by", by)
+                    self.link_party(task, "proposal.by", by);
                 }
                 tasks::ProposalState::Pending { .. } | tasks::ProposalState::Withdrawn => {}
             }
