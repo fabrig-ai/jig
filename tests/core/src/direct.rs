@@ -2,12 +2,13 @@
 
 use crate::{Store, effects, fixtures, world};
 use jig_domain_accounts as accounts;
+use jig_domain_authority as authority;
 use jig_domain_core as core;
 use jig_domain_fleet as fleet;
 use jig_domain_people as people;
 use jig_test_domain as root;
 use jig_test_store::{StoreOut, Up};
-use skein_lib::{Duration, Env, Queue, ReplyTo, Token};
+use skein_lib::{Duration, Env, Map, Queue, ReplyTo, Token};
 use std::collections::VecDeque;
 
 const WORKER: Token = Token::new(7);
@@ -37,8 +38,42 @@ impl Driver {
     /// A signed-in party's chat, assigned to the walking world's worker.
     #[must_use]
     pub fn chat(seed: u64) -> Self {
-        let limits = world::limits();
-        let configuration = world::config(seed);
+        Self::configured_chat(world::config(seed), world::limits())
+    }
+
+    /// A chat fixture with room and a configured policy for two more projects.
+    #[must_use]
+    pub fn project_maker(seed: u64) -> Self {
+        // The seed plus two makes; the people's rosters also include deployment roles.
+        const PROJECTS: u32 = 3;
+        let mut limits = world::limits();
+        limits.core.authority.projects = PROJECTS;
+        limits.core.people.projects = PROJECTS + 1;
+        let mut configuration = world::config(seed);
+        configuration.core.defaults.rules =
+            authority::Domain::new(configuration.core.defaults.rules.clone(), limits.core.authority)
+                .expect("project room")
+                .rules()
+                .clone();
+        let seed = &configuration.core.seed_projects[0].policy;
+        configuration.core.defaults.policies = Map::with_capacity(1);
+        configuration
+            .core
+            .defaults
+            .policies
+            .insert(
+                1,
+                core::ConfiguredPolicy {
+                    policy: seed.policy.clone(),
+                    permissions: Box::new([]),
+                    templates: seed.templates.clone(),
+                },
+            )
+            .expect("one configured policy");
+        Self::configured_chat(configuration, limits)
+    }
+
+    fn configured_chat(configuration: root::Config, limits: root::Limits) -> Self {
         let creating = fixtures::Creating::new(&configuration.core, limits.core.tasks.tree_tasks);
         let bootstrap = effects::World::first_start_with_accounts(configuration, &limits);
         let (now, wall) = bootstrap.clocks();
