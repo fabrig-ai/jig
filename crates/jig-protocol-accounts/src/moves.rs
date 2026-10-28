@@ -253,11 +253,3 @@ fn not_ours(source: u32) -> Next {
 fn adopted(source: u32, kept: bool) -> Next {
     Next::Child(child::Event::Adopted { source, kept })
 }
-#[must_use]
-pub fn worst_case(room: u32, limits: &oauth::Limits) -> Option<u64> {
-    Map::<u32, Out>::worst_case(room)?
-        .checked_add(Map::<u32, In>::worst_case(room)?)?
-        .checked_add(Map::<u32, driver::Account>::worst_case(room)?)?
-        .checked_add(u64::from(moved::APPLICATION))?
-        .checked_add(u64::from(room).checked_mul(moved::bound(limits).checked_mul(3)?)?)
-}

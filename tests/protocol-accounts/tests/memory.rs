@@ -1,15 +1,12 @@
-use jig_protocol_accounts::table::{self, Scheme, Table, Value};
+use jig_protocol_accounts::table::{Scheme, Table, Value};
 use skein_heap::{Counting, Meter};
 use skein_lib::{Secret, Time, bytes};
 #[global_allocator]
 static HEAP: Counting = Counting;
 #[test]
-fn the_table_at_its_limits_stays_within_its_worst_case() {
+fn the_table_keeps_two_generations_at_its_account_and_token_limits() {
     let accounts = 2;
     let token_bytes = 32;
-    let bound = table::worst_case(accounts, token_bytes).expect("table bound");
-    let meter = Meter::new();
-    meter.start();
     let mut table = Table::new(accounts, token_bytes);
     let token_length = usize::try_from(token_bytes).expect("token bound");
     for account in 0..accounts {
@@ -24,39 +21,46 @@ fn the_table_at_its_limits_stays_within_its_worst_case() {
                 .expect("full value fits");
         }
     }
-    let measured = meter.end();
-    meter.check(measured, bound, &"accounts table");
+    for account in 0..accounts {
+        for generation in 1..=2 {
+            assert_eq!(
+                table.value(account, generation, Time::ZERO).expect("both generations retained").token.len(),
+                token_length
+            );
+        }
+    }
 }
 
 #[test]
-fn llm_keys_being_adopted_stay_within_their_worst_case() {
-    use jig_protocol_accounts::keys::{self, Keys, Next};
-    let bound = keys::worst_case(2, 32).expect("LLM key state bound");
-    let meter = Meter::new();
-    meter.start();
+fn llm_keys_at_the_source_limit_wait_for_adoption() {
+    use jig_protocol_accounts::keys::{Keys, Next};
     let mut keys = Keys::new(2, 32);
     for source in 1..=2 {
         let Next::Store { exchange, .. } = keys.keep(source, u64::from(source), false) else { panic!("carried read") };
         let next = keys.read(exchange, Some(Secret::new(bytes::zeroed(32))));
         assert!(matches!(next, Some(Next::Store { .. })));
+        assert!(keys.contains(source));
     }
-    let measured = meter.end();
-    meter.check(measured, bound, &"LLM key state");
 }
 
 #[test]
-fn the_source_inventory_stays_within_its_worst_case() {
-    use jig_protocol_accounts::restart::{self, Inventory};
-    let bound = restart::worst_case(2, 2).expect("source inventory bound");
-    let meter = Meter::new();
-    meter.start();
+fn the_source_inventory_sweeps_unnamed_rows_at_its_limits() {
+    use jig_protocol_accounts::restart::{Inventory, Sweep};
     let mut inventory = Inventory::new(2, 2);
     inventory.name(1);
     inventory.name(2);
-    inventory.row(3);
-    inventory.row(4);
-    let measured = meter.end();
-    meter.check(measured, bound, &"source inventory");
+    inventory.restored();
+    assert!(matches!(inventory.step(), Some(Sweep::Load { after: None })));
+    for number in 1..=4 {
+        inventory.row(number);
+    }
+    inventory.loaded(None);
+    for expected in 3..=4 {
+        assert!(matches!(inventory.step(), Some(Sweep::Erase { number }) if number == expected));
+        inventory.erased();
+    }
+    assert!(inventory.step().is_none());
+    assert!(!inventory.active());
 }
 
 #[test]

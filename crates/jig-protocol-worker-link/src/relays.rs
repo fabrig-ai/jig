@@ -14,16 +14,6 @@ impl Relays {
         let capacity = limits.sizes.slots.checked_mul(limits.sizes.calls).expect("checked capacity");
         Self { records: Map::with_capacity(capacity), order: List::with_capacity(capacity) }
     }
-    pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-        let capacity = limits.sizes.slots.checked_mul(limits.sizes.calls)?;
-        let record =
-            jig_protocol_worker_wire::sizes::largest_body(&limits.sizes, jig_protocol_worker_wire::Kind::Call)?;
-        Map::<Key, Frame>::worst_case(capacity)?.checked_add(List::<Key>::worst_case(capacity)?)?.checked_add(
-            u64::from(capacity).checked_mul(
-                u64::from(record).checked_add(8)?.checked_add(u64::from(limits.sizes.call_name).checked_mul(2)?)?,
-            )?,
-        )
-    }
     pub(crate) fn add(&mut self, run: Token, attempt: Token, call: Box<[u8]>, frame: &Frame) -> Result<(), Box<[u8]>> {
         let key = (run, attempt, call);
         if self.records.contains_key(&key) {

@@ -19,10 +19,6 @@ impl Busy {
             rng: Rng::new(seed),
         }
     }
-    pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-        let capacity = limits.sizes.slots.checked_mul(limits.sizes.turns)?;
-        Deadlines::<Key>::worst_case(capacity)?.checked_add(Map::<Key, ()>::worst_case(capacity)?)
-    }
     pub(crate) fn add(&mut self, now: Time, run: Token, attempt: Token, turn: u32) -> bool {
         let key = (run, attempt, turn);
         let high = self.span.as_nanos();

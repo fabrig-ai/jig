@@ -1,12 +1,10 @@
 //! Checked channel capacity (protocol/channel.md, section 11).
-use crate::{Request, Worker, connection::Connection};
-use core::mem::size_of;
 use jig_protocol_worker_wire::{
     self as wire,
     sizes::{self, Sizes},
 };
 use skein_channel::{Role, Schema};
-use skein_lib::{Duration, Map, Queue, Token};
+use skein_lib::Duration;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub sizes: Sizes,
@@ -65,40 +63,6 @@ pub fn valid(limits: &Limits) -> bool {
         && schema.check(Role::Responder, &channel).is_ok()
         && channel_capacity(&channel).is_some()
         && wire::v9::worst_case_heap(&codec).is_some()
-}
-
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let connections = limits.workers.checked_add(limits.opening)?;
-    let schema = schema(limits)?;
-    let channel = channel(limits)?;
-    let each = skein_channel::worst_case(&schema, Role::Responder, &channel)?;
-    let codec = sizes::limits(&limits.sizes)?;
-    // A decoded value and its converted output, with part slots, for each request and one transient.
-    // Login rows store validated names/methods inline, so price their typed
-    // representation even when small wire payloads would dominate no other record.
-    let sources = skein_lib::List::<jig_domain_host::Login>::worst_case(limits.sizes.program_sources)?
-        .checked_add(u64::from(limits.sizes.program_sources).checked_mul(u64::from(limits.sizes.detail))?)?;
-    let records = wire::v9::worst_case_heap(&codec)?
-        .max(sources)
-        .checked_mul(2)?
-        .checked_add(skein_lib::List::<wire::Part>::worst_case(3)?)?
-        .checked_mul(u64::from(MAX_OUT_DOWN).checked_add(1)?)?;
-    let names = u64::from(limits.names)
-        .checked_mul(u64::try_from(size_of::<Worker>()).ok()?.checked_add(u64::from(limits.sizes.name))?)?;
-    let table = Map::<Token, Connection>::worst_case(connections)?;
-    let schema_heap =
-        skein_lib::List::<skein_channel::Version>::worst_case(1)?
-            .checked_add(skein_lib::List::<skein_channel::Kind>::worst_case(channel.kinds)?)?;
-    table
-        .checked_add(each.checked_mul(u64::from(connections))?)?
-        .checked_add(names)?
-        .checked_add(records)?
-        .checked_add(schema_heap)?
-        .checked_add(Queue::<Request>::worst_case(MAX_OUT_DOWN)?)
 }
 
 // The channel has no separate validity API at this pin. Keep its derived

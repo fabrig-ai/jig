@@ -57,7 +57,3 @@ impl Finishes {
 fn refused(source: u32) -> Next {
     Next::Child(accounts::Event::FinishRefused { source, why: accounts::SignInRedirectWhy::NotWaiting })
 }
-#[must_use]
-pub fn worst_case(room: u32) -> Option<u64> {
-    Map::<Token, Reading>::worst_case(room)
-}

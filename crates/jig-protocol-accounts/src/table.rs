@@ -116,13 +116,3 @@ fn expire(slot: &mut Option<Entry>, now: Time) {
 pub const fn valid(accounts: u32, token_bytes: u32) -> bool {
     accounts > 0 && token_bytes > 0
 }
-
-/// The fixed slots and bounded token bytes of two generations per account.
-#[must_use]
-pub fn worst_case(accounts: u32, token_bytes: u32) -> Option<u64> {
-    if !valid(accounts, token_bytes) {
-        return None;
-    }
-    Map::<u32, Generations>::worst_case(accounts)?
-        .checked_add(u64::from(token_bytes).checked_mul(2)?.checked_mul(u64::from(accounts))?)
-}

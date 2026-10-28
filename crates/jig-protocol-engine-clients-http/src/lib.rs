@@ -215,39 +215,6 @@ pub fn link_path(settings: &Settings, secret: &Secret) -> Box<[u8]> {
 #[cfg(test)]
 mod tests;
 
-/// Owned HTTP intake and SSE framing; the component prices the opaque reply records it supplies.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.calls == 0
-        || limits.streams > limits.calls
-        || limits.body == 0
-        || limits.read == 0
-        || limits.send == 0
-        || limits.event == 0
-    {
-        return None;
-    }
-    Map::<Token, call::Call>::worst_case(limits.calls)?
-        .checked_add(
-            u64::from(limits.calls).checked_mul(
-                skein_lib::Intake::worst_case(limits.body)?
-                    .checked_add(Queue::<http::Event>::worst_case(8)?)?
-                    .checked_add(Queue::<http::Request>::worst_case(8)?)?
-                    .checked_add(u64::from(limits.read).checked_mul(8)?)?
-                    .checked_add(u64::from(limits.send).checked_mul(8)?)?
-                    .checked_add(40)?,
-            )?,
-        )?
-        .checked_add(
-            u64::from(limits.streams).checked_mul(
-                u64::from(limits.event)
-                    .checked_mul(2)?
-                    .checked_add(Queue::<skein_http::sse::writer::Event>::worst_case(2)?)?
-                    .checked_add(Queue::<skein_lib::stream::Down>::worst_case(2)?)?,
-            )?,
-        )
-}
-
 /// The application's printed-link page adds this policy (protocol/browser.md, 12.2).
 #[must_use]
 pub fn link_page() -> skein_http::Header {
