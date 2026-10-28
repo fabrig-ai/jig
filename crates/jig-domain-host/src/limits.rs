@@ -1,12 +1,3 @@
-use skein_lib::{Id, Map, Queue, Set, Slab, Token};
-
-use crate::LinkUp;
-use crate::boundary::{Delivery, Reason};
-use crate::call::Call;
-use crate::facts::Fact;
-use crate::hosted::{Hosted, NamedEvent};
-use crate::turns::{Name, Pending};
-
 /// The host child domain's limits (section 7), handed by its parent to every
 /// step read-only.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -82,77 +73,6 @@ pub fn valid(limits: &Limits) -> bool {
 
 fn turn_capacity(limits: &Limits) -> Option<u32> {
     limits.slots.checked_mul(limits.turns)?.checked_mul(2)
-}
-
-/// The most memory the domain holds under `limits`, in bytes (6.3), or `None`
-/// if it does not fit a `u64`.
-///
-/// It counts the containers, their bookkeeping included, and the payloads, not
-/// allocator overhead. What the host passes on (a workspace, the bodies of
-/// host calls and their answers, what a save did) is moved into a
-/// request in the step it arrives in, and what it makes for a request (an
-/// hello) is moved out in the step that makes it: either is its
-/// receiver's to count. One delivery terminal is counted at the step peak,
-/// alongside the runs' retained state, including their kept answers.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let sources = crate::sources::worst_case(limits)?;
-    let hosted = Slab::<Hosted>::worst_case(limits.slots)?;
-    let names = Map::<Token, Id<Hosted>>::worst_case(limits.slots)?;
-    let answers = Map::<(Token, Token), Id<Hosted>>::worst_case(limits.slots)?;
-    let ready = Map::<Id<Hosted>, Reason>::worst_case(limits.slots)?;
-    let call_count = calls(limits)?;
-    let calls =
-        Slab::<Call>::worst_case(call_count)?.checked_add(u64::from(call_count).checked_mul(limits.event_bytes)?)?;
-    let facts = Queue::<Fact>::worst_case(limits.facts)?;
-    // Price every queue slot as a maximum piece, including Input's wire-bounded
-    // call id (256 bytes) and tool (64 bytes), even though pieces use only half.
-    let piece = u64::from(limits.piece_bytes).checked_add(256)?.checked_add(64)?;
-    let told = Queue::<LinkUp>::worst_case(limits.told)?.checked_add(u64::from(limits.told).checked_mul(piece)?)?;
-    let capacity = limits.slots.checked_mul(limits.turns)?.checked_mul(2)?;
-    let refusal_bytes = u64::from(limits.inbox).checked_mul(u64::try_from(size_of::<crate::Refused>()).ok()?)?;
-    let turns = Map::<Name, Pending>::worst_case(capacity)?
-        .checked_add(u64::from(limits.slots).checked_mul(limits.turn_queue_bytes.checked_mul(2)?)?)?
-        .checked_add(u64::from(capacity).checked_mul(refusal_bytes)?)?;
-    // Until its agent starts, a run holds its charter, its conversation and the
-    // inbound events that came meanwhile; from when it is told how the run
-    // finishes, the outcome or the detail of the failure.
-    let held = Queue::<NamedEvent>::worst_case(limits.held)?
-        .checked_add(u64::from(limits.held).checked_mul(limits.event_bytes)?)?;
-    let messages = u64::from(limits.inbox)
-        .checked_mul(u64::try_from(size_of::<crate::StartMessage>()).ok()?.checked_add(limits.event_bytes)?)?;
-    let starting =
-        limits.charter_bytes.checked_add(limits.transcript_bytes)?.checked_add(held)?.checked_add(messages)?;
-    let ending = limits.outcome_bytes.max(u64::from(limits.detail_bytes));
-    // Throughout, the opaque workspace handle, grants, and relayed calls in
-    // flight (a delivery is held inline).
-    let run_calls = Set::<Id<Call>>::worst_case(limits.run_calls)?;
-    let run = starting
-        .max(ending)
-        .checked_add(run_calls)?
-        .checked_add(skein_lib::List::<crate::Refused>::worst_case(limits.inbox)?)?
-        .checked_add(refusal_bytes)?
-        .checked_add(u64::from(limits.accounts).checked_mul(u64::try_from(size_of::<crate::Grant>()).ok()?)?)?;
-    let runs = u64::from(limits.slots).checked_mul(run)?;
-    // One terminal arrives per step; its fixed payload is included.
-    // A boxed start exists at the step peak before the parent takes it.
-    let delivered = u64::try_from(size_of::<Delivery>()).ok()?;
-    sources
-        .checked_add(hosted)?
-        .checked_add(names)?
-        .checked_add(ready)?
-        .checked_add(answers)?
-        .checked_add(calls)?
-        .checked_add(facts)?
-        .checked_add(told)?
-        .checked_add(turns)?
-        .checked_add(runs)?
-        .checked_add(ending)?
-        .checked_add(u64::try_from(size_of::<crate::Start>()).ok()?)?
-        .checked_add(delivered)
 }
 
 fn cancellations_bound(limits: &Limits) -> Option<u32> {

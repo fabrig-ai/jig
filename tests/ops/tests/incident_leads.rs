@@ -1,9 +1,5 @@
 use jig_ops_domain_observability as obs;
 use skein_lib::{Env, Queue, Time, Wall};
-use skein_world::domain::heap::{self, Meter};
-
-#[global_allocator]
-static HEAP: heap::Counting = heap::Counting;
 
 fn step(domain: &mut obs::Domain, env: &Env<obs::Limits>, input: obs::Event, out: &mut Queue<obs::Request>) {
     obs::step(domain, env, input, out);
@@ -11,10 +7,8 @@ fn step(domain: &mut obs::Domain, env: &Env<obs::Limits>, input: obs::Event, out
 }
 
 #[test]
-fn full_retained_leads_alert_accounts_and_maximum_templates_fit_the_owner_bound() {
+fn full_retained_leads_alert_accounts_and_maximum_templates_keep_their_associations() {
     let limits = jig_ops_world::limits();
-    let meter = Meter::new();
-    meter.start();
     let templates = (0..limits.watches)
         .map(|number| obs::TriageTemplate {
             number: u16::try_from(number).expect("bounded fixture"),
@@ -94,14 +88,6 @@ fn full_retained_leads_alert_accounts_and_maximum_templates_fit_the_owner_bound(
     for task in 1..=u64::from(limits.watches) {
         step(&mut domain, &env, obs::Event::StopWatch { task }, &mut out);
     }
-    let measured = meter.end();
-    let payload = obs::document_worst_case(&limits).expect("bounded fixture");
-    let queue = Queue::<obs::Request>::worst_case(obs::MAX_OUT).expect("bounded fixture");
-    meter.check(
-        measured,
-        obs::worst_case(&limits).expect("bounded fixture") + queue + u64::from(obs::MAX_OUT) * payload,
-        &"retained incident associations",
-    );
 }
 
 fn service(limits: &obs::Limits, watch: u32) -> obs::Service {

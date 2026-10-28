@@ -54,26 +54,6 @@ impl Sources {
         self.waiting || self.desired.is_some()
     }
 }
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let names = u64::from(limits.program_sources).checked_mul(u64::try_from(size_of::<SourceName>()).ok()?)?;
-    let rows = u64::from(limits.program_sources)
-        .checked_mul(u64::try_from(size_of::<Login>()).ok()?.checked_add(u64::from(limits.source_detail_bytes))?)?;
-    let lists = names.checked_mul(3)?; // Sent, previous and desired per worker.
-    let pending = Map::<SourceName, Pending>::worst_case(limits.program_sources)?
-        .checked_add(Set::<SourceName>::worst_case(limits.program_sources)?)?
-        .checked_add(Map::<SourceName, SignOutResult>::worst_case(limits.program_sources)?)?
-        .checked_add(u64::from(limits.program_sources).checked_mul(u64::from(limits.source_detail_bytes))?)?;
-    let workers = lists.checked_add(rows)?.checked_add(pending)?.checked_mul(u64::from(limits.workers))?;
-    let declaration = names.checked_mul(2)?; // One current list for the whole domain.
-    // A malformed inventory can lose one channel while its input still lives.
-    let ending = List::<SourceName>::worst_case(limits.program_sources)?;
-    let incoming = rows.max(names).max(u64::from(limits.source_detail_bytes)); // Inventory, declaration or terminal.
-    workers
-        .checked_add(declaration)?
-        .checked_add(incoming)?
-        .checked_add(ending.checked_mul(2)?)?
-        .checked_add(List::<u32>::worst_case(limits.configured_workers.checked_add(1)?)?)
-}
 pub(crate) fn replace(domain: &mut Domain, env: &Env<Limits>, names: Box<[SourceName]>, out: &mut Queue<Request>) {
     assert!(
         names.len() <= usize::try_from(env.limits.program_sources).expect("source bound") && unique(&names),

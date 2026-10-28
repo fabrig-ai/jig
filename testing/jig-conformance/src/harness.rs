@@ -169,7 +169,9 @@ pub trait Application {
     fn maximum(config: &Self::Config) -> u64;
     /// Price ownership transferred from pre-existing configuration.
     /// A measured heap ceiling needs no configuration price (0).
-    fn configuration_heap(config: &Self::Config) -> u64;
+    fn configuration_heap(_config: &Self::Config) -> u64 {
+        0
+    }
 }
 
 /// A finite run's evidence, retained independently of the engine.

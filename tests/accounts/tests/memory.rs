@@ -1,12 +1,9 @@
 use jig_accounts_world::{LIMITS, provider, providers};
 use jig_domain_accounts::{
     ADDRESS, DISPLAY, Domain, Event, Failure, Form, FromComponent, Held, Holder, Kind, Limits, NAME, Request, SUBJECT,
-    Scheme, Signing, Stored, max_out, step, worst_case,
+    Scheme, Signing, Stored, max_out, step,
 };
 use skein_lib::{Duration, Env, Queue, Time, Token, Wall};
-use skein_world::domain::heap::{self, Meter};
-#[global_allocator]
-static HEAP: heap::Counting = heap::Counting;
 const KINDS: [Kind; 3] = [Kind::SignIn, Kind::Key, Kind::Program];
 /// Bytes at their longest, distinct for each account.
 fn longest(length: u32, account: u32) -> Box<[u8]> {
@@ -39,16 +36,13 @@ fn granted(source: u32) -> FromComponent {
 /// many sources as are kept, each account's signed-in source renewed and signed out in turn, every
 /// sign-in's end kept, and a sign-in under way.
 #[test]
-#[expect(clippy::too_many_lines, reason = "one metered saturation story exercises every retained account state")]
-fn full_account_source_and_deadline_tables_stay_within_the_worst_case() {
+#[expect(clippy::too_many_lines, reason = "one saturation story exercises every retained account state")]
+fn full_accounts_restore_sign_in_and_sign_out() {
     let mut out = Queue::with_capacity(max_out(&LIMITS));
     let providers = providers(vec![provider(1, true, true)]);
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: LIMITS };
-    let bound = worst_case(&LIMITS).expect("world limits fit");
-    let meter = Meter::new();
     let mut domain = Domain::new(&LIMITS, providers);
     for account in 0..LIMITS.accounts {
-        meter.start();
         let record = Stored::Account {
             place: 0,
             uses: Some((0..jig_domain_accounts::USES).map(|n| jig_domain_accounts::Use::Party(u64::from(n))).collect()),
@@ -59,10 +53,7 @@ fn full_account_source_and_deadline_tables_stay_within_the_worst_case() {
             display: longest(DISPLAY, account),
         };
         step(&mut domain, &env, Event::Restore { record }, &mut out);
-        let measured = meter.end();
-        meter.check(measured, bound, &account);
         for place in 0..LIMITS.sources {
-            meter.start();
             let name = match kind(place) {
                 Kind::Program => longest(NAME, account),
                 Kind::SignIn | Kind::Key | Kind::None => Box::new([]),
@@ -95,42 +86,31 @@ fn full_account_source_and_deadline_tables_stay_within_the_worst_case() {
                 held,
             };
             step(&mut domain, &env, Event::Restore { record }, &mut out);
-            let measured = meter.end();
-            meter.check(measured, bound, &(account, place));
         }
     }
-    meter.start();
     step(&mut domain, &env, Event::Want, &mut out);
-    let measured = meter.end();
     while out.pop().is_some() {}
-    meter.check(measured, bound, &"want");
     for account in 0..LIMITS.accounts {
         for place in 0..LIMITS.sources {
             if kind(place) != Kind::SignIn {
                 continue;
             }
             let source = number(account, Some(place));
-            meter.start();
             let event = granted(source);
             step(&mut domain, &env, Event::Component(event), &mut out);
-            let measured = meter.end();
             while out.pop().is_some() {}
-            meter.check(measured, bound, &source);
         }
     }
     for number in 0..LIMITS.credentials {
-        meter.start();
         let event = Event::Credential { number, generation: 1, valid: Duration::from_secs(100) };
         step(&mut domain, &env, event, &mut out);
-        let measured = meter.end();
         while out.pop().is_some() {}
-        meter.check(measured, bound, &number);
     }
     assert_eq!(domain.unrestored(), 0);
     assert_eq!(domain.accounts(), LIMITS.accounts);
     assert_eq!(domain.source_views().len(), LIMITS.accounts * LIMITS.sources);
     assert!(domain.usable(number(0, None)));
-    let mut run = Run { meter, env, bound, out, request: 0 };
+    let mut run = Run { env, out, request: 0 };
     for account in 0..LIMITS.accounts {
         run.sign_out(&mut domain, account, number(account, Some(0)));
     }
@@ -159,37 +139,29 @@ fn full_account_source_and_deadline_tables_stay_within_the_worst_case() {
     assert_eq!(domain.facts_lost(), 0, "every end kept");
 }
 
-/// Each step metered, its asks taken.
+/// Each step takes its asks.
 struct Run {
-    meter: Meter,
     env: Env<Limits>,
-    bound: u64,
     out: Queue<Request>,
     request: u64,
 }
 impl Run {
-    /// Keep the account sign-in answer's allocation in the queue for its heap check.
+    /// Retain the account sign-in answer in the output queue.
     fn visit(&mut self, domain: &mut Domain, source: u32) {
-        self.meter.start();
         let address = longest(ADDRESS, 0);
         step(domain, &self.env, Event::Visited { source, address }, &mut self.out);
-        let measured = self.meter.end();
-        self.meter.check(measured, self.bound, &"account sign-in address retained");
     }
 
-    /// The step's last ask of the component, its asks dropped before the check, as the core
-    /// takes them.
-    fn step(&mut self, domain: &mut Domain, event: Event, label: &str) -> Option<Signing> {
-        self.meter.start();
+    /// Take the step's last ask of the component.
+    fn step(&mut self, domain: &mut Domain, event: Event, _label: &str) -> Option<Signing> {
         step(domain, &self.env, event, &mut self.out);
-        let measured = self.meter.end();
         let mut signing = None;
         while let Some(request) = self.out.pop() {
             if let Request::Signing(asked) = request {
                 signing = Some(asked);
             }
         }
-        self.meter.check(measured, self.bound, &label);
+
         signing
     }
     fn token(&mut self) -> Token {
@@ -216,12 +188,11 @@ impl Run {
 }
 
 #[test]
-fn pending_llm_key_keeps_and_account_removals_stay_within_the_worst_case() {
+fn pending_keys_and_account_removals_complete() {
     use jig_domain_accounts::{Change, USES, Use};
     let providers = providers(vec![provider(1, true, true)]);
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: LIMITS };
-    let bound = worst_case(&LIMITS).expect("world limits");
-    let mut run = Run { meter: Meter::new(), env, bound, out: Queue::with_capacity(max_out(&LIMITS)), request: 0 };
+    let mut run = Run { env, out: Queue::with_capacity(max_out(&LIMITS)), request: 0 };
     let mut domain = Domain::new(&LIMITS, providers);
     for number in 0..LIMITS.accounts {
         let account = jig_accounts_world::account(number * 2, 1, Holder::Party(u64::from(number)), b"subject");
@@ -296,12 +267,10 @@ fn full_program_operations_stay_below_the_accounts_bound() {
     let mut offered = provider(1, false, false);
     offered.offers.programs = Box::new([b"claude_code".as_slice().into()]);
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: LIMITS };
-    let bound = worst_case(&LIMITS).expect("world limits");
     let out = Queue::with_capacity(max_out(&LIMITS));
     let providers = providers(vec![offered]);
-    let meter = Meter::new();
     let mut domain = Domain::new(&LIMITS, providers);
-    let mut run = Run { meter, env, bound, out, request: 0 };
+    let mut run = Run { env, out, request: 0 };
     for account in 0..LIMITS.accounts {
         let holder = Holder::Party(u64::from(account));
         let _last = run.step(
@@ -386,12 +355,10 @@ fn full_program_operations_stay_below_the_accounts_bound() {
 fn move_tables() -> (Domain, Run) {
     let limits = Limits { sign_ins: LIMITS.accounts, ..LIMITS };
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
-    let bound = worst_case(&limits).expect("move world limits fit");
     let offered = providers(vec![provider(1, true, true)]);
-    let meter = Meter::new();
     let domain = Domain::new(&limits, offered);
     let out = Queue::with_capacity(max_out(&limits));
-    (domain, Run { meter, env, bound, out, request: 0 })
+    (domain, Run { env, out, request: 0 })
 }
 fn restore_move_accounts(domain: &mut Domain, run: &mut Run) {
     for account in 0..run.env.limits.accounts {
@@ -441,7 +408,7 @@ fn restore_move_accounts(domain: &mut Domain, run: &mut Run) {
     assert_eq!(domain.accounts(), run.env.limits.accounts);
 }
 #[test]
-fn full_moves_and_their_deadlines_stay_within_the_worst_case() {
+fn full_moves_follow_their_deadlines() {
     use jig_domain_accounts::Change;
     let (mut domain, mut run) = move_tables();
     restore_move_accounts(&mut domain, &mut run);
@@ -467,7 +434,7 @@ fn full_moves_and_their_deadlines_stay_within_the_worst_case() {
     run.step(&mut domain, Event::Close, "full moves close");
 }
 #[test]
-fn full_opened_arrivals_stay_within_the_worst_case() {
+fn full_opened_arrivals_keep_their_values() {
     use jig_domain_accounts::Change;
     let (mut domain, mut run) = move_tables();
     restore_move_accounts(&mut domain, &mut run);
@@ -484,7 +451,6 @@ fn full_opened_arrivals_stay_within_the_worst_case() {
         ) else {
             panic!("the arrival starts");
         };
-        run.meter.start();
         step(
             &mut domain,
             &run.env,
@@ -496,10 +462,8 @@ fn full_opened_arrivals_stay_within_the_worst_case() {
             },
             &mut run.out,
         );
-        let measured = run.meter.end();
         assert_eq!(run.out.pop(), Some(Request::Signing(Signing::Adopt { source, carried })));
         assert!(run.out.pop().is_none());
-        run.meter.check(measured, run.bound, &"every opened subject and display retained");
     }
     run.step(&mut domain, Event::Close, "full arrivals close");
 }

@@ -424,31 +424,3 @@ pub(crate) fn has(list: &List<u64>, number: u64) -> bool {
     }
     false
 }
-
-/// Input operations, owned plans and their bounded field projections.
-pub(crate) fn worst_case(limits: &Limits, payload: u64) -> Option<u64> {
-    let tasks = limits.tasks;
-    List::<Plan>::worst_case(tasks)?
-        .checked_add(List::<Option<(u64, crate::Circle)>>::worst_case(tasks)?)?
-        .checked_add(List::<Operation>::worst_case(tasks)?)?
-        .checked_add(List::<u64>::worst_case(tasks)?.checked_mul(2)?)?
-        .checked_add(List::<(Funder, Numbers)>::worst_case(tasks.checked_mul(4)?)?)?
-        .checked_add(
-            u64::from(tasks).checked_mul(
-                u64::try_from(size_of::<crate::control::AmendPlan>())
-                    .ok()?
-                    .checked_add(payload.checked_mul(4)?)?
-                    .checked_add(List::<u64>::worst_case(tasks)?.checked_mul(2)?)?,
-            )?,
-        )?
-        // Each projected return can carry a fresh bounded circle, beside the input hold.
-        .checked_add(
-            u64::from(tasks).checked_mul(
-                u64::try_from(size_of::<crate::HoldSource>())
-                    .ok()?
-                    .checked_add(u64::from(limits.circle).checked_mul(8)?)?,
-            )?,
-        )?
-        .checked_add(crate::placed::compound_bytes(limits)?)?
-        .checked_add(payload)
-}

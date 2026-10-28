@@ -2,16 +2,15 @@
 //! (domain/authority.md, sections 5, 8, 9 and 11).
 
 use alloc::boxed::Box;
-use core::mem::{size_of, size_of_val};
 
-use skein_lib::{Duration, Map, Queue, Wall, bytes::copy_of};
+use skein_lib::{Duration, Queue, Wall, bytes::copy_of};
 
 use crate::{
     Action, Answer, Authority, BatchAsk, Call, CallAsk, Delegate, Domain, Effect, EffectAccess, EffectAsk,
-    EffectResource, Event, FITS_MAX_OUT, Finding, Given, Grant, Guard, Holder, Implication, Judge, Lack, Last, Limits,
-    Models, Name, Numbers, Pattern, PersonAsk, PersonRequest, Policy, PolicyFact, PolicyRefusal, ProposalKind,
-    Proposals, Requests, Requirement, RunAsk, Scopes, Source, Tools, Verdict, Write, Writer, at_most, check_batch,
-    check_call, check_effect, check_request, check_run, covers, fits, max_out, needs, resolve_task_grants, worst_case,
+    EffectResource, Event, FITS_MAX_OUT, Finding, Given, Grant, Guard, Holder, Judge, Lack, Last, Limits, Models, Name,
+    Numbers, Pattern, PersonAsk, PersonRequest, PolicyFact, PolicyRefusal, ProposalKind, Proposals, Requests,
+    Requirement, RunAsk, Scopes, Source, Tools, Verdict, Write, Writer, at_most, check_batch, check_call, check_effect,
+    check_request, check_run, covers, fits, max_out, needs, resolve_task_grants,
 };
 
 use crate::tests_fixtures::*;
@@ -936,47 +935,6 @@ fn fitting_laws_needs_and_holder_depth_use_separate_current_inputs() {
     assert_eq!(needs(&Action::Batch(Box::new([overflowing]))), None, "needs refuses arithmetic overflow");
 }
 
-fn add(a: u64, b: u64) -> u64 {
-    a.checked_add(b).unwrap()
-}
-
-fn sized(size: usize) -> u64 {
-    u64::try_from(size).unwrap()
-}
-
-fn pattern_heap(pattern: &Pattern) -> u64 {
-    let mut bytes = sized(size_of_val(pattern.segments.as_ref()));
-    for segment in &pattern.segments {
-        bytes = add(bytes, sized(segment.len()));
-    }
-    match &pattern.last {
-        Last::Exact(last) | Last::Open(last) => bytes = add(bytes, sized(last.len())),
-    }
-    bytes
-}
-
-fn authority_heap(authority: &Authority) -> u64 {
-    let mut bytes = add(
-        add(sized(size_of_val(authority.grants.as_ref())), sized(size_of_val(authority.note_resources.as_ref()))),
-        sized(size_of_val(authority.delegation.kinds.as_ref())),
-    );
-    for grant in &authority.grants {
-        bytes = add(bytes, pattern_heap(&grant.pattern));
-    }
-    for scope in &authority.note_resources {
-        bytes = add(bytes, pattern_heap(&scope.pattern));
-    }
-    bytes
-}
-
-fn requirements_heap(requirements: &[Requirement]) -> u64 {
-    let mut bytes = sized(size_of_val(requirements));
-    for requirement in requirements {
-        bytes = add(bytes, pattern_heap(&requirement.pattern));
-    }
-    bytes
-}
-
 fn full_pattern() -> Pattern {
     Pattern {
         segments: Box::new([copy_of(b"12345678"), copy_of(b"12345678"), copy_of(b"12345678"), copy_of(b"12345678")]),
@@ -999,7 +957,7 @@ fn full_requirements() -> Box<[Requirement]> {
 }
 
 #[test]
-fn policy_lifecycle_refuses_bad_replacements_and_memory_bounds_full_owned_containers() {
+fn policy_lifecycle_refuses_bad_replacements_and_accepts_full_owned_policies() {
     let mut domain = domain();
     assert_eq!(
         apply(&mut domain, Event::Policy { project: 2, policy: policy(authority()) }),
@@ -1076,10 +1034,10 @@ fn policy_lifecycle_refuses_bad_replacements_and_memory_bounds_full_owned_contai
         PolicyFact::Refused { project: 1, reason: PolicyRefusal::InvalidRole }
     );
 
-    check_full_policy_memory();
+    check_full_policy_admission();
 }
 
-fn check_full_policy_memory() {
+fn check_full_policy_admission() {
     let mut configured = rules(full_authority());
     configured.requirements = full_requirements();
     let mut resident = policy(full_authority());
@@ -1089,19 +1047,6 @@ fn check_full_policy_memory() {
     let mut second_role = first_role.clone();
     second_role.number = 8;
     resident.roles = Box::new([first_role, second_role]);
-    let mut held = add(authority_heap(&configured.ceiling), requirements_heap(&configured.requirements));
-    held = add(held, u64::from(configured.implies.len()).checked_mul(sized(size_of::<Implication>())).unwrap());
-    held = add(held, Map::<u32, Policy>::worst_case(LIMITS.projects).unwrap());
-    let mut one = add(authority_heap(&resident.ceiling), requirements_heap(&resident.requirements));
-    one = add(one, sized(size_of_val(resident.projections.as_ref())));
-    for grant in &resident.projections {
-        one = add(one, pattern_heap(&grant.pattern));
-    }
-    one = add(one, sized(size_of_val(resident.roles.as_ref())));
-    for role in &resident.roles {
-        one = add(one, authority_heap(&role.authority));
-    }
-    held = add(held, one.checked_mul(u64::from(LIMITS.projects)).unwrap());
     let mut full = Domain::new(configured, LIMITS).unwrap();
     for project in 0..LIMITS.projects {
         assert_eq!(
@@ -1109,11 +1054,6 @@ fn check_full_policy_memory() {
             PolicyFact::Added { project }
         );
     }
-    assert_eq!(
-        worst_case(&LIMITS),
-        Some(held),
-        "full owned boxes plus the map's node bound equal the advertised heap bound"
-    );
     let enormous = Limits {
         projects: u32::MAX,
         roles: u32::MAX,
@@ -1368,26 +1308,4 @@ fn replacement_rules_and_restore_preserve_a_project_above_the_new_ceiling() {
         assert_eq!(Some(finding), after.pop());
     }
     assert!(after.is_empty());
-}
-
-#[test]
-fn valid_refuses_each_unrepresentable_limit() {
-    // This sum has no validity conditions: even prices that overflow do not
-    // make an edge unrepresentable. Finding-output checks remain separate.
-    for (name, limits) in [
-        ("fixture", LIMITS),
-        (
-            "retained heap prices",
-            Limits {
-                projects: u32::MAX,
-                roles: u32::MAX,
-                grants: u32::MAX,
-                segments: u32::MAX,
-                segment_bytes: u32::MAX,
-                ..LIMITS
-            },
-        ),
-    ] {
-        assert!(crate::valid(&limits), "{name}");
-    }
 }

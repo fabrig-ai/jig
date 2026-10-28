@@ -534,7 +534,7 @@ impl Domain {
 /// and reply, plus one expired sign-in's erase; completion answers every bounded waiter.
 /// Required free Request slots for one step/fire under validated `limits`: maximum of bootstrap
 /// owner matches plus four, waiters plus two, and sign-ins, holdings or people plus one.
-/// `worst_case` validates those additions before use; caller counts
+/// `valid` validates those additions before use; caller counts
 /// output payload bytes separately.
 #[must_use]
 pub fn max_out(limits: &Limits) -> u32 {

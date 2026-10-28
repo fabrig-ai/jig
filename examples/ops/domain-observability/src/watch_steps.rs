@@ -12,7 +12,7 @@
 //! | lead bound | conflicting outcome | unchanged | refusal |
 use crate::{Domain, Limits, Record, RecordKey, Request, Service};
 use alloc::boxed::Box;
-use skein_lib::{Env, List, Queue};
+use skein_lib::{Env, Queue};
 
 /// The triage's closed result, with no follow-up delegation.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -333,21 +333,4 @@ pub(crate) fn outcome(domain: &mut Domain, task: u64, step: u64, child: Option<u
     value.child = child;
     value.settled = true;
     save(domain, value, out);
-}
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let count = capacity(limits)?;
-    skein_lib::Map::<(u64, u64), Delegation>::worst_case(count)?
-        .checked_add(u64::from(count).checked_mul(u64::from(limits.alerts_per_batch).checked_mul(8)?)?)?
-        .checked_add(List::<WatchMessage>::worst_case(message_capacity(limits)?)?)?
-        .checked_add(
-            u64::from(message_capacity(limits)?).checked_mul(
-                u64::from(limits.alerts_per_batch)
-                    .checked_mul(8)?
-                    .checked_add(u64::from(limits.name_bytes).checked_mul(2)?)?,
-            )?,
-        )?
-        .checked_add(2_u64.checked_mul(skein_lib::Map::<u16, Box<[u8]>>::worst_case(limits.watches)?)?)?
-        .checked_add(2_u64.checked_mul(u64::from(limits.watches).checked_mul(u64::from(limits.answer_bytes))?)?)?
-        .checked_add(u64::from(limits.answer_bytes).checked_mul(2)?)
 }

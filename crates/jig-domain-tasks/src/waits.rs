@@ -55,41 +55,6 @@ pub(crate) fn valid(limits: &Limits) -> bool {
     resource_capacity(limits).is_some() && limits.tasks.checked_mul(limits.dependencies).is_some()
 }
 
-/// Index and traversal heap, including owned names and the simultaneous batch/restore scratch.
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let resources = resource_capacity(limits)?;
-    let dependencies = limits.tasks.checked_mul(limits.dependencies)?;
-    let name = u64::from(limits.hold_bytes).checked_add(List::<Box<[u8]>>::worst_case(limits.hold_segments)?)?;
-    Map::<(Name, u64), ()>::worst_case(resources)?
-        .checked_mul(2)?
-        .checked_add(Map::<(u64, u64), ()>::worst_case(dependencies)?)?
-        .checked_add(Map::<u64, Indexed>::worst_case(limits.tasks)?)?
-        .checked_add(u64::from(resources).checked_mul(
-            name.checked_mul(4)?.checked_add(u64::try_from(size_of::<Holding>()).ok()?.checked_mul(2)?)?,
-        )?)?
-        .checked_add(u64::from(dependencies).checked_mul(16)?)?
-        // Old/new delegate comparison rows, including a refresh's replacement.
-        .checked_add(u64::from(limits.tasks).checked_mul(u64::from(limits.delegates))?.checked_mul(16)?)?
-        // Changes being drained, changes made by lifts, and the knot's visited set.
-        .checked_add(Set::<u64>::worst_case(limits.tasks)?.checked_mul(3)?)?
-        // The judgement and a restore remainder; the knot's chosen wait per task.
-        .checked_add(Map::<u64, u32>::worst_case(limits.tasks)?.checked_mul(2)?)?
-        .checked_add(Map::<u64, u64>::worst_case(limits.tasks)?)?
-        .checked_add(Map::<Name, u32>::worst_case(resources)?.checked_mul(2)?)?
-        .checked_add(u64::from(resources).checked_mul(name)?.checked_mul(2)?)?
-        .checked_add(List::<u64>::worst_case(limits.tasks)?.checked_mul(3)?)?
-        .checked_add(Map::<(u64, u64), ()>::worst_case(dependencies)?)?
-        .checked_add(Map::<(Name, u64), Gate>::worst_case(resources)?)?
-        .checked_add(u64::from(resources).checked_mul(name)?)?
-        .checked_add(List::<u64>::worst_case(limits.circle)?)?
-        .checked_add(List::<(u64, u64)>::worst_case(dependencies)?)?
-        .checked_add(List::<(Name, u64)>::worst_case(resources)?)?
-        .checked_add(u64::from(resources).checked_mul(name)?)
-}
-
 pub(crate) fn refresh(domain: &mut Domain, number: u64) {
     let row = record(domain, number).expect("published live row");
     let phase = WaitPhase::for_phase(&row.phase);

@@ -33,9 +33,8 @@
 //! remain the root's route (domain/tasks.md, section 5.6; domain/engine.md, sections 5.6, 7.1 and 9).
 //!
 //! `fire` expires at most one projected retry timer per call and advances bounded
-//! cascades. Caller reserves free `Request` room from `max_out`; `worst_case`
-//! counts retained containers/payloads and bounded scratch, while callers count
-//! queues and owned output copies. `stored_bytes` measures existing row heap
+//! cascades. Caller reserves free `Request` room from `max_out`; `valid`
+//! checks edge and derived-count representability. `stored_bytes` measures existing row heap
 //! without cloning; `Domain::funding` borrows authentic finite accounting without
 //! creating a mutable root shadow (domain/tasks.md, section 10).
 //! Current chat construction supplies a report contract and empty parameters.
@@ -147,7 +146,7 @@ pub use failures::{Class, Retries, Retry, Tries};
 pub use funders::FundingRecord;
 pub use grace::Grace;
 pub use holds::valid_name;
-pub use limits::{Limits, valid, worst_case};
+pub use limits::{Limits, valid};
 pub use llm::{AccountWhy, CharterModels, LlmChoice, LlmFault, MODELS, ModelEffort};
 pub use owned::{phase_bytes, stored_bytes, task_bytes, terminal_bytes};
 pub use parts::{Part, PartKey, PartKind};

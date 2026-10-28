@@ -162,9 +162,9 @@ impl Domain {
                 "bounded model names"
             );
         }
-        let tracked = limits::tracked(limits).expect("worst_case accepted the limits");
+        let tracked = limits::tracked(limits).expect("validated fleet limits");
         let channels_count =
-            limits.workers.checked_add(u32::from(limits.engine_slots > 0)).expect("worst_case accepted the limits");
+            limits.workers.checked_add(u32::from(limits.engine_slots > 0)).expect("validated fleet limits");
         let mut channels = Slab::with_capacity(channels_count);
         let mut tokens = Map::with_capacity(channels_count);
         if limits.engine_slots > 0 {

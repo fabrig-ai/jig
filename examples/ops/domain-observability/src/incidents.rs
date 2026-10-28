@@ -183,19 +183,3 @@ fn resolve_alerts(domain: &mut Domain, env: &Env<Limits>, service: &Service, out
         out.push(Request::Save { record: Record::Alert(account.clone()) });
     }
 }
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let count = capacity(limits)?;
-    skein_lib::Map::<(u32, u64), AlertAccount>::worst_case(count)?
-        .checked_add(u64::from(count).checked_mul(u64::from(limits.name_bytes).checked_mul(2)?)?)?
-        .checked_add(skein_lib::Map::<(u32, u64), Incident>::worst_case(count)?)?
-        .checked_add(List::<(u32, u64)>::worst_case(count)?)?
-        .checked_add(
-            u64::from(count).checked_mul(
-                u64::from(limits.name_bytes)
-                    .checked_mul(2)?
-                    .checked_add(u64::from(limits.alerts_per_batch).checked_mul(8)?)?
-                    .checked_add(List::<IncidentPoint>::worst_case(limits.samples_per_service.max(1))?)?,
-            )?,
-        )
-}

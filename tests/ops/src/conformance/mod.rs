@@ -911,9 +911,6 @@ impl Application for Ops {
     fn maximum(_: &Config) -> u64 {
         OPS_HEAP_CEILING
     }
-    fn configuration_heap(_: &Config) -> u64 {
-        0
-    }
 }
 
 /// Native client facts share the independent submitted-row durability check.

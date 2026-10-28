@@ -495,7 +495,4 @@ impl Application for OpsApplication {
     fn maximum(_: &Config) -> u64 {
         OPS_JOINT_HEAP_CEILING
     }
-    fn configuration_heap(config: &Config) -> u64 {
-        Ops::configuration_heap(config)
-    }
 }

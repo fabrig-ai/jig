@@ -117,7 +117,7 @@ impl World {
         limits.turn_queue_bytes = 64;
         limits.told = told;
         limits.piece_bytes = piece_bytes;
-        assert!(host::worst_case(&limits).is_some());
+        assert!(host::valid(&limits));
         Self {
             limits,
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits },

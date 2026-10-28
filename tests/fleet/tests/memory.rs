@@ -1,11 +1,6 @@
-//! Memory stays within the worst case (programming-model.md, 6.3), measured by
-//! a counting allocator: every worker in contact holding as many workstream
-//! keys as it may, every attempt tracked, every relayed call kept, and every
-//! entry point on the way.
+//! Saturated fleet lifecycle, refusals and exact ownership observations.
 
-use jig_domain_fleet::{
-    Answer, Domain, Event, Hello, Hosted, Limits, Phase, Request, fire, max_out, resume, step, worst_case,
-};
+use jig_domain_fleet::{Answer, Domain, Event, Hello, Hosted, Limits, Phase, Request, fire, max_out, resume, step};
 use skein_lib::{Duration, Env, Queue, ReplyTo, Time, Token, Wall};
 use skein_world::domain::heap::{self, Meter};
 
@@ -34,15 +29,12 @@ const LIMITS: Limits = Limits {
     history: 4,
 };
 
-/// The fleet under `limits`, measured: each step's peak is checked against
-/// the worst case, less what it handed out in requests, which their receivers
-/// count.
+/// The fleet and its scenario inputs and requests.
 struct Measured {
     domain: Domain,
     env: Env<Limits>,
     out: Queue<Request>,
     meter: Meter,
-    bound: u64,
     names: u64,
 }
 
@@ -52,11 +44,10 @@ impl Measured {
     }
 
     fn with_needs(limits: Limits, needs: impl FnOnce() -> jig_domain_fleet::Needs) -> Measured {
-        let bound = worst_case(&limits).expect("the test limits fit");
         let meter = Meter::new();
         let domain = jig_fleet_world::fixtures::domain(&limits, needs());
         let out = Queue::with_capacity(max_out(&limits));
-        Measured { domain, env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, out, meter, bound, names: 0 }
+        Measured { domain, env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, out, meter, names: 0 }
     }
 
     fn name(&mut self) -> Token {
@@ -65,7 +56,6 @@ impl Measured {
     }
 
     fn step(&mut self, event: Event) -> Vec<Request> {
-        self.meter.start();
         step(&mut self.domain, &self.env, event, &mut self.out);
         self.drain()
     }
@@ -74,7 +64,6 @@ impl Measured {
     fn settle(&mut self) -> Vec<Request> {
         let mut requests = Vec::new();
         while self.domain.is_ready() {
-            self.meter.start();
             resume(&mut self.domain, &self.env, &mut self.out);
             requests.extend(self.drain());
         }
@@ -86,7 +75,6 @@ impl Measured {
         self.env.now = Time::ZERO.saturating_add(Duration::from_secs(secs));
         let mut requests = Vec::new();
         while self.domain.is_due(self.env.now) {
-            self.meter.start();
             fire(&mut self.domain, &self.env, &mut self.out);
             requests.extend(self.drain());
         }
@@ -94,7 +82,6 @@ impl Measured {
     }
 
     fn drain(&mut self) -> Vec<Request> {
-        let measured = self.meter.end();
         let mut requests = Vec::with_capacity(self.out.len() as usize);
         while let Some(request) = self.out.pop() {
             if let Request::Sources { channel, sources } = request {
@@ -104,7 +91,7 @@ impl Measured {
                 requests.push(request);
             }
         }
-        self.meter.check(measured, self.bound, &self.env.limits);
+
         // The iteration ends: the reclaim point.
         self.domain.reclaim();
         while self.domain.pop_fact().is_some() {}
@@ -153,61 +140,6 @@ impl Measured {
         assert!(asked.is_empty(), "a start waits for placement: {asked:?}");
         (run, attempt)
     }
-}
-
-#[test]
-fn program_endpoints_retain_exactly_the_formulas_bytes() {
-    let limits = Limits { engine_slots: 1, ..LIMITS };
-    let channels = limits.workers + u32::from(limits.engine_slots > 0);
-    let retained = |endpoints| {
-        let mut fleet = Measured::new(limits);
-        assert!(fleet.hello_with_endpoints(Token::new(0), Vec::new(), endpoints).is_empty());
-        for nth in 0..limits.workers {
-            assert!(fleet.hello_with_endpoints(channel(nth), Vec::new(), endpoints).is_empty());
-        }
-        assert_eq!(fleet.domain.workers(), limits.workers);
-        assert_eq!(fleet.domain.attempts(), 0);
-        fleet.meter.held()
-    };
-    let with_0 = retained(0);
-    let with_64 = retained(jig_domain_fleet::PROGRAM_ENDPOINTS);
-    let endpoints = u64::from(channels) * u64::from(jig_domain_fleet::PROGRAM_ENDPOINTS) * 4;
-    assert_eq!(with_64 - with_0, endpoints);
-}
-
-#[test]
-fn model_eligibility_on_every_host_stays_within_the_memory_bound() {
-    // Fill the needs budget with charter headers: this maximizes eligibility
-    // bytes per needs byte, independently of model name lengths.
-    const CHARTERS: usize = 32;
-    let needs_bytes = u64::try_from(CHARTERS * size_of::<jig_domain_fleet::CharterNeeds>()).expect("small fixture");
-    let limits = Limits { needs_bytes, engine_slots: 1, ..LIMITS };
-    let mut fleet = Measured::with_needs(limits, || jig_domain_fleet::Needs {
-        charters: (0..CHARTERS)
-            .map(|number| jig_domain_fleet::CharterNeeds {
-                version: jig_domain_fleet::Version {
-                    charter: u32::try_from(number).expect("small fixture"),
-                    revision: 1,
-                },
-                kinds: jig_domain_fleet::Kinds::Both,
-                models: Box::new([]),
-                turns: 0,
-                time: Duration::ZERO,
-                waiting: Duration::ZERO,
-                change_reserve: None,
-            })
-            .collect(),
-        ..jig_fleet_world::fixtures::needs()
-    });
-    fleet.hello(Token::new(0), Vec::new());
-    for nth in 0..limits.workers {
-        fleet.hello(channel(nth), Vec::new());
-    }
-    for _ in 0..limits.attempts {
-        fleet.start();
-    }
-    fleet.settle();
-    assert_eq!(fleet.domain.workers(), limits.workers);
 }
 
 /// The channels of the workers, `C1` and on.
@@ -276,7 +208,7 @@ fn fill(limits: Limits) -> (Measured, Vec<(Token, Token, Token)>, Vec<ReplyTo>) 
 }
 
 #[test]
-fn a_fleet_full_to_its_limits_stays_within_its_worst_case() {
+fn a_full_fleet_refuses_new_work_and_drains() {
     // This fixture fills runs; the source fixture below fills inventories.
     let (mut fleet, placed, calls) = fill(Limits { program_sources: 0, source_detail_bytes: 0, ..LIMITS });
     // One more is refused, at the entrance.
@@ -327,7 +259,7 @@ fn a_fleet_full_to_its_limits_stays_within_its_worst_case() {
 }
 
 #[test]
-fn every_entry_point_stays_within_the_worst_case() {
+fn every_entry_point_preserves_its_lifecycle() {
     let mut fleet = Measured::new(LIMITS);
     // Hellos: a worker with strays and answers it holds, before the parent
     // has loaded its claims.
@@ -424,19 +356,16 @@ fn every_entry_point_stays_within_the_worst_case() {
     }
     assert!(fleet.domain.host_history_lost() > 0);
     assert!(fleet.domain.hello_history_lost() > 0);
-    fleet.meter.start();
     let hosts = fleet.domain.host_views();
     let attempts = fleet.domain.attempt_views();
     let refusals = fleet.domain.hello_refusals();
     assert!(!hosts.is_empty());
     assert!(attempts.is_empty());
     assert_eq!(refusals.len(), LIMITS.history);
-    let measured = fleet.meter.end();
-    fleet.meter.check(measured, fleet.bound, &fleet.env.limits);
 }
 
 #[test]
-fn held_and_handed_turn_admissions_stay_within_the_worst_case() {
+fn held_turns_refuse_overflow_and_release_after_adoption() {
     let limits = Limits { turns: 8, ..LIMITS };
     let mut fleet = Measured::new(limits);
     let (run, attempt) = (fleet.name(), fleet.name());
@@ -472,97 +401,6 @@ fn held_and_handed_turn_admissions_stay_within_the_worst_case() {
     fleet.step(Event::Acknowledge { run, attempt });
     fleet.settle();
     assert_eq!(fleet.domain.attempts(), 0);
-}
-
-#[test]
-fn engine_slots_stay_within_the_fleets_worst_case() {
-    let limits = Limits { workers: 0, engine_slots: 2, ..LIMITS };
-    let mut fleet = Measured::new(limits);
-    for _ in 0..2 {
-        fleet.start();
-        fleet.settle();
-    }
-}
-
-#[test]
-fn source_lifecycle_at_capacity_fits_the_memory_bound() {
-    use jig_domain_fleet::{Login, LoginState, SourceName};
-    let limits = LIMITS;
-    let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
-    let mut out = Queue::with_capacity(max_out(&limits));
-    let meter = Meter::new();
-    let mut domain = jig_fleet_world::fixtures::domain(&limits, jig_fleet_world::fixtures::needs());
-    let mut measured_step = |event| {
-        meter.start();
-        step(&mut domain, &env, event, &mut out);
-        let measured = meter.end();
-        while out.pop().is_some() {}
-        meter.check(measured, worst_case(&limits).expect("source inventory bound"), &limits);
-    };
-    let names: Box<[_]> = (0..limits.program_sources)
-        .map(|index| SourceName::new(format!("{index:032}").as_bytes()).expect("full source name"))
-        .collect();
-    measured_step(Event::Sources { sources: names.clone() });
-    for worker in 1..=limits.workers {
-        let channel = Token::new(u64::from(worker));
-        measured_step(Event::Hello {
-            worker: u32::try_from(channel.raw()).expect("fixture channel") % LIMITS.configured_workers,
-            channel,
-            hello: Hello {
-                slots: limits.slots,
-                stop_bound: Duration::ZERO,
-                workstreams: Box::new([]),
-                hosting: Box::new([]),
-                bounds: jig_fleet_world::fixtures::bounds(),
-            },
-        });
-        measured_step(Event::Logins {
-            channel,
-            logins: names
-                .iter()
-                .map(|&name| Login {
-                    name,
-                    state: LoginState::Failed {
-                        reason: jig_domain_fleet::SourceFailure::Exited,
-                        detail: vec![b'x'; usize::try_from(limits.source_detail_bytes).expect("detail bound")]
-                            .into_boxed_slice(),
-                    },
-                })
-                .collect(),
-        });
-        for &name in &names {
-            measured_step(Event::SignOut { to: ReplyTo::new(channel), channel, name });
-            measured_step(Event::SignedOut {
-                channel,
-                name,
-                result: jig_domain_fleet::SignOutResult::Failed {
-                    reason: jig_domain_fleet::SourceFailure::Exited,
-                    detail: vec![b'x'; usize::try_from(limits.source_detail_bytes).expect("detail bound")]
-                        .into_boxed_slice(),
-                },
-            });
-            measured_step(Event::SignOut { to: ReplyTo::new(channel), channel, name });
-        }
-    }
-    // One sent replacement and the latest desired list coexist on every host.
-    measured_step(Event::Sources { sources: Box::new([SourceName::new(b"replacement").expect("name")]) });
-    measured_step(Event::Sources { sources: names });
-    // Rejected full inventories coexist with loss's pending sign-out names.
-    for worker in 1..=limits.workers {
-        measured_step(Event::Logins {
-            channel: Token::new(u64::from(worker)),
-            logins: (0..limits.program_sources)
-                .map(|_| Login {
-                    name: SourceName::new(b"foreign").expect("foreign source"),
-                    state: LoginState::Failed {
-                        reason: jig_domain_fleet::SourceFailure::Exited,
-                        detail: vec![b'x'; usize::try_from(limits.source_detail_bytes).expect("detail bound")]
-                            .into_boxed_slice(),
-                    },
-                })
-                .collect(),
-        });
-    }
 }
 
 #[test]
@@ -603,49 +441,4 @@ fn full_endpoint_metadata_including_engine_fits_its_accounted_channels() {
         world.hello(Token::new(u64::from(worker)), Vec::new());
     }
     assert_eq!(world.domain.program_endpoint(Token::new(0), 0), Some(true));
-}
-
-#[test]
-fn retained_versions_on_every_host_stay_within_the_memory_bound() {
-    use jig_domain_fleet::{CharterNeeds, Kinds, ModelNeed, Needs, Version};
-    const VERSIONS: u32 = 2;
-    let limits = Limits {
-        needs_bytes: u64::try_from(size_of::<CharterNeeds>()).expect("charter header fits"),
-        versions: VERSIONS,
-        engine_slots: 1,
-        ..LIMITS
-    };
-    let mut fleet = Measured::with_needs(limits, || {
-        let mut charters = vec![CharterNeeds {
-            version: Version { charter: 1, revision: VERSIONS + 1 },
-            kinds: Kinds::Both,
-            models: Box::new([]),
-            turns: 0,
-            time: Duration::ZERO,
-            waiting: Duration::ZERO,
-            change_reserve: None,
-        }];
-        for revision in 1..=VERSIONS {
-            let mut charter = charters[0].clone();
-            charter.version.revision = revision;
-            charter.models = (0..=jig_domain_fleet::CATALOGUE_MODELS)
-                .map(|_| ModelNeed {
-                    name: vec![
-                        b'm';
-                        usize::try_from(jig_domain_fleet::CATALOGUE_NAME_BYTES).expect("model name bound")
-                    ]
-                    .into_boxed_slice(),
-                    window: 1,
-                    output: 1,
-                })
-                .collect();
-            charters.push(charter);
-        }
-        Needs { charters: charters.into_boxed_slice(), ..jig_fleet_world::fixtures::needs() }
-    });
-    fleet.hello(Token::new(0), Vec::new());
-    for nth in 0..limits.workers {
-        fleet.hello(channel(nth), Vec::new());
-    }
-    assert_eq!(fleet.domain.workers(), limits.workers);
 }

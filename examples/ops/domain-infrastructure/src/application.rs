@@ -206,14 +206,3 @@ fn keep(
 fn busy(request: Token, out: &mut Queue<Request>) {
     out.push(Request::ApplicationBusy { request });
 }
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let names = u64::from(limits.name_bytes).checked_mul(2)?;
-    Map::<Token, ApplicationRequest>::worst_case(limits.staged)?
-        .checked_add(Map::<Environment, (Key, EnvironmentEnd)>::worst_case(limits.environments)?)?
-        .checked_add(Map::<Token, (Wall, ApplicationOutcome)>::worst_case(limits.proposals)?)?
-        .checked_add(
-            u64::from(limits.staged.checked_add(limits.environments)?.checked_add(limits.proposals)?)
-                .checked_mul(names)?,
-        )
-}

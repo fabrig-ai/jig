@@ -45,8 +45,7 @@
 //! share one atomic commit (domain/people.md, section 5.1).
 //! `fire` expires at most one due sign-in per call. The caller reserves free
 //! request room from `max_out`, accounts output bytes separately, and reclaims
-//! retired flights at the iteration boundary. `worst_case` includes retained
-//! state and bounded scratch. `Domain::role` supplies current membership for root
+//! retired flights at the iteration boundary. `Domain::role` supplies current membership for root
 //! escalation coverage/standing without authentication or copying. `Domain::has_project` is a pure bounded startup
 //! lookup; `Domain::person` is a pure sign-in lookup after restoration, checking
 //! both its projected monotonic deadline and saved wall expiry for root result
@@ -107,7 +106,7 @@ pub use capacity::{CapacityAction, CapacityCause, CapacityRefusal};
 pub use decisions::{Bound, Exceeded, FailureClass, HoldReason, Moved};
 pub use domain::{Domain, application_part, application_part_done, fire, max_out, step};
 pub use facts::Fact;
-pub use limits::{Limits, outcome_bytes, valid, worst_case};
+pub use limits::{Limits, outcome_bytes, valid};
 pub use policy_value::{
     Guard, Judge, PermissionRole, PolicyChange, PolicyRole, PolicyValue, Requirement, policy_bytes,
     policy_change_bytes, requirements_bytes,

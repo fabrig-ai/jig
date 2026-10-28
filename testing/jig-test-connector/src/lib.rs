@@ -54,7 +54,7 @@ pub use boundary::{
     TopicSpec, Verdict,
 };
 pub use domain::{Domain, MAX_OUT, closing_ready, fire, next_deadline, resume, step};
-pub use limits::{Limits, valid, worst_case};
+pub use limits::{Limits, valid};
 
 #[cfg(test)]
 mod tests;

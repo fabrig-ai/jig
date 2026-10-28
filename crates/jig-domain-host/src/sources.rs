@@ -80,21 +80,6 @@ pub fn valid(limits: &Limits) -> bool {
     limits.source_interval != skein_lib::Duration::ZERO && limits.source_timeout != skein_lib::Duration::ZERO
 }
 
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let rows = List::<Row>::worst_case(limits.program_sources)?;
-    let details = u64::from(limits.program_sources).checked_mul(u64::from(limits.detail_bytes))?;
-    let retained = rows.checked_add(details)?;
-    // A replacement moves surviving states while old/new row arrays coexist.
-    let replacing =
-        rows.checked_add(u64::from(limits.program_sources).checked_mul(u64::try_from(size_of::<SourceName>()).ok()?)?)?;
-    let publishing = List::<Login>::worst_case(limits.program_sources)?.checked_add(details)?;
-    retained.checked_add(replacing.max(publishing))
-}
-
 pub(crate) fn replace(domain: &mut Domain, env: &Env<Limits>, names: Box<[SourceName]>, out: &mut Queue<Request>) {
     if names.len() > usize::try_from(env.limits.program_sources).expect("source bound") || !unique(&names) {
         out.push(Request::SourceFault);

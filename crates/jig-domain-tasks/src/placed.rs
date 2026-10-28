@@ -6,7 +6,7 @@ use crate::{
     Stored,
 };
 use alloc::boxed::Box;
-use skein_lib::{Env, List, Map, Queue, ReplyTo};
+use skein_lib::{Env, List, Queue, ReplyTo};
 
 /// Who placed a hold, and so who lifts it (domain/tasks.md, 5.9).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -568,19 +568,6 @@ pub(crate) fn ended(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &m
     }
 }
 
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<u64, PlacedHold>::worst_case(limits.placed_holds)?
-        .checked_add(
-            u64::from(limits.placed_holds).checked_mul(
-                u64::from(limits.message_bytes).checked_add(u64::from(limits.exemptions).checked_mul(8)?)?,
-            )?,
-        )?
-        // Placement selection, replacement walk, and hold erasure snapshot.
-        .checked_add(List::<u64>::worst_case(limits.tasks)?)?
-        .checked_add(List::<(u64, Option<u64>)>::worst_case(limits.tasks)?)?
-        .checked_add(List::<u64>::worst_case(limits.placed_holds)?)
-}
-
 /// Preserve the live attempt fence when resuming; preparation and backoff start due again.
 pub(crate) fn resumed(was: &crate::Was) -> Phase {
     match was {
@@ -775,15 +762,6 @@ fn retained(domain: &Domain, staged: &Staged, hold: &PlacedHold) -> bool {
         }
     }
     false
-}
-
-pub(crate) fn compound_bytes(limits: &Limits) -> Option<u64> {
-    let selection = List::<u64>::worst_case(limits.tasks)?.checked_add(u64::try_from(size_of::<Placement>()).ok()?)?;
-    let release = List::<(u64, Option<u64>)>::worst_case(limits.tasks)?
-        .checked_add(u64::try_from(size_of::<ReleaseChanges>()).ok()?)?
-        .checked_add(u64::from(limits.message_bytes))?
-        .checked_add(u64::from(limits.exemptions).checked_mul(8)?)?;
-    u64::from(limits.tasks).checked_mul(selection.max(release))
 }
 
 /// Moving a whole scope preserves its hold; detaching a held delegate must first release it.

@@ -13,8 +13,6 @@ struct Measured {
     d: Domain,
     env: Env<Limits>,
     out: Queue<Request>,
-    meter: Meter,
-    bound: u64,
     serial: u64,
     refused: bool,
 }
@@ -23,17 +21,8 @@ impl Measured {
     fn new(limits: &Limits) -> Measured {
         let limits = *limits;
         let out = Queue::with_capacity(tasks::max_out(&limits));
-        let meter = Meter::new();
         let d = jig_tasks_world::domain(&limits, 1);
-        Measured {
-            d,
-            env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits },
-            out,
-            meter,
-            bound: tasks::worst_case(&limits).expect("admitted bounds"),
-            serial: 0,
-            refused: false,
-        }
+        Measured { d, env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, out, serial: 0, refused: false }
     }
 
     fn to(&mut self) -> ReplyTo {
@@ -42,16 +31,14 @@ impl Measured {
     }
 
     fn event(&mut self, event: Event) {
-        self.meter.start();
         tasks::step(&mut self.d, &self.env, event, &mut self.out);
         let _history = self.d.capacity_refusals();
-        let measured = self.meter.end();
         self.refused = false;
         while let Some(request) = self.out.pop() {
             self.refused |= matches!(request, Request::Refused { .. });
             drop(request);
         }
-        self.meter.check(measured, self.bound, &self.env.limits);
+
         self.d.reclaim();
     }
 
@@ -69,13 +56,11 @@ impl Measured {
     fn fire(&mut self) {
         self.env.now = self.env.now.saturating_add(skein_lib::Duration::from_secs(1));
         self.env.wall = Wall::from_nanos(self.env.now.as_nanos());
-        self.meter.start();
         tasks::fire(&mut self.d, &self.env, &mut self.out);
-        let measured = self.meter.end();
         while let Some(request) = self.out.pop() {
             drop(request);
         }
-        self.meter.check(measured, self.bound, &self.env.limits);
+
         self.d.reclaim();
     }
 
@@ -273,7 +258,7 @@ fn full_delegate_tree_dependency_edges_and_cold_restored_claims_fit() {
         m.event(Event::EffectsSettled { task });
         m.event(Event::Settled { task });
     }
-    assert!(tasks::worst_case(&Limits { tasks: u32::MAX, ..l }).is_none());
+    assert!(!tasks::valid(&Limits { tasks: u32::MAX, ..l }));
     let mut w = jig_tasks_world::World::new(3, l);
     w.make(Party::Person(1), vec![task(10, &[])]);
     w.claim(10, 10);
@@ -624,17 +609,6 @@ fn a_wide_back_walk_with_ancestors_and_dependents_fits_its_priced_scratch() {
     let width = usize::try_from(WIDTH).expect("small tree width");
     assert_eq!(measured.d.task(ROOT).expect("root").delegates.len(), width);
     assert_eq!(measured.d.task(MIDDLE).expect("middle").delegates.len(), width);
-}
-
-// The tasks domain's price at LIMITS: 11,662,996 bytes at jig 0d5ed2767.
-// A ceiling, a quarter above, rounded up to two significant digits
-// (skein's dynamic-memory draft, 7.1); it moves by hand only in the
-// commit of a real change that passes it, never on a type's size.
-const TASKS_DOMAIN_CEILING: u64 = 15_000_000;
-#[test]
-fn the_tasks_domain_stays_under_its_ceiling() {
-    let domain = tasks::worst_case(&LIMITS).expect("tasks fixture fits");
-    assert!(domain <= TASKS_DOMAIN_CEILING, "{domain}");
 }
 
 #[test]

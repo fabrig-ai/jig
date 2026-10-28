@@ -1,7 +1,7 @@
 //! Bounded deployment facts read independently of the diagnostic drain
 //! (client/domain/pages.md, section 7; domain/engine.md, section 8).
 
-use skein_lib::{Duration, Map, Queue, Time, Token, Wall};
+use skein_lib::{Duration, Time, Token, Wall};
 
 /// The owner's reason for refusing a worker's hello.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -84,8 +84,4 @@ pub(crate) fn refused(domain: &mut crate::Domain, record: HelloRefusalRecord) {
         domain.hello_history_lost = domain.hello_history_lost.saturating_add(1);
     }
     domain.hello_refusals.push(record);
-}
-
-pub(crate) fn worst_case(capacity: u32) -> Option<u64> {
-    Map::<Token, LostHost>::worst_case(capacity)?.checked_add(Queue::<HelloRefusalRecord>::worst_case(capacity)?)
 }

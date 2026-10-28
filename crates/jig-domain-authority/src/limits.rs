@@ -3,9 +3,7 @@
 use alloc::boxed::Box;
 use core::mem::size_of;
 
-use skein_lib::Map;
-
-use crate::{Authority, Executor, Grant, Implication, Name, Pattern, Policy, Requirement, ResourceScope, Role};
+use crate::{Authority, Executor, Grant, Implication, Name, Pattern, Requirement, ResourceScope};
 
 /// Root-configured capacities for policy state and admitted questions; owned values do not enforce
 /// these bounds until admission. (domain/authority.md, sections 6–11).
@@ -46,27 +44,6 @@ pub fn max_out(limits: &Limits) -> Option<u32> {
     let run = limits.writes.checked_mul(6)?.checked_add(limits.accounts.checked_mul(2)?)?.checked_add(12)?;
     let effect = limits.requirements.checked_mul(4)?.checked_add(9)?;
     Some(batch.max(run).max(effect))
-}
-
-/// Heap held by the domain's rules and full project table. Questions and finding queues belong to
-/// the caller and are counted there. Checked retained-heap bound for deployment rules and a full
-/// live policy table under `limits`; `None` means unrepresentable arithmetic. Caller separately
-/// counts question payloads, constructed needs and output queues.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    let authority = authority_heap(limits)?;
-    let requirements = requirement_heap(limits)?;
-    let role_heap = bytes(u64::from(limits.roles), size_of::<Role>())?
-        .checked_add(authority.checked_mul(u64::from(limits.roles))?)?;
-    let projections = u64::from(limits.grants)
-        .checked_mul(u64::try_from(size_of::<Grant>()).ok()?.checked_add(pattern_heap(limits)?)?)?;
-    let policy = authority.checked_add(projections)?.checked_add(requirements)?.checked_add(role_heap)?;
-    let configured = authority
-        .checked_add(requirements)?
-        .checked_add(bytes(u64::from(limits.implications), size_of::<Implication>())?)?;
-    Map::<u32, Policy>::worst_case(limits.projects)?
-        .checked_add(policy.checked_mul(u64::from(limits.projects))?)?
-        .checked_add(configured)
 }
 
 fn bytes(count: u64, size: usize) -> Option<u64> {

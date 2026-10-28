@@ -208,10 +208,3 @@ fn finish(
 fn busy(request: Token, out: &mut Queue<Request>) {
     out.push(Request::ApplicationAgain { request, why: application_core::Again::Busy });
 }
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<Token, ApplicationRequest>::worst_case(limits.staged)?
-        .checked_add(Map::<Token, Pending>::worst_case(limits.staged)?)?
-        .checked_add(Map::<u64, ApplicationObject>::worst_case(limits.resources)?)?
-        .checked_add(Map::<Token, (Wall, ApplicationOutcome)>::worst_case(limits.values)?)
-}

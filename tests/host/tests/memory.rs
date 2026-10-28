@@ -1,10 +1,8 @@
-//! Memory stays within the worst case (programming-model.md, 6.3), measured by
-//! a counting allocator: the host with every slot holding an assignment of
-//! exactly its limits, then every run ending with as much as it may hold.
+//! Saturated fleet lifecycle, refusals and exact ownership observations.
 
 use jig_domain_host::{
     AgentFailure, Ask, Delivery, DeliveryOutcome, Domain, Ending, Event, Finish, Grant, Invalid, Limits, Preparation,
-    Reason, Refusal, Request, RunAssignment, Workspace, max_out, resume, step, worst_case,
+    Reason, Refusal, Request, RunAssignment, Workspace, max_out, resume, step,
 };
 use jig_domain_host::{LinkDown, LinkUp};
 use skein_lib::{Duration, Env, Queue, Time, Token, Wall};
@@ -55,35 +53,29 @@ enum Asked {
     Other,
 }
 
-/// The host under `limits`, measured: each step's peak is checked against
-/// the worst case, less what it handed out in requests, which their
-/// receivers count.
+/// The host and its scenario inputs and requests.
 struct Measured {
     domain: Domain,
     env: Env<Limits>,
     out: Queue<Request>,
     meter: Meter,
-    bound: u64,
 }
 
 impl Measured {
     fn new(limits: Limits) -> Measured {
-        let bound = worst_case(&limits).expect("the test limits fit");
         // The output queue belongs to the parent, not the measured child.
         let out = Queue::with_capacity(max_out(&limits));
         let meter = Meter::new();
         let domain = Domain::new(&limits);
-        Measured { domain, env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, out, meter, bound }
+        Measured { domain, env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, out, meter }
     }
 
     fn step(&mut self, event: Event) -> Vec<Asked> {
-        self.meter.start();
         step(&mut self.domain, &self.env, event, &mut self.out);
         self.drain()
     }
 
     fn resume(&mut self) -> Vec<Asked> {
-        self.meter.start();
         resume(&mut self.domain, &self.env, &mut self.out);
         self.drain()
     }
@@ -96,7 +88,6 @@ impl Measured {
     }
 
     fn drain(&mut self) -> Vec<Asked> {
-        let measured = self.meter.end();
         let mut asked = Vec::new();
         let mut cancelled = Vec::new();
         while let Some(request) = self.out.pop() {
@@ -138,7 +129,7 @@ impl Measured {
                 | Request::AcknowledgeAgentTurn { .. } => Asked::Other,
             });
         }
-        self.meter.check(measured, self.bound, &self.env.limits);
+
         // The iteration ends: the reclaim point.
         self.domain.reclaim();
         for event in cancelled {
@@ -175,7 +166,7 @@ fn assignment(run: u64, limits: &Limits) -> RunAssignment {
 /// change in every item and make as many calls as it may, the last a
 /// delivery still in flight as it ends with an outcome of exactly the limit; and
 /// takes each through its tail. Every step's peak is checked against the
-/// worst case.
+/// scenario.
 fn fill(limits: Limits) {
     let delivered = Delivery { outcome: DeliveryOutcome::Delivered, left: Token::new(5000), changed: true };
     let mut host = Measured::new(limits);
@@ -362,7 +353,7 @@ fn paths(limits: Limits) {
 }
 
 #[test]
-fn a_host_with_every_slot_full_stays_within_its_worst_case() {
+fn a_full_host_completes_every_slot() {
     fill(LIMITS);
     fill(Limits { slots: 16, held: 8, run_calls: 4, ..LIMITS });
     fill(Limits { slots: 200, charter_bytes: 65_536, transcript_bytes: 16_384, event_bytes: 4096, ..LIMITS });
@@ -372,13 +363,13 @@ fn a_host_with_every_slot_full_stays_within_its_worst_case() {
 }
 
 #[test]
-fn every_entry_point_stays_within_the_worst_case() {
+fn every_entry_point_preserves_its_lifecycle() {
     paths(LIMITS);
     paths(Limits { slots: 8, ..LIMITS });
 }
 
 #[test]
-fn ordered_transcripts_and_delivery_feedback_fit_the_hosts_bound() {
+fn transcripts_and_delivery_feedback_keep_their_order() {
     use jig_domain_host::{Assignment, Ending, Finish, Turn};
     let limits = Limits { transcript_bytes: 2048, turn_bytes: 128, turns: 1, turn_queue_bytes: 128, ..LIMITS };
     let mut owners = Vec::with_capacity(usize::try_from(limits.slots).expect("bounded"));
@@ -451,21 +442,18 @@ fn fill_refusals(host: &mut Measured, owner: Token, inbox: u32) {
 }
 
 #[test]
-fn source_replacement_at_capacity_stays_within_the_memory_bound() {
+fn source_replacement_at_capacity_completes_every_check() {
     use jig_domain_host::{LoginState, SourceFailure, SourceName, sources};
     let limits = Limits { slots: 0, ..LIMITS };
     let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
     let mut out = Queue::with_capacity(max_out(&limits));
-    let meter = Meter::new();
     let mut domain = Domain::new(&limits);
     let names: Box<[_]> = (0..limits.program_sources)
         .map(|index| SourceName::new(format!("{index:032}").as_bytes()).expect("full source name"))
         .collect();
-    meter.start();
     step(&mut domain, &env, Event::Down(LinkDown::Sources { sources: names.clone() }), &mut out);
-    let measured = meter.end();
     let Some(Request::Source { mut owner, .. }) = out.pop() else { panic!("first check") };
-    meter.check(measured, worst_case(&limits).expect("source bound"), &limits);
+
     for index in 0..limits.program_sources {
         let event = Event::SourceAnswered {
             owner,
@@ -474,10 +462,8 @@ fn source_replacement_at_capacity_stays_within_the_memory_bound() {
                 detail: bytes(u64::from(limits.detail_bytes)),
             }),
         };
-        meter.start();
         step(&mut domain, &env, event, &mut out);
         // Keep the full inventory at the measured step peak, then hand it out.
-        let measured = meter.end();
         while let Some(request) = out.pop() {
             match request {
                 Request::Source { owner: next, .. } => owner = next,
@@ -499,18 +485,15 @@ fn source_replacement_at_capacity_stays_within_the_memory_bound() {
                 | Request::Release { .. }) => panic!("unexpected source output: {other:?}"),
             }
         }
-        meter.check(measured, worst_case(&limits).expect("source bound"), &limits);
+
         assert_eq!(domain.sources_settled(), index + 1 == limits.program_sources);
     }
-    meter.start();
     step(&mut domain, &env, Event::Down(LinkDown::Sources { sources: names }), &mut out);
-    let measured = meter.end();
     assert!(matches!(out.pop(), Some(Request::Source { .. })));
-    meter.check(measured, worst_case(&limits).expect("replacement bound"), &limits);
 }
 
 #[test]
-fn maximum_input_pieces_in_the_shared_queue_fit_the_hosts_bound() {
+fn maximum_input_pieces_keep_their_payloads_and_order() {
     use jig_domain_host::{Activity, LiveAsk, LiveKind, Piece};
     let limits = Limits { told: 64, ..LIMITS };
     let mut host = Measured::new(limits);

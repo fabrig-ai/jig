@@ -724,9 +724,6 @@ impl Application for Testing {
     fn maximum(_: &Config) -> u64 {
         CONFORMANCE_HEAP_CEILING
     }
-    fn configuration_heap(_: &Config) -> u64 {
-        0
-    }
 }
 
 pub mod actions;

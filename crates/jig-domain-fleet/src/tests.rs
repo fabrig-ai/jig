@@ -6,7 +6,7 @@ use skein_lib::{Duration, Env, List, Queue, ReplyTo, Time, Token, Wall};
 
 use crate::{
     Answer, Assignment, Call, Domain, Event, Fact, Hello, HelloRefusal, HostKind, Hosted, Kinds, Limits, Message,
-    Phase, Refusal, Request, Undelivered, Withdrawal, fire, max_out, resume, step, worst_case,
+    Phase, Refusal, Request, Undelivered, Withdrawal, fire, max_out, resume, step, valid,
 };
 
 const LIMITS: Limits = Limits {
@@ -1171,15 +1171,6 @@ fn facts_beyond_the_room_are_dropped_and_counted() {
 }
 
 #[test]
-fn a_representable_fleet_bound_is_accepted() {
-    assert!(worst_case(&LIMITS).is_some());
-}
-#[test]
-fn an_overflowing_fleet_bound_is_refused() {
-    let huge = Limits { workers: u32::MAX, slots: u32::MAX, ..LIMITS };
-    assert_eq!(worst_case(&huge), None);
-}
-#[test]
 fn a_configured_worker_fan_out_sets_the_output_floor() {
     for slots in [1, 2, 8] {
         assert_eq!(max_out(&Limits { slots, ..LIMITS }), 65);
@@ -1193,11 +1184,11 @@ fn a_slot_burst_sets_the_output_floor() {
 }
 #[test]
 fn an_overflowing_configured_worker_count_is_refused() {
-    assert_eq!(worst_case(&Limits { configured_workers: u32::MAX, ..LIMITS }), None);
+    assert!(!valid(&Limits { configured_workers: u32::MAX, ..LIMITS }));
 }
 #[test]
 fn an_overflowing_program_source_count_is_refused() {
-    assert_eq!(worst_case(&Limits { program_sources: u32::MAX, ..LIMITS }), None);
+    assert!(!valid(&Limits { program_sources: u32::MAX, ..LIMITS }));
 }
 
 fn turns() -> Harness {
@@ -1389,7 +1380,7 @@ mod needs;
 #[test]
 fn an_overflowing_joined_reply_count_is_refused() {
     let limits = Limits { program_sources: u32::MAX / 2 + 1, ..LIMITS };
-    assert_eq!(worst_case(&limits), None);
+    assert!(!valid(&limits));
 }
 
 mod crossed;

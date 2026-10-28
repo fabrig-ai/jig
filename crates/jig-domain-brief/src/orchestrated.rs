@@ -126,33 +126,6 @@ pub fn valid(limits: &Limits) -> bool {
     limits.briefs > 0 && limits.sections > 0 && limits.read_bytes > 0 && limits.brief_bytes > 0
 }
 
-/// The active inventory and its core text, including a whole input
-/// inventory temporarily held during admission.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.briefs == 0 || limits.sections == 0 || limits.read_bytes == 0 || limits.brief_bytes == 0 {
-        return None;
-    }
-    let rows = Map::<Token, Active>::worst_case(limits.briefs)?;
-    let sections = List::<Planned>::worst_case(limits.sections)?;
-    let status = List::<Status>::worst_case(limits.sections)?;
-    let allotted = List::<u32>::worst_case(limits.sections)?;
-    let payload = u64::from(limits.sections).checked_mul(u64::from(limits.brief_bytes))?;
-    let one = sections.checked_add(status)?.checked_add(allotted)?.checked_add(payload)?;
-    // Admission owns an input inventory while an active brief is live;
-    // allocation copies the available inventory, and completion copies its
-    // output while the original sections still exist.
-    let in_hand = one.checked_mul(3)?;
-    let planning = List::<bool>::worst_case(limits.sections)?
-        .checked_add(List::<u32>::worst_case(limits.sections)?)?
-        .checked_add(List::<planned::Placement>::worst_case(limits.sections)?)?
-        .checked_add(List::<ConnectorAction>::worst_case(limits.sections)?)?;
-    rows.checked_add(Deadlines::<Token>::worst_case(limits.briefs)?)?
-        .checked_add(u64::from(limits.briefs).checked_mul(one)?)?
-        .checked_add(in_hand)?
-        .checked_add(planning)
-}
-
 /// Advance one brief or accept a new one.
 pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queue<Request>) {
     match event {

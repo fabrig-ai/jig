@@ -189,6 +189,11 @@ fn checked_valid(limits: &Limits) -> Option<()> {
     {
         return None;
     }
+    // Constructor counts formerly reached through the inbox and settings subtotals.
+    crate::inbox::question_capacity(limits)?;
+    limits.people.people.checked_mul(limits.people.inbox_entries)?.checked_add(1)?;
+    limits.settings.versions.checked_add(crate::settings::capacity(limits)?.checked_mul(4)?)?;
+    limits.tasks.charters.checked_mul(2)?.checked_add(limits.settings.versions)?;
     crate::routing::route_bound(limits)?;
     crate::documents::document_with_context_worst_case(limits)?;
     crate::settings::set_worst_case(limits)?;

@@ -514,7 +514,7 @@ pub struct World {
 impl World {
     #[must_use]
     pub fn new(settings: Settings) -> World {
-        assert!(fleet::worst_case(&settings.limits).is_some(), "the shell refuses limits it cannot provision");
+        assert!(fleet::valid(&settings.limits), "domain limits are valid");
         let unseen = settings.latency.max.saturating_add(settings.wind_down.max);
         assert!(
             settings.worker_grace.saturating_add(unseen) <= settings.limits.grace,

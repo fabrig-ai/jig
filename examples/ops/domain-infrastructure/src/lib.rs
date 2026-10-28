@@ -49,7 +49,7 @@ pub use boundary::{
     ServiceFact, StepDecision, SystemEvent, SystemRequest, TEAR_DOWN_CODE,
 };
 pub use domain::{Domain, MAX_OUT, fire, next_deadline, step};
-pub use limits::{Limits, valid, worst_case};
+pub use limits::{Limits, valid};
 
 #[cfg(test)]
 mod tests;

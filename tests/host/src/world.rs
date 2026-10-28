@@ -358,7 +358,7 @@ impl World {
     }
 
     fn start(settings: &Settings, trace: Trace) -> World {
-        assert!(host::worst_case(&settings.host).is_some(), "the shell refuses limits it cannot provision");
+        assert!(host::valid(&settings.host), "domain limits are valid");
         let mut rng = Rng::new(settings.seed);
         let engine = Engine::new(settings.engine, settings.host, rng.next_u64());
         let parent = Parent::new(settings.parent, settings.host, rng.next_u64());

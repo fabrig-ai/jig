@@ -45,9 +45,3 @@ pub(crate) fn observed(domain: &mut Domain, env: &Env<Limits>, account: DriftAcc
     domain.drifts.insert(account.resource.clone(), account.clone()).expect("drift capacity checked");
     out.push(Request::Save { record: Record::Drift(account) });
 }
-
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let count = capacity(limits)?;
-    skein_lib::Map::<Resource, DriftAccount>::worst_case(count)?
-        .checked_add(u64::from(count).checked_mul(u64::from(limits.name_bytes).checked_mul(5)?)?)
-}

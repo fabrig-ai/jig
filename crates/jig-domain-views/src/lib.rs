@@ -17,5 +17,5 @@ pub use boundary::{
 };
 pub use domain::{Domain, fire, max_out, step};
 pub use facts::Fact;
-pub use limits::{Limits, valid, worst_case};
+pub use limits::{Limits, valid};
 pub use text::{RetainedRun, current_call, has_current_call, position, retained_attempt, revision, writing};

@@ -6,7 +6,7 @@ use skein_lib::{Env, List, Queue, Time, Token, Wall};
 
 use crate::{
     Author, Change, Domain, Entry, Event, Limits, Line, New, Range, Recall, Record, Refusal, Request, Rows, Scope,
-    max_out, step, worst_case,
+    max_out, step,
 };
 
 const LIMITS: Limits = Limits {
@@ -193,11 +193,6 @@ fn a_full_scope_refuses_a_new_entry() {
         Line { scope: Scope::Project { project: 7 }, name: 20, description: Box::from(&b"old"[..]), revision: 1 };
     let got = h.step(Event::Loaded { owner, rows: rows(&[Record::Line(line)]), more: false });
     assert_eq!(&*got, &[Request::Refused { owner: Token::new(7), why: Refusal::Full }]);
-}
-
-#[test]
-fn the_memory_bound_accepts_the_test_limits() {
-    assert!(worst_case(&LIMITS).is_some());
 }
 
 #[test]

@@ -1,10 +1,3 @@
-use alloc::boxed::Box;
-use skein_lib::{List, Map};
-
-use crate::{
-    Effect, Entry, Environment, EnvironmentFact, Key, Named, Pool, ProcedureState, Resource, Service, ServiceFact,
-};
-
 /// Bounds for infrastructure's live records and system values.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Limits {
@@ -46,48 +39,6 @@ pub fn valid(limits: &Limits) -> bool {
         && closing_capacity(limits).is_some()
         && refresh_capacity(limits).is_some()
         && crate::drift_accounts::capacity(limits).is_some()
-}
-
-/// Conservative heap bound for tables and owned names.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let name = u64::from(limits.name_bytes);
-    let refresh = refresh_capacity(limits)?;
-    crate::application::worst_case(limits)?
-        .checked_add(crate::drift_accounts::worst_case(limits)?)?
-        .checked_add(Map::<skein_lib::Token, crate::ClientSubject>::worst_case(limits.proposals)?)?
-        .checked_add(List::<skein_lib::Token>::worst_case(limits.proposals)?)?
-        .checked_add(u64::from(limits.proposals).checked_mul(name.checked_mul(2)?)?)?
-        .checked_add(Map::<Service, ServiceFact>::worst_case(limits.services)?)?
-        .checked_add(Map::<u64, bool>::worst_case(closing_capacity(limits)?)?)?
-        .checked_add(Map::<Resource, bool>::worst_case(refresh)?)?
-        .checked_add(u64::from(refresh).checked_mul(u64::from(limits.name_bytes).checked_mul(2)?)?)?
-        .checked_add(Map::<Environment, Option<EnvironmentFact>>::worst_case(limits.environments)?)?
-        .checked_add(Map::<Pool, (u32, u32)>::worst_case(limits.pools)?)?
-        .checked_add(Map::<u64, (u32, Box<[Named]>)>::worst_case(limits.tasks)?)?
-        .checked_add(u64::from(limits.tasks).checked_mul(List::<Named>::worst_case(limits.resources_per_task)?)?)?
-        .checked_add(Map::<u64, ProcedureState>::worst_case(limits.procedures)?)?
-        .checked_add(List::<u64>::worst_case(limits.procedures)?)?
-        .checked_add(Map::<skein_lib::Token, Effect>::worst_case(limits.staged)?)?
-        .checked_add(Map::<u64, (u64, Effect)>::worst_case(limits.proposals)?)?
-        .checked_add(Map::<[u8; 16], (u32, u64)>::worst_case(limits.made)?)?
-        .checked_add(Map::<Key, Entry>::worst_case(limits.effects)?)?
-        .checked_add(Map::<Environment, (Key, Option<u32>)>::worst_case(limits.made)?)?
-        .checked_add(u64::from(limits.services).checked_mul(name.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.environments).checked_mul(name.checked_mul(2)?)?)?
-        .checked_add(u64::from(limits.pools).checked_mul(name)?)?
-        .checked_add(
-            u64::from(limits.tasks)
-                .checked_mul(u64::from(limits.resources_per_task).checked_mul(name.checked_mul(2)?)?)?,
-        )?
-        .checked_add(u64::from(limits.procedures).checked_mul(name.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.staged).checked_mul(name.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.proposals).checked_mul(name.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.effects).checked_mul(name.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.made).checked_mul(name.checked_mul(2)?)?)
 }
 
 fn closing_capacity(limits: &Limits) -> Option<u32> {

@@ -21,7 +21,7 @@
 //! `needs` copies bounded data and its output is counted by the caller.
 //! `step` alone updates the policy table and emits one terminal `PolicyFact`
 //! per event, with free room `POLICY_MAX_OUT` (domain/authority.md, section 6).
-//! `max_out` bounds finding room and `worst_case` bounds retained policy heap;
+//! `max_out` bounds finding room;
 //! callers count question payloads and queues (domain/authority.md, section 11).
 //! This child never authenticates people, discovers task standing or funding
 //! links, executes effects, or recognizes duplicate settlements.
@@ -62,7 +62,7 @@ pub use check::{
     covers, needed_judges, needs,
 };
 pub use domain::{Domain, Event, POLICY_MAX_OUT, PolicyFact, PolicyRefusal, policy_refusal, step, valid_rules};
-pub use limits::{Limits, max_out, rules_worst_case, worst_case};
+pub use limits::{Limits, max_out, rules_worst_case};
 pub use numbers::{Numbers, carve, charge, left, settle};
 pub use order::{FITS_MAX_OUT, Lack, Lacks, fits};
 pub use order::{
