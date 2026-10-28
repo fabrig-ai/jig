@@ -288,8 +288,6 @@ fn valid_refuses_each_unrepresentable_limit() {
     for (condition, invalid) in [
         ("positive retry", first::Limits { retry: Duration::ZERO, ..base }),
         ("watch and read count", first::Limits { reads: u32::MAX, ..base }),
-        ("output object count", first::Limits { objects: u32::MAX / 6, ..base }),
-        ("output watch count", first::Limits { watches: u32::MAX / 2 + 1, reads: 0, ..base }),
         ("retired object count", first::Limits { objects: u32::MAX, ..base }),
         ("row count", first::Limits { rows: u32::MAX, ..base }),
         ("connector document edge", first::Limits { connector, ..base }),

@@ -34,7 +34,6 @@ pub trait App: Sized {
     fn duty(request: Self::Request) -> Duty<Self>;
     fn record_key(record: &Self::Record) -> Self::Key;
     fn unsent(request: Self::Request) -> Option<Self::Event>;
-    fn max_out(limits: &Self::Limits) -> u32;
     fn view_limits(view: &Self::View) -> skein_ui::Limits;
     fn patch_limit(view: &Self::View) -> u32;
     /// No bound of the application's own: the world's

@@ -1141,16 +1141,9 @@ fn valid_refuses_each_unrepresentable_limit() {
     first.first.retry = Duration::ZERO;
     let mut client = base;
     client.client.domain.heartbeat = Duration::ZERO;
-    let mut output = base;
-    output.first.objects = (u32::MAX - 16 - 2 * output.first.watches) / 6;
-    assert!(first::valid(&output.first));
-    for (condition, invalid) in [
-        ("retained requests", retention),
-        ("jig limits", jig),
-        ("first limits", first),
-        ("client limits", client),
-        ("root output count", output),
-    ] {
+    for (condition, invalid) in
+        [("retained requests", retention), ("jig limits", jig), ("first limits", first), ("client limits", client)]
+    {
         assert!(!crate::valid(&invalid), "{condition}");
     }
 }

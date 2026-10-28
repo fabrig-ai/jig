@@ -260,9 +260,6 @@ impl App for Ops {
             | Request::Observability(_) => None,
         }
     }
-    fn max_out(limits: &Self::Limits) -> u32 {
-        domain::max_out(limits)
-    }
     fn view_limits(view: &Self::View) -> skein_ui::Limits {
         view.limits().tree
     }

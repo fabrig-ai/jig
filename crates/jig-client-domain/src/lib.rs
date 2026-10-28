@@ -16,6 +16,6 @@ mod watches;
 pub const TABLE_VERSION: u16 = 2;
 pub use boundary::*;
 pub use domain::{Domain, fire, next_deadline, reclaim, step};
-pub use limits::{AccountCounts, Backoff, Limits, VALUE_BYTES, max_out, valid, worst_case};
+pub use limits::{AccountCounts, Backoff, Limits, VALUE_BYTES, valid, worst_case};
 #[cfg(test)]
 mod tests;

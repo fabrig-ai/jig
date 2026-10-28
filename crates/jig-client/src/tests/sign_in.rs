@@ -432,27 +432,6 @@ fn independent_reads_refuse_cancel_once_and_reuse_room() {
     assert_read_credential(&c, Some(&fixtures::credential(&NEW_CREDENTIAL)));
 }
 
-#[test]
-fn overflowing_read_outputs_are_refused_before_construction() {
-    let limits = Limits { domain: DomainLimits { reads: u32::MAX, ..fixtures::domain_limits() }, ..fixtures::limits() };
-    assert!(!valid(&limits));
-    assert_eq!(crate::Client::new(&limits, 7).expect_err("read output overflow"), Unusable::Limits);
-    assert_eq!(crate::Client::unlinked(&limits, 7).expect_err("read output overflow"), Unusable::Limits);
-}
-
-#[test]
-fn read_room_prices_the_composed_cancellation_buffers() {
-    let full = fixtures::limits();
-    let empty = Limits { domain: DomainLimits { reads: 0, ..full.domain }, ..full };
-    let domain_growth = jig_client_domain::worst_case(&full.domain)
-        .unwrap()
-        .checked_sub(jig_client_domain::worst_case(&empty.domain).unwrap())
-        .unwrap();
-    let composed_growth = worst_case(&full).unwrap().checked_sub(worst_case(&empty).unwrap()).unwrap();
-    assert!(max_out(&full) > max_out(&empty));
-    assert!(composed_growth > domain_growth);
-}
-
 fn link_attempt() -> With {
     With::Link { secret: skein_lib::Secret::new(Box::new([3; 32])), held: None }
 }

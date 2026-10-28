@@ -510,18 +510,6 @@ impl Ui {
     }
 }
 
-/// The maximum effects emitted by any one entry, with all watches closing.
-#[must_use]
-pub fn max_out(limits: &Limits) -> u32 {
-    limits
-        .watches
-        .saturating_mul(2)
-        .saturating_add(limits.objects)
-        .saturating_add(limits.parts.saturating_mul(2))
-        .saturating_add(limits.records)
-        .saturating_add(16)
-}
-
 /// Routes one event, accepting no input until Start.
 pub fn step(domain: &mut Ui, env: &Env<Limits>, event: Event, out: &mut Queue<Request>, lent: &jig_client::Client) {
     if !domain.started {

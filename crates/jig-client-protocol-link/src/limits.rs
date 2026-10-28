@@ -222,7 +222,6 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
 pub fn valid(limits: &Limits) -> bool {
     limits.exchanges != 0
         && wire(&limits.client) == Some(limits.wire)
-        && max_out(limits).is_some()
         && limits.client.watches != 0
         && limits.client.heartbeat != Duration::ZERO
         && crate::store::valid(limits)
@@ -245,12 +244,4 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(w::Authorize::worst_case_bytes(&limits.wire)?.checked_mul(2)?)?
         .checked_add(w::AuthorizeAnswer::worst_case_bytes(&limits.wire)?.checked_mul(2)?)?
         .checked_add(40)
-}
-
-#[must_use]
-pub fn max_out(limits: &Limits) -> Option<u32> {
-    let per_event = limits.client.watches.checked_mul(3)?.checked_add(limits.exchanges)?.checked_add(20)?;
-    per_event
-        .checked_add(limits.exchanges.checked_mul(2)?)?
-        .checked_add(limits.client.requests.requests.checked_mul(2)?)
 }
