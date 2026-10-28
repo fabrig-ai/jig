@@ -106,7 +106,7 @@ pub fn declare(
 }
 
 pub(crate) fn restore(domain: &mut Domain, number: u32, holder: Holder, name: Box<[u8]>, signed_out: bool) -> bool {
-    let Some(name) = crate::SourceName::new(&name) else { return false };
+    let Some(name) = crate::SourceName::from_stored(&name) else { return false };
     for (other_number, issued) in &domain.issued {
         assert!(
             *other_number == number || issued.name != name,
@@ -135,23 +135,7 @@ pub(crate) fn finish_restore(domain: &mut Domain, out: &mut Queue<Request>) {
             out.push(Request::Save { record: Stored::Issued { number, holder, name, signed_out: false } });
         }
     }
-    for (number, source) in &domain.sources {
-        if source.kind == Kind::Program {
-            let account = domain.accounts.get(&source.account).expect("source account linked on load");
-            let issued = domain.issued.get(number);
-            assert!(
-                issued.is_some(),
-                "accounts: Source({number}) links to issued name {:?}, which is absent",
-                source.name
-            );
-            let issued = issued.expect("linked issued name");
-            assert!(
-                issued.holder == account.holder && issued.name.as_bytes() == source.name.as_ref(),
-                "accounts: Source({number}) links to name {:?} reserved by another source",
-                source.name
-            );
-        }
-    }
+    link(domain);
     let mut numbers = List::with_capacity(domain.accounts.capacity());
     for (number, _) in &domain.accounts {
         numbers.push(*number).expect("one number per account");
@@ -167,6 +151,31 @@ pub(crate) fn finish_restore(domain: &mut Domain, out: &mut Queue<Request>) {
             }
         }
         account.plan = plan;
+    }
+}
+
+/// Link all restored source names before any child performs retention.
+pub(crate) fn link(domain: &Domain) {
+    for (number, source) in &domain.sources {
+        if source.kind == Kind::Program {
+            let account = domain.accounts.get(&source.account).expect("source account linked on load");
+            for (reserved, issued) in &domain.issued {
+                assert!(
+                    *reserved == *number || issued.name.as_bytes() != source.name.as_ref(),
+                    "accounts: Source({number}) links to name {:?}, reserved by source {reserved}",
+                    source.name
+                );
+            }
+            let issued = domain.issued.get(number);
+            // Older writers predate Issued; finish_restore reserves those names
+            // after the complete link pass and before admission opens.
+            let Some(issued) = issued else { continue };
+            assert!(
+                issued.holder == account.holder && issued.name.as_bytes() == source.name.as_ref(),
+                "accounts: Source({number}) links to name {:?} reserved by another source",
+                source.name
+            );
+        }
     }
 }
 

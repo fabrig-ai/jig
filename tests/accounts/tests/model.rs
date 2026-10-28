@@ -55,10 +55,10 @@ fn numbers_are_never_given_twice() {
     world.restore(vec![
         Stored::Next { number: 2 },
         account(40, 9, ALICE, &[b'x'; 256]),
-        source(41, 50, 0, Kind::SignIn),
+        source(40, 50, 0, Kind::SignIn),
     ]);
-    assert_eq!(world.domain.unrestored(), 2);
-    assert_eq!(world.domain.next_number(), 51, "a record refused still passes its numbers");
+    assert_eq!(world.domain.restore_limit(), None);
+    assert_eq!(world.domain.next_number(), 51, "stored numbers advance the counter");
     world.step(Event::Want);
     assert!(world.domain.account(51).is_some());
 }
@@ -125,7 +125,7 @@ fn each_bound_is_refused_naming_it() {
             held: None,
         },
     ]);
-    assert_eq!(world.domain.unrestored(), 0);
+    assert_eq!(world.domain.restore_limit(), None);
     assert_eq!(world.domain.sign_in(&LIMITS, BOB, 1, b"d"), limit(Bound::Accounts));
     assert_eq!(world.domain.room_for_source(&LIMITS, 4), limit(Bound::Sources));
     assert_eq!(world.domain.room_for_source(&LIMITS, 0), Ok(()));
@@ -206,35 +206,24 @@ fn a_kept_limit_means_the_same_after_a_restart() {
 }
 
 #[test]
-fn records_that_break_the_rules_are_counted_not_restored() {
+fn restore_keeps_bounded_records_without_rejudging_admission() {
+    const UNKNOWN_PROVIDER: u32 = 9;
+    const ACCOUNT: u32 = 40;
+    const SOURCE: u32 = 50;
     let mut world = fresh();
-    world.restore(signed_in(0, 1, ALICE, b"alice"));
-    let named = |number, place, name: &[u8]| Stored::Source {
-        account: 0,
-        number,
-        place,
-        kind: Kind::Program,
-        name: name.into(),
-        held: None,
-    };
+    let mut row = source(ACCOUNT, SOURCE, 0, Kind::Program);
+    if let Stored::Source { name, .. } = &mut row {
+        *name = Box::from(&b"Upper"[..]);
+    }
     world.restore(vec![
-        account(0, 2, BOB, b"bob"),
-        account(2, 1, BOB, b"alice"),
-        account(3, 1, BOB, &[b's'; 256]),
-        source(9, 4, 0, Kind::Key),
-        source(0, 5, 0, Kind::Key),
-        source(0, 6, 1, Kind::SignIn),
-        named(7, 1, b"Upper"),
-        named(8, 1, b"runner"),
-        Stored::Issued { number: 8, holder: ALICE, name: b"runner".as_slice().into(), signed_out: false },
-        named(10, 2, b"runner"),
-        account(11, 2, BOB, b"bob"),
+        account(ACCOUNT, UNKNOWN_PROVIDER, ALICE, b""),
+        Stored::Issued { number: SOURCE, holder: ALICE, name: Box::from(&b"Upper"[..]), signed_out: false },
+        row,
     ]);
-    assert_eq!(world.domain.unrestored(), 8);
     world.step(Event::Want);
-    assert_eq!(world.domain.unrestored(), 9, "an account with no source is dropped at the start");
-    assert_eq!(world.domain.accounts(), 2, "alice's and the none account");
-    assert_eq!(world.domain.account(0).expect("kept").sources().len(), 2);
+    assert_eq!(world.domain.restore_limit(), None);
+    assert_eq!(world.domain.account(ACCOUNT).expect("unknown provider retained").provider(), UNKNOWN_PROVIDER);
+    assert_eq!(world.domain.source(SOURCE).expect("bounded source retained").kind, Kind::Program);
 }
 
 /// The store's family as the core commits it: each save under its record's key, each erase
@@ -307,7 +296,7 @@ fn each_record_restores_to_the_same_model() {
     }
     assert_eq!(store.len(), 8, "the counter, three accounts and four sources are all durable rows");
     let mut again = start(&store);
-    assert_eq!(again.domain.unrestored(), 0);
+    assert_eq!(again.domain.restore_limit(), None);
     assert_eq!(
         again.step(Event::Want),
         vec![
@@ -344,7 +333,7 @@ fn each_record_restores_to_the_same_model() {
 }
 
 #[test]
-fn a_record_breaking_a_rule_is_counted_and_dropped() {
+fn bounded_numbers_and_unknown_providers_restore_without_rejudgment() {
     let records = vec![
         account(7, 1, ALICE, b"alice"),
         source(7, 8, 1, Kind::Key),
@@ -361,20 +350,16 @@ fn a_record_breaking_a_rule_is_counted_and_dropped() {
     ];
     let mut world = World::with(providers(vec![provider(1, true, true)]), &[]);
     world.restore(records.clone());
-    assert_eq!(
-        world.domain.unrestored(),
-        3,
-        "an account and source cannot share a number; an unknown provider's rows wait"
-    );
+    assert_eq!(world.domain.restore_limit(), None);
     let alice = world.domain.account(7).expect("restored");
     assert_eq!((alice.holder(), alice.subject()), (ALICE, &b"alice"[..]));
-    assert_eq!(alice.sources().iter().collect::<Vec<_>>(), vec![(&1, &8)]);
-    assert!(world.domain.source(7).is_none());
-    assert!(world.domain.account(9).is_none());
-    assert_eq!(world.domain.next_number(), 11, "a record dropped still passes its numbers");
+    assert_eq!(alice.sources().iter().collect::<Vec<_>>(), vec![(&0, &7), (&1, &8)]);
+    assert!(world.domain.source(7).is_some());
+    assert!(world.domain.account(9).is_some());
+    assert_eq!(world.domain.next_number(), 11, "all stored numbers advance allocation");
     let mut again = World::with(providers(vec![provider(1, true, true), provider(5, true, false)]), &[]);
     again.restore(records);
-    assert_eq!(again.domain.unrestored(), 1);
+    assert_eq!(again.domain.restore_limit(), None);
     assert_eq!(again.domain.account(9).expect("restored").sources().len(), 1);
 }
 
@@ -446,17 +431,12 @@ fn a_restored_source_whose_account_is_held_is_admitted() {
     world.step(Event::Want);
     assert!(world.domain.source(RESTORED_SOURCE).is_some());
     assert!(world.domain.account(RESTORED_ACCOUNT).is_some());
-    assert_eq!(world.domain.unrestored(), 0);
+    assert_eq!(world.domain.restore_limit(), None);
     assert!(world.domain.restore_finished());
 }
 
 #[test]
-fn a_restored_source_whose_account_is_absent_is_left() {
-    let mut world = restored_source(ABSENT_ACCOUNT);
-    world.step(Event::Want);
-    assert_eq!(world.domain.source(RESTORED_SOURCE), None);
-    assert!(world.domain.account(RESTORED_ACCOUNT).is_none());
-    // The unresolved source and its now empty account are both left.
-    assert_eq!(world.domain.unrestored(), 2);
-    assert!(world.domain.restore_finished());
+#[should_panic(expected = "links to account")]
+fn a_restored_source_links_to_its_account() {
+    let _world = restored_source(ABSENT_ACCOUNT);
 }
