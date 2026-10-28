@@ -108,17 +108,17 @@ fn check_waiters(domain: &mut Domain, env: &Env<Limits>, resource: &Name, out: &
 }
 
 pub(crate) fn restore_pool(domain: &mut Domain, limits: &Limits, row: PoolSlots) -> bool {
-    if row.number == 0
-        || !shape(limits, &row.pool)
-        || domain.pools.contains_key(&row.pool)
-        || domain.pools.len() == domain.pools.capacity()
-    {
+    assert!(
+        !domain.pools.contains_key(&row.pool),
+        "tasks: Pool({}) links to resource {:?}, already reserved by another pool",
+        row.number,
+        row.pool
+    );
+    if !shape(limits, &row.pool) || domain.pools.len() == domain.pools.capacity() {
         return false;
     }
     for (_, known) in &domain.pools {
-        if known.number == row.number {
-            return false;
-        }
+        assert!(known.number != row.number, "tasks: duplicate Pool({})", row.number);
     }
     domain.next_pool = domain.next_pool.max(row.number);
     domain.pools.insert(row.pool.clone(), row).is_ok()
