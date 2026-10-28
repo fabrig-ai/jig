@@ -238,6 +238,9 @@ pub(super) fn named_proposal_decide(
     proposal: u64,
     choice: ProposalChoice,
 ) -> Requests {
+    if let Some(pending) = core.tasks.person_proposal(proposer, proposal) {
+        return super::party_releases::task_decide(core, env, work, to, key, pending, choice);
+    }
     let Some(pending) = core.tasks.proposal(proposer, proposal) else {
         return proposal_refused(core, to, key, tasks::Refusal::Unknown);
     };

@@ -228,6 +228,7 @@ fn permanent(outcome: &Outcome) -> bool {
         | Outcome::Released { .. }
         | Outcome::Created { .. }
         | Outcome::Proposed { .. }
+        | Outcome::ReleaseProposed { .. }
         | Outcome::Withdrawn { .. }
         | Outcome::PersonTaken { .. }
         | Outcome::PersonHandedBack { .. }
@@ -282,6 +283,7 @@ pub(super) fn valid_outcome(limits: &Limits, act: &Act, outcome: &Outcome) -> bo
             | Outcome::Released { .. }
             | Outcome::Created { .. }
             | Outcome::Proposed { .. }
+            | Outcome::ReleaseProposed { .. }
             | Outcome::Withdrawn { .. }
             | Outcome::PersonTaken { .. }
             | Outcome::PersonHandedBack { .. }

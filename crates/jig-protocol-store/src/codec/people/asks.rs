@@ -311,6 +311,12 @@ pub fn encode_ask(value: &domain::Ask, limits: &wire::Limits) -> Result<wire::As
         )?),
         domain::Ask::Propose { project, action, reason } => {
             let action = match action {
+                domain::Action::ReleasePlaced { task, hold, revision } => {
+                    wire::Action::ReleasePlaced(wire::ActionReleasePlaced::new(
+                        limits,
+                        wire::ActionReleasePlacedParts { task: *task, hold: *hold, revision: *revision },
+                    )?)
+                }
                 domain::Action::Settings { against, digest } => wire::Action::Settings(wire::ActionSettings::new(
                     limits,
                     wire::ActionSettingsParts { against: *against, digest: *digest },
@@ -542,6 +548,9 @@ pub fn decode_ask(value: wire::Ask, limits: &wire::Limits) -> Result<domain::Ask
         wire::Ask::Propose(value) => {
             let wire::AskProposeParts { project, action, reason } = value.into_parts();
             let action = match action {
+                wire::Action::ReleasePlaced(value) => {
+                    domain::Action::ReleasePlaced { task: value.task(), hold: value.hold(), revision: value.revision() }
+                }
                 wire::Action::Settings(value) => {
                     domain::Action::Settings { against: value.against(), digest: *value.digest() }
                 }

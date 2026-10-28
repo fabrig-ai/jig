@@ -194,7 +194,7 @@ impl Core {
         if kind == authority::RequestKind::Release
             && let Some(hold) = self.tasks.placed_on(task)
         {
-            self.party_hold_admit(person, hold)?;
+            self.party_release_admit(person, hold)?;
         }
         if reason_len > usize::try_from(limits.result_bytes).expect("u32 fits usize") {
             Err(people::Refusal::Limit { which: people::LimitKind::Words })
@@ -405,6 +405,13 @@ pub(crate) const fn hold_owner(owner: tasks::Owner) -> people::HoldOwner {
     }
 }
 impl Core {
+    pub(crate) fn party_release_admit(&self, person: u64, hold: &tasks::PlacedHold) -> Result<(), people::Refusal> {
+        let mut result = self.party_hold_admit(person, hold);
+        if let Err(people::Refusal::Authority { proposable, .. }) = &mut result {
+            *proposable = Some(people::Accepter::HoldOwner);
+        }
+        result
+    }
     pub(crate) fn party_hold_admit(&self, person: u64, hold: &tasks::PlacedHold) -> Result<(), people::Refusal> {
         let above = match hold.owner {
             tasks::Owner::Party { person: owner } => outranks(self, hold.project, person, owner),

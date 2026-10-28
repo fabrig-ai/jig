@@ -158,6 +158,7 @@ pub(super) fn refused(value: &c::Ask, configured: &[Model]) -> Result<Option<c::
     let (at, lacking) = match value {
         c::Ask::Create { tasks, .. } => (None, batch_lacking(tasks, configured)),
         c::Ask::Propose { action, .. } => match action {
+            c::ProposeAction::ReleasePlaced { .. } => (None, None),
             c::ProposeAction::Settings(_) => return Err(asks::Invalid::Settings),
             c::ProposeAction::Batch { tasks } => (None, batch_lacking(tasks, configured)),
             c::ProposeAction::Amendment { change, .. } => (None, lacking(change.llm.as_ref(), configured)),

@@ -382,6 +382,12 @@ pub(super) fn propose(
     limits: &w::Limits,
 ) -> Result<w::Ask, w::Problem> {
     let action = match action {
+        c::ProposeAction::ReleasePlaced { task, hold, revision } => {
+            w::ProposeAction::ReleasePlaced(w::ProposeReleasePlaced::new(
+                limits,
+                w::ProposeReleasePlacedParts { task: *task, hold: *hold, revision: *revision },
+            )?)
+        }
         c::ProposeAction::Settings(value) => {
             w::ProposeAction::Settings(super::settings_proposals::wire_propose_settings(value, limits)?)
         }
@@ -407,6 +413,9 @@ pub(super) fn propose(
 }
 pub(super) fn restore_propose(value: &w::Propose, limits: &crate::Limits) -> Result<c::Ask, w::Problem> {
     let action = match value.action() {
+        w::ProposeAction::ReleasePlaced(value) => {
+            c::ProposeAction::ReleasePlaced { task: value.task(), hold: value.hold(), revision: value.revision() }
+        }
         w::ProposeAction::Settings(value) => {
             c::ProposeAction::Settings(super::settings_proposals::restore_propose_settings(value, limits)?)
         }

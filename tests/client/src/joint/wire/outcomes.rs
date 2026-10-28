@@ -44,6 +44,7 @@ pub fn outcome(value: &people::Outcome, limits: &Limits) -> Result<Outcome, owne
         people::Outcome::CompoundRefused { at, why } => {
             return Ok(Outcome::CompoundRefused { at: *at, why: why.clone() });
         }
+        people::Outcome::ReleaseProposed { proposal } => client::OwnerOutcome::ReleaseProposed { proposal: *proposal },
         people::Outcome::Proposed { proposal, to } => client::OwnerOutcome::Proposed { proposal: *proposal, to: *to },
         people::Outcome::Withdrawn { proposal } => client::OwnerOutcome::Withdrawn { proposal: *proposal },
         people::Outcome::Created { first, last, given } => client::OwnerOutcome::Created {

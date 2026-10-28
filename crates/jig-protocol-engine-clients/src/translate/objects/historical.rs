@@ -335,7 +335,9 @@ pub(crate) fn settings_history(
 ) -> Result<w::OwnerProposalHistory, w::Problem> {
     let (against, items) = match &proposal.action {
         t::PersonAction::Settings { against, items } => (*against, d::settings_heads(items)),
-        t::PersonAction::Batch(_) | t::PersonAction::Amend { .. } => unreachable!("settings history selected"),
+        t::PersonAction::Batch(_) | t::PersonAction::Amend { .. } | t::PersonAction::ReleasePlaced { .. } => {
+            unreachable!("settings history selected")
+        }
     };
     let (state, made) = match &proposal.state {
         t::PersonProposalState::Pending { since } => (

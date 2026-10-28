@@ -38,7 +38,9 @@ fn word(proposal: &Proposal, at: Wall) -> crate::Word {
 /// The holder's decision entry is projected from its proposer's durable row.
 /// It never occupies or consumes an inbox reservation.
 pub(crate) fn waiting_for(domain: &Domain, holder: u64) -> Box<[crate::Word]> {
-    let mut waiting = skein_lib::List::with_capacity(domain.names.len());
+    let mut waiting = skein_lib::List::with_capacity(
+        domain.names.len().checked_add(domain.person_proposals.len()).expect("bounded proposal owners"),
+    );
     for (number, _) in &domain.names {
         let task = record(domain, *number).expect("indexed proposal owner");
         if let Some(proposal) = &task.proposal {
@@ -51,6 +53,13 @@ pub(crate) fn waiting_for(domain: &Domain, holder: u64) -> Box<[crate::Word]> {
                 | ProposalState::Rejected { .. }
                 | ProposalState::Withdrawn => {}
             }
+        }
+    }
+    for (_, proposal) in &domain.person_proposals {
+        if domain.person_proposal_owner(proposal) == Some(crate::Owner::Task { task: holder })
+            && let Some(since) = proposal.state.pending_since()
+        {
+            waiting.push(person_word(proposal, since)).expect("bounded party and task proposals");
         }
     }
     waiting.into_boxed()
@@ -73,6 +82,22 @@ fn wake_holder(domain: &mut Domain, env: &Env<Limits>, proposal: &Proposal, out:
         return;
     }
     crate::wake::after_message(domain, env, task, None, word(proposal, since), out);
+}
+
+pub(crate) fn person_word(proposal: &PersonProposal, at: Wall) -> crate::Word {
+    crate::Word {
+        number: proposal.number,
+        from: Party::Person(proposal.proposer),
+        kind: crate::MessageKind::Proposal {
+            proposer: proposal.proposer,
+            proposal: proposal.number,
+            kind: ProposalKind::Release,
+        },
+        words: proposal.reason.clone(),
+        at,
+        hits: 1,
+        eligible: true,
+    }
 }
 
 /// A task action waiting for a holder's authority and funding.
@@ -168,7 +193,7 @@ impl PersonProposal {
     pub fn batch(&self) -> &[New] {
         match &self.action {
             PersonAction::Batch(batch) => batch,
-            PersonAction::Amend { .. } | PersonAction::Settings { .. } => &[],
+            PersonAction::Amend { .. } | PersonAction::Settings { .. } | PersonAction::ReleasePlaced { .. } => &[],
         }
     }
     /// The amended task or first root for the inbox link; zero when there is no task.
@@ -179,7 +204,7 @@ impl PersonProposal {
                 Some(member) => member.number,
                 None => PROPOSAL_WITHOUT_TASK,
             },
-            PersonAction::Amend { task, .. } => *task,
+            PersonAction::Amend { task, .. } | PersonAction::ReleasePlaced { task, .. } => *task,
             PersonAction::Settings { .. } => PROPOSAL_WITHOUT_TASK,
         }
     }
@@ -189,6 +214,7 @@ impl PersonProposal {
 /// deployment settings carry no funding (tasks.md, section 9).
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum PersonAction {
+    ReleasePlaced { task: u64, hold: u64, revision: u64 },
     Settings { against: u32, items: Box<[SettingHead]> },
     Batch(Box<[New]>),
     Amend { task: u64, revision: u64, amendment: Box<Amendment> },
@@ -220,7 +246,7 @@ impl PersonAction {
     pub const fn is_settings(&self) -> bool {
         match self {
             Self::Settings { .. } => true,
-            Self::Batch(_) | Self::Amend { .. } => false,
+            Self::Batch(_) | Self::Amend { .. } | Self::ReleasePlaced { .. } => false,
         }
     }
 }
@@ -259,7 +285,9 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
         PersonProposalState::SettingsAccepted { by, revision } => {
             let against = match proposal.action {
                 PersonAction::Settings { against, .. } => against,
-                PersonAction::Batch(_) | PersonAction::Amend { .. } => return false,
+                PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => {
+                    return false;
+                }
             };
             *revision > against
                 && match by {
@@ -269,7 +297,8 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
         }
         PersonProposalState::Accepted { by } => match by {
             Party::Person(person) => !proposal.action.is_settings() && *person != 0,
-            Party::Task(_) | Party::Deployment { .. } => false,
+            Party::Task(task) => *task != 0 && matches!(proposal.action, PersonAction::ReleasePlaced { .. }),
+            Party::Deployment { .. } => false,
         },
         PersonProposalState::Rejected { by, reason, message, .. } => match by {
             Party::Person(person) => {
@@ -277,7 +306,13 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
                     && *message != 0
                     && reason.len() <= usize::try_from(limits.message_bytes).expect("u32 fits usize")
             }
-            Party::Task(_) | Party::Deployment { .. } => false,
+            Party::Task(task) => {
+                *task != 0
+                    && *message != 0
+                    && reason.len() <= usize::try_from(limits.message_bytes).expect("message bound")
+                    && matches!(proposal.action, PersonAction::ReleasePlaced { .. })
+            }
+            Party::Deployment { .. } => false,
         },
     }
 }
@@ -335,6 +370,9 @@ pub(crate) fn propose_person(
     let number = proposal.number;
     let saved = domain.person_proposals.insert(number, proposal.clone());
     assert!(saved == Ok(None), "admitted person proposal has room");
+    if let Some(crate::Owner::Task { task }) = domain.person_proposal_owner(&proposal) {
+        crate::wake::after_message(domain, env, task, None, person_word(&proposal, env.wall), out);
+    }
     out.push(Request::Save { record: Stored::PersonProposal(Box::new(proposal)) });
     out.push(Request::PersonProposed { reply_to: to, proposal: number });
 }
@@ -388,14 +426,16 @@ pub(crate) fn decide_person(
         ProposalDecision::Accept => {
             let settings = match old.action {
                 PersonAction::Settings { .. } => true,
-                PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+                PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => false,
             };
             let valid_revision = match old.action {
                 PersonAction::Settings { against, .. } => match revision {
                     Some(revision) => revision > against,
                     None => false,
                 },
-                PersonAction::Batch(_) | PersonAction::Amend { .. } => revision.is_none(),
+                PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => {
+                    revision.is_none()
+                }
             };
             if settings != revision.is_some() || !valid_revision || !crate::person_proposals::made(domain, &old.action)
             {
@@ -416,10 +456,21 @@ pub(crate) fn decide_person(
         }
         ProposalDecision::Pass { .. } => return refused(to, None, Refusal::State, out),
     };
+    let release = if decision == ProposalDecision::Accept {
+        match crate::person_proposals::release_plan(domain, env, old, by) {
+            Ok(plan) => plan,
+            Err(why) => return refused(to, None, why, out),
+        }
+    } else {
+        None
+    };
     let mut proposal = domain.person_proposals.remove(&number).expect("checked pending proposal");
+    if let Some(plan) = release {
+        crate::control::apply_release(domain, env, by, plan, out);
+    }
     let settings = match proposal.action {
         PersonAction::Settings { .. } => true,
-        PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+        PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => false,
     };
     proposal.state = match decision {
         ProposalDecision::Accept => match revision {

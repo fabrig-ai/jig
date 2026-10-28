@@ -300,6 +300,10 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     )?;
     Slab::<Task>::worst_case(limits.tasks)?
         .checked_add(crate::placed::worst_case(limits)?)?
+        // Party release proposals add virtual entries beside task proposals, and hold withdrawal scratch.
+        .checked_add(List::<(u64, u64)>::worst_case(limits.tasks)?)?
+        .checked_add(List::<crate::Word>::worst_case(limits.tasks)?.checked_mul(3)?)?
+        .checked_add(u64::from(limits.tasks).checked_mul(u64::from(limits.message_bytes))?.checked_mul(3)?)?
         .checked_add(crate::waits::worst_case(limits)?)?
         .checked_add(Map::<u64, crate::PersonProposal>::worst_case(limits.tasks)?)?
         .checked_add(u64::from(limits.tasks).checked_mul(proposal_payload)?)?

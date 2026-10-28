@@ -33,7 +33,9 @@ pub fn historical(
         reads::Past::PersonProposal { proposal, .. }
             if match proposal.action {
                 jig_domain_tasks::PersonAction::Settings { .. } => true,
-                jig_domain_tasks::PersonAction::Batch(_) | jig_domain_tasks::PersonAction::Amend { .. } => false,
+                jig_domain_tasks::PersonAction::Batch(_)
+                | jig_domain_tasks::PersonAction::Amend { .. }
+                | jig_domain_tasks::PersonAction::ReleasePlaced { .. } => false,
             } =>
         {
             w::OwnerHistoricalValue::Proposal(w::OwnerHistoricalValueProposal::new(

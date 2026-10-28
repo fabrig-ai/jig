@@ -115,6 +115,22 @@ impl Core {
     #[must_use]
     pub fn person_proposal_entries(&self, row: &tasks::PersonProposal) -> Box<[people::Entry]> {
         let mut entries = List::with_capacity(self.authority.limits().roles.max(1));
+        if let tasks::PersonAction::ReleasePlaced { .. } = row.action {
+            if let Some(tasks::Owner::Party { person }) = self.tasks.person_proposal_owner(row)
+                && let Some(since) = row.state.pending_since()
+            {
+                entries
+                    .push(people::Entry {
+                        task: row.first(),
+                        project: row.project,
+                        whom: people::Whom::Person(person),
+                        kind: people::EntryKind::Proposal { number: row.number },
+                        at: since,
+                    })
+                    .expect("one hold owner recipient");
+            }
+            return entries.into_boxed();
+        }
         if row.action.is_settings() {
             if let Some(since) = row.state.pending_since() {
                 entries
@@ -139,6 +155,9 @@ impl Core {
                             }
                             tasks::PersonAction::Batch(_) => authority::ProposalKind::Batch,
                             tasks::PersonAction::Amend { .. } => authority::ProposalKind::Amend,
+                            tasks::PersonAction::ReleasePlaced { .. } => {
+                                unreachable!("release recipient is the hold owner")
+                            }
                         };
                         if !policy.decides.allows(kind) {
                             continue;
@@ -335,6 +354,13 @@ impl Core {
     /// people child's keyed reply, consuming the in-flight correlation.
     pub fn person_proposed(&mut self, request: Token, proposal: u64) -> (people::Event, Box<[tasks::Stub]>) {
         let route = self.goal_routes.remove(&request).expect("person proposal route");
+        if let GoalRoute::OfferingRelease { proposal: named } = route {
+            assert!(named == proposal, "release proposal identity");
+            return (
+                people::Event::Decided { request, outcome: people::Outcome::ReleaseProposed { proposal } },
+                Box::new([]),
+            );
+        }
         let GoalRoute::Offering { proposal: named, to, stubs } = route else {
             unreachable!("proposal admission route")
         };
@@ -365,7 +391,9 @@ impl Core {
                 };
             }
             GoalRoute::Deciding { proposer, proposal, by } => (proposer, proposal, by),
-            GoalRoute::Offering { .. } | GoalRoute::Accepting { .. } => unreachable!("proposal decision stage"),
+            GoalRoute::Offering { .. } | GoalRoute::OfferingRelease { .. } | GoalRoute::Accepting { .. } => {
+                unreachable!("proposal decision stage")
+            }
         };
         assert!(named == proposer && proposal == number, "party decision identity");
         let choice = match outcome {

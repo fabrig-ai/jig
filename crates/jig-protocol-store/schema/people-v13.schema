@@ -140,7 +140,8 @@ record AskAdopt { project: u32 adoption: Adoption }
 record ActionBatch { members: list 8 Member }
 record ActionAmend { task: u64 revision: u64 amendment: Amendment }
 record ActionSettings { against: u32 digest: fixed 32 }
-enum Action { batch: ActionBatch, amend: boxed ActionAmend, settings: ActionSettings }
+record ActionReleasePlaced { task: u64 hold: u64 revision: u64 }
+enum Action { batch: ActionBatch, amend: boxed ActionAmend, settings: ActionSettings, release_placed: ActionReleasePlaced }
 record AskPropose { project: u32 action: Action reason: bytes 8192 }
 record AskWithdraw { project: u32 proposal: u64 }
 record AskStop { project: u32 task: u64 }
@@ -269,6 +270,7 @@ record OutcomeAgain { value: Again }
 record OutcomeNoteEdited { name: u64 }
 record OutcomeServiceMade { person: u64 }
 record OutcomeAdopted { project: u32 }
+record OutcomeReleaseProposed { proposal: u64 }
 record OutcomeProposed { proposal: u64 to: u32 }
 record OutcomeWithdrawn { proposal: u64 }
 record OutcomeStopped { task: u64 }
@@ -302,7 +304,7 @@ record OutcomeAccountMovingOut { account: u32 number: u32 source: u32 }
 record OutcomeAccountMovedIn { account: u32 renewed: bool }
 record OutcomeAccountFinishing { source: u32 }
 record OutcomeMovedToNewest { newest: u32 moved: u32 stayed: u32 }
-enum Outcome { renamed: OutcomeRenamed, project_made: OutcomeProjectMade, compound: OutcomeCompound, compound_refused: OutcomeCompoundRefused, created: OutcomeCreated, marked_seen: OutcomeMarkedSeen, applied: OutcomeApplied, again: OutcomeAgain, signed_out, note_edited: OutcomeNoteEdited, service_made: OutcomeServiceMade, adopted: OutcomeAdopted, proposed: OutcomeProposed, stopped: OutcomeStopped, cancelled: OutcomeCancelled, released: OutcomeReleased, person_taken: OutcomePersonTaken, person_handed_back: OutcomePersonHandedBack, person_answered: OutcomePersonAnswered, moved: OutcomeMoved, proposal_decided: OutcomeProposalDecided, said: OutcomeSaid, question_answered: OutcomeQuestionAnswered, amended: OutcomeAmended, roles_set: OutcomeRolesSet, policy_changed: OutcomePolicyChanged, pool_set: OutcomePoolSet, escalation_decided: OutcomeEscalationDecided, refused: OutcomeRefused, withdrawn: OutcomeWithdrawn, account_sign_in_started: OutcomeAccountSignInStarted, account_signed_out: OutcomeAccountSignedOut, account_key_kept: OutcomeAccountKeyKept, account_changed, account_removed: OutcomeAccountRemoved, account_program_declared: OutcomeAccountProgramDeclared, account_moving_out: OutcomeAccountMovingOut, account_moved_in: OutcomeAccountMovedIn, settings_changed: OutcomeSettingsChanged, account_finishing: OutcomeAccountFinishing, moved_to_newest: OutcomeMovedToNewest, lifted: OutcomeLifted, placed: OutcomePlaced }
+enum Outcome { renamed: OutcomeRenamed, project_made: OutcomeProjectMade, compound: OutcomeCompound, compound_refused: OutcomeCompoundRefused, created: OutcomeCreated, marked_seen: OutcomeMarkedSeen, applied: OutcomeApplied, again: OutcomeAgain, signed_out, note_edited: OutcomeNoteEdited, service_made: OutcomeServiceMade, adopted: OutcomeAdopted, proposed: OutcomeProposed, stopped: OutcomeStopped, cancelled: OutcomeCancelled, released: OutcomeReleased, person_taken: OutcomePersonTaken, person_handed_back: OutcomePersonHandedBack, person_answered: OutcomePersonAnswered, moved: OutcomeMoved, proposal_decided: OutcomeProposalDecided, said: OutcomeSaid, question_answered: OutcomeQuestionAnswered, amended: OutcomeAmended, roles_set: OutcomeRolesSet, policy_changed: OutcomePolicyChanged, pool_set: OutcomePoolSet, escalation_decided: OutcomeEscalationDecided, refused: OutcomeRefused, withdrawn: OutcomeWithdrawn, account_sign_in_started: OutcomeAccountSignInStarted, account_signed_out: OutcomeAccountSignedOut, account_key_kept: OutcomeAccountKeyKept, account_changed, account_removed: OutcomeAccountRemoved, account_program_declared: OutcomeAccountProgramDeclared, account_moving_out: OutcomeAccountMovingOut, account_moved_in: OutcomeAccountMovedIn, settings_changed: OutcomeSettingsChanged, account_finishing: OutcomeAccountFinishing, moved_to_newest: OutcomeMovedToNewest, lifted: OutcomeLifted, placed: OutcomePlaced, release_proposed: OutcomeReleaseProposed }
 record ActKey { connector: u16 key: fixed 16 }
 record ActClose { project: u32 task: u64 grace: option u64 reason: bytes 8192 }
 record ActAddKey { provider: u32 join: option u32 digest: fixed 32 }

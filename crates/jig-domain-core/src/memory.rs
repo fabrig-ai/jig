@@ -148,6 +148,7 @@ fn context_carrier(limits: &Limits) -> Option<u64> {
         .checked_add(sizeof(size_of::<tasks::RunContext>())?)?
         .checked_add(bytes(task.dependencies, sizeof(size_of::<tasks::Added>())?.checked_add(8)?)?)?
         .checked_add(bytes(task.inbox_messages, sizeof(size_of::<tasks::Word>())?)?)?
+        .checked_add(bytes(task.tasks, sizeof(size_of::<tasks::Word>())?.checked_add(u64::from(task.message_bytes))?)?)?
         .checked_add(u64::from(task.inbox_bytes))?
         .checked_add(u64::from(task.inbox_bytes).checked_mul(sizeof(size_of::<tasks::ResultField>())?)?)?
         .checked_add(bytes(task.delegates, sizeof(size_of::<tasks::DelegateState>())?)?)?

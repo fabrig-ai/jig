@@ -272,6 +272,7 @@ fn number(value: &OwnerOutcome, task: u64, place: u32) -> Option<u64> {
         | OwnerOutcome::QuestionAnswered { .. }
         | OwnerOutcome::Amended { .. }
         | OwnerOutcome::Proposed { .. }
+        | OwnerOutcome::ReleaseProposed { .. }
         | OwnerOutcome::Withdrawn { .. }
         | OwnerOutcome::RolesSet { .. }
         | OwnerOutcome::PolicyChanged { .. }

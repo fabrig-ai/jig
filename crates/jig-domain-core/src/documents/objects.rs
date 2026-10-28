@@ -547,7 +547,14 @@ pub(super) fn proposal(
                 super::small::text(&value.reason, limits.documents.text_bytes),
                 action,
                 kind != tasks::ProposalKind::Settings,
-                ProposalWaiting { holder: tasks::ProposalHolder::Policy { project: value.project, kind }, since },
+                ProposalWaiting {
+                    holder: match core.tasks.person_proposal_owner(&value) {
+                        Some(tasks::Owner::Party { person }) => tasks::ProposalHolder::Person(person),
+                        Some(tasks::Owner::Task { task }) => tasks::ProposalHolder::Task(task),
+                        None => tasks::ProposalHolder::Policy { project: value.project, kind },
+                    },
+                    since,
+                },
             )
         }
     };

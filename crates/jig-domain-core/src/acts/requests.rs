@@ -18,7 +18,8 @@ pub(crate) fn request(
 ) -> Result<(), people::Refusal> {
     let (act, subject) = match ask {
         // An account request's check is its holder's, which people made (domain/authority.md, 8.4).
-        people::Ask::Hold { .. }
+        people::Ask::Propose { action: people::Action::ReleasePlaced { .. }, .. }
+        | people::Ask::Hold { .. }
         | people::Ask::Lift { .. }
         | people::Ask::Propose { action: people::Action::Settings { .. }, .. }
         | people::Ask::ChangeSettings { .. }

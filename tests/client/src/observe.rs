@@ -88,7 +88,8 @@ pub fn jig_sent(attempt: skein_lib::Token, request_key: [u8; 16], ask: &Ask) -> 
         Ask::Propose {
             action: jig_client_domain::contract::ProposeAction::Amendment { task, revision, .. }, ..
         } => (Some(key(ObjectKey::Task(*task))), Some((1, revision.value)), None),
-        Ask::Propose { action: jig_client_domain::contract::ProposeAction::Settings(_), .. }
+        Ask::Propose { action: jig_client_domain::contract::ProposeAction::ReleasePlaced { .. }, .. }
+        | Ask::Propose { action: jig_client_domain::contract::ProposeAction::Settings(_), .. }
         | Ask::Propose { action: jig_client_domain::contract::ProposeAction::Batch { .. }, .. }
         | Ask::Withdraw { .. }
         | Ask::Create { .. }

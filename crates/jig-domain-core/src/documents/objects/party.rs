@@ -27,6 +27,18 @@ pub(super) fn action(
     action: &tasks::PersonAction,
 ) -> Result<(ProposalAction, tasks::ProposalKind), Missing> {
     match action {
+        tasks::PersonAction::ReleasePlaced { task, .. } => Ok((
+            ProposalAction::Release {
+                task: super::super::task_tree::link(core, limits, party, *task)?,
+                hold: super::super::task_tree::hold_for(
+                    core,
+                    limits,
+                    party,
+                    super::super::small::visible(core, party, *task)?,
+                )?,
+            },
+            tasks::ProposalKind::Release,
+        )),
         tasks::PersonAction::Settings { against, items } => Ok((
             ProposalAction::Settings {
                 against: *against,

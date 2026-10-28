@@ -20,7 +20,7 @@ pub(crate) fn route(outcome: &Outcome) -> Route {
                 }
             }
             OwnerOutcome::Said { task, message, .. } => Route::Words { task: *task, message: *message },
-            OwnerOutcome::Proposed { .. } => Route::Proposed,
+            OwnerOutcome::Proposed { .. } | OwnerOutcome::ReleaseProposed { .. } => Route::Proposed,
             OwnerOutcome::Withdrawn { .. }
             | OwnerOutcome::Compound { .. }
             | OwnerOutcome::MarkedSeen { .. }

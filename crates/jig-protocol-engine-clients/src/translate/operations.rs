@@ -362,10 +362,13 @@ pub(super) fn propose(
             record.encode(&mut bytes).expect("measured ask");
             crate::sign_in::digest(&bytes.finish()).expose().try_into().expect("32-byte digest")
         }
-        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => [0; 32],
+        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) | w::ProposeAction::ReleasePlaced(_) => [0; 32],
     };
     let v = value.into_parts();
     let action = match v.action {
+        w::ProposeAction::ReleasePlaced(value) => {
+            p::Action::ReleasePlaced { task: value.task(), hold: value.hold(), revision: value.revision() }
+        }
         w::ProposeAction::Settings(value) => p::Action::Settings { against: value.against(), digest },
         w::ProposeAction::Batch(value) => {
             p::Action::Batch(batch(value.tasks(), w::Path::ProposeBatchTasks, models, limits, names)?)

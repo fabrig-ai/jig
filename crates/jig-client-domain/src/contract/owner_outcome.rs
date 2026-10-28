@@ -127,6 +127,10 @@ pub enum OwnerOutcome {
         task: u64,
     },
     /// A party's action was admitted to the original role in the request's project.
+    /// A release proposal waits for the placed hold owner.
+    ReleaseProposed {
+        proposal: u64,
+    },
     Proposed {
         proposal: u64,
         to: u32,

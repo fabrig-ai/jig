@@ -88,6 +88,20 @@ pub(super) fn tag_tasks(
             tasks::Request::PersonProposalDecided { reply_to, proposer, number, outcome } => {
                 core.touch_party(proposer);
                 if let Some(reply_to) = reply_to {
+                    let token = reply_to.into_token();
+                    if let Some(RoutedCall::Decide { key, proposal }) = core.routing_calls.get(&token).cloned() {
+                        assert!(proposal == number, "party proposal call identity");
+                        let _route = core.routing_calls.remove(&token);
+                        call_decision(
+                            core,
+                            &mut out,
+                            ReplyTo::new(token),
+                            key,
+                            CallPart::ProposalDecided { proposal: number, outcome },
+                        );
+                        continue;
+                    }
+                    let reply_to = ReplyTo::new(token);
                     let event =
                         core.person_proposal_decided(reply_to.into_token(), proposer, number, outcome, env.wall);
                     append_people(core, env, event, &mut out);
@@ -1066,7 +1080,9 @@ pub(super) fn tag_tasks(
                         Some((task.number, core.waiting_entries(&env.limits, task)))
                     }
                     tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) => {
-                        if row.first() == tasks::PROPOSAL_WITHOUT_TASK {
+                        if matches!(row.action, tasks::PersonAction::ReleasePlaced { .. })
+                            || row.first() == tasks::PROPOSAL_WITHOUT_TASK
+                        {
                             None
                         } else {
                             Some((row.first(), core.person_proposal_entries(row)))
@@ -1130,6 +1146,13 @@ pub(super) fn tag_tasks(
                     | tasks::Stored::DecidedProposal(_)
                     | tasks::Stored::PlacedHold(_)
                     | tasks::Stored::Stub(_) => {}
+                }
+                if let tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) = &record
+                    && let tasks::PersonAction::ReleasePlaced { .. } = row.action
+                {
+                    let entries = core.person_proposal_entries(row);
+                    core.people.release_proposal_waiting(row.number, entries.first().copied());
+                    core.touch_project_parties(row.project);
                 }
                 out.push(Request::Write(Write::Save(Record::Tasks(record))));
                 if let Some((task, entries)) = waiting {

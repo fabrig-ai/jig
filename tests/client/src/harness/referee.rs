@@ -532,7 +532,7 @@ fn decisions(ask: &Ask) -> Vec<(ObjectKey, ActKind)> {
             })
             .collect(),
         Ask::Answer { on: AnswerOn::Question { .. }, .. }
-        | Ask::Propose { action: ProposeAction::Settings(_), .. }
+        | Ask::Propose { action: ProposeAction::Settings(_) | ProposeAction::ReleasePlaced { .. }, .. }
         | Ask::Propose { action: ProposeAction::Batch { .. }, .. }
         | Ask::Withdraw { .. }
         | Ask::Create { .. }

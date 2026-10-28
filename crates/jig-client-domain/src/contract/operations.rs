@@ -104,6 +104,7 @@ pub struct CreatedGiven {
 /// A party's explicitly proposed batch or amendment.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ProposeAction {
+    ReleasePlaced { task: u64, hold: u64, revision: u64 },
     Settings(super::ProposeSettings),
     Batch { tasks: skein_lib::List<NewTask> },
     Amendment { task: u64, revision: Revision, change: Box<Amendment> },

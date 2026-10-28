@@ -344,7 +344,9 @@ impl Core {
                     }
                     count = count.checked_add(1).expect("bounded pending sets");
                 }
-                tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {}
+                tasks::PersonAction::Batch(_)
+                | tasks::PersonAction::Amend { .. }
+                | tasks::PersonAction::ReleasePlaced { .. } => {}
             }
         }
         for view in self.tasks.view_tasks() {

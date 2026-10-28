@@ -115,6 +115,8 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(roles)?
         .checked_add(waiting)?
         .checked_add(Map::<u64, Box<[crate::domain::Need]>>::worst_case(limits.inbox_tasks)?)?
+        // One volatile entry per pending party release proposal; core bounds these by live tasks.
+        .checked_add(Map::<u64, crate::Entry>::worst_case(limits.inbox_tasks)?)?
         .checked_add(
             u64::from(limits.inbox_tasks)
                 .checked_mul(List::<crate::domain::Need>::worst_case(limits.inbox_recipients)?)?,

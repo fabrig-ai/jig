@@ -121,6 +121,7 @@ pub struct Domain {
     unread: Map<u64, Box<[ResultRef]>>,
     waiting: Map<Whom, Box<[Entry]>>,
     needs: Map<u64, Box<[Need]>>,
+    release_proposals: Map<u64, Entry>,
     identities: Map<IdentityKey, u64>,
     sign_ins: Map<u64, SignIn>,
     alarms: Deadlines<u64>,
@@ -242,6 +243,7 @@ impl Domain {
             recent: Map::with_capacity(limits.people),
             unread: Map::with_capacity(limits.people),
             needs: Map::with_capacity(limits.inbox_tasks),
+            release_proposals: Map::with_capacity(limits.inbox_tasks),
             waiting: Map::with_capacity(
                 limits
                     .people
@@ -679,6 +681,7 @@ fn outcome_reply(outcome: Outcome) -> Reply {
         | Outcome::Adopted { .. }
         | Outcome::Created { .. }
         | Outcome::Proposed { .. }
+        | Outcome::ReleaseProposed { .. }
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }
@@ -1326,6 +1329,12 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
         },
         Ask::SetPool { person, .. } => *person != 0,
         Ask::Create { batch, .. } => crate::batch::valid(limits, batch),
+        Ask::Propose { action: crate::Action::ReleasePlaced { task, hold, .. }, reason, .. } => {
+            *task != 0
+                && *hold != 0
+                && !reason.is_empty()
+                && reason.len() <= usize::try_from(limits.words).expect("words bound")
+        }
         Ask::Propose { action: crate::Action::Batch(batch), reason, .. } => {
             crate::batch::valid(limits, batch) && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
         }
@@ -1430,6 +1439,12 @@ pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
         Ask::Adopt { .. } => LimitKind::Resource,
         Ask::SetRoles { .. } => LimitKind::Roles,
         Ask::ChangePolicy { .. } => LimitKind::Policy,
+        Ask::Propose { action: crate::Action::ReleasePlaced { task, hold, .. }, .. } if *task == 0 || *hold == 0 => {
+            return Refusal::Unknown;
+        }
+        Ask::Propose { action: crate::Action::ReleasePlaced { .. }, reason, .. } if reason.is_empty() => {
+            LimitKind::Empty
+        }
         Ask::Create { batch, .. } | Ask::Propose { action: crate::Action::Batch(batch), .. } => {
             crate::batch::invalid(limits, batch)
         }
@@ -1438,7 +1453,10 @@ pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
         | Ask::ChangeSettings { .. }
         | Ask::MoveToNewest { .. }
         | Ask::AccountChange { .. }
-        | Ask::Propose { action: crate::Action::Amend { .. } | crate::Action::Settings { .. }, .. } => LimitKind::Words,
+        | Ask::Propose {
+            action: crate::Action::Amend { .. } | crate::Action::Settings { .. } | crate::Action::ReleasePlaced { .. },
+            ..
+        } => LimitKind::Words,
         Ask::Say { task, words, .. } => {
             if *task == 0 {
                 return Refusal::Unknown;
@@ -1487,6 +1505,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Service,
         Create,
         Propose,
+        ReleasePropose,
         Withdraw(u64),
         Stop(u64),
         Cancel(u64),
@@ -1529,6 +1548,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Ask::MakeService { .. } => Expected::Service,
         Ask::Adopt { project, .. } => Expected::Adoption(*project),
         Ask::Create { .. } => Expected::Create,
+        Ask::Propose { action: crate::Action::ReleasePlaced { .. }, .. } => Expected::ReleasePropose,
         Ask::Propose { .. } => Expected::Propose,
         Ask::Withdraw { proposal, .. } => Expected::Withdraw(*proposal),
         Ask::Stop { task, .. } => Expected::Stop(*task),
@@ -1602,6 +1622,7 @@ fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
         Outcome::Adopted { project } => expected == Expected::Adoption(project),
         Outcome::Created { first, last, .. } => expected == Expected::Create && first != 0 && last >= first,
         Outcome::Proposed { proposal, .. } => expected == Expected::Propose && proposal != 0,
+        Outcome::ReleaseProposed { proposal } => expected == Expected::ReleasePropose && proposal != 0,
         Outcome::Withdrawn { proposal } => expected == Expected::Withdraw(proposal),
         Outcome::Stopped { task } => expected == Expected::Stop(task),
         Outcome::Cancelled { task } => expected == Expected::Cancel(task),
@@ -1973,6 +1994,7 @@ pub(super) fn answer_decided(
         | Outcome::Released { .. }
         | Outcome::Created { .. }
         | Outcome::Proposed { .. }
+        | Outcome::ReleaseProposed { .. }
         | Outcome::Withdrawn { .. }
         | Outcome::PersonTaken { .. }
         | Outcome::PersonHandedBack { .. }
@@ -2206,6 +2228,7 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
             | Outcome::Released { .. }
             | Outcome::Created { .. }
             | Outcome::Proposed { .. }
+            | Outcome::ReleaseProposed { .. }
             | Outcome::Withdrawn { .. }
             | Outcome::EscalationDecided { .. }
             | Outcome::ProposalDecided { .. }
@@ -2473,6 +2496,7 @@ fn valid_program_outcome(limits: &Limits, outcome: &Outcome) -> bool {
         | Outcome::Adopted { .. }
         | Outcome::Created { .. }
         | Outcome::Proposed { .. }
+        | Outcome::ReleaseProposed { .. }
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }

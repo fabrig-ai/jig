@@ -386,7 +386,8 @@ impl<A: crate::Application> Engine<A> {
                     };
                     self.amendment_admission(offer, *task, change)
                 }
-                Ask::Propose { action: jig_client_domain::contract::ProposeAction::Settings(_), .. }
+                Ask::Propose { action: jig_client_domain::contract::ProposeAction::ReleasePlaced { .. }, .. }
+                | Ask::Propose { action: jig_client_domain::contract::ProposeAction::Settings(_), .. }
                 | Ask::Message { .. }
                 | Ask::Answer { .. }
                 | Ask::Take { .. }
@@ -746,6 +747,15 @@ fn target(ask: &Ask) -> Option<Target> {
             Some((*revision, Moved::Hold { reason: None })),
         ),
         Ask::Propose { project, action, .. } => match action {
+            jig_client_domain::contract::ProposeAction::ReleasePlaced { task, revision, .. } => (
+                Some(*project),
+                Some(ObjectKey::Task(*task)),
+                ActKind::Release,
+                Some((
+                    jig_client_domain::contract::Revision { value: *revision },
+                    Moved::PlacedHold { revision: jig_client_domain::contract::Revision { value: *revision } },
+                )),
+            ),
             jig_client_domain::contract::ProposeAction::Amendment { task, revision, .. } => {
                 (Some(*project), Some(ObjectKey::Task(*task)), ActKind::Amend, Some((*revision, Moved::Spec)))
             }

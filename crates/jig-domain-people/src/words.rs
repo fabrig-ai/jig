@@ -7,7 +7,9 @@ pub(crate) fn valid(ask: &Ask) -> bool {
         Ask::Propose { action: crate::Action::Batch(batch), reason, .. } => text(reason) && batch_words(batch),
         Ask::Create { batch, .. } => batch_words(batch),
         Ask::MakeService { name, .. } => text(name),
-        Ask::Propose { action: crate::Action::Settings { .. }, reason, .. }
+        Ask::Propose {
+            action: crate::Action::Settings { .. } | crate::Action::ReleasePlaced { .. }, reason, ..
+        }
         | Ask::Move { reason, .. }
         | Ask::Hold { reason, .. }
         | Ask::Cancel { reason, .. } => text(reason),

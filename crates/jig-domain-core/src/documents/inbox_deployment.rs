@@ -215,7 +215,9 @@ pub(super) fn inbox(core: &Core, limits: &Limits, party: u64, window: &Window) -
                         )
                         .expect("bounded settings needs");
                 }
-                jig_domain_tasks::PersonAction::Batch(_) | jig_domain_tasks::PersonAction::Amend { .. } => {}
+                jig_domain_tasks::PersonAction::Batch(_)
+                | jig_domain_tasks::PersonAction::Amend { .. }
+                | jig_domain_tasks::PersonAction::ReleasePlaced { .. } => {}
             }
         }
     }

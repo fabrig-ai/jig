@@ -32,6 +32,7 @@ pub fn stored_bytes(record: &Stored) -> Option<u64> {
         Stored::Milestone(row) => phase_bytes(&row.phase),
         Stored::PersonProposal(row) | Stored::DecidedProposal(row) => {
             let action = match &row.action {
+                crate::PersonAction::ReleasePlaced { .. } => 0,
                 crate::PersonAction::Settings { items, .. } => bytes(size_of_val(&**items))?,
                 crate::PersonAction::Batch(batch) => batch_bytes(batch)?,
                 crate::PersonAction::Amend { amendment, .. } => {

@@ -486,9 +486,9 @@ pub(crate) fn row_visible(core: &Core, party: u64, row: &Row) -> bool {
                 tasks::PersonAction::Settings { .. } => {
                     party == proposal.proposer || core.people.role(party, people::DEPLOYMENT).is_some()
                 }
-                tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {
-                    core.people.role(party, proposal.project).is_some()
-                }
+                tasks::PersonAction::Batch(_)
+                | tasks::PersonAction::Amend { .. }
+                | tasks::PersonAction::ReleasePlaced { .. } => core.people.role(party, proposal.project).is_some(),
             }
         }
         Record::Tasks(tasks::Stored::Ledger(ledger) | tasks::Stored::ClosedLedger(ledger)) => match ledger.funder {

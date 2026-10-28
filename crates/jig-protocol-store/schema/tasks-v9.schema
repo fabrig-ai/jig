@@ -160,7 +160,7 @@ record RejectedPersonProposal { by: Party reason: bytes 65536 message: u64 at: u
 record WithdrawnPersonProposal { at: u64 }
 record SettingsAccepted { by: Party revision: u32 }
 enum PersonProposalState { pending: PendingPersonProposal, accepted: AcceptedProposal, rejected: RejectedPersonProposal, withdrawn: WithdrawnPersonProposal, settings_accepted: SettingsAccepted }
-enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment, settings: ProposedSettings }
+enum PersonAction { batch: ProposedBatch, amend: boxed ProposedAmendment, settings: ProposedSettings, release_placed: ReleasePlaced }
 record PersonProposal { number: u64 proposer: u64 project: u32 action: PersonAction reason: bytes 65536 state: PersonProposalState }
 record Milestone { task: u64 position: u64 phase: Phase at: u64 }
 record Grace { by: Party until: u64 reason: bytes 65536 message: u64 }

@@ -11,6 +11,7 @@ pub(crate) mod deadlines;
 mod deployment_acts;
 pub(crate) mod key_routes;
 pub(crate) mod party_inputs;
+pub(crate) mod party_releases;
 mod propose;
 pub(crate) mod result_reads;
 pub(crate) mod settings;

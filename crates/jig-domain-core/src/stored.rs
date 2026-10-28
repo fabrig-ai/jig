@@ -434,7 +434,9 @@ impl Core {
                     && proposal.proposer <= deployment.people
                     && match proposal.action {
                         tasks::PersonAction::Settings { .. } => proposal.project == jig_domain_people::DEPLOYMENT,
-                        tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {
+                        tasks::PersonAction::Batch(_)
+                        | tasks::PersonAction::Amend { .. }
+                        | tasks::PersonAction::ReleasePlaced { .. } => {
                             self.authority.policy(proposal.project).is_some()
                         }
                     }

@@ -201,7 +201,7 @@ fn check(
             if release.is_some()
                 && let Some(hold) = core.tasks.placed_on(task)
             {
-                core.party_hold_admit(route.person, hold)?;
+                core.party_release_admit(route.person, hold)?;
             }
             amendment.release = release;
             Ok(tasks::Operation::Amend { task, message: 0, stop_run, amendment: Box::new(amendment) })

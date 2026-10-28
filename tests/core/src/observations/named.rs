@@ -148,14 +148,14 @@ pub(super) fn placed_party(store: &crate::Store, ask: &people::Ask) -> Vec<r::Ob
     if let people::Ask::Lift { hold, revision, with_tasks: true } = ask {
         return placed_names(store, *hold, *revision, None);
     }
-    if let people::Ask::DecideProposal {
-        proposer: people::Proposer::Task(proposer),
-        proposal,
-        decision: people::ProposalDecision::Accept,
-        ..
-    } = ask
-    {
-        return proposal_names(store, *proposer, *proposal);
+    if let people::Ask::DecideProposal { proposer, proposal, decision: people::ProposalDecision::Accept, .. } = ask {
+        return proposal_names(
+            store,
+            match proposer {
+                people::Proposer::Task(number) | people::Proposer::Party(number) => *number,
+            },
+            *proposal,
+        );
     }
     Vec::new()
 }
@@ -171,6 +171,15 @@ pub(super) fn placed_run(store: &crate::Store, event: &core::Event) -> Vec<r::Ob
     }
 }
 fn proposal_names(store: &crate::Store, proposer: u64, proposal: u64) -> Vec<r::Observed> {
+    let party_key = jig_test_domain::Key::Core(core::Key::Tasks(tasks::Key::PersonProposal(proposal)));
+    if let Some(jig_test_domain::Record::Core(core::Record::Tasks(tasks::Stored::PersonProposal(row)))) =
+        store.rows.get(&party_key)
+        && row.proposer == proposer
+        && let tasks::PersonAction::ReleasePlaced { task, hold, revision } = row.action
+    {
+        return placed_names(store, hold, revision, Some(task));
+    }
+
     let key = jig_test_domain::Key::Core(core::Key::Tasks(tasks::Key::Live(proposer)));
     if let Some(jig_test_domain::Record::Core(core::Record::Tasks(tasks::Stored::Live(row)))) = store.rows.get(&key)
         && let Some(p) = &row.proposal

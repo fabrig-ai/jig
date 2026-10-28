@@ -27,6 +27,12 @@ pub(crate) fn proposal(
                     | tasks::PersonProposalState::Withdrawn { .. } => Err(people::Refusal::NotOffered),
                 };
             }
+            if let tasks::PersonAction::ReleasePlaced { .. } = row.action {
+                if row.state.pending_since().is_none() {
+                    return Err(people::Refusal::Unknown);
+                }
+                return crate::routing::party_releases::judge(core, limits, party, act, &row);
+            }
             let role = core.people.role(party, row.project);
             core.goal_standing(&row, row.project, role)?;
             match &row.state {

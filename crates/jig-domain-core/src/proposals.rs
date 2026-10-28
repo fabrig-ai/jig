@@ -399,6 +399,7 @@ pub(crate) fn decision_record(row: &tasks::Stored, at: Wall) -> Option<ProposalD
                     tasks::PersonAction::Settings { .. } => tasks::ProposalKind::Settings,
                     tasks::PersonAction::Batch(_) => tasks::ProposalKind::Batch,
                     tasks::PersonAction::Amend { .. } => tasks::ProposalKind::Amend,
+                    tasks::PersonAction::ReleasePlaced { .. } => tasks::ProposalKind::Release,
                 },
                 by,
                 at: match row.state {

@@ -47,6 +47,10 @@ impl Core {
         }
         for (_, proposal) in self.tasks.person_proposals() {
             let entries = self.person_proposal_entries(proposal);
+            if let jig_domain_tasks::PersonAction::ReleasePlaced { .. } = proposal.action {
+                self.people.release_proposal_waiting(proposal.number, entries.first().copied());
+                continue;
+            }
             people::step(&mut self.people, &env, people::Event::Waiting { task: proposal.first(), entries }, &mut out);
             assert!(out.is_empty(), "restored pending proposals decide nothing");
         }

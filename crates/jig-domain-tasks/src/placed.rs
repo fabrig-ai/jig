@@ -552,6 +552,7 @@ pub(crate) fn apply_changes(
             publish(domain, env, number, out);
         }
     }
+    withdraw_parties(domain, env, held, false, out);
     prune(domain, held, out);
     released
 }
@@ -618,7 +619,23 @@ pub(crate) fn prune(domain: &mut Domain, hold: u64, out: &mut Queue<Request>) {
     out.push(Request::Erase { key: Key::PlacedHold(hold) });
 }
 
+fn withdraw_parties(domain: &mut Domain, env: &Env<Limits>, hold: u64, moved: bool, out: &mut Queue<Request>) {
+    let mut parties = List::with_capacity(env.limits.tasks);
+    for (number, proposal) in &domain.person_proposals {
+        if let crate::PersonAction::ReleasePlaced { task, hold: named, .. } = proposal.action
+            && named == hold
+            && (moved || record(domain, task).expect("pending release target").placed != Some(hold))
+        {
+            parties.push((*number, proposal.proposer)).expect("bounded party proposals");
+        }
+    }
+    for (number, proposer) in parties.into_boxed() {
+        crate::person_proposals::withdraw(domain, env, None, proposer, number, out);
+    }
+}
+
 fn withdraw(domain: &mut Domain, env: &Env<Limits>, hold: u64, out: &mut Queue<Request>) {
+    withdraw_parties(domain, env, hold, true, out);
     let numbers = crate::domain::snapshot(domain, env.limits.tasks);
     for number in numbers.into_boxed() {
         let row = task_mut(domain, number).expect("live proposer");
@@ -696,6 +713,20 @@ pub(crate) fn resumed(was: &crate::Was) -> Phase {
 }
 
 pub(crate) fn check(domain: &Domain, limits: &Limits) -> bool {
+    for (_, proposal) in &domain.person_proposals {
+        if let crate::PersonAction::ReleasePlaced { task, hold, revision } = proposal.action {
+            let Some(held) = domain.placed_hold(hold) else { return false };
+            let Some(target) = record(domain, task) else { return false };
+            if held.lifted
+                || held.revision != revision
+                || target.placed != Some(hold)
+                || target.project != proposal.project
+                || held.project != proposal.project
+            {
+                return false;
+            }
+        }
+    }
     let staged = Staged::new(0);
     for (key, hold) in &domain.placed {
         if !shaped(hold, limits) {

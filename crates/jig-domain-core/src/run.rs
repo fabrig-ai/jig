@@ -465,6 +465,7 @@ pub enum PersonTaskRoute {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum GoalRoute {
+    OfferingRelease { proposal: u64 },
     Offering { proposal: u64, to: u32, stubs: Box<[tasks::Stub]> },
     Withdrawing { proposer: u64, proposal: u64, moved: Option<people::Moved> },
     Accepting { proposer: u64, proposal: u64, by: u64 },

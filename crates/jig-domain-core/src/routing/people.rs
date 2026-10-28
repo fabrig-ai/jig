@@ -196,6 +196,7 @@ pub(super) fn tag_people(
                     | people::Outcome::Adopted { .. }
                     | people::Outcome::Created { .. }
                     | people::Outcome::Proposed { .. }
+                    | people::Outcome::ReleaseProposed { .. }
                     | people::Outcome::Withdrawn { .. }
                     | people::Outcome::Stopped { .. }
                     | people::Outcome::Cancelled { .. }
@@ -356,6 +357,21 @@ pub(super) fn tag_people(
                         super::create::Creation { request, person, project, role: role.expect("admitted role"), batch },
                     ),
                     people::Ask::Propose { action, reason, .. } => match action {
+                        people::Action::ReleasePlaced { task, hold, revision } => super::party_releases::offer(
+                            core,
+                            env,
+                            work,
+                            super::party_releases::Offer {
+                                request,
+                                person,
+                                project,
+                                role,
+                                task,
+                                hold,
+                                revision,
+                                reason,
+                            },
+                        ),
                         people::Action::Settings { against, .. } => {
                             super::settings::propose_admitted(core, env, work, request, person, against, reason);
                         }

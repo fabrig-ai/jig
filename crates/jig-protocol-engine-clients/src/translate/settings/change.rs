@@ -361,7 +361,9 @@ pub(crate) fn proposed(
     }
     let value_set = match value.action {
         w::ProposeAction::Settings(v) => v.into_parts(),
-        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => return Err(bad()),
+        w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) | w::ProposeAction::ReleasePlaced(_) => {
+            return Err(bad());
+        }
     };
     let envelope = match w::ChangeSettings::new(
         limits,

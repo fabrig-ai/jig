@@ -453,6 +453,10 @@ pub enum Outcome {
         project: u32,
     },
     /// An explicit proposal awaits the named policy role.
+    /// A release proposal waits for the placed hold owner.
+    ReleaseProposed {
+        proposal: u64,
+    },
     Proposed {
         proposal: u64,
         to: u32,

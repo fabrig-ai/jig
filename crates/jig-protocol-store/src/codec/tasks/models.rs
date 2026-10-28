@@ -106,7 +106,7 @@ fn referenced(row: &d::Stored) -> u64 {
             bits
         }
         d::Stored::PersonProposal(row) | d::Stored::DecidedProposal(row) => match &row.action {
-            d::PersonAction::Settings { .. } => 0,
+            d::PersonAction::Settings { .. } | d::PersonAction::ReleasePlaced { .. } => 0,
             d::PersonAction::Batch(batch) => member_bits(batch),
             d::PersonAction::Amend { amendment, .. } => amendment_bits(amendment),
         },
@@ -200,7 +200,7 @@ pub(super) fn remap(row: &mut d::Stored, moved: &[u64; 64]) {
             }
         }
         d::Stored::PersonProposal(row) | d::Stored::DecidedProposal(row) => match &mut row.action {
-            d::PersonAction::Settings { .. } => {}
+            d::PersonAction::Settings { .. } | d::PersonAction::ReleasePlaced { .. } => {}
             d::PersonAction::Batch(batch) => members(batch, moved),
             d::PersonAction::Amend { amendment: value, .. } => amendment(value, moved),
         },

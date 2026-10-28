@@ -445,7 +445,7 @@ fn amend_release_admit(core: &Core, person: u64, task: u64, release: Option<u64>
         | tasks::Phase::Ended(_) => {}
     }
     if let Some(hold) = core.tasks.placed_on(task) {
-        core.party_hold_admit(person, hold)?;
+        core.party_release_admit(person, hold)?;
     }
     Ok(())
 }

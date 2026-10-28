@@ -122,6 +122,9 @@ fn owner(value: &p::Outcome, limits: &w::Limits) -> Result<w::OwnerOutcome, w::P
                 w::OwnerOutcomeAccountMovedInParts { account: *account, renewed: *renewed },
             )?)
         }
+        p::Outcome::ReleaseProposed { proposal } => w::OwnerOutcome::ReleaseProposed(
+            w::OwnerOutcomeReleaseProposed::new(limits, w::OwnerOutcomeReleaseProposedParts { proposal: *proposal })?,
+        ),
         p::Outcome::Proposed { proposal, to } => w::OwnerOutcome::Proposed(w::OwnerOutcomeProposed::new(
             limits,
             w::OwnerOutcomeProposedParts { proposal: *proposal, to: *to },

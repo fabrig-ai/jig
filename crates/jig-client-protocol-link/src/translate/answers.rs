@@ -88,6 +88,7 @@ pub(crate) fn owner_outcome(value: &w::OwnerOutcome, limits: &Limits) -> Result<
             c::OwnerOutcome::QuestionAnswered { task: row.task(), question: row.question(), message: row.message() }
         }
         w::OwnerOutcome::Amended(row) => c::OwnerOutcome::Amended { task: row.task() },
+        w::OwnerOutcome::ReleaseProposed(row) => c::OwnerOutcome::ReleaseProposed { proposal: row.proposal() },
         w::OwnerOutcome::Proposed(row) => c::OwnerOutcome::Proposed { proposal: row.proposal(), to: row.to() },
         w::OwnerOutcome::Withdrawn(row) => c::OwnerOutcome::Withdrawn { proposal: row.proposal() },
         w::OwnerOutcome::RolesSet(row) => c::OwnerOutcome::RolesSet { project: row.project() },

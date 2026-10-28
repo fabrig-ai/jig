@@ -101,6 +101,9 @@ pub(super) fn encode_outcome(value: &domain::Outcome, limits: &wire::Limits) -> 
         domain::Outcome::Adopted { project } => {
             wire::Outcome::Adopted(wire::OutcomeAdopted::new(limits, wire::OutcomeAdoptedParts { project: *project })?)
         }
+        domain::Outcome::ReleaseProposed { proposal } => wire::Outcome::ReleaseProposed(
+            wire::OutcomeReleaseProposed::new(limits, wire::OutcomeReleaseProposedParts { proposal: *proposal })?,
+        ),
         domain::Outcome::Proposed { proposal, to } => encode_proposed(*proposal, *to, limits)?,
         domain::Outcome::Withdrawn { proposal } => encode_withdrawn(*proposal, limits)?,
         domain::Outcome::Stopped { task } => {
@@ -246,6 +249,7 @@ pub(super) fn decode_outcome(value: wire::Outcome) -> domain::Outcome {
             let wire::OutcomeAdoptedParts { project } = value.into_parts();
             domain::Outcome::Adopted { project }
         }
+        wire::Outcome::ReleaseProposed(value) => domain::Outcome::ReleaseProposed { proposal: value.proposal() },
         wire::Outcome::Proposed(value) => {
             let wire::OutcomeProposedParts { proposal, to } = value.into_parts();
             domain::Outcome::Proposed { proposal, to }

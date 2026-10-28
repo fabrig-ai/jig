@@ -173,6 +173,26 @@ impl Party {
         }).expect("decoded final answer")
     }
 
+    fn read_value(&mut self, world: &mut World, read: c::Read) -> c::ReadValue {
+        let requests = self.step(client::Event::Read {
+            handle: client::Handle { asker: client::Asker::JIG, number: 20 },
+            read: client::Readable::Jig(read),
+        });
+        self.exchange(world, requests)
+            .into_iter()
+            .find_map(|request| {
+                if let client::Request::Told {
+                    told: client::Told::Page { page: client::Readout::Jig(c::ReadResult::Value(value)), .. },
+                } = request
+                {
+                    Some(value)
+                } else {
+                    None
+                }
+            })
+            .expect("decoded read value")
+    }
+
     fn holds(&mut self, world: &mut World, after: Option<c::Cursor>) -> c::ProjectHolds {
         let requests = self.step(client::Event::Read {
             handle: client::Handle { asker: client::Asker::JIG, number: 10 },
@@ -276,7 +296,7 @@ fn a_client_reads_a_stopped_goals_hold_and_only_its_owner_lifts_it() {
     assert!(!hold.placed().expect("same placed hold").may_lift);
     let why = c::Refusal::Authority {
         lacking: c::Lacking::HoldOwner { hold: number, owner: c::HoldOwner::Party { person: owner } },
-        proposable: None,
+        proposable: Some(true),
     };
     assert!(
         document
@@ -391,4 +411,93 @@ fn a_client_reads_a_projects_holds_and_pages_them() {
     let fresh = party.holds(&mut world, None);
     assert_eq!(fresh.rows[0].hold.number, numbers[1]);
     assert!(fresh.after.is_none());
+}
+
+#[test]
+fn a_client_proposes_a_release_and_the_owner_reads_it_in_their_inbox() {
+    let seed = 1020;
+    let (mut config, mut limits) = jig_core_world::peers::fixture(seed, 0);
+    config.core.seed_projects[0].policy.policy.roles[0].authority.budget.spend = 100;
+    limits.core.fleet.slots = 2;
+    limits.core.tasks.inbox_messages = 8;
+    limits.core.tasks.inbox_bytes = 512;
+    limits.core.people.inbox_recipients = 24;
+    jig_core_world::peers::journal(&mut limits);
+    let mut world = World::configured(seed, false, config, limits);
+    world.reads = Some(reads::Parties::new(world.store.applied));
+    let owner_sign_in = world.sign_in.expect("owner signed in");
+    let coordinator = world.assignments[0];
+    let tasks::Party::Person(owner) = fixtures::live_row(&world, coordinator.0).requester else { panic!("owner") };
+    let sign_in = fixtures::second_party(&mut world, b"proposing client", people::Role::Maintainer);
+    let Some(people::Reply::SignedIn { person: maintainer, .. }) = world.people_answers.last() else {
+        panic!("maintainer")
+    };
+    let maintainer = *maintainer;
+    let mut goal = fixtures::member(&world, tasks::Executor::Agent { charter: 1 }, b"held goal");
+    goal.tracked = Some(1);
+    goal.authority.delegation = tasks::Delegation { kinds: Box::new([]), tasks: 0, depth: 0 };
+    let goal = fixtures::delegate(&mut world, coordinator, 1, goal);
+    let mut owner_client = Party::new(&mut world, owner_sign_in, owner);
+    let mut proposer_client = Party::new(&mut world, sign_in, maintainer);
+    assert!(matches!(owner_client.ask(&mut world, c::Ask::Stop { project: 1, task: goal }), c::Answer::Done(_)));
+    let attempt = fixtures::live_row(&world, goal).attempt;
+    world.send(root::Event::Answer {
+        read: None,
+        refused: Box::new([]),
+        channel: skein_lib::Token::new(7),
+        task: goal,
+        attempt,
+        cumulative: 0,
+        end: tasks::End::Parked,
+    });
+    let task = proposer_client.task(&mut world, goal);
+    let placed = task.hold.as_ref().expect("held goal").placed().expect("placed hold");
+    let (hold, revision) = (placed.number, placed.revision.value);
+    let answer = proposer_client.ask(
+        &mut world,
+        c::Ask::Propose {
+            project: 1,
+            action: c::ProposeAction::ReleasePlaced { task: goal, hold, revision },
+            reason: c::Text::new(b"resume the goal".as_slice().into(), 4096).expect("reason"),
+        },
+    );
+    let c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::ReleaseProposed { proposal })) = answer else {
+        panic!("release proposed: {answer:?}")
+    };
+    let key = c::ProposalKey { proposer: c::Proposer::Party(maintainer), number: proposal };
+    let c::ReadValue::OwnerInbox(inbox) = owner_client.read_value(
+        &mut world,
+        c::Read::Inbox {
+            group: c::InboxReadGroup::Needs,
+            project: Some(1),
+            kind: Some(c::InboxGroup::Proposals),
+            goal: None,
+            after: None,
+        },
+    ) else {
+        panic!("owner inbox")
+    };
+    assert!(inbox.rows.iter().any(|row| row.card_key() == c::ObjectKey::Proposal(key)));
+    let c::ReadValue::OwnerProposal(document) =
+        owner_client.read_value(&mut world, c::Read::Proposal { proposal: key })
+    else {
+        panic!("proposal document")
+    };
+    assert_eq!(document.waiting.holder, c::OwnerHistoryHolder::Person(owner));
+    let c::OwnerProposalAction::Release { hold: Some(held), .. } = &document.action else { panic!("release facts") };
+    assert_eq!(held.placed.as_ref().expect("placed facts").number, hold);
+    assert!(
+        document.acts.iter().any(|offer| offer.act == c::ActKind::Accept && offer.admission == c::Admission::Allowed)
+    );
+    assert!(matches!(
+        owner_client.ask(
+            &mut world,
+            c::Ask::Decide {
+                project: 1,
+                on: c::DecideOn::Proposal { proposal: key, decision: c::Decision::Accept, running: None },
+            }
+        ),
+        c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::ProposalDecided { .. }))
+    ));
+    assert!(owner_client.task(&mut world, goal).hold.is_none());
 }

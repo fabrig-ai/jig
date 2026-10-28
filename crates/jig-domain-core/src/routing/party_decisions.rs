@@ -51,6 +51,10 @@ pub(super) fn goal_decide(
     }
     let event = match choice {
         people::ProposalDecision::Accept => {
+            if let tasks::PersonAction::ReleasePlaced { .. } = proposal.action {
+                super::party_releases::accept(core, work, request, person, proposal);
+                return;
+            }
             if super::proposal_revisions::party(core, work, request, &proposal) {
                 return;
             }
@@ -63,7 +67,9 @@ pub(super) fn goal_decide(
                 work.push(Event::Tasks(event));
             }
             let event = match proposal.action {
-                tasks::PersonAction::Settings { .. } => unreachable!("settings acceptance has its own decision"),
+                tasks::PersonAction::Settings { .. } | tasks::PersonAction::ReleasePlaced { .. } => {
+                    unreachable!("settings and release acceptance have their own decision")
+                }
                 tasks::PersonAction::Batch(mut batch) => {
                     super::deadlines::fund(&mut batch, source, env.wall);
                     tasks::Event::Make {
@@ -536,7 +542,9 @@ pub(super) fn proposal_request(
             if let Some(row) = core.tasks.person_proposal(number, proposal) {
                 let settings = match row.action {
                     tasks::PersonAction::Settings { .. } => true,
-                    tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => false,
+                    tasks::PersonAction::Batch(_)
+                    | tasks::PersonAction::Amend { .. }
+                    | tasks::PersonAction::ReleasePlaced { .. } => false,
                 };
                 let accepts = decision == people::ProposalDecision::Accept;
                 if running.is_some() != (settings && accepts) {

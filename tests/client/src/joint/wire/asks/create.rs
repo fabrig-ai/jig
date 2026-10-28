@@ -103,6 +103,9 @@ pub(super) fn propose(
     names: &mut List<Box<[u8]>>,
 ) -> Result<p::Ask, super::Invalid> {
     let action = match action {
+        c::ProposeAction::ReleasePlaced { task, hold, revision } => {
+            p::Action::ReleasePlaced { task: *task, hold: *hold, revision: *revision }
+        }
         c::ProposeAction::Settings(_) => return Err(super::Invalid::Settings),
         c::ProposeAction::Batch { tasks } => {
             p::Action::Batch(tasks.iter().map(|value| member(value, models, names)).collect::<Result<_, _>>()?)

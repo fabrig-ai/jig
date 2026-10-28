@@ -75,6 +75,9 @@ impl Core {
         project: u32,
         role: Option<people::Role>,
     ) -> Result<(), people::Refusal> {
+        if let tasks::PersonAction::ReleasePlaced { .. } = proposal.action {
+            return Err(people::Refusal::NotWaiting);
+        }
         if proposal.action.is_settings() {
             return if project == 0 && role == Some(people::Role::Owner) {
                 Ok(())
@@ -93,6 +96,7 @@ impl Core {
             tasks::PersonAction::Settings { .. } => unreachable!("settings standing checked separately"),
             tasks::PersonAction::Batch(_) => authority::ProposalKind::Batch,
             tasks::PersonAction::Amend { .. } => authority::ProposalKind::Amend,
+            tasks::PersonAction::ReleasePlaced { .. } => unreachable!("release recipient is the hold owner"),
         };
         if !policy.decides.allows(kind) {
             return Err(people::Refusal::Unknown);
@@ -112,7 +116,7 @@ impl Core {
     ) -> Result<tasks::Funder, people::Refusal> {
         let (source, numbers) = self.person_pool(project, person);
         match &proposal.action {
-            tasks::PersonAction::Settings { .. } => return Ok(source),
+            tasks::PersonAction::Settings { .. } | tasks::PersonAction::ReleasePlaced { .. } => return Ok(source),
             tasks::PersonAction::Batch(batch) => {
                 if let Err(why) = self.funded_accounts(batch, source) {
                     return Err(self.account_refusal(why));
@@ -125,7 +129,7 @@ impl Core {
             }
         }
         let action = match &proposal.action {
-            tasks::PersonAction::Settings { .. } => return Ok(source),
+            tasks::PersonAction::Settings { .. } | tasks::PersonAction::ReleasePlaced { .. } => return Ok(source),
             tasks::PersonAction::Batch(batch) => {
                 let mut members =
                     skein_lib::List::with_capacity(u32::try_from(batch.len()).expect("bounded party batch"));

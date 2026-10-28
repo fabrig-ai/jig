@@ -89,7 +89,7 @@ fn release(s: &mut Story, sign_in: u64, key: u8) {
 
 fn owner_refusal(hold: u64, person: u64) -> people::Refusal {
     people::Refusal::Authority {
-        proposable: None,
+        proposable: Some(people::Accepter::HoldOwner),
         lacking: people::Lack::HoldOwner { hold, owner: people::HoldOwner::Party { person } },
     }
 }
@@ -220,7 +220,13 @@ fn a_lift_naming_an_old_revision_or_by_a_maintainer_is_refused() {
     ask_as(&mut s.world, sign_in, 56, people::Ask::Lift { hold: number, revision: 0, with_tasks: true });
     refusal(&s.world, people::Refusal::Moved { now: people::Moved::PlacedHold { revision: 1 } });
     ask_as(&mut s.world, maintainer, 57, people::Ask::Lift { hold: number, revision: 1, with_tasks: true });
-    refusal(&s.world, owner_refusal(number, s.owner));
+    refusal(
+        &s.world,
+        people::Refusal::Authority {
+            lacking: people::Lack::HoldOwner { hold: number, owner: people::HoldOwner::Party { person: s.owner } },
+            proposable: None,
+        },
+    );
     ask_as(&mut s.world, sign_in, 58, people::Ask::Lift { hold: number, revision: 1, with_tasks: true });
     resumed(&s, number);
 }
@@ -1001,4 +1007,385 @@ fn a_project_drain_reasserts_its_parks_after_the_core_adopts_restored_runs() {
     for task in [s.goal, s.child] {
         assert!(matches!(live_row(&s.world, task).phase, tasks::Phase::Held { .. }));
     }
+}
+
+fn maintainer(s: &mut Story) -> (u64, u64) {
+    let sign_in = second_party(&mut s.world, b"proposing maintainer", people::Role::Maintainer);
+    let Some(people::Reply::SignedIn { person, .. }) = s.world.people_answers.last() else {
+        panic!("maintainer signed in")
+    };
+    (sign_in, *person)
+}
+fn party_propose(s: &mut Story, sign_in: u64, task: u64, hold: u64, key: u8) -> u64 {
+    let revision = placed_hold(s, hold).revision;
+    ask_as(
+        &mut s.world,
+        sign_in,
+        key,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task, hold, revision },
+            reason: b"resume this task".as_slice().into(),
+        },
+    );
+    let Some(people::Reply::Outcome(people::Outcome::ReleaseProposed { proposal })) = s.world.people_answers.last()
+    else {
+        panic!("release proposed: {:?}", s.world.people_answers.last())
+    };
+    *proposal
+}
+fn party_decide(
+    s: &mut Story,
+    sign_in: u64,
+    proposer: u64,
+    proposal: u64,
+    decision: people::ProposalDecision,
+    key: u8,
+) {
+    ask_as(
+        &mut s.world,
+        sign_in,
+        key,
+        people::Ask::DecideProposal {
+            project: 1,
+            proposer: people::Proposer::Party(proposer),
+            proposal,
+            decision,
+            running: None,
+        },
+    );
+}
+fn party_proposal(s: &Story, number: u64) -> tasks::PersonProposal {
+    s.world
+        .store
+        .rows
+        .values()
+        .find_map(|row| match row {
+            root::Record::Core(core::Record::Tasks(
+                tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row),
+            )) if row.number == number => Some(*row.clone()),
+            _ => None,
+        })
+        .expect("durable party proposal")
+}
+
+#[test]
+fn a_maintainers_refused_release_says_the_owner_may_accept_a_proposal() {
+    let mut s = story(1010);
+    let (sign_in, _) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    release(&mut s, sign_in, 80);
+    refusal(&s.world, owner_refusal(number, s.owner));
+}
+
+#[test]
+fn a_maintainer_proposes_the_release_and_the_owner_accepts_it_in_their_inbox() {
+    let mut s = story(1011);
+    let (sign_in, person) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    let proposal = party_propose(&mut s, sign_in, goal, number, 80);
+    assert_eq!(party_proposal(&s, proposal).first(), goal);
+    s.world.reads = Some(jig_core_world::reads::Parties::new(s.world.store.applied));
+    let object = core::documents::InboxObject::Proposal { proposer: people::Proposer::Party(person), number: proposal };
+    assert!(inbox_objects(&mut s.world, owner, core::reads::Group::Proposals).contains(&object));
+    assert!(!inbox_objects(&mut s.world, sign_in, core::reads::Group::Proposals).contains(&object));
+    // The maintainer cannot accept their own offer, even with policy authority over its tree.
+    party_decide(&mut s, sign_in, person, proposal, people::ProposalDecision::Accept, 81);
+    refusal(&s.world, owner_refusal(number, s.owner));
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Pass, 82);
+    refusal(&s.world, people::Refusal::NoFurther);
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Accept, 83);
+    assert_eq!(
+        party_proposal(&s, proposal).state,
+        tasks::PersonProposalState::Accepted { by: tasks::Party::Person(s.owner) }
+    );
+    resumed(&s, number);
+    transcripts(&s);
+}
+
+#[test]
+fn a_party_release_proposal_of_a_delegate_exempts_it_alone_when_accepted() {
+    let mut s = story(1012);
+    let (sign_in, person) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let child = s.child;
+    let proposal = party_propose(&mut s, sign_in, child, number, 80);
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Accept, 81);
+    assert_eq!(live_row(&s.world, child).placed, None);
+    assert_eq!(live_row(&s.world, s.goal).placed, Some(number));
+    let hold = placed_hold(&s, number);
+    assert!(!hold.lifted);
+    assert_eq!(hold.exempt.as_ref(), &[child]);
+    assert_eq!(
+        party_proposal(&s, proposal).state,
+        tasks::PersonProposalState::Accepted { by: tasks::Party::Person(s.owner) }
+    );
+}
+
+#[test]
+fn a_party_release_proposal_is_withdrawn_when_the_hold_is_lifted_or_moves() {
+    for with_tasks in [false, true] {
+        let mut s = story(1013);
+        let (sign_in, _) = maintainer(&mut s);
+        let owner = s.owner_sign_in;
+        let number = stop(&mut s, owner);
+        let goal = s.goal;
+        let proposal = party_propose(&mut s, sign_in, goal, number, 80);
+        let task_proposal = propose(&mut s, number);
+        ask_as(&mut s.world, owner, 81, people::Ask::Lift { hold: number, revision: 1, with_tasks });
+        assert!(matches!(party_proposal(&s, proposal).state, tasks::PersonProposalState::Withdrawn { .. }));
+        assert!(s.world.store.rows.values().any(|row| matches!(row,
+            root::Record::Core(core::Record::Tasks(tasks::Stored::History(history))) if history.proposal.as_ref().is_some_and(|row| row.number == task_proposal && row.state == tasks::ProposalState::Withdrawn))));
+        if !with_tasks {
+            assert_eq!(placed_hold(&s, number).revision, 2)
+        }
+    }
+}
+
+#[test]
+fn a_party_release_proposal_to_a_task_owned_hold_waits_among_its_entries_and_the_task_accepts_it() {
+    let mut s = story(1014);
+    let (sign_in, person) = maintainer(&mut s);
+    let number = message_number(&s).max(1);
+    s.world.send(root::Event::Core(core::Event::Tasks(tasks::Event::Place {
+        reply_to: ReplyTo::new(Token::new(10900)),
+        hold: tasks::PlacedHold {
+            number,
+            project: 1,
+            owner: tasks::Owner::Task { task: s.coordinator.0 },
+            mode: tasks::Mode::Stop,
+            scope: tasks::Scope::Subtree { task: s.goal },
+            reason: b"coordinator's hold".as_slice().into(),
+            placed_at: 1,
+            revision: 1,
+            exempt: Box::new([]),
+            lifted: false,
+        },
+    })));
+    parked(&mut s);
+    let goal = s.goal;
+    let proposal = party_propose(&mut s, sign_in, goal, number, 80);
+    // A new run reads the virtual proposal entry as a real holder entry.
+    let coordinator = s.coordinator;
+    s.world.send(root::Event::Answer {
+        read: None,
+        refused: Box::new([]),
+        channel: Token::new(7),
+        task: coordinator.0,
+        attempt: coordinator.1,
+        cumulative: 0,
+        end: tasks::End::Parked,
+    });
+    let run = s.world.assignments.iter().rev().find(|run| run.0 == coordinator.0).copied().expect("holder woken");
+    s.coordinator = run;
+    assert!(s.world.assigned.as_ref().expect("holder assignment").messages.iter().any(|word|
+        word.from == tasks::Party::Person(person) && matches!(word.kind, tasks::MessageKind::Proposal { proposer, proposal: named, kind: tasks::ProposalKind::Release } if proposer == person && named == proposal)));
+    action(
+        &mut s,
+        20,
+        core::NamedAction::DecideProposal { proposer: person, proposal, choice: core::ProposalChoice::Accept },
+    );
+    assert_eq!(
+        party_proposal(&s, proposal).state,
+        tasks::PersonProposalState::Accepted { by: tasks::Party::Task(coordinator.0) }
+    );
+    resumed(&s, number);
+}
+
+#[test]
+fn a_party_who_may_lift_the_hold_is_refused_a_proposal_and_releases_instead() {
+    let mut s = story(1015);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    ask_as(
+        &mut s.world,
+        owner,
+        80,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task: goal, hold: number, revision: 1 },
+            reason: b"resume".as_slice().into(),
+        },
+    );
+    refusal(&s.world, people::Refusal::NotOffered);
+    release(&mut s, owner, 81);
+    resumed(&s, number);
+}
+
+#[test]
+fn a_rejected_party_release_proposal_leaves_the_task_held() {
+    let mut s = story(1016);
+    let (sign_in, person) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    let proposal = party_propose(&mut s, sign_in, goal, number, 80);
+    let before = live_row(&s.world, goal).clone();
+    let reason = b"keep inspecting".as_slice();
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Reject { reason: reason.into() }, 81);
+    assert_eq!(live_row(&s.world, goal), &before);
+    assert!(
+        matches!(party_proposal(&s, proposal).state, tasks::PersonProposalState::Rejected { by: tasks::Party::Person(by), reason: words, .. } if by == s.owner && words.as_ref() == reason)
+    );
+}
+
+#[test]
+fn a_pending_party_release_proposal_survives_a_cold_restart() {
+    let mut s = story(1017);
+    let (sign_in, person) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    release(&mut s, sign_in, 79);
+    refusal(&s.world, owner_refusal(number, s.owner));
+    let proposal = party_propose(&mut s, sign_in, goal, number, 80);
+    let before = party_proposal(&s, proposal);
+    s.world.restart_with(configuration(s.seed).0);
+    assert_eq!(party_proposal(&s, proposal), before);
+    release(&mut s, sign_in, 79);
+    refusal(&s.world, owner_refusal(number, s.owner));
+    // Replaying the retained ask reads back both its action and number-only successful outcome.
+    assert_eq!(party_propose(&mut s, sign_in, goal, number, 80), proposal);
+    s.world.reads = Some(jig_core_world::reads::Parties::new(s.world.store.applied));
+    assert!(inbox_objects(&mut s.world, owner, core::reads::Group::Proposals).contains(
+        &core::documents::InboxObject::Proposal { proposer: people::Proposer::Party(person), number: proposal }
+    ));
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Accept, 81);
+    resumed(&s, number);
+    assert_eq!(
+        party_proposal(&s, proposal).state,
+        tasks::PersonProposalState::Accepted { by: tasks::Party::Person(s.owner) }
+    );
+}
+
+#[test]
+fn a_refused_party_release_acceptance_changes_neither_the_hold_nor_the_proposal() {
+    let seed = 1018;
+    let (config, mut limits) = configuration(seed);
+    limits.core.tasks.exemptions = 1;
+    jig_core_world::peers::journal(&mut limits);
+    let mut s = configured_story(seed, config, &limits);
+    let (sign_in, person) = maintainer(&mut s);
+    let owner = s.owner_sign_in;
+    let number =
+        placed_number(&hold(&mut s, owner, 80, people::HoldMode::Stop, people::HoldScope::Project, b"pause project"));
+    parked(&mut s);
+    let child = s.child;
+    let revision = live_row(&s.world, child).revisions.hold;
+    ask_as(&mut s.world, owner, 81, people::Ask::Release { project: 1, task: child, revision, again: None });
+    let goal = s.goal;
+    let proposal = party_propose(&mut s, sign_in, goal, number, 82);
+    let before = (placed_hold(&s, number), live_row(&s.world, goal).clone(), party_proposal(&s, proposal));
+    party_decide(&mut s, owner, person, proposal, people::ProposalDecision::Accept, 83);
+    assert_eq!((placed_hold(&s, number), live_row(&s.world, goal).clone(), party_proposal(&s, proposal)), before);
+    assert!(matches!(s.world.people_answers.last(), Some(people::Reply::Again(people::Again::Busy))));
+}
+
+#[test]
+fn party_release_proposals_for_one_task_keep_both_inbox_entries_and_acceptance_withdraws_the_other() {
+    let mut s = story(1019);
+    let (sign_in, first) = maintainer(&mut s);
+    let second_sign_in = second_party(&mut s.world, b"another maintainer", people::Role::Maintainer);
+    let Some(people::Reply::SignedIn { person: second, .. }) = s.world.people_answers.last() else {
+        panic!("second maintainer")
+    };
+    let second = *second;
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    let a = party_propose(&mut s, sign_in, goal, number, 80);
+    let b = party_propose(&mut s, second_sign_in, goal, number, 81);
+    s.world.reads = Some(jig_core_world::reads::Parties::new(s.world.store.applied));
+    let inbox = inbox_objects(&mut s.world, owner, core::reads::Group::Proposals);
+    for (person, number) in [(first, a), (second, b)] {
+        assert!(
+            inbox.contains(&core::documents::InboxObject::Proposal {
+                proposer: people::Proposer::Party(person),
+                number
+            })
+        );
+    }
+    party_decide(&mut s, owner, first, a, people::ProposalDecision::Accept, 82);
+    assert!(matches!(party_proposal(&s, b).state, tasks::PersonProposalState::Withdrawn { .. }));
+    resumed(&s, number);
+}
+
+#[test]
+fn party_release_admission_checks_the_reason_standing_hold_and_revision() {
+    let mut s = story(1021);
+    let (sign_in, _) = maintainer(&mut s);
+    let member_sign_in = second_party(&mut s.world, b"outside member", people::Role::Member);
+    let owner = s.owner_sign_in;
+    let number = stop(&mut s, owner);
+    let goal = s.goal;
+    let bound = configuration(s.seed).1.core.people.words;
+    for (key, reason, which) in
+        [(80, Vec::new(), people::LimitKind::Empty), (81, vec![b'x'; bound as usize + 1], people::LimitKind::Words)]
+    {
+        ask_as(
+            &mut s.world,
+            sign_in,
+            key,
+            people::Ask::Propose {
+                project: 1,
+                action: people::Action::ReleasePlaced { task: goal, hold: number, revision: 1 },
+                reason: reason.into(),
+            },
+        );
+        refusal(&s.world, people::Refusal::Limit { which });
+    }
+    ask_as(
+        &mut s.world,
+        member_sign_in,
+        82,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task: goal, hold: number, revision: 1 },
+            reason: b"outside my tree".as_slice().into(),
+        },
+    );
+    refusal(&s.world, people::Refusal::Unknown);
+    ask_as(
+        &mut s.world,
+        sign_in,
+        83,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task: goal, hold: number, revision: 0 },
+            reason: b"old revision".as_slice().into(),
+        },
+    );
+    refusal(&s.world, people::Refusal::Moved { now: people::Moved::PlacedHold { revision: 1 } });
+    ask_as(
+        &mut s.world,
+        sign_in,
+        84,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task: goal, hold: number + 1, revision: 1 },
+            reason: b"different hold".as_slice().into(),
+        },
+    );
+    refusal(&s.world, people::Refusal::NotWaiting);
+    let reason = vec![b'x'; bound as usize];
+    ask_as(
+        &mut s.world,
+        sign_in,
+        85,
+        people::Ask::Propose {
+            project: 1,
+            action: people::Action::ReleasePlaced { task: goal, hold: number, revision: 1 },
+            reason: reason.clone().into(),
+        },
+    );
+    let Some(people::Reply::Outcome(people::Outcome::ReleaseProposed { proposal })) = s.world.people_answers.last()
+    else {
+        panic!("at-bound reason admitted")
+    };
+    assert_eq!(party_proposal(&s, *proposal).reason.as_ref(), reason.as_slice());
 }

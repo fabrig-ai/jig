@@ -542,6 +542,12 @@ pub fn person_proposal(
 ) -> Result<wire::PersonProposal, wire::Problem> {
     let domain::PersonProposal { number, proposer, project, action, reason, state } = source;
     let action = match action {
+        domain::PersonAction::ReleasePlaced { task, hold, revision } => {
+            wire::PersonAction::ReleasePlaced(wire::ReleasePlaced::new(
+                limits,
+                wire::ReleasePlacedParts { task: *task, hold: *hold, revision: *revision },
+            )?)
+        }
         domain::PersonAction::Settings { against, items } => {
             wire::PersonAction::Settings(setting_heads(*against, items, limits)?)
         }
@@ -579,6 +585,9 @@ pub fn read_person_proposal(
 ) -> Result<domain::PersonProposal, wire::Problem> {
     let wire::PersonProposalParts { number, proposer, project, action, reason, state } = source.into_parts();
     let action = match action {
+        wire::PersonAction::ReleasePlaced(value) => {
+            domain::PersonAction::ReleasePlaced { task: value.task(), hold: value.hold(), revision: value.revision() }
+        }
         wire::PersonAction::Settings(row) => {
             let row = row.into_parts();
             let mut items = List::with_capacity(domain::SETTINGS_ITEMS);

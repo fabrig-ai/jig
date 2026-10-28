@@ -337,3 +337,62 @@ fn a_hold_owner_refusal_says_a_release_proposal_could_be_accepted() {
         }
     }
 }
+
+#[test]
+fn a_party_release_proposal_crosses_the_native_boundary() {
+    let limits = fixtures::limits().wire;
+    let reason = b"resume through the owner's decision";
+    let ask = w::Ask::Propose(
+        w::Propose::new(
+            &limits,
+            w::ProposeParts {
+                project: u32::MAX,
+                action: w::ProposeAction::ReleasePlaced(
+                    w::ProposeReleasePlaced::new(
+                        &limits,
+                        w::ProposeReleasePlacedParts { task: u64::MAX, hold: u64::MAX - 1, revision: u64::MAX - 2 },
+                    )
+                    .expect("action"),
+                ),
+                reason: reason.as_slice().into(),
+            },
+        )
+        .expect("propose"),
+    );
+    let mut bytes = Writer::new(ask.measure() as usize);
+    ask.encode(&mut bytes).expect("ask bytes");
+    let keyed = w::Keyed::new(
+        &limits,
+        w::KeyedParts { key: [20; 16], owner: w::Owner::Jig, version: 19, request: bytes.finish(), value: None },
+    )
+    .expect("keyed");
+    let mut bytes = Writer::new(keyed.measure() as usize);
+    keyed.encode(&mut bytes).expect("request bytes");
+    let mut peer = Peer::started(&fixtures::settings());
+    let bearer = fixtures::signed_in(&mut peer);
+    let socket = peer.post(b"/jig/v1/request", bytes.finish(), Some(&bearer));
+    let Some(core::Event::People(p::Event::Ask { reply_to, ask, .. })) = peer.take_core() else {
+        panic!("native proposal")
+    };
+    assert_eq!(
+        ask,
+        p::Ask::Propose {
+            project: u32::MAX,
+            action: p::Action::ReleasePlaced { task: u64::MAX, hold: u64::MAX - 1, revision: u64::MAX - 2 },
+            reason: reason.as_slice().into()
+        }
+    );
+    peer.answer_request(reply_to, p::Reply::Outcome(p::Outcome::ReleaseProposed { proposal: u64::MAX }));
+    let w::KeyedAnswer::FinalAnswer(record) =
+        w::KeyedAnswer::decode(&limits, &mut Reader::new(peer.answered(socket).expect("durable proposal reply")))
+            .expect("envelope")
+    else {
+        panic!("final")
+    };
+    let w::Final::Done(done) = w::Final::decode(&limits, &mut Reader::new(record.record())).expect("answer") else {
+        panic!("done")
+    };
+    let w::Outcome::Owner(owner) = done.outcome() else { panic!("owner outcome") };
+    let w::OwnerOutcome::ReleaseProposed(proposed) = owner.value() else { panic!("release proposed") };
+    assert_eq!(proposed.proposal(), u64::MAX);
+}

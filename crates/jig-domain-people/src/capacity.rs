@@ -152,6 +152,7 @@ pub(crate) fn permanent(outcome: &Outcome) -> Option<CapacityCause> {
         | Outcome::Adopted { .. }
         | Outcome::Created { .. }
         | Outcome::Proposed { .. }
+        | Outcome::ReleaseProposed { .. }
         | Outcome::Withdrawn { .. }
         | Outcome::Stopped { .. }
         | Outcome::Cancelled { .. }

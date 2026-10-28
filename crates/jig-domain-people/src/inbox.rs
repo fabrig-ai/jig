@@ -14,6 +14,17 @@ use alloc::boxed::Box;
 use skein_lib::{Env, Id, List, Map, Queue, Token, Wall};
 
 impl Domain {
+    /// Replace a volatile owner-inbox projection by proposal identity, independent of task projections.
+    /// Pending party proposals are bounded by the core's live task count, at most `inbox_tasks`.
+    pub fn release_proposal_waiting(&mut self, proposal: u64, entry: Option<Entry>) {
+        if let Some(entry) = entry {
+            assert!(entry.kind == EntryKind::Proposal { number: proposal }, "exact release proposal entry");
+            self.release_proposals.insert(proposal, entry).expect("core bounded pending party proposals");
+        } else {
+            self.release_proposals.remove(&proposal);
+        }
+    }
+
     /// Last explicitly accepted results position for a known party, zero before any mark.
     #[must_use]
     pub fn results_seen(&self, person: u64) -> Option<u64> {
@@ -71,6 +82,11 @@ impl Domain {
                 }
             }
         }
+        for (_, entry) in &self.release_proposals {
+            if addressed_entry(self, person, *entry) {
+                insert_newest(&mut visible, *entry);
+            }
+        }
         Some(visible.into_boxed())
     }
 
@@ -87,6 +103,11 @@ impl Domain {
                         Entry { task: *task, project: need.project, whom: need.whom, kind: need.kind, at: need.at },
                     );
                 }
+            }
+        }
+        for (_, entry) in &self.release_proposals {
+            if addressed_entry(self, person, *entry) {
+                insert_oldest(&mut entries, *entry);
             }
         }
         Some(entries.into_boxed())
@@ -155,12 +176,22 @@ impl Domain {
                 *count = count.checked_add(1).expect("validated task projection bound");
             }
         }
+        for (_, entry) in &self.release_proposals {
+            if addressed_entry(self, person, *entry) {
+                counts.proposals = counts.proposals.checked_add(1).expect("bounded release proposals");
+            }
+        }
         Some(counts)
     }
 
     /// Whether this task currently contributes to the party's exact need count.
     #[must_use]
     pub fn task_needs(&self, person: u64, task: u64) -> bool {
+        for (_, entry) in &self.release_proposals {
+            if entry.task == task && addressed_entry(self, person, *entry) {
+                return true;
+            }
+        }
         match self.needs.get(&task) {
             Some(tallies) => {
                 for tally in tallies {
@@ -607,6 +638,9 @@ fn forget_chat(domain: &mut Domain, limits: &Limits, task: u64, out: &mut Queue<
     drop(domain.replies.remove(&task));
 }
 
+fn addressed_entry(domain: &Domain, person: u64, entry: Entry) -> bool {
+    addressed(domain, person, Need { project: entry.project, whom: entry.whom, kind: entry.kind, at: entry.at })
+}
 fn addressed(domain: &Domain, person: u64, need: Need) -> bool {
     let Some(held) = role(domain, person, need.project) else { return false };
     match need.whom {

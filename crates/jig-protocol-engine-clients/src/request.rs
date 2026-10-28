@@ -103,7 +103,9 @@ impl Component {
                     w::Ask::Propose(value)
                         if match value.action() {
                             w::ProposeAction::Settings(_) => true,
-                            w::ProposeAction::Batch(_) | w::ProposeAction::Amendment(_) => false,
+                            w::ProposeAction::Batch(_)
+                            | w::ProposeAction::Amendment(_)
+                            | w::ProposeAction::ReleasePlaced(_) => false,
                         } =>
                     {
                         if keyed.value.is_some() {
