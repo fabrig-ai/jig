@@ -148,3 +148,36 @@ fn valid_refuses_each_unrepresentable_limit() {
         assert!(!crate::store::valid(&limits));
     }
 }
+
+/// O4: a completed write releases its admitted exchanges in arrival order.
+#[test]
+fn held_exchanges_leave_in_order_after_the_write() {
+    let mut harness = fixtures::Harness::new(&fixtures::limits());
+    harness.save(fixtures::saved_table(fixtures::message()));
+    for number in [1, 2, 3] {
+        harness.link.step(
+            Time::ZERO,
+            Event::Send {
+                attempt: Token::new(number),
+                key: [u8::try_from(number).unwrap(); 16],
+                ask: Ask::Jig(Box::new(fixtures::message())),
+                value: None,
+            },
+            &mut harness.out,
+        );
+    }
+    assert_eq!(harness.exchanges(), 0, "all exchanges await the write");
+    harness.clear();
+    harness.written();
+    let mut keys = skein_lib::List::with_capacity(3);
+    while let Some(request) = harness.out.pop() {
+        let Request::Exchange { message: Message::Request(bytes), .. } = request else {
+            panic!("only held keyed exchanges leave: {request:?}")
+        };
+        let keyed = w::Keyed::decode(&fixtures::limits().wire, &mut Reader::new(&bytes)).unwrap();
+        keys.push(*keyed.key()).unwrap();
+    }
+    assert_eq!(keys.as_slice(), &[[1; 16], [2; 16], [3; 16]]);
+    harness.written();
+    assert_eq!(harness.exchanges(), 0, "a repeated answer releases nothing twice");
+}

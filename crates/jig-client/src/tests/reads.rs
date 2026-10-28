@@ -196,3 +196,71 @@ fn a_peer_version_refusal_ends_queued_reads_instead_of_admitting_them() {
         }
     }
 }
+
+/// O2: the old link's consequences leave before the new domain's requests.
+#[test]
+fn link_consequences_precede_the_next_domain_request() {
+    const ORDER_OUTPUTS: u32 = 32;
+    let mut limits = fixtures::limits();
+    limits.exchanges = 3;
+    let mut client = Client::with_limits(limits, List::with_capacity(0), ORDER_OUTPUTS);
+    client.sign_in();
+    for task in [20, 21] {
+        client.step(Event::Watch {
+            handle: Handle { number: task, ..TASK },
+            subject: crate::Watchable::Jig(c::Subject::Task { task }),
+        });
+    }
+    for handle in [TASK, fixtures::ME] {
+        client.step(Event::Read { handle, read: Readable::Jig(c::Read::Project { project: 1 }) });
+    }
+    client.step(Event::SignIn { with: With::Held(fixtures::credential(&fixtures::NEW_CREDENTIAL)) });
+    let [
+        Request::CloseStream,
+        Request::Told { told: crate::Told::Page { handle: first, .. } },
+        Request::Told { told: crate::Told::Page { handle: second, .. } },
+        Request::Told { told: crate::Told::Ended { handle: watch_a, .. } },
+        Request::Told { told: crate::Told::Ended { handle: watch_b, .. } },
+        Request::Told { told: crate::Told::Link { link: crate::Link::SignedOut } },
+        Request::Told { told: crate::Told::Link { link: crate::Link::Starting } },
+        Request::OpenStream { .. },
+    ] = client.requests()
+    else {
+        panic!("close the old stream before dispatching the credential boundary: {:?}", client.requests())
+    };
+    assert_eq!([*first, *second], [TASK, fixtures::ME]);
+    assert_eq!([watch_a.number, watch_b.number], [20, 21]);
+
+    // The new opening and two reads occupy the exchange edge; the next
+    // two reads must wait, then leave in order as one slot is released.
+    client.stream(fixtures::hello(jig_client_protocol_wire::VERSION));
+    let opening = client.exchange();
+    let first = client.read(TASK);
+    let second = client.read(fixtures::ME);
+    for number in [30, 31] {
+        client.step(Event::Read {
+            handle: Handle { number, ..TASK },
+            read: Readable::Jig(c::Read::Project { project: u32::try_from(number).unwrap() }),
+        });
+        assert!(client.requests().is_empty(), "the edge is occupied");
+    }
+    for (exchange, project) in [(first, 30), (second, 31)] {
+        client.step(Event::Reply { exchange, message: fixtures::unknown_read() });
+        let mut sent = List::with_capacity(1);
+        for request in client.requests() {
+            if let Request::Exchange { message: Message::Read(bytes), .. } = request {
+                let owned = w::Owned::decode(&w::CEILINGS, &mut Reader::new(bytes)).unwrap();
+                let w::Read::Project(read) = w::Read::decode(&w::CEILINGS, &mut Reader::new(owned.record())).unwrap()
+                else {
+                    panic!("deferred project read")
+                };
+                sent.push(read.project()).unwrap();
+            }
+        }
+        assert_eq!(sent.as_slice(), &[project]);
+    }
+    client.step(Event::Lost { exchange: opening });
+    assert!(
+        client.requests().iter().all(|request| !matches!(request, Request::Exchange { message: Message::Read(_), .. }))
+    );
+}
