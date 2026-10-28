@@ -664,7 +664,7 @@ impl World {
                 request
             };
             self.route_hint(&request);
-            if let Request::EscalationNeeded { context } = &request {
+            if let Request::EscalationNeeded { context, restored: false } = &request {
                 tasks::step(
                     &mut self.domain,
                     &self.env,
