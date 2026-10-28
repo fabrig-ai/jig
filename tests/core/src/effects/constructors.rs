@@ -284,7 +284,7 @@ impl World {
         sets: jig_protocol_store::PatchSets,
     ) -> World {
         let observer = crate::observations::Observer::new(&configuration);
-        let heap = crate::observations::Heap::new(limits);
+        let heap = crate::observations::Heap::new();
         let creating = crate::fixtures::Creating::new(&configuration.core, limits.core.tasks.tree_tasks);
         let initial_ask = if configuration.core.seed_projects.is_empty() {
             people::Ask::MarkSeen { seen: people::Seen::Results { through: 0 } }

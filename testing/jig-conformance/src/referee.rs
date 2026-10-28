@@ -1064,7 +1064,7 @@ impl Referee {
             }
             Observed::Batch { members } => self.batch(&members)?,
             Observed::Heap { held, maximum } => {
-                require(held <= maximum, Promise::Bounded, "engine heap exceeded worst_case")?;
+                require(held <= maximum, Promise::Bounded, "engine heap exceeded its ceiling")?;
             }
             Observed::ColdStore { receipts } => {
                 if let Some(drained) = self.drained_receipts.take() {

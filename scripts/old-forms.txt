@@ -3,4 +3,4 @@
 max_out 752
 JournalRoom 36
 takes 3
-worst_case 2171
+worst_case 2165

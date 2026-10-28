@@ -1250,6 +1250,14 @@ pub fn root_bound(limits: &root::Limits) -> Option<u64> {
     root::worst_case(limits)
 }
 
+// The most held of this world's stories whose binary counts the heap,
+// the core world, focused and fuzzy suites: 4,456,374 bytes at jig c5bd3bba7,
+// reached by memory::memory_scenario_family.
+// A ceiling, a quarter above, rounded up to two significant digits
+// (skein's dynamic-memory draft, 7.1); it moves by hand only in the commit
+// of a real change that passes it, never on a type's size.
+const CORE_WORLD_HEAP_CEILING: u64 = 5_600_000;
+
 /// A conservative heap observation at each testing-root iteration. Test peers'
 /// allocations after construction are counted too; passing this check therefore
 /// bounds the engine even while those peers retain their independent ledgers.
@@ -1257,7 +1265,6 @@ pub fn root_bound(limits: &root::Limits) -> Option<u64> {
 pub struct Heap {
     meter: skein_world::domain::heap::Meter,
     maximum: u64,
-    configuration: u64,
 }
 
 impl std::fmt::Debug for Heap {
@@ -1266,27 +1273,23 @@ impl std::fmt::Debug for Heap {
     }
 }
 
+impl Default for Heap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Heap {
     /// Start before root construction, after the scenario built its configuration.
     #[must_use]
-    pub fn new(limits: &root::Limits) -> Self {
-        Self {
-            meter: skein_world::domain::heap::Meter::new(),
-            maximum: root_bound(limits).expect("testing root bound fits"),
-            // Pre-existing configuration allocations transferred into the root
-            // are covered by a complete bound for both of their owning children.
-            configuration: core::worst_case(&limits.core).expect("core bound fits")
-                + connector::worst_case(&limits.connector).expect("connector bound fits") * 2,
-        }
+    pub fn new() -> Self {
+        Self { meter: skein_world::domain::heap::Meter::new(), maximum: CORE_WORLD_HEAP_CEILING }
     }
 
-    /// Heap observation, including pre-existing configuration ownership.
+    /// Heap observation of allocator-held bytes since construction.
     #[must_use]
     pub fn observed(&self) -> r::Observed {
-        r::Observed::Heap {
-            held: self.meter.held().checked_add(self.configuration).expect("world heap fits"),
-            maximum: self.maximum,
-        }
+        r::Observed::Heap { held: self.meter.held(), maximum: self.maximum }
     }
 }
 

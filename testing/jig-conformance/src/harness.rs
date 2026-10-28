@@ -162,9 +162,13 @@ pub trait Application {
     fn quiescent(domain: &Self::Domain) -> bool;
     /// Run the root’s iteration reclamation point.
     fn reclaim(domain: &mut Self::Domain);
-    /// Declare the engine’s worst-case heap before construction.
+    /// The scenario's heap ceiling: the most the engine, with its peers'
+    /// allocations after construction, may hold at an iteration. A named
+    /// constant with headroom over the most a world's stories hold (skein's
+    /// dynamic-memory draft, 7.1), not the root's formula.
     fn maximum(config: &Self::Config) -> u64;
     /// Price ownership transferred from pre-existing configuration.
+    /// A measured heap ceiling needs no configuration price (0).
     fn configuration_heap(config: &Self::Config) -> u64;
 }
 

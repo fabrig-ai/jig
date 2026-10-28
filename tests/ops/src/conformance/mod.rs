@@ -150,6 +150,15 @@ pub enum Delivery {
     Results { commit: u64, rows: Vec<(u64, u64)> },
 }
 
+// The most held of this world's stories whose binary counts the heap,
+// the ordinary ops adapter, focused and fuzzy suites: 14,778,622 bytes at jig c5bd3bba7,
+// reached by application_documents::a_remediations_panel_says_restarting_then_waiting_for_healthy
+// and application_documents::an_incidents_subject_follows_an_alert_to_its_resolution.
+// A ceiling, a quarter above, rounded up to two significant digits
+// (skein's dynamic-memory draft, 7.1); it moves by hand only in the commit
+// of a real change that passes it, never on a type's size.
+const OPS_HEAP_CEILING: u64 = 19_000_000;
+
 /// The real ops root and its independent production; no surrogate engine.
 pub struct Ops;
 
@@ -901,8 +910,8 @@ impl Application for Ops {
     fn reclaim(domain: &mut root::Domain) {
         domain.reclaim();
     }
-    fn maximum(config: &Config) -> u64 {
-        root::worst_case(&config.limits).expect("finite scenario root")
+    fn maximum(_: &Config) -> u64 {
+        OPS_HEAP_CEILING
     }
     fn configuration_heap(_: &Config) -> u64 {
         0

@@ -514,7 +514,7 @@ impl World {
                 name: b"Person".as_slice().into(),
             },
         }));
-        let heap = crate::observations::Heap::new(&limits);
+        let heap = crate::observations::Heap::new();
         let bootstrap = crate::effects::World::first_start_with_accounts(config(seed), &limits);
         let mut observer = crate::observations::Observer::new(&config(seed));
         observer.fresh_mark(0, &bootstrap.store);
