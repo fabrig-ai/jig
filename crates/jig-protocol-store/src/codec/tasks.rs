@@ -107,7 +107,6 @@ pub fn limits(domain: &domain::Limits) -> Option<wire::Limits> {
         task_interests_delegates: domain.delegates,
         task_interests_result_followups: domain.batch,
         task_interests_references: domain.references,
-        task_interests_questions: domain.inbox_messages,
         task_interests_subscriptions: domain.subscriptions,
         task_interests_inbox: domain.inbox_messages.checked_add(2)?,
         task_interests_saved: domain.saved_resources,

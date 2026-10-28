@@ -710,6 +710,8 @@ fn object(
                     | tasks::MessageKind::Answer { .. }
                     | tasks::MessageKind::EffectNotMade { .. }
                     | tasks::MessageKind::Met { .. }
+                    | tasks::MessageKind::QuestionAnswered { .. }
+                    | tasks::MessageKind::QuestionEnded { .. }
                     | tasks::MessageKind::FinishRequested { .. }
                     | tasks::MessageKind::Amendment { .. }
                     | tasks::MessageKind::Proposal { .. }

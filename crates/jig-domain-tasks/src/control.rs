@@ -688,8 +688,8 @@ pub(crate) fn apply_amend(
         task.record.narrowing = true;
         task.record.due_reason = crate::Why::Narrowed;
     }
-    task.record.phase = crate::run::ends::pending(&task.record.waiting_on, task.record.flags.ended_by)
-        .amended(task.record.executor, task.record.phase.clone());
+    task.record.phase =
+        crate::run::ends::for_record(&task.record).amended(task.record.executor, task.record.phase.clone());
     let queued = crate::holds::queued(&task.record);
     if was_queued && !queued {
         crate::holds::leave(domain, number);

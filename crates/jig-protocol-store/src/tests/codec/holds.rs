@@ -520,9 +520,14 @@ fn tasks_piece_words_read_their_fixtures_whole() {
     let tasks::Phase::Ended(ended) = value.outcome.into_parts().phase else { panic!("ended fixture") };
     let tasks::Ending::Done(done) = ended.into_parts().ending else { panic!("done fixture") };
     let tasks::TaskResult::Verdict(result) = done.into_parts().result else { panic!("verdict fixture") };
-    let tasks::MessageKind::Result(message) = value.interests.inbox().get(0).unwrap().kind().clone() else {
-        panic!("message fixture")
-    };
+    let mut selected = None;
+    for item in value.interests.inbox() {
+        if let tasks::InboxItem::Word(word) = item {
+            selected = Some(word);
+        }
+    }
+    let word = selected.expect("word fixture");
+    let tasks::MessageKind::Result(message) = word.kind().clone() else { panic!("message fixture") };
     let tasks::ResultKind::Verdict(message) = message.into_parts().kind else { panic!("verdict message fixture") };
     let rows = [
         TaskRow {

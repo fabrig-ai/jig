@@ -27,7 +27,7 @@ pub fn line(value: &t::ActivityLine, limits: &w::Limits) -> Result<w::OwnerActiv
             limits,
             w::OwnerActivityDecidedParts { revision: *revision },
         )?),
-        t::Line::Kept { attempt, pending } => {
+        t::Line::Kept { attempt, pending, question } => {
             let mut rows =
                 skein_lib::List::with_capacity(u32::try_from(pending.len()).expect("bounded pending dependencies"));
             for number in pending {
@@ -35,7 +35,7 @@ pub fn line(value: &t::ActivityLine, limits: &w::Limits) -> Result<w::OwnerActiv
             }
             w::OwnerActivity::Kept(w::OwnerActivityKept::new(
                 limits,
-                w::OwnerActivityKeptParts { attempt: *attempt, pending: rows },
+                w::OwnerActivityKeptParts { attempt: *attempt, pending: rows, question: *question },
             )?)
         }
         t::Line::Milestone { position } => w::OwnerActivity::Milestone(w::OwnerActivityMilestone::new(

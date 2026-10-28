@@ -30,6 +30,13 @@ fn add(
         .expect("one bounded projection per task state");
 }
 
+fn matches_person(party: tasks::Party) -> bool {
+    match party {
+        tasks::Party::Person(_) => true,
+        tasks::Party::Task(_) | tasks::Party::Deployment { .. } => false,
+    }
+}
+
 fn proposal_kind(kind: tasks::ProposalKind) -> authority::ProposalKind {
     match kind {
         tasks::ProposalKind::Settings => unreachable!("settings proposals have no task holder"),
@@ -104,8 +111,13 @@ impl Core {
             return false;
         };
         let mut named = false;
-        for position in &owner.question_lines {
-            named |= position.message == *message && position.line == line.position && position.answer.is_none();
+        if matches_person(owner.requester) {
+            for position in &owner.question_lines {
+                named |= position.message == *message && position.line == line.position && position.answer.is_none();
+            }
+        }
+        for credit in &owner.questions {
+            named |= credit.number == *message && credit.line == line.position;
         }
         if !named {
             return false;
@@ -125,8 +137,13 @@ impl Core {
             if let Some(owner) = self.tasks.task(task)
                 && questions_live(&owner.phase)
             {
-                for position in &owner.question_lines {
-                    keep |= position.line == key.1 && position.answer.is_none();
+                if matches_person(owner.requester) {
+                    for position in &owner.question_lines {
+                        keep |= position.line == key.1 && position.answer.is_none();
+                    }
+                }
+                for credit in &owner.questions {
+                    keep |= credit.line == key.1;
                 }
             }
             if !keep {
@@ -221,15 +238,20 @@ impl Core {
         match row.requester {
             tasks::Party::Person(person) => {
                 for line in &row.question_lines {
-                    if line.answer.is_none()
-                        && let Some(fact) = self.question_activity.get(&(row.number, line.line))
-                    {
+                    if line.answer.is_some() {
+                        continue;
+                    }
+                    let mut at = None;
+                    if let Some(fact) = self.question_activity.get(&(row.number, line.line)) {
+                        at = Some(fact.at);
+                    }
+                    if let Some(at) = at {
                         add(
                             &mut entries,
                             row,
                             people::Whom::Person(person),
                             people::EntryKind::Question { message: line.message },
-                            fact.at,
+                            at,
                         );
                     }
                 }

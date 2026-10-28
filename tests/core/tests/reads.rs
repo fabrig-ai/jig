@@ -382,14 +382,15 @@ fn a_task_proposal_read_finds_its_history_row_by_key() {
 #[test]
 fn a_question_older_than_the_kept_lines_reads_as_gone() {
     let bound = 2;
-    let (mut world, task) = question_world(794, Some(bound));
-    let sender = chat_task(&world);
-    let oldest = question(&mut world, task, 1);
+    let (mut world, sender) = question_world(794, Some(bound));
+    let task = chat_task(&world);
+    let oldest = message(&mut world, sender, task, 2, tasks::MessageKind::Question, b"original question?");
     let answer = reply(&mut world, task, sender, oldest, bound + 2);
     take_message(&mut world, task, 1, oldest);
     take_message(&mut world, sender, 1, answer);
     for number in 2..=bound + 1 {
-        let message = question(&mut world, task, number);
+        let message =
+            message(&mut world, sender, task, number + 1, tasks::MessageKind::Question, b"original question?");
         let answer = reply(&mut world, task, sender, message, number + bound + 1);
         take_message(&mut world, task, number, message);
         take_message(&mut world, sender, number, answer);
@@ -474,11 +475,21 @@ fn question_world_with_text_bound(
 }
 
 #[test]
-fn a_question_answered_by_its_task_reads_the_line_in_the_delegates_activity() {
+fn a_persons_answer_reads_the_line_in_the_delegates_activity() {
     let (mut world, task) = question_world(795, None);
     let delegate = chat_task(&world);
     let message = question(&mut world, task, 1);
-    let sent = reply(&mut world, task, delegate, message, 2);
+    request(
+        &mut world,
+        124,
+        people::Ask::AnswerQuestion { project: 1, task, question: message, words: b"answer".as_slice().into() },
+    );
+    let sent = live_task(&world, delegate)
+        .inbox
+        .iter()
+        .find(|word| word.kind == tasks::MessageKind::Answer { question: message })
+        .expect("person's answer")
+        .number;
     finish_chat(&mut world, delegate);
     finish_chat(&mut world, task);
     ask(&mut world, 905, reads::Read::Question { task, message });
@@ -489,6 +500,61 @@ fn a_question_answered_by_its_task_reads_the_line_in_the_delegates_activity() {
         matches!(&answer.line, tasks::Line::Words { message: number, kind: tasks::MessageKind::Answer { question }, words, .. }
         if *number == sent && *question == message && words.as_ref() == b"answer")
     );
+}
+
+#[test]
+fn a_moved_question_waits_for_its_person_after_the_chat_closes() {
+    const SEED: u64 = 810;
+    // Closing consists of moving the goal and cancelling its former requester.
+    const OPERATIONS: u32 = 2;
+    let (mut world, chat) = question_world(SEED, None);
+    let goal = chat_task(&world);
+    let message = question(&mut world, chat, 1);
+    finish_chat(&mut world, goal);
+    let mut operations = skein_lib::List::with_capacity(OPERATIONS);
+    operations
+        .push(people::Operation::Move { task: goal, reason: b"continue".as_slice().into() })
+        .expect("move fixture");
+    operations
+        .push(people::Operation::Cancel { task: chat, reason: b"close".as_slice().into(), grace: None })
+        .expect("close fixture");
+    request(&mut world, 125, people::Ask::Compound { project: 1, operations });
+    ask(&mut world, 998, reads::Read::Question { task: goal, message });
+    let question = question_read(&world);
+    assert_eq!(question.words.bytes.as_ref(), b"original question?");
+    world.restart_with(jig_core_world::faults::plan_fixture(SEED).0);
+    let row = live_task(&world, goal);
+    assert_eq!(row.requester, tasks::Party::Person(1));
+    assert_eq!(row.phase, tasks::Phase::Active(tasks::Active::Idle));
+    assert_eq!(row.question_lines[0].message, message);
+    assert_eq!(row.question_lines[0].line, row.questions[0].line);
+    ask(&mut world, 999, reads::Read::Question { task: goal, message });
+    let question = question_read(&world);
+    assert_eq!(question.words.bytes.as_ref(), b"original question?");
+    request(
+        &mut world,
+        126,
+        people::Ask::AnswerQuestion { project: 1, task: goal, question: message, words: b"proceed".as_slice().into() },
+    );
+    assert!(live_task(&world, goal).questions.is_empty());
+    assert!(
+        live_task(&world, goal).inbox.iter().any(|word| word.from == tasks::Party::Person(1)
+            && word.kind == tasks::MessageKind::Answer { question: message })
+    );
+}
+
+fn question_read(world: &jig_core_world::effects::World) -> &documents::Question {
+    if let reads::Answer::Document(document) = latest(world)
+        && let documents::Document::Question(question) = document.as_ref()
+    {
+        return question;
+    }
+    if let reads::Answer::Historical(document) = latest(world)
+        && let reads::Past::Question { question, .. } = &document.value
+    {
+        return question;
+    }
+    panic!("question by its original activity key: {:?}", latest(world));
 }
 
 fn live_task(world: &jig_core_world::effects::World, task: u64) -> &tasks::TaskRecord {
@@ -677,13 +743,19 @@ fn a_delegates_question_waits_for_the_person_after_the_director_reads_it() {
         },
     );
     let row = jig_core_world::fixtures::live_row(&world, director);
-    assert!(row.inbox.iter().any(|word| word.kind == tasks::MessageKind::Answer { question: message }
-        && word.words.as_ref() == b"the person's answer"));
+    assert!(row.inbox.iter().any(|word| word.kind == tasks::MessageKind::QuestionAnswered { question: message }));
+    assert!(
+        jig_core_world::fixtures::live_row(&world, delegate)
+            .inbox
+            .iter()
+            .any(|word| word.kind == tasks::MessageKind::Answer { question: message }
+                && word.words.as_ref() == b"the person's answer")
+    );
     assert!(row.question_lines[0].answer.is_some());
     assert_eq!(
         jig_core_world::fixtures::live_row(&world, delegate).questions.len(),
-        1,
-        "the delegate still has its reserved answer credit"
+        0,
+        "the person's answer consumed the delegate's reserved answer credit"
     );
     ask(
         &mut world,

@@ -196,7 +196,9 @@ fn a_live_run_finishes_done_as_parked_keeps_saved_state_and_names_its_dependenci
         .iter()
         .position(|line| matches!(line, Line::RunEnded { end: tasks::EndKind::Parked, .. }))
         .expect("fixture evidence");
-    assert!(matches!(lines.get(end + 1), Some(Line::Kept { attempt: 1, pending }) if pending.as_ref() == [2]));
+    assert!(
+        matches!(lines.get(end + 1), Some(Line::Kept { attempt: 1, pending, question: None }) if pending.as_ref() == [2])
+    );
     done(&mut world, 2);
     assert_eq!(world.record(1).phase, Phase::Active(Active::Due));
     assert!(world.contexts[&1].pending.is_empty());
@@ -222,21 +224,30 @@ fn a_kept_run_may_still_end_failed() {
 }
 
 #[test]
-fn every_person_answer_is_refused_while_kept_and_its_take_stands() {
+fn a_persons_success_is_refused_while_kept_and_its_take_stands() {
     let mut world = World::new(851, LIMITS);
     let mut person = task(1, &[]);
     person.executor = Executor::Person(PersonAddress::Role(7));
     world.make(Party::Person(9), vec![person, task(2, &[])]);
     assert_eq!(response(&mut world, |reply_to| Event::TakePerson { reply_to, task: 1, person: 10 }), Reply::Done);
     keep(&mut world);
-    for result in [report(), TaskResult::Failure { reason: Box::new([1]) }] {
-        refused(answer(&mut world, 1, result), 1, Refusal::Kept, &[2]);
-        assert_eq!(world.record(1).taken_by, Some(10));
-    }
+    refused(answer(&mut world, 1, report()), 1, Refusal::Kept, &[2]);
+    assert_eq!(world.record(1).taken_by, Some(10));
     done(&mut world, 2);
     assert_eq!(answer(&mut world, 1, report()), Reply::Done);
     world.settle(1);
     assert!(matches!(world.results[&1], Ending::Done(_)));
+
+    // Failure is an exit even while the dependency keeps successful completion.
+    let mut world = World::new(851, LIMITS);
+    let mut person = task(1, &[]);
+    person.executor = Executor::Person(PersonAddress::Role(7));
+    world.make(Party::Person(9), vec![person, task(2, &[])]);
+    assert_eq!(response(&mut world, |reply_to| Event::TakePerson { reply_to, task: 1, person: 10 }), Reply::Done);
+    keep(&mut world);
+    assert_eq!(answer(&mut world, 1, TaskResult::Failure { reason: Box::new([1]) }), Reply::Done);
+    world.settle(1);
+    assert!(matches!(world.results[&1], Ending::Failed { .. }));
 }
 
 #[test]

@@ -134,6 +134,13 @@ pub fn message_kind(source: &domain::MessageKind, limits: &wire::Limits) -> Resu
                 wire::DecisionMessageParts { proposal: *proposal, accepted: *accepted },
             )?)
         }
+        domain::MessageKind::QuestionAnswered { question } => wire::MessageKind::QuestionAnswered(
+            wire::AnswerMessage::new(limits, wire::AnswerMessageParts { question: *question })?,
+        ),
+        domain::MessageKind::QuestionEnded { question } => wire::MessageKind::QuestionEnded(wire::AnswerMessage::new(
+            limits,
+            wire::AnswerMessageParts { question: *question },
+        )?),
         domain::MessageKind::Words => wire::MessageKind::Words,
         domain::MessageKind::EffectNotMade { entry } => wire::MessageKind::EffectNotMade(wire::EffectMessage::new(
             limits,
@@ -208,6 +215,10 @@ pub fn read_message_kind(
             let wire::DecisionMessageParts { proposal, accepted } = source.into_parts();
             domain::MessageKind::ProposalDecision { proposal, accepted }
         }
+        wire::MessageKind::QuestionAnswered(source) => {
+            domain::MessageKind::QuestionAnswered { question: source.question() }
+        }
+        wire::MessageKind::QuestionEnded(source) => domain::MessageKind::QuestionEnded { question: source.question() },
         wire::MessageKind::Words => domain::MessageKind::Words,
         wire::MessageKind::EffectNotMade(source) => {
             let wire::EffectMessageParts { entry } = source.into_parts();
@@ -340,10 +351,11 @@ pub fn line(source: &domain::Line, limits: &wire::Limits) -> Result<wire::Line, 
         domain::Line::Decided { revision } => {
             wire::Line::Decided(wire::DecidedLine::new(limits, wire::DecidedLineParts { revision: *revision })?)
         }
-        domain::Line::Kept { attempt, pending } => wire::Line::Kept(wire::KeptLine::new(
+        domain::Line::Kept { attempt, pending, question } => wire::Line::Kept(wire::KeptLine::new(
             limits,
             wire::KeptLineParts {
                 attempt: *attempt,
+                question: *question,
                 pending: super::phase::references(
                     pending,
                     limits.kept_line_pending,
@@ -389,8 +401,8 @@ pub fn read_line(source: wire::Line, limits: &wire::Limits) -> Result<domain::Li
             domain::Line::Decided { revision }
         }
         wire::Line::Kept(source) => {
-            let wire::KeptLineParts { attempt, pending } = source.into_parts();
-            domain::Line::Kept { attempt, pending: super::phase::read_references(pending) }
+            let wire::KeptLineParts { attempt, pending, question } = source.into_parts();
+            domain::Line::Kept { attempt, pending: super::phase::read_references(pending), question }
         }
         wire::Line::Milestone(source) => {
             let wire::MilestoneLineParts { position } = source.into_parts();

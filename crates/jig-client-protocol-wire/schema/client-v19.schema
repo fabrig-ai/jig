@@ -507,7 +507,7 @@ record OwnerMessageKindTimer { subscription: u64 }
 record OwnerMessageKindNews { subscription: u64 class: OwnerNewsClass }
 record OwnerMessageKindResult { value: OwnerWordResult }
 record OwnerMessageKindMet { dependency: u64 removed: bool }
-enum OwnerMessageKind { escalation: OwnerMessageKindEscalation, proposal: OwnerMessageKindProposal, person_stalled: OwnerMessageKindPersonStalled, proposal_decision: OwnerMessageKindProposalDecision, words, effect_not_made: OwnerMessageKindEffectNotMade, amendment: OwnerMessageKindAmendment, question, answer: OwnerMessageKindAnswer, notice: OwnerMessageKindNotice, timer: OwnerMessageKindTimer, news: OwnerMessageKindNews, result: OwnerMessageKindResult, met: OwnerMessageKindMet, settings_decision: OwnerMessageKindSettingsDecision }
+enum OwnerMessageKind { escalation: OwnerMessageKindEscalation, proposal: OwnerMessageKindProposal, person_stalled: OwnerMessageKindPersonStalled, proposal_decision: OwnerMessageKindProposalDecision, words, effect_not_made: OwnerMessageKindEffectNotMade, amendment: OwnerMessageKindAmendment, question, answer: OwnerMessageKindAnswer, notice: OwnerMessageKindNotice, timer: OwnerMessageKindTimer, news: OwnerMessageKindNews, result: OwnerMessageKindResult, met: OwnerMessageKindMet, settings_decision: OwnerMessageKindSettingsDecision, question_answered: OwnerMessageKindAnswer, question_ended: OwnerMessageKindAnswer }
 record OwnerWord { number: u64 from: OwnerRequester kind: OwnerMessageKind words: text 65536 at: u64 hits: u32 eligible: bool }
 record OwnerRunWhyMessage { message: u64 }
 record OwnerRunWhyRetry { tries: OwnerFailureTries }
@@ -522,7 +522,7 @@ record OwnerActivityRunEnded { attempt: u64 end: OwnerRunEnd spent: u64 }
 record OwnerActivityTurn { reply: u64 attempt: u64 turn: u32 read: option u64 }
 record OwnerActivityDecided { revision: u64 }
 record OwnerActivityMilestone { position: u64 }
-record OwnerActivityKept { attempt: u64 pending: list 32 u64 }
+record OwnerActivityKept { attempt: u64 pending: list 32 u64 question: option u64 }
 enum OwnerActivity { words: OwnerActivityWords, heard: OwnerActivityHeard, notified: OwnerActivityNotified, run_began: OwnerActivityRunBegan, run_ended: OwnerActivityRunEnded, turn: OwnerActivityTurn, decided: OwnerActivityDecided, milestone: OwnerActivityMilestone, kept: OwnerActivityKept }
 record OwnerActivityLine { task: u64 position: u64 at: u64 line: OwnerActivity }
 record TurnName { attempt: u64 number: u32 }

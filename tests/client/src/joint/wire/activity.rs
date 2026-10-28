@@ -88,6 +88,12 @@ pub fn kind(value: &tasks::MessageKind, limits: &Limits) -> Result<client::Owner
                 tasks::SettingsOutcome::Stale { newest } => client::SettingsOutcome::Stale { newest: *newest },
             },
         },
+        tasks::MessageKind::QuestionAnswered { question } => {
+            client::OwnerMessageKind::QuestionAnswered { question: *question }
+        }
+        tasks::MessageKind::QuestionEnded { question } => {
+            client::OwnerMessageKind::QuestionEnded { question: *question }
+        }
         tasks::MessageKind::Words => client::OwnerMessageKind::Words,
         tasks::MessageKind::EffectNotMade { entry } => client::OwnerMessageKind::EffectNotMade { entry: *entry },
         tasks::MessageKind::Amendment { revision } | tasks::MessageKind::FinishRequested { revision } => {
@@ -196,12 +202,12 @@ pub fn line(task: u64, value: &tasks::ActivityLine, limits: &Limits) -> Result<c
             client::OwnerActivity::Turn { reply: *reply, attempt: *attempt, turn: *turn, read: *read }
         }
         tasks::Line::Decided { revision } => client::OwnerActivity::Decided { revision: *revision },
-        tasks::Line::Kept { attempt, pending } => {
+        tasks::Line::Kept { attempt, pending, question } => {
             let mut rows = List::with_capacity(u32::try_from(pending.len()).expect("pending count"));
             for number in pending {
                 rows.push(*number).expect("same pending count");
             }
-            client::OwnerActivity::Kept { attempt: *attempt, pending: rows }
+            client::OwnerActivity::Kept { attempt: *attempt, pending: rows, question: *question }
         }
         tasks::Line::Milestone { position } => client::OwnerActivity::Milestone { position: *position },
     };

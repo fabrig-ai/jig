@@ -118,6 +118,10 @@ pub enum MessageKind {
     /// removal emptied the pending set; of several removed at once, the
     /// first in the old list.
     Met { dependency: u64, removed: bool },
+    /// Its person answered this task's received question in their inbox.
+    QuestionAnswered { question: u64 },
+    /// The question ended without an answer; its asker may go on.
+    QuestionEnded { question: u64 },
 }
 
 /// Terminal shape carried with a delegate's bounded message words.
@@ -182,7 +186,9 @@ impl Word {
             | MessageKind::Timer { .. }
             | MessageKind::News { .. }
             | MessageKind::Result(_)
-            | MessageKind::Met { .. } => false,
+            | MessageKind::Met { .. }
+            | MessageKind::QuestionAnswered { .. }
+            | MessageKind::QuestionEnded { .. } => false,
         }
     }
 
@@ -212,6 +218,8 @@ impl Word {
             | MessageKind::FinishRequested { .. }
             | MessageKind::Amendment { .. }
             | MessageKind::Met { .. }
+            | MessageKind::QuestionAnswered { .. }
+            | MessageKind::QuestionEnded { .. }
             | MessageKind::Question
             | MessageKind::Answer { .. }
             | MessageKind::Notice { .. }
@@ -230,10 +238,21 @@ pub struct SavedResource {
 }
 
 /// An unanswered question and the task allowed to use its reserved answer room.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct QuestionCredit {
     pub number: u64,
-    pub answerer: u64,
+    pub answerer: Party,
+    /// Logical recipient, distinct from the person who answers for that recipient.
+    pub asked: Party,
+    /// Original question activity in this credit owner's record (protocol/store.md, 15.7).
+    pub line: u64,
+}
+
+/// Root-numbered terminal notices for one asker's retired question credits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct QuestionNotice {
+    pub question: u64,
+    pub message: u64,
 }
 
 /// Root-verified requester/creator identity; requester topology and financial source are
@@ -1275,6 +1294,10 @@ pub enum Refusal {
     /// person's answer, a procedure's step ending it done, or an effect that waits for them
     /// (domain/tasks.md, 5.7).
     Kept,
+    /// Its own question keeps it until its requester answers.
+    KeptQuestion { question: u64 },
+    /// The asked task cannot answer a question waiting for its person.
+    PersonAnswers { question: u64 },
     /// `Agent` charter is absent from the admitted configured table.
     Executor,
     /// Specification count or aggregate owned bytes are invalid.
@@ -1732,6 +1755,20 @@ pub enum Event {
     PersonStallNotice { task: u64, message: u64 },
     /// Root numbers the notice that a kept task goes on (domain/tasks.md, 5.7 and 8.1).
     MetNotice { task: u64, dependency: u64, removed: bool, by: Party, message: u64 },
+    /// A root-authenticated inbox answer reaches the credit owner in this decision.
+    PersonQuestionAnswer {
+        reply_to: ReplyTo,
+        project: u32,
+        asked: u64,
+        person: u64,
+        question: u64,
+        word: Word,
+        notice: u64,
+    },
+    /// Root numbers the notice consuming an ended question's reserved answer room.
+    QuestionEndedNotice { task: u64, notices: Box<[QuestionNotice]> },
+    /// A caller cancels its own unanswered question.
+    CancelQuestion { reply_to: ReplyTo, task: u64, question: u64 },
     /// Admit one `Live`/`Ledger` row during restoring; invalid input permanently fails restoration
     /// with `RestoreRefused`.
     Restore {
@@ -1783,6 +1820,8 @@ pub enum Request {
     PersonStallDue { task: u64 },
     /// Root supplies one message number for the notice that a kept task goes on (domain/tasks.md, 5.7 and 8.1).
     MetDue { task: u64, dependency: u64, removed: bool, by: Party },
+    /// A question ends unanswered; its reserved answer slot becomes its notice.
+    QuestionEndedDue { task: u64, questions: Box<[u64]> },
     /// One nonfinal held decision passed its configured wait.
     EscalationStalled { task: u64, revision: u64, holder: crate::EscalationHolder },
     /// One nonfinal holder's wait bound elapsed; root chooses the next holder.

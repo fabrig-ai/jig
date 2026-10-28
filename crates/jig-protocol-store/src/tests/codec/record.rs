@@ -290,15 +290,11 @@ fn a_task_record_past_its_inbox_count_is_refused() {
 fn a_task_record_inbox_decoded_above_its_count_is_refused() {
     let limits = tasks_limits();
     let mut wider = limits;
+    // Four words plus the fixture credit exceed the ordinary four-item bound.
     wider.task_interests_inbox = 5;
     let mut record = fixtures::task_record();
-    record.inbox = Box::new([
-        fixtures::task_word(5),
-        fixtures::task_word(7),
-        fixtures::task_word(11),
-        fixtures::task_word(13),
-        fixtures::task_word(17),
-    ]);
+    record.inbox =
+        Box::new([fixtures::task_word(5), fixtures::task_word(7), fixtures::task_word(11), fixtures::task_word(13)]);
     let bytes = tasks::encode(&live_record(record), &wider, &fixtures::model_names(&[b"first", b"second", b"third"]))
         .expect("within wider count");
     assert_eq!(
@@ -446,14 +442,14 @@ fn added_dependencies_circle_and_restarted_wait_bound_read_back() {
 fn kept_lines_and_met_notices_read_back_and_pending_is_bounded() {
     let limits = tasks_limits();
     let pending = task_numbers(limits.kept_line_pending);
-    let row = activity(domain::Line::Kept { attempt: 3, pending });
+    let row = activity(domain::Line::Kept { attempt: 3, pending, question: None });
     assert_eq!(saved_tasks(&row), Ok(row));
     for removed in [false, true] {
         let row = message_row(domain::MessageKind::Met { dependency: 7, removed });
         assert_eq!(saved_tasks(&row), Ok(row));
     }
     let pending = task_numbers(limits.kept_line_pending + 1);
-    let row = activity(domain::Line::Kept { attempt: 3, pending });
+    let row = activity(domain::Line::Kept { attempt: 3, pending, question: None });
     assert_eq!(tasks::encode(&row, &limits, &[]), Err(bound_problem(wire::Path::KeptLinePending)));
     let mut wider = limits;
     wider.kept_line_pending += 1;
