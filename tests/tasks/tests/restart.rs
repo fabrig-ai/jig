@@ -545,3 +545,22 @@ fn waiting_restore_requests_recheck_once_and_identical_recipient_changes_nothing
         assert_eq!(format!("{domain:?}"), before);
     }
 }
+
+#[test]
+fn restoring_resource_slots_does_not_rejudge_their_allocated_number() {
+    const HISTORICAL_NUMBER: u64 = 0;
+    const EFFECT: u64 = 7;
+    const SEED: u64 = 38;
+    let resource = jig_domain_tasks::Name { connector: 1, path: Box::new([b"slot".as_slice().into()]) };
+    let rows = [
+        Stored::Writer(jig_domain_tasks::WriterSlot {
+            number: HISTORICAL_NUMBER,
+            resource: resource.clone(),
+            writer: jig_domain_tasks::Writer::Effect { entry: EFFECT },
+            lost: false,
+        }),
+        Stored::Pool(jig_domain_tasks::PoolSlots { number: HISTORICAL_NUMBER, pool: resource, slots: 1 }),
+    ];
+    let env = skein_lib::Env { limits: LIMITS, now: skein_lib::Time::ZERO, wall: Wall::EPOCH };
+    load_without_judgment(SEED, &rows, &env);
+}
