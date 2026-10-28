@@ -12,7 +12,7 @@ const EXPORT_ACCOUNT: u32 = 9; // its account is never looked up while admission
 const PARTY: u64 = 1;
 const HELD: u32 = 2;
 const WALL: Wall = Wall::from_nanos(1_000_000_000);
-const ROOM: Wall = Wall::from_nanos(120_028_000_000); // bootstrap chat at 28 ms + 120-second retention
+const ROOM: Wall = Wall::from_nanos(120_029_000_000); // bootstrap chat at 29 ms + 120-second retention
 const KEY: client::Key = client::Key { asker: client::Asker(7), number: 1 };
 const NAME: [u8; 16] = [52; 16];
 
