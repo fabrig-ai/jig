@@ -665,6 +665,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     // Connector accounts retain 512 bytes beside each phase, including staged task clones
     // and their wider source carriers.
     const HOLD_ACCOUNT_BYTES: u64 = 176_408;
+    // Sixteen tasks, each with three retained/scratch records, gain a 16-byte room wait.
+    const ROOM_WAIT_BYTES: u64 = 16 * 3 * 16;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -682,6 +684,7 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_MOVES_BYTES
                 + PLACED_HOLDS_BYTES
                 + HOLD_ACCOUNT_BYTES
+                + ROOM_WAIT_BYTES
         )
     );
 }
