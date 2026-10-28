@@ -72,9 +72,7 @@ mod relays;
 mod resources;
 mod restart;
 mod stopping;
-pub use restart::{
-    Census, HeldLimit, ReadResults, RestartRequest, RestartStep, RestoreChild, RestoreRange, restore_cursor,
-};
+pub use restart::{Census, HeldLimit, ReadResults, RestartRequest, RestartStep, RestoreRange, restore_cursor};
 mod host_rule;
 mod revisions;
 mod roles;
