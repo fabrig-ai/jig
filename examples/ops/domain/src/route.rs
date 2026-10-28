@@ -423,6 +423,9 @@ fn core_held(
         core::Held::Cancel { run, attempt, .. } => {
             child(decision, Released::Host(host::Event::Down(host::LinkDown::Cancel { run, attempt })));
         }
+        core::Held::Park { run, attempt, .. } => {
+            child(decision, Released::Host(host::Event::Down(host::LinkDown::Park { run, attempt })));
+        }
         core::Held::StopRun { task, attempt } => child(
             decision,
             Released::Fleet(fleet::Event::Cancel { run: Token::new(task), attempt: Token::new(attempt) }),

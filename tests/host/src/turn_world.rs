@@ -700,26 +700,8 @@ impl World {
                 });
             }
 
-            Request::Stop { agent } => {
-                assert_eq!(agent, AGENT);
-                self.stats.stops += 1;
-                self.reading = false;
-                self.stop_pending = true;
-                if !self.stop_waits {
-                    self.stop_pending = false;
-                    self.agent_live = false;
-                    self.events.push_back(Event::Gone { owner: self.owner.expect("assigned"), detail: Box::new([]) });
-                }
-            }
-            Request::Save { owner, workspace } => {
-                assert!(!self.agent_live && self.space_live && workspace == SPACE);
-                self.stats.saves += 1;
-                if self.save_waits {
-                    self.save_pending = true;
-                } else {
-                    self.events.push_back(Event::Saved { owner, at: Some(Token::new(8)) });
-                }
-            }
+            Request::Stop { agent } => self.stop_agent(agent),
+            Request::Save { owner, workspace } => self.save_workspace(owner, workspace),
             Request::Release { workspace } => {
                 assert!(!self.agent_live && workspace == SPACE && self.space_live);
                 self.space_live = false;
@@ -754,6 +736,28 @@ impl World {
             Request::CancelRelay { .. } => {
                 panic!("unscripted request: {request:?}")
             }
+        }
+    }
+
+    fn stop_agent(&mut self, agent: Token) {
+        assert_eq!(agent, AGENT);
+        self.stats.stops += 1;
+        self.reading = false;
+        self.stop_pending = true;
+        if !self.stop_waits {
+            self.stop_pending = false;
+            self.agent_live = false;
+            self.events.push_back(Event::Gone { owner: self.owner.expect("assigned"), detail: Box::new([]) });
+        }
+    }
+
+    fn save_workspace(&mut self, owner: Token, workspace: Token) {
+        assert!(!self.agent_live && self.space_live && workspace == SPACE);
+        self.stats.saves += 1;
+        if self.save_waits {
+            self.save_pending = true;
+        } else {
+            self.events.push_back(Event::Saved { owner, at: Some(Token::new(8)) });
         }
     }
 
