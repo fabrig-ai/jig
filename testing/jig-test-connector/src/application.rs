@@ -59,8 +59,8 @@ pub(crate) struct Pending {
 pub(crate) struct State {
     prepared: Map<Token, ApplicationRequest>,
     pending: Map<Token, Pending>,
-    objects: Map<u64, ApplicationObject>,
-    answers: Map<Token, (Wall, ApplicationOutcome)>,
+    pub(crate) objects: Map<u64, ApplicationObject>,
+    pub(crate) answers: Map<Token, (Wall, ApplicationOutcome)>,
 }
 
 impl State {

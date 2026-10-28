@@ -385,7 +385,17 @@ pub struct Domain {
 }
 
 impl Domain {
-    /// Public read-only core face for the world's restart oracle.
+    /// Read one connector-owned retained row without routing an event.
+    #[must_use]
+    pub fn connector_record(&self, number: u16, key: &connector::RecordKey) -> Option<connector::Record> {
+        match number {
+            1 => self.first.stored_record(key),
+            2 => self.second.stored_record(key),
+            _ => unreachable!("reference root has exactly two connectors"),
+        }
+    }
+
+    /// The core and its children.
     #[must_use]
     pub const fn core(&self) -> &core::Core {
         &self.core
