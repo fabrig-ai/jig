@@ -656,8 +656,8 @@ fn transcript_loaded(domain: &mut Domain, env: &Env<Limits>, task: u64, rows: Bo
 
 #[expect(clippy::too_many_lines, reason = "one bounded decision routes the complete root work vocabulary")]
 fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
-    // A stopped journal takes no decision, so neither child may move.
-    if domain.journal.stopped() {
+    // A failed restart leaves its decision unaccepted; the root takes no other.
+    if domain.journal.stopped() || domain.core.restart_failure().is_some() {
         return;
     }
     let mut decision = domain.journal.decide();
