@@ -86,3 +86,31 @@ fn a_read_whose_exchange_is_lost_is_answered_unreachable() {
     assert_eq!(*handle, TASK);
     assert_eq!(*page, Readout::Jig(contract::ReadResult::None(contract::ReadNone::Unreachable)));
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = fixtures::limits();
+    assert!(valid(&base));
+    let cases = [
+        Limits { domain: DomainLimits { watches: 0, ..base.domain }, ..base },
+        Limits { exchanges: 0, ..base },
+        // The domain output itself fits, but adding the composition's two outputs does not.
+        Limits {
+            domain: DomainLimits {
+                reads: u32::MAX
+                    - (base.domain.handles * 2
+                        + base.domain.watches
+                        + base.domain.requests.out
+                        + base.domain.requests.requests * 2
+                        + 1),
+                ..base.domain
+            },
+            ..base
+        },
+        // Both children's outputs fit, but their product does not.
+        Limits { domain: DomainLimits { reads: u32::MAX / 2, ..base.domain }, ..base },
+    ];
+    for (case, limits) in cases.into_iter().enumerate() {
+        assert!(!valid(&limits), "case {case}");
+    }
+}

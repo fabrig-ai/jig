@@ -8,7 +8,7 @@ use crate::Limits;
 use jig_client_domain::contract as c;
 use jig_client_protocol_wire::v19 as w;
 pub fn proposal(record: w::Proposal, limits: &Limits) -> Result<c::Proposal, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -24,7 +24,7 @@ pub fn proposal(record: w::Proposal, limits: &Limits) -> Result<c::Proposal, Und
 }
 
 pub fn owner_proposal(record: w::OwnerProposal, limits: &Limits) -> Result<c::OwnerProposal, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -40,7 +40,7 @@ pub fn owner_proposal(record: w::OwnerProposal, limits: &Limits) -> Result<c::Ow
 }
 
 pub fn escalation(record: w::Escalation, limits: &Limits) -> Result<c::Escalation, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -56,7 +56,7 @@ pub fn escalation(record: w::Escalation, limits: &Limits) -> Result<c::Escalatio
 }
 
 pub fn owner_escalation(record: w::OwnerEscalation, limits: &Limits) -> Result<c::OwnerEscalation, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -72,7 +72,7 @@ pub fn owner_escalation(record: w::OwnerEscalation, limits: &Limits) -> Result<c
 }
 
 pub fn question(record: w::Question, limits: &Limits) -> Result<c::Question, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -88,7 +88,7 @@ pub fn question(record: w::Question, limits: &Limits) -> Result<c::Question, Und
 }
 
 pub fn person_task(record: w::PersonTask, limits: &Limits) -> Result<c::PersonTask, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -104,7 +104,7 @@ pub fn person_task(record: w::PersonTask, limits: &Limits) -> Result<c::PersonTa
 }
 
 pub fn owner_person_task(record: w::OwnerPersonTask, limits: &Limits) -> Result<c::OwnerPersonTask, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -120,7 +120,7 @@ pub fn owner_person_task(record: w::OwnerPersonTask, limits: &Limits) -> Result<
 }
 
 pub fn result(record: w::ResultDocument, limits: &Limits) -> Result<c::Result, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -136,7 +136,7 @@ pub fn result(record: w::ResultDocument, limits: &Limits) -> Result<c::Result, U
 }
 
 pub fn project(record: w::Project, limits: &Limits) -> Result<c::Project, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -152,7 +152,7 @@ pub fn project(record: w::Project, limits: &Limits) -> Result<c::Project, Undeco
 }
 
 pub fn owner_historical(record: w::OwnerHistorical, limits: &Limits) -> Result<c::OwnerHistorical, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;

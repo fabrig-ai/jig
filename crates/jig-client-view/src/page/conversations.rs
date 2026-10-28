@@ -429,9 +429,19 @@ pub const fn live(phase: contract::Phase) -> bool {
         | contract::Phase::Held => true,
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.rows.checked_mul(3).is_some()
+}
+
 /// Heap for inbox lineage and whole reply-line context, cursors and the chat form.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     limits.rows.checked_mul(3)?;
     List::<contract::InboxEntry>::worst_case(limits.rows)?
         .checked_mul(7)?

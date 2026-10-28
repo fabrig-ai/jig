@@ -18,12 +18,27 @@ pub fn max_out(limits: &Limits) -> u32 {
         .checked_mul(jig_client_domain::max_out(&limits.domain).checked_add(2).expect("valid domain bound"))
         .expect("valid client output bound")
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    if !jig_client_domain::valid(&limits.domain) {
+        return false;
+    }
+    let Ok(link) = jig_client_protocol_link::Limits::new(limits.domain, limits.exchanges) else {
+        return false;
+    };
+    output_bound(limits, &link).is_some()
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let domain = jig_client_domain::worst_case(&limits.domain)?;
     let link = jig_client_protocol_link::Limits::new(limits.domain, limits.exchanges).ok()?;
-    let bound = jig_client_protocol_link::limits::max_out(&link)?
-        .checked_mul(jig_client_domain::max_out(&limits.domain).checked_add(2)?)?;
+    let bound = output_bound(limits, &link)?;
     let output_bytes = limits.domain.document_bytes.max(u64::from(link.wire.authorize_go_location));
     domain
         .checked_add(jig_client_protocol_link::worst_case(&link)?)?
@@ -37,4 +52,9 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(List::<crate::Record>::worst_case(bound)?)?
         .checked_add(List::<Box<[u8]>>::worst_case(bound)?)?
         .checked_add(u64::from(bound).checked_mul(output_bytes.checked_mul(2)?)?)
+}
+
+fn output_bound(limits: &Limits, link: &jig_client_protocol_link::Limits) -> Option<u32> {
+    jig_client_protocol_link::limits::max_out(link)?
+        .checked_mul(jig_client_domain::max_out(&limits.domain).checked_add(2)?)
 }

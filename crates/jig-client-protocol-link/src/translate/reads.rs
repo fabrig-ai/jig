@@ -148,7 +148,7 @@ pub fn none(value: &w::ReadNone) -> c::ReadNone {
 
 /// Decodes a whole discriminated document against the original client limits.
 pub fn value(bytes: &[u8], limits: &Limits) -> Result<c::ReadValue, Undecodable> {
-    if crate::limits::worst_case(limits).is_none()
+    if !crate::limits::valid(limits)
         || u64::try_from(bytes.len()).expect("usize fits u64") > limits.client.document_bytes
     {
         return Err(Undecodable::TooLarge);

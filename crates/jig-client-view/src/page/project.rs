@@ -336,9 +336,19 @@ pub(crate) fn more(domain: &mut Ui, window: Token, end: End, out: &mut Queue<Req
         }
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.rows.checked_mul(2).is_some()
+}
+
 /// Whole documents, nested bounded rows, note handles, cursors and pending goal words.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     limits.rows.checked_mul(2)?;
     u64::from(limits.rows)
         .checked_mul(limits.document_bytes)?

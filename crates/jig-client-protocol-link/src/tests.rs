@@ -70,3 +70,28 @@ mod settings;
 mod settings_proposals;
 
 mod placed_holds;
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = fixtures::limits();
+    assert!(valid(&base));
+    let cases = [
+        Limits { exchanges: 0, ..base },
+        Limits { exchanges: u32::MAX, ..base },
+        Limits { wire: w::Limits { authorize_go_location: 1, ..base.wire }, ..base },
+        Limits { client: jig_client_domain::Limits { document_bytes: u64::MAX, ..base.client }, ..base },
+        Limits { client: jig_client_domain::Limits { watches: 0, ..base.client }, ..base },
+        Limits { client: jig_client_domain::Limits { watches: u32::MAX, ..base.client }, ..base },
+        Limits { client: jig_client_domain::Limits { heartbeat: skein_lib::Duration::ZERO, ..base.client }, ..base },
+        Limits {
+            client: jig_client_domain::Limits {
+                requests: skein_lib::RequestLimits { requests: u32::MAX, ..base.client.requests },
+                ..base.client
+            },
+            ..base
+        },
+    ];
+    for (case, limits) in cases.into_iter().enumerate() {
+        assert!(!valid(&limits), "case {case}");
+    }
+}

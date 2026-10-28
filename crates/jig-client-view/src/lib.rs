@@ -126,5 +126,5 @@ pub mod store;
 pub mod ui;
 pub mod windows;
 pub use boundary::{Event, How, Refused, Request};
-pub use limits::ui::{Limits, worst_case};
+pub use limits::ui::{Limits, valid, worst_case};
 pub use ui::{Borrowed, Ui, fire, max_out, next_deadline, reclaim, step};

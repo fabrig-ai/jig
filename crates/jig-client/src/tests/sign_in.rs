@@ -436,7 +436,7 @@ fn independent_read_room_and_pages_fit_the_composed_queues() {
 #[test]
 fn overflowing_read_outputs_are_refused_before_construction() {
     let limits = Limits { domain: DomainLimits { reads: u32::MAX, ..fixtures::domain_limits() }, ..fixtures::limits() };
-    assert_eq!(worst_case(&limits), None);
+    assert!(!valid(&limits));
     assert_eq!(crate::Client::new(&limits, 7).expect_err("read output overflow"), Unusable::Limits);
     assert_eq!(crate::Client::unlinked(&limits, 7).expect_err("read output overflow"), Unusable::Limits);
 }

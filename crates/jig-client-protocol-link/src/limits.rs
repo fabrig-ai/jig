@@ -29,7 +29,9 @@ impl Limits {
         }
         let wire = wire(&client).ok_or(Unusable::Limits)?;
         let value = Self { client, exchanges, wire };
-        worst_case(&value).ok_or(Unusable::Limits)?;
+        if !valid(&value) {
+            return Err(Unusable::Limits);
+        }
         Ok(value)
     }
 }
@@ -214,16 +216,23 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
     w::check_limits(&wire).ok()?;
     Some(wire)
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.exchanges != 0
+        && wire(&limits.client) == Some(limits.wire)
+        && max_out(limits).is_some()
+        && limits.client.watches != 0
+        && limits.client.heartbeat != Duration::ZERO
+        && crate::store::valid(limits)
+        && w::Authorize::worst_case_bytes(&limits.wire).is_some()
+        && w::AuthorizeAnswer::worst_case_bytes(&limits.wire).is_some()
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.exchanges == 0 {
-        return None;
-    }
-    if wire(&limits.client)? != limits.wire {
-        return None;
-    }
-    max_out(limits)?;
-    if limits.client.watches == 0 || limits.client.heartbeat == Duration::ZERO {
+    if !valid(limits) {
         return None;
     }
     let map = Map::<skein_lib::Token, Attempt>::worst_case(limits.exchanges)?;

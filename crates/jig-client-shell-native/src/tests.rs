@@ -507,3 +507,23 @@ fn transport_tags_socket_events_and_waits_for_connection() {
         assert!(matches!(requests.pop(), Some(skein_io::Request::Stream { stream, .. }) if stream == socket));
     }
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = limits();
+    assert!(crate::valid(&base));
+    let cases = [
+        Limits { exchanges: 0, ..base },
+        Limits { body_bytes: 0, ..base },
+        Limits { deadline: skein_lib::Duration::ZERO, ..base },
+        Limits { http: skein_http::client::Limits { head: 1, ..base.http }, ..base },
+        Limits { http: skein_http::client::Limits { read: 0, ..base.http }, ..base },
+        Limits { http: skein_http::client::Limits { send: 0, ..base.http }, ..base },
+        Limits { http: skein_http::client::Limits { read: u32::MAX, ..base.http }, ..base },
+        Limits { body_bytes: u32::MAX, ..base },
+        Limits { body_bytes: 3_221_225_400, ..base },
+    ];
+    for (case, limits) in cases.into_iter().enumerate() {
+        assert!(!crate::valid(&limits), "case {case}");
+    }
+}

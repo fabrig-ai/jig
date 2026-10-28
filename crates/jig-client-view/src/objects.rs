@@ -455,10 +455,19 @@ fn retained(object: &Object) -> bool {
         Card::Open | Card::NotSent { .. } | Card::Refused { .. } => false,
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.objects.checked_mul(2).is_some()
+}
 
 /// The working set containers, source sets and document payloads, retired room included.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let slots = limits.objects.checked_mul(2)?;
     let payload = Set::<Source>::worst_case(limits.sources)?.checked_add(limits.document_bytes.checked_mul(5)?)?;
     Slab::<Object>::worst_case(slots)?

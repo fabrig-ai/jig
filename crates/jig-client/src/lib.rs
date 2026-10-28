@@ -17,6 +17,6 @@ pub use jig_client_domain::{
     Pending, Progress, Readable, Readout, Retry, Spoken, State, Told, Up, Watchable, Why, contract,
 };
 pub use jig_client_protocol_link::{AuthorizeWhy, Authorized, Message, Record, STREAM_KEY, Streamed, With};
-pub use limits::{Limits, Unusable, max_out, worst_case};
+pub use limits::{Limits, Unusable, max_out, valid, worst_case};
 #[cfg(test)]
 mod tests;

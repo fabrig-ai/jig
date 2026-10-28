@@ -199,7 +199,7 @@ mod part8;
 pub(crate) use part8::*;
 
 pub fn history_page(record: w::HistoryPage, limits: &Limits) -> Result<c::HistoryPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -215,7 +215,7 @@ pub fn history_page(record: w::HistoryPage, limits: &Limits) -> Result<c::Histor
 }
 
 pub fn inbox_page(record: w::InboxPage, limits: &Limits) -> Result<c::InboxPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -231,7 +231,7 @@ pub fn inbox_page(record: w::InboxPage, limits: &Limits) -> Result<c::InboxPage,
 }
 
 pub fn spend_page(record: w::SpendPage, limits: &Limits) -> Result<c::SpendPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -247,7 +247,7 @@ pub fn spend_page(record: w::SpendPage, limits: &Limits) -> Result<c::SpendPage,
 }
 
 pub fn note_page(record: w::NotePage, limits: &Limits) -> Result<c::NotePage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -263,7 +263,7 @@ pub fn note_page(record: w::NotePage, limits: &Limits) -> Result<c::NotePage, Un
 }
 
 pub fn object_page(record: w::ObjectPage, limits: &Limits) -> Result<c::ObjectPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -279,7 +279,7 @@ pub fn object_page(record: w::ObjectPage, limits: &Limits) -> Result<c::ObjectPa
 }
 
 pub fn owner_ended_page(record: w::OwnerEndedPage, limits: &Limits) -> Result<c::OwnerEndedPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -295,7 +295,7 @@ pub fn owner_ended_page(record: w::OwnerEndedPage, limits: &Limits) -> Result<c:
 }
 
 pub fn owner_inbox_page(record: w::OwnerInboxPage, limits: &Limits) -> Result<c::OwnerInboxPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -311,7 +311,7 @@ pub fn owner_inbox_page(record: w::OwnerInboxPage, limits: &Limits) -> Result<c:
 }
 
 pub fn owner_spend_page(record: w::OwnerSpendPage, limits: &Limits) -> Result<c::OwnerSpendPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -327,7 +327,7 @@ pub fn owner_spend_page(record: w::OwnerSpendPage, limits: &Limits) -> Result<c:
 }
 
 pub fn activity_page(record: w::ActivityPage, limits: &Limits) -> Result<c::ActivityPage, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;

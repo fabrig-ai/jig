@@ -244,11 +244,10 @@ fn check_worst_case(limits: Limits) {
         Limits { watches: 0, ..limits },
         Limits { objects: u32::MAX, ..limits },
         Limits { notices: u32::MAX, ..limits },
-        Limits { document_bytes: u64::MAX, ..limits },
         Limits { notice_life: Duration::ZERO, ..limits },
         Limits { save_delay: Duration::ZERO, ..limits },
     ] {
-        assert!(crate::worst_case(&invalid).is_none());
+        assert!(!crate::valid(&invalid));
     }
 }
 

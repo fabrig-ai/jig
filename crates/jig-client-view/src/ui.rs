@@ -130,7 +130,7 @@ impl Ui {
         if !arrangement.valid() {
             return Err(Refused::Arrangement);
         }
-        assert!(crate::limits::ui::worst_case(limits).is_some(), "client limits are valid");
+        assert!(crate::limits::ui::valid(limits), "client limits are valid");
         let mut conversation = jig_client::thread::Thread::new(
             0,
             &jig_client::thread::Limits { lines: limits.rows, bytes: limits.document_bytes, text: limits.text },

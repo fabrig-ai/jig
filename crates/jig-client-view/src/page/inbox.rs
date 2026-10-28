@@ -429,9 +429,19 @@ pub const fn query_filter(query: Option<&Read>) -> Option<Filter> {
         | None => None,
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.rows.checked_mul(4).is_some()
+}
+
 /// Whole Inbox storage, projections and merge scratch including independent windows.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let rows = limits.rows.checked_mul(4)?;
     List::<InboxRow>::worst_case(rows)?
         .checked_mul(3)?

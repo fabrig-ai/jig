@@ -137,8 +137,18 @@ fn bounds(limits: Limits) -> Option<(u32, sse::Limits)> {
     let event = encoded.checked_add(256)?;
     Some((decoded, sse::Limits { line: event, event, field: 64, chunk: limits.chunk }))
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    bounds(*limits).is_some()
+}
+
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let (decoded, framing) = bounds(*limits)?;
     sse::worst_case(&framing)?
         .checked_add(u64::from(framing.chunk))?

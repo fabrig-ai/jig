@@ -120,7 +120,9 @@ impl Client {
     /// # Errors
     /// Refuses limits whose queues or receiving bounds cannot be represented.
     pub fn new(limits: &Limits, seed: u64) -> Result<Self, Unusable> {
-        crate::worst_case(limits).ok_or(Unusable::Limits)?;
+        if !crate::valid(limits) {
+            return Err(Unusable::Limits);
+        }
         let Ok(bounds) = link::Limits::new(limits.domain, limits.exchanges) else {
             return Err(Unusable::Limits);
         };
@@ -132,7 +134,9 @@ impl Client {
     /// # Errors
     /// Refuses limits whose queues or receiving bounds cannot be represented.
     pub fn unlinked(limits: &Limits, seed: u64) -> Result<Self, Unusable> {
-        crate::worst_case(limits).ok_or(Unusable::Limits)?;
+        if !crate::valid(limits) {
+            return Err(Unusable::Limits);
+        }
         Ok(Self::build(limits, seed, None))
     }
     fn build(limits: &Limits, seed: u64, link: Option<link::Link>) -> Self {

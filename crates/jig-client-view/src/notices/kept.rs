@@ -162,9 +162,19 @@ pub(crate) fn dismiss_first(domain: &mut Ui) {
         dismiss(domain, id.token());
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.notices.checked_mul(2).is_some()
+}
+
 /// Visible and retired notices and their maximum durable answer payloads.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let slots = limits.notices.checked_mul(2)?;
     Slab::<Notice>::worst_case(slots)?
         .checked_add(Map::<Id<Notice>, ()>::worst_case(limits.notices)?)?

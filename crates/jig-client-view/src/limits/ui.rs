@@ -45,29 +45,39 @@ pub struct Limits {
     pub updates_count: u32,
 }
 
-/// The heap held by the implemented spine, including page reads and record payloads.
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    limits.watches.checked_add(limits.reads)?;
+pub fn valid(limits: &Limits) -> bool {
     if limits.watches == 0
         || limits.notice_life == Duration::ZERO
         || limits.linger == Duration::ZERO
         || limits.save_delay == Duration::ZERO
+        || limits.sources == 0
+        || limits.conversation_words < limits.intents
     {
+        return false;
+    }
+    limits.watches.checked_add(limits.reads).is_some()
+        && output_bound(limits).is_some()
+        && timers(limits).is_some()
+        && tree_names(limits).is_some()
+        && crate::page::conversations::valid(limits)
+        && crate::page::inbox::valid(limits)
+        && crate::page::task::valid(limits)
+        && crate::page::project::valid(limits)
+        && crate::notices::kept::valid(limits)
+        && crate::objects::valid(limits)
+        && crate::windows::valid(limits)
+}
+
+/// The heap held by the implemented spine, including page reads and record payloads.
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
-    limits
-        .watches
-        .checked_mul(2)?
-        .checked_add(limits.objects)?
-        .checked_add(limits.parts.checked_mul(2)?)?
-        .checked_add(limits.records)?
-        .checked_add(16)?;
-    limits.objects.checked_mul(2)?;
     let timer_capacity = timers(limits)?;
-    if limits.sources == 0 || limits.conversation_words < limits.intents {
-        return None;
-    }
     let mut total = Map::<jig_client::Handle, crate::handles::Watched>::worst_case(limits.watches)?;
     total = total.checked_add(List::<jig_client::contract::ObjectKey>::worst_case(tree_names(limits)?)?)?;
     total = total.checked_add(List::<crate::page::Section>::worst_case(crate::page::MOST_SECTIONS)?)?;
@@ -117,4 +127,14 @@ pub fn timers(limits: &Limits) -> Option<u32> {
 /// One task and every bounded proposal name per retained tree row.
 pub(crate) fn tree_names(limits: &Limits) -> Option<u32> {
     limits.rows.checked_mul(limits.rows.checked_add(1)?)?.checked_add(1)
+}
+
+fn output_bound(limits: &Limits) -> Option<u32> {
+    limits
+        .watches
+        .checked_mul(2)?
+        .checked_add(limits.objects)?
+        .checked_add(limits.parts.checked_mul(2)?)?
+        .checked_add(limits.records)?
+        .checked_add(16)
 }

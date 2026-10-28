@@ -37,7 +37,7 @@ pub struct Domain {
 impl Domain {
     #[must_use]
     pub fn new(limits: &Limits, seed: u64) -> Self {
-        crate::worst_case(limits).expect("valid client limits");
+        assert!(crate::valid(limits), "valid client limits");
         let bound = u32::try_from(limits.owners.len()).expect("bounded owners");
         let mut owners = List::with_capacity(bound);
         for spoken in limits.owners {

@@ -53,7 +53,9 @@ pub struct Link {
 }
 impl Link {
     pub fn new(limits: &Limits) -> Result<Self, Unusable> {
-        crate::worst_case(limits).ok_or(Unusable::Limits)?;
+        if !crate::valid(limits) {
+            return Err(Unusable::Limits);
+        }
         Ok(Self {
             limits: *limits,
             store: crate::store::Store::new(limits),

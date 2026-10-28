@@ -85,3 +85,18 @@ fn a_piece_after_the_end_is_dropped() {
 fn the_stream_limits_have_a_finite_worst_case() {
     assert!(worst_case(&fixtures::stream_limits()).is_some());
 }
+
+#[test]
+fn valid_refuses_each_unrepresentable_limit() {
+    let base = fixtures::stream_limits();
+    assert!(crate::valid(&base));
+    for limits in [
+        crate::Limits { record: 0, ..base },
+        crate::Limits { chunk: 0, ..base },
+        crate::Limits { record: u32::MAX, ..base },
+        // Base64 itself fits; adding the SSE framing allowance overflows.
+        crate::Limits { record: 3_221_225_400, ..base },
+    ] {
+        assert!(!crate::valid(&limits), "{limits:?}");
+    }
+}

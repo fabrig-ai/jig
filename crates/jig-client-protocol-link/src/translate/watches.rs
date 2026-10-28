@@ -82,7 +82,7 @@ pub fn ended(value: &w::WatchEnd) -> c::WatchEnd {
 
 /// A delivery's discriminator and its whole record are admitted before decoding.
 pub fn delivery(bytes: &[u8], limits: &Limits) -> Result<c::Delivery, Undecodable> {
-    if crate::limits::worst_case(limits).is_none()
+    if !crate::limits::valid(limits)
         || u64::try_from(bytes.len()).expect("usize fits u64") > limits.client.document_bytes
     {
         return Err(Undecodable::TooLarge);

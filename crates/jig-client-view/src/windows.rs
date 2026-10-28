@@ -295,10 +295,19 @@ fn move_historywindow(rows: List<HistoryRow>, start: u32, count: u32, out: &mut 
         }
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.rows.checked_mul(2).is_some()
+}
 
 /// Concrete row containers and the maximum row payloads while sliding.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     let mut total = List::<ObjectKey>::worst_case(limits.rows)?;
     total = total.checked_add(List::<TaskLine>::worst_case(limits.rows)?)?;
     total = total.checked_add(List::<ActivityLine>::worst_case(limits.rows)?)?;

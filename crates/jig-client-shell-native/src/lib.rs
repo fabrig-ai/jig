@@ -4,7 +4,7 @@ mod connections;
 pub mod diagnostics;
 mod files;
 mod shell;
-pub use connections::{Conn, Connections, Limits};
+pub use connections::{Conn, Connections, Limits, valid};
 pub use shell::{Settings, Shell, Transport};
 #[cfg(test)]
 mod tests;

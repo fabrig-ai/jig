@@ -5,7 +5,7 @@ use crate::Limits;
 use jig_client_domain::contract as c;
 use jig_client_protocol_wire::v19 as w;
 pub fn run_state(record: w::RunState, limits: &Limits) -> Result<c::RunState, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -20,7 +20,7 @@ pub fn run_state(record: w::RunState, limits: &Limits) -> Result<c::RunState, Un
     }
 }
 pub fn run_text(record: w::RunText, limits: &Limits) -> Result<c::RunText, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -35,7 +35,7 @@ pub fn run_text(record: w::RunText, limits: &Limits) -> Result<c::RunText, Undec
     }
 }
 pub fn current_call(record: w::CurrentCall, limits: &Limits) -> Result<c::CurrentCall, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;
@@ -50,7 +50,7 @@ pub fn current_call(record: w::CurrentCall, limits: &Limits) -> Result<c::Curren
     }
 }
 pub fn live_call(record: w::LiveCall, limits: &Limits) -> Result<c::LiveCall, Undecodable> {
-    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+    if !crate::limits::valid(limits) || u64::from(record.measure()) > limits.client.document_bytes {
         return Err(Undecodable::TooLarge);
     }
     let checked = receiving(limits)?;

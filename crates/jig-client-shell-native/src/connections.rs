@@ -17,6 +17,24 @@ pub struct Limits {
     pub deadline: Duration,
     pub http: http::Limits,
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    let Some(record) = limits.body_bytes.checked_add(512) else {
+        return false;
+    };
+    limits.exchanges > 0
+        && limits.body_bytes > 0
+        && limits.deadline != Duration::ZERO
+        // skein-http's client sum has these conditions; its remaining terms are heap prices.
+        && limits.http.head >= 2
+        && limits.http.read != 0
+        && limits.http.send != 0
+        && limits.http.read.checked_mul(3).and_then(|v| v.checked_add(8)).is_some()
+        && mapping::valid(&mapping::Limits { record, chunk: limits.http.read })
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Owner {
     Link(Token),
@@ -51,13 +69,7 @@ pub struct Connections {
 impl Connections {
     #[must_use]
     pub fn new(limits: &Limits, host: &str) -> Self {
-        assert!(
-            limits.exchanges > 0
-                && limits.body_bytes > 0
-                && limits.deadline != Duration::ZERO
-                && http::worst_case(&limits.http).is_some(),
-            "usable transport limits"
-        );
+        assert!(valid(limits), "usable transport limits");
         Self {
             limits: *limits,
             mapping: Mapping::new(b"/jig").expect("default mapping"),

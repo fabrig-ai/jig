@@ -61,28 +61,33 @@ pub fn max_out(limits: &Limits) -> u32 {
         .checked_add(1)
         .expect("validated drop output")
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
+pub fn valid(limits: &Limits) -> bool {
     if limits.turn_text < limits.text || limits.turn_text > limits.turn_bytes {
-        return None;
+        return false;
     }
     if limits.watches == 0 || limits.backoff.first == Duration::ZERO || limits.backoff.first > limits.backoff.most {
-        return None;
+        return false;
     }
     if limits.requests.out == 0
         || limits.requests.first == Duration::ZERO
         || limits.requests.first > limits.requests.most
     {
+        return false;
+    }
+    if u32::try_from(limits.owners.len()).is_err() {
+        return false;
+    }
+    output_bound(limits).is_some()
+}
+
+#[must_use]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
-    limits
-        .handles
-        .checked_mul(2)?
-        .checked_add(limits.watches)?
-        .checked_add(limits.reads)?
-        .checked_add(limits.requests.out)?
-        .checked_add(limits.requests.requests.checked_mul(2)?)?
-        .checked_add(1)?;
     let own = Map::<Handle, HandleState>::worst_case(limits.handles)?
         .checked_add(Map::<u64, Watch>::worst_case(limits.watches)?)?;
     let owners = u32::try_from(limits.owners.len()).ok()?;
@@ -109,4 +114,15 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     own.checked_add(
         u64::from(limits.handles.checked_add(limits.watches)?).checked_mul(limits.document_bytes.checked_mul(2)?)?,
     )
+}
+
+fn output_bound(limits: &Limits) -> Option<u32> {
+    limits
+        .handles
+        .checked_mul(2)?
+        .checked_add(limits.watches)?
+        .checked_add(limits.reads)?
+        .checked_add(limits.requests.out)?
+        .checked_add(limits.requests.requests.checked_mul(2)?)?
+        .checked_add(1)
 }

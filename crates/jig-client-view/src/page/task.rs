@@ -641,9 +641,19 @@ pub(crate) fn more(domain: &mut Ui, window: Token, end: jig_client::thread::wind
         }
     }
 }
+/// Whether these limits are representable: every edge bound they size
+/// is finite and every capacity they derive fits (programming-model.md, 6.3).
+#[must_use]
+pub(crate) fn valid(limits: &crate::Limits) -> bool {
+    limits.rows.checked_add(1).is_some()
+}
+
 /// Plan context, nested chip payloads and opaque subtree cursors.
 #[must_use]
 pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
+    if !valid(limits) {
+        return None;
+    }
     List::<TreeNode>::worst_case(limits.rows)?
         .checked_add(List::<ProposalKey>::worst_case(limits.objects)?.checked_mul(2)?)?
         .checked_add(List::<ProposalKey>::worst_case(limits.rows)?)?
