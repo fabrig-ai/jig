@@ -13,10 +13,11 @@ impl World {
         self.cut = None;
         self.peers = None;
         self.hold_restore_pages = false;
+        self.store.pause_pages(false);
         self.hold_restart_reads = false;
         self.hold_switch = false;
         self.release_commits();
-        let transients = Transients::from_core(self.domain.core());
+        let transients = Transients::from_core(self.domain.core(), configuration.core.workers_in_process);
         let stored = self.store.readback_rows();
         self.oracle_child_views(&stored);
         let before = self.oracle_documents(&transients);
@@ -82,6 +83,27 @@ impl World {
             .filter_map(|source| self.domain.accounts().source_grant(source.source, self.env().now))
             .filter(|grant| matches!(grant.form, jig_domain_accounts::Form::Credential(_)))
             .collect();
+        // accounts.md 3.5: the component reports its kept record's failure
+        // again, just as it reports a surviving grant. No new fake refresh is
+        // performed merely to read the story's durable facts back.
+        let failures: Vec<_> = self
+            .domain
+            .accounts()
+            .source_views()
+            .as_slice()
+            .iter()
+            .filter_map(|source| {
+                use jig_domain_accounts::{Failure, FromComponent, State};
+                let failure = match source.state {
+                    State::NeedsSignIn => Failure::SignInAgain,
+                    State::Misconfigured => Failure::Misconfigured,
+                    State::Unloaded { at, why } => Failure::Unloaded { at, why },
+                    _ => return None,
+                };
+                Some(FromComponent::Failed { account: source.source, failure })
+            })
+            .collect();
+        self.hold_accounts = true;
         self.supplied_wall = Some(self.env().wall);
         self.hold_switch = true;
         self.restart_with(configuration);
@@ -101,6 +123,9 @@ impl World {
                     valid: grant.valid,
                 },
             ))));
+        }
+        for failure in failures {
+            self.send(root::Event::Core(core::Event::Account(jig_domain_accounts::Event::Component(failure))));
         }
         for (worker, channel, hello) in hellos {
             self.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello { worker, channel, hello })));
