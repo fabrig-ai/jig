@@ -1310,14 +1310,7 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
         Ask::Move { task, reason, .. } | Ask::Cancel { task, reason, .. } => {
             *task != 0 && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
         }
-        Ask::Hold { scope, reason, .. } => {
-            !reason.is_empty()
-                && reason.len() <= usize::try_from(limits.words).expect("words bound fits usize")
-                && match scope {
-                    crate::HoldScope::Subtree { task } => *task != 0,
-                    crate::HoldScope::Project => true,
-                }
-        }
+        Ask::Hold { scope, reason, .. } => valid_hold(limits, *scope, reason),
         Ask::Lift { hold, .. } => *hold != 0,
         Ask::TakePerson { task, .. }
         | Ask::HandBackPerson { task, .. }
@@ -1379,11 +1372,24 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
     }
 }
 
+fn valid_hold(limits: &Limits, scope: crate::HoldScope, reason: &[u8]) -> bool {
+    !reason.is_empty()
+        && reason.len() <= usize::try_from(limits.words).expect("words bound fits usize")
+        && valid_hold_scope(scope)
+}
+
+fn valid_hold_scope(scope: crate::HoldScope) -> bool {
+    match scope {
+        crate::HoldScope::Subtree { task } => task != 0,
+        crate::HoldScope::Project => true,
+    }
+}
+
 // Admission identifies the bounded payload before any keyed flight is made.
 pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
     let which = match ask {
         Ask::Hold { scope, reason, .. } => {
-            if matches!(scope, crate::HoldScope::Subtree { task: 0 }) {
+            if !valid_hold_scope(*scope) {
                 return Refusal::Unknown;
             }
             if reason.is_empty() { LimitKind::Empty } else { LimitKind::Words }

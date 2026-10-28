@@ -193,7 +193,6 @@ pub fn scene(tree: &Tree, node: NodeId) -> Scene {
 #[must_use]
 pub fn named(ask: &Ask) -> Vec<(Object, Revision)> {
     match ask {
-        Ask::Hold { .. } => Vec::new(),
         Ask::Lift { hold, revision, .. } => vec![(Object::PlacedHold(*hold), *revision)],
         Ask::Release { task, revision, .. } | Ask::Decide { on: DecideOn::Escalation { task, revision, .. }, .. } => {
             vec![(Object::Escalation(*task), *revision)]
@@ -217,7 +216,8 @@ pub fn named(ask: &Ask) -> Vec<(Object, Revision)> {
                 | Operation::Move { .. } => Vec::new(),
             })
             .collect(),
-        Ask::Answer { on: AnswerOn::Question { .. }, .. }
+        Ask::Hold { .. }
+        | Ask::Answer { on: AnswerOn::Question { .. }, .. }
         | Ask::Decide { on: DecideOn::Proposal { .. }, .. }
         | Ask::Propose { action: ProposeAction::Settings(_), .. }
         | Ask::Propose { action: ProposeAction::Batch { .. }, .. }

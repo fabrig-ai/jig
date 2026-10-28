@@ -306,6 +306,7 @@ fn core_held(
                 | jig_domain_people::Outcome::Withdrawn { .. }
                 | jig_domain_people::Outcome::Stopped { .. }
                 | jig_domain_people::Outcome::Cancelled { .. }
+                | jig_domain_people::Outcome::Placed { .. }
                 | jig_domain_people::Outcome::Lifted { .. }
                 | jig_domain_people::Outcome::Released { .. }
                 | jig_domain_people::Outcome::PersonTaken { .. }

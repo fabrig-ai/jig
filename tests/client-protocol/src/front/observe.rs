@@ -109,7 +109,8 @@ pub fn client_sent(request: &ClientRequest) -> Option<Sent> {
                     w::ProposeAction::Settings(_) | w::ProposeAction::Batch(_) => None,
                     w::ProposeAction::Amendment(v) => Some((c::ObjectKey::Task(v.task()), 1, v.revision().value())),
                 },
-                w::Ask::Lift(_)
+                w::Ask::Hold(_)
+                | w::Ask::Lift(_)
                 | w::Ask::Withdraw(_)
                 | w::Ask::Create(_)
                 | w::Ask::Take(_)
