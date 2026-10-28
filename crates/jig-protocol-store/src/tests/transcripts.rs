@@ -12,7 +12,7 @@ fn submit(store: &mut Store, number: u64, turns: &[TurnRecord]) -> (Box<[Event]>
     for turn in turns {
         writes.push(fixtures::save(Record::Core(CoreRecord::Turn(turn.clone())))).expect("turn slot");
     }
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(store, &fixtures::env(), fixtures::commit(number, writes.into_boxed()), &mut above, &mut below);
     (fixtures::events(&mut above), below)
@@ -377,7 +377,7 @@ fn readable(turns: &[TurnRecord]) -> (Store, Box<[u8]>) {
     (store, disk)
 }
 fn ask(store: &mut Store, owner: u64, read: crate::TranscriptRead, rows: u32, bytes: u64) -> (Box<[Event]>, Below) {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         store,
@@ -640,7 +640,7 @@ fn fixture_page(store: &mut Store, raw: &[u8], read: crate::TranscriptRead, byte
                 at,
                 &mut jig_test_patches_smith::patches::Context { key },
             );
-            let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+            let mut above = Queue::uncapped();
             below = fixtures::below();
             crate::down(
                 store,
@@ -1006,7 +1006,7 @@ fn cut_open(length: Option<u64>, claimed: bool) -> (Store, Box<[Event]>, Below) 
         .expect("place slot");
     }
     fixtures::plant(&mut store.stores, ops.as_slice());
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         &mut store,
@@ -1082,7 +1082,7 @@ fn committed(events: &[Event], number: u64) {
     assert_eq!(*found, number);
 }
 fn drop_submit(store: &mut Store, number: u64, task: u64) -> (Box<[Event]>, Below) {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         store,

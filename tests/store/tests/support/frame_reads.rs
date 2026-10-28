@@ -11,7 +11,6 @@ use skein_io::{file, kernel::Fd};
 use skein_lib::{Env, Queue, Time, Token, Wall};
 
 const OWNER: Token = Token::new(9);
-const ROOM: u32 = store::MAX_OUT_DOWN;
 const COMMITTED: u64 = 1024;
 pub(crate) const FRAME_KEY_BYTES: usize = 18;
 pub(crate) const SETS: PatchSets = PatchSets {
@@ -89,8 +88,8 @@ pub(crate) fn closed(sets: PatchSets, limits: &store::Limits) -> (store::Store, 
             value: codec::component::Attempt { first: 0 }.encode().expect("attempt"),
         },
     ]);
-    let mut above = Queue::with_capacity(ROOM);
-    let mut below = Queue::with_capacity(ROOM);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut maps.store,
         &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.store },
@@ -103,12 +102,9 @@ pub(crate) fn closed(sets: PatchSets, limits: &store::Limits) -> (store::Store, 
     (component, env(limits))
 }
 pub(crate) fn open(component: &mut store::Store, env: &Env<store::Limits>) {
-    let mut above = Queue::with_capacity(ROOM);
-    let mut below = store::Below {
-        store: Queue::with_capacity(ROOM),
-        secrets: Queue::with_capacity(ROOM),
-        transcripts: Queue::with_capacity(ROOM),
-    };
+    let mut above = Queue::uncapped();
+    let mut below =
+        store::Below { store: Queue::uncapped(), secrets: Queue::uncapped(), transcripts: Queue::uncapped() };
     store::down(
         component,
         env,
@@ -131,12 +127,9 @@ pub(crate) fn decode(
     raw: &[u8],
     no_site: bool,
 ) -> Option<Box<[u8]>> {
-    let mut above = Queue::with_capacity(ROOM);
-    let mut below = store::Below {
-        store: Queue::with_capacity(ROOM),
-        secrets: Queue::with_capacity(ROOM),
-        transcripts: Queue::with_capacity(ROOM),
-    };
+    let mut above = Queue::uncapped();
+    let mut below =
+        store::Below { store: Queue::uncapped(), secrets: Queue::uncapped(), transcripts: Queue::uncapped() };
     store::down(
         component,
         env,

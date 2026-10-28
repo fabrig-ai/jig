@@ -13,7 +13,7 @@ pub(crate) fn submit(
     below: &mut crate::Below,
 ) {
     let kv_env = crate::directory::env(store, env, false);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.store,
         &kv_env,
@@ -232,8 +232,8 @@ fn copy_settings(store: &mut Store, number: u32) -> Option<skein_kv::Op> {
     use jig_domain_core::{CoreKey, Key, settings};
     let held = Key::Core(CoreKey::Settings(settings::Key::Held(number)));
     let history = Key::Core(CoreKey::Settings(settings::Key::History(number)));
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.store,
         &crate::memory_env(store.limits.store),

@@ -107,14 +107,14 @@ impl Store {
             ),
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits },
             routes,
-            above: Queue::with_capacity(room),
-            routed: Queue::with_capacity(room),
-            secrets: Queue::with_capacity(room),
-            sources: Queue::with_capacity(room),
+            above: Queue::uncapped(),
+            routed: Queue::uncapped(),
+            secrets: Queue::uncapped(),
+            sources: Queue::uncapped(),
             below: protocol::Below {
-                store: Queue::with_capacity(room),
-                secrets: Queue::with_capacity(room),
-                transcripts: Queue::with_capacity(room),
+                store: Queue::uncapped(),
+                secrets: Queue::uncapped(),
+                transcripts: Queue::uncapped(),
             },
             drivers,
             submitted: Queue::with_capacity(room),
@@ -221,15 +221,6 @@ impl Store {
             }
         }
         answer
-    }
-    pub(super) fn room(&self) -> bool {
-        self.secrets.room() >= protocol::MAX_OUT_DOWN
-            && self.sources.room() >= protocol::MAX_OUT_DOWN
-            && self.above.room() >= protocol::MAX_OUT_DOWN
-            && self.routed.room() >= protocol::MAX_OUT_DOWN
-            && self.below.store.room() >= protocol::MAX_OUT_DOWN
-            && self.below.secrets.room() >= protocol::MAX_OUT_DOWN
-            && self.below.transcripts.room() >= protocol::MAX_OUT_DOWN
     }
     pub(super) fn next_deadline(&self) -> Option<Time> {
         let mut next = None;
@@ -370,7 +361,7 @@ impl Store {
         None
     }
     pub(super) fn iterate(&mut self) {
-        if self.adopted && !self.closing && self.room() {
+        if self.adopted && !self.closing {
             protocol::fire(&mut self.component, &self.env, &mut self.above, &mut self.below);
         }
         for index in 0..3 {
@@ -381,9 +372,6 @@ impl Store {
                 &mut submitted,
             );
             for _ in 0..self.drivers.get(index).expect("driver index").above.len() {
-                if !self.room() {
-                    break;
-                }
                 let event = self.drivers.get_mut(index).expect("driver index").above.pop().expect("file terminal");
                 if event.owner() == CLOSE {
                     continue;
@@ -492,9 +480,6 @@ pub(super) fn answer(engine: &mut crate::Engine) {
         return;
     }
     for _ in 0..engine.store.above.len() {
-        if engine.store.routed.room() < protocol::MAX_OUT_DOWN {
-            break;
-        }
         let event = engine.store.above.pop().expect("store terminals");
         match event {
             protocol::Event::Opened { installation, pending, .. } => {

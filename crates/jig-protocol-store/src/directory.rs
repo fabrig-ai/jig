@@ -829,7 +829,7 @@ fn open_stores(store: &mut Store, env: &Env<Limits>, opened: Root, above: &mut Q
     store.directory.private_root = Some(opened);
     store.directory.opening = Opening::Stores;
     let kv_env = self::env(store, env, false);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     let root = store.directory.store_root.expect("the store directory is open");
     skein_kv::down(
         &mut store.stores.store,
@@ -840,7 +840,7 @@ fn open_stores(store: &mut Store, env: &Env<Limits>, opened: Root, above: &mut Q
     );
     events_up(store, false, &mut events, above, below);
     let kv_env = self::env(store, env, true);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &kv_env,
@@ -891,7 +891,7 @@ pub(crate) fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue
         return;
     }
     let kv_env = self::env(store, env, secret);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     if secret {
         skein_kv::up(&mut store.stores.secrets, &kv_env, arrived.event, &mut events, &mut below.secrets);
     } else {
@@ -906,7 +906,7 @@ pub(crate) fn events_up(
     above: &mut Queue<Event>,
     below: &mut Below,
 ) {
-    for _ in 0..skein_kv::MAX_OUT.above {
+    for _ in 0..events.len() {
         let Some(event) = events.pop() else {
             break;
         };
@@ -956,7 +956,7 @@ pub(crate) fn events_up(
 pub(crate) fn fire(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Event>, below: &mut Below) {
     for secret in [false, true] {
         let kv_env = self::env(store, env, secret);
-        let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+        let mut events = Queue::uncapped();
         if secret {
             if skein_kv::is_ready(&store.stores.secrets, &kv_env.limits) {
                 skein_kv::fire(&mut store.stores.secrets, &kv_env, &mut events, &mut below.secrets);
