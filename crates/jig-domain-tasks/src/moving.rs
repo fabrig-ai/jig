@@ -364,6 +364,7 @@ pub(crate) fn reroute(domain: &Domain, env: &Env<Limits>, out: &mut Queue<Reques
         match row.escalation {
             crate::Escalation::Waiting { .. } => out.push(Request::EscalationNeeded {
                 context: crate::escalation::context(domain, task).expect("waiting task context"),
+                restored: false,
             }),
             crate::Escalation::Unheld { .. }
             | crate::Escalation::Routing { .. }

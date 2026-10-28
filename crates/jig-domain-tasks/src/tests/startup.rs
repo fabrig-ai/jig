@@ -103,6 +103,25 @@ fn refused_delegate(source: &Harness) {
     refusal(&cold.send(Event::Restore { record: row }), Refusal::Restore);
 }
 
+#[test]
+fn restored_escalation_keeps_its_original_stall_deadline() {
+    let mut source = one_task();
+    source.send(Event::Hold { task: DUE, why: crate::Hold::Stopped });
+    source.route(DUE, crate::EscalationHolder::Person(9), 1);
+    let before = source.domain.task(DUE).expect("held task").escalation.clone();
+    let deadline = source.domain.escalation_alarms.next().expect("original stall timer");
+    let mut restored = cold(&source);
+    // One minute has passed since the stored decision; restart must not give
+    // its holder a new hour to answer (LIMITS.escalation_stall).
+    restored.env.now = skein_lib::Time::from_nanos(60_000_000_000);
+    restored.env.wall = skein_lib::Wall::from_nanos(60_000_000_000);
+    restored.send(Event::Check);
+    let out = restored.send(Event::Restored);
+    assert_eq!(restored.domain.escalation_alarms.next(), Some(deadline));
+    assert_eq!(restored.domain.task(DUE).expect("restored task").escalation, before);
+    assert!(!out.iter().any(|request| matches!(request, Request::Save { .. })));
+}
+
 fn refusal(out: &[Request], why: Refusal) {
     let [Request::RestoreRefused { problem }] = out else { panic!("one restore refusal: {out:?}") };
     assert_eq!(problem.why, why);

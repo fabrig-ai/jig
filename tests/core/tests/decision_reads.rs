@@ -215,6 +215,16 @@ fn decisions_keep_their_offered_fence_and_room_across_each_restart_cut() {
 }
 
 #[test]
+fn a_new_escalation_selects_its_parent_task() {
+    let (world, holder, child) = entry_world(false);
+    let tasks::Escalation::Waiting { holder: recipient, entry, .. } = live_row(&world, child).escalation else {
+        panic!("new escalation waits for a decision");
+    };
+    assert_eq!(recipient, tasks::EscalationHolder::Task(holder.0));
+    assert_eq!(proof(&world, holder.0).outstanding.as_ref(), [entry]);
+}
+
+#[test]
 fn a_passed_escalation_keeps_its_party_holder_after_restart() {
     let (mut world, holder, child) = entry_world(false);
     let entry = *proof(&world, holder.0).outstanding.first().expect("escalation offered to the holder");
