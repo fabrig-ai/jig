@@ -132,10 +132,11 @@ fn profile() -> root::Limits {
         + jig_test_connector::MAX_OUT * 2
         + tasks.tasks
         + 6;
+    let journal = JournalLimits { commits: 3, held: 2000, writes: writes.max(2000), now: 32, release: 32 };
     let mut limits = root::Limits {
-        journal: JournalLimits { commits: 3, held: 2000, writes: writes.max(2000), now: 32, release: 32 },
+        journal,
         routes: 200,
-        watermark: 3,
+        watermark: root::default_watermark(&journal),
         connector: jig_test_connector_world::LIMITS,
         core: core::Limits {
             settings: core::settings::Limits {

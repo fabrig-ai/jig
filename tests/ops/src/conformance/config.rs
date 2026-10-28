@@ -87,7 +87,7 @@ pub fn root_for(seed: u64, environment_chat: bool) -> (Config, Limits) {
         charter: smith_charter::v4::CEILINGS,
         endpoints: 1,
         journal,
-        watermark: journal.commits,
+        watermark: jig_ops_domain::default_watermark(&journal),
         routes: 256,
     };
     let mut config = Config {

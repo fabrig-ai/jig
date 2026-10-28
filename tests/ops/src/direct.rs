@@ -16,8 +16,6 @@ const STEPS: usize = 256;
 const OUTPUTS: u32 = 256;
 // An isolated reliance row, reused by the pressure setup.
 const PRESSURE_TASK: u64 = 900;
-// A turn's commit and held outputs count in the backlog; 5 admits its terminal at backlog 4 before applying pressure.
-const STORY_WATERMARK: u32 = 5;
 
 pub struct Driver {
     pub domain: root::Domain,
@@ -38,23 +36,7 @@ pub struct Driver {
 impl Driver {
     #[must_use]
     pub fn started(seed: u64) -> Self {
-        Self::configured(seed, None)
-    }
-
-    /// A chat whose turn and terminal both enter before applying pressure.
-    #[must_use]
-    pub fn turn_story(seed: u64) -> Self {
-        let mut driver = Self::configured(seed, Some(STORY_WATERMARK));
-        driver.chat();
-        driver
-    }
-
-    fn configured(seed: u64, commits: Option<u32>) -> Self {
-        let (configuration, mut limits) = crate::conformance::config::root(seed);
-        if let Some(commits) = commits {
-            limits.journal.commits = commits;
-        }
-        limits.watermark = limits.journal.commits;
+        let (configuration, limits) = crate::conformance::config::root(seed);
         let rows = jig_core_world::fixtures::account_rows(&configuration.core.settings.llm_providers);
         let seeded = jig_core_world::fixtures::seeded_project_rows(&configuration.core);
         let mut world = Self {
@@ -259,7 +241,7 @@ impl Driver {
 
     pub fn fill_to_watermark(&mut self) {
         let returned = self.returned;
-        for _ in 0..=self.env.limits.journal.commits {
+        for _ in 0..=self.env.limits.watermark {
             self.send(root::Event::Infrastructure(infrastructure::Event::Names {
                 project: 1,
                 task: PRESSURE_TASK,
@@ -269,6 +251,6 @@ impl Driver {
                 return;
             }
         }
-        panic!("admission binds within journal.commits + 1 writing probes");
+        panic!("admission binds within watermark + 1 writing probes");
     }
 }

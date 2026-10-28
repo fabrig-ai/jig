@@ -77,6 +77,7 @@ pub fn env() -> Env<Limits> {
     let connectors = jig_test_connector::MAX_OUT.checked_mul(2).expect("two connector outputs");
     let writes = room.checked_add(connectors).expect("write room");
     let held = room.checked_add(connectors).expect("delivery room");
+    let journal = JournalLimits { commits: 2, writes, held, now: held, release: held };
     Env {
         now: Time::from_nanos(1),
         wall: Wall::from_nanos(1),
@@ -84,8 +85,8 @@ pub fn env() -> Env<Limits> {
             core,
             connector: jig_test_connector_world::LIMITS,
             routes: 512,
-            watermark: 2,
-            journal: JournalLimits { commits: 2, writes, held, now: held, release: held },
+            watermark: crate::default_watermark(&journal),
+            journal,
         },
     }
 }
@@ -347,11 +348,19 @@ fn held_records() -> [(core::Held, host::LinkDown); 4] {
     ]
 }
 
-pub fn fill_to_watermark(domain: &mut Domain, env: &Env<Limits>) {
-    while crate::admission::backlog(domain) < u64::from(env.limits.watermark) {
+// Synthetic writes leave the child state alone; each adds one backlog entry.
+// Return their count so a test that uses the core's counters can advance them too.
+pub fn fill_to_watermark(domain: &mut Domain, env: &Env<Limits>) -> u32 {
+    for commits in 0..=env.limits.watermark {
+        if crate::admission::backlog(domain) >= u64::from(env.limits.watermark) {
+            crate::try_step(domain, env, crate::Event::Timer(core::Timer::People))
+                .expect_err("new work is handed back at the watermark");
+            return commits;
+        }
         let mut decision = domain.journal.decide();
         decision.push_write(crate::Write::Erase(crate::Key::Core(core::Key::Tasks(tasks::Key::Ended(1)))));
         domain.journal.accept(decision);
         let _commit = domain.journal.commit().expect("commit in flight");
     }
+    panic!("admission returns a pressure probe within watermark + 1 attempts");
 }
