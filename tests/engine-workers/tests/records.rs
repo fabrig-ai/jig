@@ -212,7 +212,7 @@ mod down_records {
     fn send(world: &mut World, channel: Token, down: LinkDown) {
         world.down(Event::Down { channel, down, parts: Box::new([]), values: Box::new([]) });
     }
-    fn records() -> [LinkDown; 5] {
+    fn records() -> [LinkDown; 6] {
         let run = Token::new(7);
         let attempt = Token::new(2);
         [
@@ -228,6 +228,7 @@ mod down_records {
             LinkDown::TurnKept { run, attempt, turn: 3 },
             LinkDown::Acknowledge { run, attempt },
             LinkDown::Cancel { run, attempt },
+            LinkDown::Park { run, attempt },
         ]
     }
     #[test]
@@ -250,7 +251,7 @@ mod down_records {
         });
         world.run();
         let kinds: Vec<_> = world.observed(connection).iter().map(|record| record.kind).collect();
-        assert_eq!(kinds, [0x0180, 0x0181, 0x0182, 0x0183, 0x0185, 0x0186, 0x0184, 0x0187]);
+        assert_eq!(kinds, [0x0180, 0x0181, 0x0182, 0x0183, 0x0185, 0x0186, 0x018b, 0x0184, 0x0187]);
     }
     #[test]
     fn a_replaced_channel_receives_no_later_down_record() {

@@ -96,6 +96,8 @@ pub struct World {
     received_grant: Option<host::Grant>,
     prepare_waits: bool,
     start_waits: bool,
+    save_waits: bool,
+    save_pending: bool,
     last_read: Option<Token>,
     refusals: crate::refusals::Referee,
     pub reports: Vec<host::LinkUp>,
@@ -155,6 +157,8 @@ impl World {
             reports: Vec::new(),
             prepare_waits: false,
             start_waits: false,
+            save_waits: false,
+            save_pending: false,
             last_read: None,
             refusals: crate::refusals::Referee::default(),
         }
@@ -500,6 +504,16 @@ impl World {
     pub fn hold_stop(&mut self) {
         self.stop_waits = true;
     }
+    pub fn hold_save(&mut self) {
+        self.save_waits = true;
+    }
+
+    pub fn saved(&mut self) {
+        assert!(self.save_pending);
+        self.save_pending = false;
+        self.send(Event::Saved { owner: self.owner(), at: Some(Token::new(8)) });
+    }
+
 
     pub fn gone(&mut self) {
         assert!(self.stop_pending && self.agent_live);
@@ -696,7 +710,11 @@ impl World {
             Request::Save { owner, workspace } => {
                 assert!(!self.agent_live && self.space_live && workspace == SPACE);
                 self.stats.saves += 1;
-                self.events.push_back(Event::Saved { owner, at: Some(Token::new(8)) });
+                if self.save_waits {
+                    self.save_pending = true;
+                } else {
+                    self.events.push_back(Event::Saved { owner, at: Some(Token::new(8)) });
+                }
             }
             Request::Release { workspace } => {
                 assert!(!self.agent_live && workspace == SPACE && self.space_live);
@@ -722,6 +740,7 @@ impl World {
             }
             Request::Grant { agent, grant } => self.receive_grant(agent, grant),
             Request::Abort { owner } => {
+                self.space_live = false;
                 self.events.push_back(Event::Unprepared {
                     owner, failure: host::Preparation::Transient, detail: Box::new([]),
                 });

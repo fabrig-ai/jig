@@ -124,6 +124,7 @@ fn has_watch_end(out: &[Request]) -> bool {
                 | Held::AcknowledgeTurn { .. }
                 | Held::Drained
                 | Held::Cancel { .. }
+                | Held::Park { .. }
                 | Held::Sources { .. }
                 | Held::CheckSource { .. }
                 | Held::SignOutSource { .. }

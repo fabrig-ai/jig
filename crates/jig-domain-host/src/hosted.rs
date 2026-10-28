@@ -906,6 +906,9 @@ fn stop(domain: &mut Domain, env: &Env<Limits>, id: Id<Hosted>, reason: Reason, 
         State::Stopping { workspace, agent, ending: RunEnding::Parking, gone } if !entry.parking => {
             State::Stopping { workspace, agent, ending: stopped(entry, reason), gone }
         }
+        State::Saving { workspace, ending: RunEnding::Parking } if !entry.parking => {
+            State::Saving { workspace, ending: stopped(entry, reason) }
+        }
         // How the run ends is decided already, or it is stopping.
         state @ (State::Cancelling { .. } | State::Unwanted { .. } | State::Stopping { .. } | State::Saving { .. }) => {
             state

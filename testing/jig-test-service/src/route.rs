@@ -300,6 +300,7 @@ fn core_held(engine: &mut Engine, held: core::Held) {
         | core::Held::TaskTurnKept { .. }
         | core::Held::AcknowledgeTurn { .. }
         | core::Held::Cancel { .. }
+        | core::Held::Park { .. }
         | core::Held::StopRun { .. } => stop::unavailable(engine, b"workers"),
         core::Held::SettledCall { .. } | core::Held::NotesWritten { .. } | core::Held::NotesDeleted { .. } => {
             stop::unavailable(engine, b"accounts");

@@ -29,7 +29,16 @@ impl World {
     }
 
     fn drain(&mut self) -> Vec<Request> {
-        let requests = std::iter::from_fn(|| self.out.pop()).collect();
+        let mut requests = Vec::new();
+        while let Some(request) = self.out.pop() {
+            if let Request::Sources { channel, sources } = request {
+                assert!(sources.is_empty());
+                fleet::step(&mut self.domain, &self.env,
+                    Event::Logins { channel, logins: Box::new([]) }, &mut self.out);
+            } else {
+                requests.push(request);
+            }
+        }
         self.domain.reclaim();
         while self.domain.pop_fact().is_some() {}
         requests
@@ -58,8 +67,12 @@ impl World {
 
     fn place(&mut self) -> Vec<Request> {
         assert!(self.domain.is_ready());
-        fleet::resume(&mut self.domain, &self.env, &mut self.out);
-        self.drain()
+        let mut requests = Vec::new();
+        while self.domain.is_ready() {
+            fleet::resume(&mut self.domain, &self.env, &mut self.out);
+            requests.extend(self.drain());
+        }
+        requests
     }
 
     fn placed() -> Self {
@@ -118,11 +131,11 @@ fn a_waiting_claim_keeps_its_park_until_placed() {
 fn a_park_after_the_answer_changes_nothing() {
     let mut world = World::placed();
     world.park();
-    let answered = world.step(Event::Answered {
+    let answered = world.step(Event::Answer {
         channel: CHANNEL, run: RUN, attempt: ATTEMPT,
-        answer: fleet::Answer::Parked { turned: None }, payload: Token::new(99),
+        answer: fleet::Answer::Parked, payload: Token::new(99),
     });
-    assert!(matches!(&answered[..], [Request::Answered { answer: fleet::Answer::Parked { .. }, .. }]));
+    assert!(matches!(&answered[..], [Request::Answered { answer: fleet::Answer::Parked, .. }]));
     assert!(world.park().is_empty());
     world.step(Event::Lost { channel: CHANNEL });
     assert!(world.hello(REJOINED, Some(Phase::Answered)).is_empty());

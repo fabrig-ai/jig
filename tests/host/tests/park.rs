@@ -11,6 +11,8 @@ fn a_run_parked_mid_turn_parks_after_its_turn_is_kept() {
     world.turn_with(1, b"selected turn", Some(Token::new(17)), false);
     assert!(!world.reading());
     assert_eq!(world.stats().agent_acks, 0);
+    world.message_from();
+    assert!(world.received_message().is_none(), "no reader input past the selected turn");
     assert!(world.answer().is_none());
     assert_eq!(world.stats().saves, 0);
     world.commit_turn(1);
@@ -125,5 +127,61 @@ fn a_park_after_a_cancel_changes_nothing() {
     world.park();
     world.gone();
     assert!(matches!(world.answer().expect("cancel wins").ending,
+        Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
+}
+
+#[test]
+fn a_yield_during_a_pending_park_stops_without_another_turn() {
+    let mut world = World::new();
+    world.assign(false);
+    world.turn(1, b"last");
+    world.park();
+    world.yield_run();
+    assert_eq!(world.stats().stops, 1);
+    assert!(world.answer().is_none());
+    world.commit_turn(1);
+    assert!(matches!(world.answer().expect("yielded park").ending, Ending::Parked { .. }));
+}
+
+#[test]
+fn a_run_that_already_finished_ignores_a_later_park() {
+    let mut world = World::new();
+    world.assign(false);
+    world.hold_stop();
+    world.finish(0, false);
+    world.park();
+    world.gone();
+    assert!(matches!(world.answer().expect("run's ending").ending, Ending::Ended { .. }));
+}
+
+#[test]
+fn a_runs_own_park_and_accounting_win_while_it_stops() {
+    let mut world = World::new();
+    world.assign(false);
+    world.hold_stop();
+    world.turn(1, b"one");
+    world.park();
+    world.turn(2, b"selected");
+    world.finish(2, true);
+    world.gone();
+    world.commit_turn(1);
+    world.commit_turn(2);
+    let answer = world.answer().expect("own park");
+    assert!(matches!(answer.ending, Ending::Parked { .. }));
+    assert_eq!(answer.spent, 34, "the agent's last report replaces the turn tally of 51");
+}
+
+#[test]
+fn a_cancel_while_the_park_saves_keeps_the_cancellation_ending() {
+    let mut world = World::new();
+    world.assign(true);
+    world.hold_save();
+    world.park();
+    world.turn(1, b"selected");
+    world.commit_turn(1);
+    assert_eq!(world.stats().saves, 1);
+    world.cancel();
+    world.saved();
+    assert!(matches!(world.answer().expect("saved cancellation").ending,
         Ending::Failed { failure: Failure::Cancelled(Reason::Engine), .. }));
 }

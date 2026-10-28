@@ -305,6 +305,7 @@ fn delivery(now: Time, channel: Token, down: host::LinkDown, values: &Values) ->
         | host::LinkDown::Relayed { .. }
         | host::LinkDown::TurnKept { .. }
         | host::LinkDown::Acknowledge { .. }
+        | host::LinkDown::Park { .. }
         | host::LinkDown::Cancel { .. } => Box::default(),
     };
     kit::Event::Down { channel, down, parts: Box::default(), values: grants }
