@@ -444,6 +444,7 @@ fn task_outcome(source: &domain::TaskRecord, limits: &wire::Limits) -> Result<wi
             invalid_result: optional_invalid(source.invalid_result),
             refusals: source.refusals,
             phase: phase::phase(&source.phase, limits)?,
+            room_wait: room_wait(source.room_wait, limits)?,
         },
     )
 }
@@ -456,6 +457,7 @@ pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Resu
     let interests = interests.into_parts();
     let outcome = outcome.into_parts();
     Ok(domain::TaskRecord {
+        room_wait: read_room_wait(outcome.room_wait),
         label: definition.label,
         flags: phase::read_flags(definition.flags),
         last_activity: Wall::from_nanos(history.last_activity),
@@ -582,4 +584,24 @@ fn read_added(source: List<wire::Added>) -> Box<[domain::Added]> {
             .expect("same number of additions");
     }
     rows.into_boxed()
+}
+
+fn room_wait(source: Option<domain::RoomWait>, limits: &wire::Limits) -> Result<Option<wire::RoomWait>, wire::Problem> {
+    let Some(wait) = source else { return Ok(None) };
+    let room = match wait.room {
+        domain::LiveRoom::Deployment => wire::LiveRoom::Deployment,
+        domain::LiveRoom::Project(project) => {
+            wire::LiveRoom::Project(wire::RoomProject::new(limits, wire::RoomProjectParts { project })?)
+        }
+    };
+    Ok(Some(wire::RoomWait::new(limits, wire::RoomWaitParts { room, order: wait.order })?))
+}
+
+fn read_room_wait(source: Option<wire::RoomWait>) -> Option<domain::RoomWait> {
+    let wait = source?.into_parts();
+    let room = match wait.room {
+        wire::LiveRoom::Deployment => domain::LiveRoom::Deployment,
+        wire::LiveRoom::Project(project) => domain::LiveRoom::Project(project.into_parts().project),
+    };
+    Some(domain::RoomWait { room, order: wait.order })
 }

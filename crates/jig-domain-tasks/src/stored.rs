@@ -322,7 +322,8 @@ fn valid_followups(task: &TaskRecord) -> bool {
 
 #[expect(clippy::too_many_lines, reason = "one complete restored task shape is checked before retention")]
 fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
-    if task.last_activity < task.created_at
+    if !crate::room::valid(domain, task)
+        || task.last_activity < task.created_at
         || task.run_reserved > task.numbers.reserved
         || (task.run_reserved != 0 && crate::run::run_attempt(&task.phase).is_none())
         || task.ended_at.is_some()

@@ -496,3 +496,13 @@ fn task_numbers(count: u32) -> Box<[u64]> {
     }
     numbers.into_boxed()
 }
+
+#[test]
+fn a_procedures_live_room_refusal_keeps_its_condition_and_order() {
+    for room in [domain::LiveRoom::Deployment, domain::LiveRoom::Project(3)] {
+        let mut record = current_record();
+        record.room_wait = Some(domain::RoomWait { room, order: 97 });
+        let row = live_record(record);
+        assert_eq!(saved_tasks(&row), Ok(row));
+    }
+}

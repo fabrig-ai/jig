@@ -867,6 +867,7 @@ pub(crate) fn wake_procedure(domain: &mut Domain, env: &Env<Limits>, task: u64, 
     };
     if wake {
         let row = &mut task_mut(domain, task).expect("live procedure").record;
+        row.room_wait = None;
         row.due_reason = crate::Why::Changed;
         row.phase = Phase::Active(Active::Due);
         publish(domain, env, task, out);
@@ -1439,6 +1440,7 @@ pub(crate) fn make_admitted(
                 last_message: 0,
                 inbox: Box::new([]),
                 saved: Box::new([]),
+                room_wait: None,
                 ever_turned: false,
                 made: 1,
                 attempt: 0,

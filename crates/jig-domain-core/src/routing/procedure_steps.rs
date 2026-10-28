@@ -124,17 +124,22 @@ pub(super) fn apply(core: &mut Core, env: &Env<Limits>, task: u64, step: u64, ev
             kept.push(request);
         }
     }
-    if let Some(why) = refusal {
-        return refused(core, task, step, why);
-    }
     let Requests::Out(mut routed) = super::task_routes::tag_tasks(core, env, kept, room, false, false, false);
-    let mut out = Queue::with_capacity(routed.capacity().checked_add(1).expect("step outcome room"));
+    let mut out = Queue::with_capacity(routed.capacity().checked_add(2).expect("step outcome room"));
     for _ in 0..routed.len() {
         let request = routed.pop().expect("routed step count");
         if let Request::Decided = &request {
             continue;
         }
         out.push(request);
+    }
+    if let Some(why) = refusal {
+        // The refused batch made no delegates, but its live-room wait is durable.
+        let Requests::Out(mut outcome) = refused(core, task, step, why);
+        for _ in 0..outcome.len() {
+            out.push(outcome.pop().expect("refusal outcome count"));
+        }
+        return Requests::Out(out);
     }
     let mut revisions = List::with_capacity(revised.capacity());
     for number in revised.into_boxed() {

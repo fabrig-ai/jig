@@ -323,6 +323,9 @@ record TaskInterests {
     ever_turned: TranscriptState
     made: u32
 }
+record RoomProject { project: u32 }
+enum LiveRoom { deployment, project: RoomProject }
+record RoomWait { room: LiveRoom order: u64 }
 record TaskOutcome {
     attempt: u64
     last_answer: option u64
@@ -330,6 +333,7 @@ record TaskOutcome {
     invalid_result: option InvalidResult
     refusals: u32
     phase: Phase
+    room_wait: option RoomWait
 }
 record TaskRecord { history: TaskHistory run: TaskRun definition: TaskDefinition interests: TaskInterests outcome: TaskOutcome }
 record EndedByParty { party: u64 label: u32 ended_at: u64 task: u64 }
