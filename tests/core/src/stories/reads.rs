@@ -118,7 +118,7 @@ fn read_world(seed: u64, reply_bound: Option<u32>, rows: u32, initial: Option<pe
     let room = core::route_bound(&limits.core).expect("read story room");
     let connectors = jig_test_connector::MAX_OUT * 2;
     limits.journal.commits = 2;
-    limits.watermark = 2;
+    limits.watermark = root::default_watermark(&limits.journal);
     limits.journal.writes = room + connectors;
     limits.journal.held = (room + connectors) * 2;
     let mut world = match initial {

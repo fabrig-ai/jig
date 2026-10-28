@@ -152,7 +152,7 @@ fn tree_world() -> (World, root::Config) {
     limits.core.brief.briefs = 4;
     limits.routes = 500;
     limits.journal.commits = 8;
-    limits.watermark = 8;
+    limits.watermark = root::default_watermark(&limits.journal);
     jig_core_world::peers::journal(&mut limits);
     let mut policy = configuration.core.seed_projects[0].policy.policy.clone();
     policy.projections.clone_from(&policy.ceiling.grants);

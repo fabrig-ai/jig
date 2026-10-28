@@ -232,14 +232,14 @@ impl Driver {
     /// The refused setup probe is dropped and does not join the story's inputs.
     pub fn fill_to_watermark(&mut self) {
         let returned = self.returned;
-        for _ in 0..=self.env.limits.journal.commits {
+        for _ in 0..=self.env.limits.watermark {
             self.probe();
             if self.returned > returned {
                 return;
             }
             self.collect();
         }
-        panic!("admission returns a pressure probe within the commit allowance");
+        panic!("admission returns a pressure probe within watermark + 1 writing probes");
     }
 
     pub fn probe(&mut self) {

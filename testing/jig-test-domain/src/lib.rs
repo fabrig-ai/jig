@@ -321,6 +321,13 @@ pub struct Limits {
     pub routes: u32,
 }
 
+/// The watermark's default: the journal's commits plus the outputs its
+/// door holds (`domain/root.md` 10).
+#[must_use]
+pub fn default_watermark(journal: &JournalLimits) -> u32 {
+    journal.commits.checked_add(journal.now).expect("journal commits plus door outputs fit")
+}
+
 /// The testing application's two numbered connectors.
 #[derive(Debug)]
 pub struct Config {

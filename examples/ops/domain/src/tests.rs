@@ -17,6 +17,7 @@ fn fixture_with_commits(commits: u32) -> (Domain, Env<Limits>) {
     let mut core_limits = jig_core_world::world::limits().core;
     core_limits.fleet.engine_slots = 1;
     core_limits.tasks.hold_kinds = 3;
+    let journal = JournalLimits { commits, writes: 20000, held: 20000, now: 128, release: 128 };
     let limits = Limits {
         core: core_limits,
         infrastructure: jig_ops_world::infrastructure_limits(),
@@ -45,8 +46,8 @@ fn fixture_with_commits(commits: u32) -> (Domain, Env<Limits>) {
         },
         charter: smith_charter::v4::CEILINGS,
         endpoints: 1,
-        journal: JournalLimits { commits, writes: 20000, held: 20000, now: 128, release: 128 },
-        watermark: commits,
+        journal,
+        watermark: crate::default_watermark(&journal),
         routes: 256,
     };
     let mut config = Config {
@@ -88,10 +89,23 @@ fn name(task: u64) -> Event {
     })
 }
 
+// Rewriting the same reliance row adds one commit without growing the
+// connector's working set. Drain submissions, withholding every store answer.
+fn fill_to_watermark(domain: &mut Domain, env: &Env<Limits>) {
+    for _ in 0..=env.limits.watermark {
+        if try_step(domain, env, name(1)).is_err() {
+            return;
+        }
+        take(domain, env);
+    }
+    panic!("admission returns a pressure probe within watermark + 1 writing probes");
+}
+
 #[test]
 fn admission_precedes_a_connectors_change_and_its_outputs_wait_for_the_commit() {
     const FIRST_COMMIT: u64 = 1;
-    const RETRY_COMMIT: u64 = 2;
+    // The fixture watermark is 1 commit + 128 door outputs; retry adds one commit.
+    const RETRY_COMMIT: u64 = 130;
     const SUBSCRIBER: u64 = 2;
     const ONCE: usize = 1;
     let (mut domain, env) = fixture();
@@ -101,6 +115,7 @@ fn admission_precedes_a_connectors_change_and_its_outputs_wait_for_the_commit() 
         [Output::Commit { number: FIRST_COMMIT, .. }] => {}
         other => panic!("one commit: {other:?}"),
     }
+    fill_to_watermark(&mut domain, &env);
     // An independent subscription starts new work, rather than injecting a
     // connector's Names continuation as the rejected probe.
     let event = Event::Observability(observability::Event::Subscribe {
@@ -202,6 +217,7 @@ fn a_connector_read_answer_uses_the_door_and_makes_no_commit() {
         [Output::Commit { number: COMMIT, .. }] => {}
         other => panic!("unrelated pending commit: {other:?}"),
     }
+    fill_to_watermark(&mut domain, &env);
     try_step(
         &mut domain,
         &env,

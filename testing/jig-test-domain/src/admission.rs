@@ -161,8 +161,8 @@ mod expiry_tests {
         );
         let elapsed = domain.core.people.next_deadline();
         assert!(domain.core.people.ready());
-        fixtures::fill_to_watermark(&mut domain, &env);
-        for _ in 0..env.limits.journal.commits {
+        let commits = fixtures::fill_to_watermark(&mut domain, &env);
+        for _ in 0..commits {
             domain.core.counters.next_commit();
         }
         env.now = Time::from_nanos(2);

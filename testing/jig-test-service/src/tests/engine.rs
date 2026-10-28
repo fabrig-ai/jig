@@ -50,13 +50,16 @@ fn fill_to_watermark(driven: &mut fixtures::Driven) -> u64 {
 
 #[test]
 fn a_store_answer_is_taken_at_the_watermark() {
+    // Small profile: 3 commits + 256 door outputs; answering one and
+    // admitting its retry leaves the same 259 commits pending.
+    const PENDING_COMMITS: u32 = 259;
     let mut driven = fixtures::Driven::started(&fixtures::engine_document());
     let next_period = fill_to_watermark(&mut driven);
     let first = driven.commit_asked();
     driven.commit(first);
     assert_eq!(fixtures::engine(&mut driven.service).store.above.len(), 0);
     period(&mut driven, next_period);
-    assert_eq!(driven.commits.len(), 3);
+    assert_eq!(driven.commits.len(), PENDING_COMMITS);
 }
 
 #[test]

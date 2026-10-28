@@ -206,9 +206,12 @@ pub struct Driven {
 }
 impl Driven {
     pub fn started(document: &[u8]) -> Self {
+        let mut service = started(document);
+        // Withhold every writing pressure probe up to the first refusal.
+        let commits = engine(&mut service).env.limits.watermark.checked_add(1).expect("pressure probe budget");
         let mut driven = Self {
-            service: started(document),
-            commits: Queue::with_capacity(16),
+            service,
+            commits: Queue::with_capacity(commits),
             released: 0,
             busy: Queue::with_capacity(16),
             reply: None,
