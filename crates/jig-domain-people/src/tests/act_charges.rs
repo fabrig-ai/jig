@@ -1,8 +1,4 @@
-#![expect(
-    clippy::disallowed_macros,
-    clippy::disallowed_methods,
-    reason = "step tests are ordinary Rust (testing-strategy.md, section 4)"
-)]
+#![expect(clippy::disallowed_macros, reason = "step tests are ordinary Rust (testing-strategy.md, section 4)")]
 use super::{valid, valid_outcome};
 use crate::tests::LIMITS;
 use crate::*;
