@@ -274,6 +274,9 @@ pub fn down(domain: &mut Domain, delivery: Delivery) -> Delivery {
         Delivery::Core(core::Held::Cancel { channel, run, attempt }) if domain.links.contains(&channel) => {
             (channel, host::LinkDown::Cancel { run, attempt })
         }
+        Delivery::Core(core::Held::Park { channel, run, attempt }) if domain.links.contains(&channel) => {
+            (channel, host::LinkDown::Park { run, attempt })
+        }
         Delivery::Core(core::Held::Grant { channel, run, attempt, grant }) if domain.links.contains(&channel) => (
             channel,
             host::LinkDown::Grant {

@@ -237,6 +237,13 @@ mod agreement {
     fn an_acknowledgement_crosses_unchanged() {
         cross_down(acknowledged(), &acknowledged());
     }
+    #[test]
+    fn a_park_crosses_unchanged() {
+        cross_down(
+            host::LinkDown::Park { run: RUN_SEVEN, attempt: ATTEMPT_TWO },
+            &host::LinkDown::Park { run: RUN_SEVEN, attempt: ATTEMPT_TWO },
+        );
+    }
     fn cancel() -> host::LinkDown {
         host::LinkDown::Cancel { run: RUN_SEVEN, attempt: ATTEMPT_TWO }
     }

@@ -537,6 +537,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             attempt::cross(domain, env, reply_to, run, attempt, worked, out);
         }
         Event::Cancel { run, attempt } => attempt::cancel(domain, run, attempt, out),
+        Event::Park { run, attempt } => attempt::park(domain, run, attempt, out),
         Event::Relayed { to, answer } => call::relayed(domain, to, answer, out),
         Event::Acknowledge { run, attempt } => attempt::acknowledge(domain, run, attempt, out),
         Event::Grant { grant } => crate::grants::renew(domain, env, grant, out),

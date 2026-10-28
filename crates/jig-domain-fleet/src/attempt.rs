@@ -136,6 +136,8 @@ pub(crate) struct Attempt {
     pub(crate) placement: Option<crate::PlacementConstraint>,
     pub(crate) grants: List<crate::grants::Kept>,
     pub(crate) state: State,
+    /// Volatile drain intent, replayed on placement and unanswered listings.
+    parking: bool,
 }
 
 /// What the fleet knows of a run: its claim, and how many of its attempts a
@@ -485,6 +487,7 @@ pub(crate) fn cancel(domain: &mut Domain, run: Token, attempt: Token, out: &mut 
     };
     let names = Names { run, attempt };
     let entry = domain.attempts.get_mut(id).expect("a named attempt is tracked");
+    entry.parking = false;
     let before = implied(&entry.state);
     let state = mem::replace(&mut entry.state, State::Closed);
     entry.state = match state {
@@ -507,6 +510,32 @@ pub(crate) fn cancel(domain: &mut Domain, run: Token, attempt: Token, out: &mut 
         State::Closed => unreachable!("a closed attempt is no longer named"),
     };
     follow(domain, id, before);
+}
+
+/// Remember a drain on a live claim, including one not yet placed.
+pub(crate) fn park(domain: &mut Domain, run: Token, attempt: Token, out: &mut Queue<Request>) {
+    let Some(&id) = domain.names.get(&(run, attempt)) else { return };
+    let entry = domain.attempts.get_mut(id).expect("a named attempt is tracked");
+    match entry.state {
+        State::Waiting { .. } | State::Adopted { .. } | State::Claimed { .. } => {
+            if !entry.parking {
+                entry.parking = true;
+                resend_park(entry, &domain.channels, out);
+            }
+        }
+        State::Cancelled { .. } | State::Crossed { .. } | State::Handed { .. }
+        | State::Acknowledged { .. } | State::Stray { .. } | State::Kept { .. }
+        | State::Fenced { .. } | State::Closed => {}
+    }
+}
+
+fn resend_park(entry: &Attempt, channels: &Slab<Channel>, out: &mut Queue<Request>) {
+    if entry.parking {
+        if let State::Claimed { at: Where::On(channel), .. } = entry.state {
+            let channel = channels.get(channel).expect("claimed channel is in contact").token;
+            out.push(Request::Park { channel, run: entry.run, attempt: entry.token });
+        }
+    }
 }
 
 /// Acknowledge, from the parent: the answer it was handed is durable, or not
@@ -578,6 +607,7 @@ pub(crate) fn place(
         | State::Closed => unreachable!("only a waiting attempt is queued for a slot"),
     };
     follow(domain, id, before);
+    resend_park(domain.attempts.get(id).expect("placed attempt"), &domain.channels, out);
     crate::grants::resend(domain.attempts.get(id).expect("placed attempt"), &domain.channels, env.now, out);
 }
 
@@ -637,6 +667,9 @@ pub(crate) fn listed(
         State::Closed => unreachable!("a closed attempt is no longer named"),
     };
     follow(domain, id, before);
+    if !answered {
+        resend_park(domain.attempts.get(id).expect("listed attempt"), &domain.channels, out);
+    }
     crate::grants::resend(domain.attempts.get(id).expect("listed attempt"), &domain.channels, env.now, out);
 }
 
@@ -1219,6 +1252,7 @@ fn insert(domain: &mut Domain, run: Token, attempt: Token, listed: bool, assignm
         token: attempt,
         listed,
         kept: 0,
+        parking: false,
         lost_host: None,
         progress: None,
         placement: None,

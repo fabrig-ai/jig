@@ -124,6 +124,7 @@ pub(crate) fn decode(kind: u16, body: &[u8], limits: &wire::v9::Limits) -> Optio
         | wire::Kind::TurnBusy
         | wire::Kind::Acknowledge
         | wire::Kind::Cancel
+        | wire::Kind::Park
         | wire::Kind::Grant => None,
     }
 }
@@ -429,6 +430,7 @@ pub(crate) enum Down {
     TurnBusy(wire::TurnBusy),
     Acknowledge(wire::Acknowledge),
     Cancel(wire::Cancel),
+    Park(wire::Park),
     Grant(wire::Granted),
 }
 impl Down {
@@ -444,6 +446,7 @@ impl Down {
             Self::TurnBusy(record) => (0x0184, record.measure()),
             Self::Acknowledge(record) => (0x0185, record.measure()),
             Self::Cancel(record) => (0x0186, record.measure()),
+            Self::Park(record) => (wire::Kind::Park.number(), record.measure()),
             Self::Grant(record) => (0x0187, record.measure()),
         };
         let mut writer = skein_channel::frame_writer(kind, length).expect("checked record fits a frame");
@@ -459,6 +462,7 @@ impl Down {
             Self::TurnBusy(record) => record.encode(&mut body),
             Self::Acknowledge(record) => record.encode(&mut body),
             Self::Cancel(record) => record.encode(&mut body),
+            Self::Park(record) => record.encode(&mut body),
             Self::Grant(record) => record.encode(&mut body),
         };
         encoded.expect("measured record");
@@ -535,6 +539,9 @@ pub(crate) fn down(
         )),
         host::LinkDown::Cancel { run, attempt } => Some(Down::Cancel(
             wire::Cancel::new(limits, wire::CancelParts { task: run.raw(), attempt: attempt.raw() }).ok()?,
+        )),
+        host::LinkDown::Park { run, attempt } => Some(Down::Park(
+            wire::Park::new(limits, wire::ParkParts { run: run.raw(), attempt: attempt.raw() }).ok()?,
         )),
         host::LinkDown::Grant { run, attempt, grant } => {
             let value = values.into_iter().next()??;

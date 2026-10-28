@@ -321,6 +321,10 @@ fn held_records() -> [(core::Held, host::LinkDown); 4] {
             host::LinkDown::Cancel { run: RUN, attempt: ATTEMPT },
         ),
         (
+            core::Held::Park { channel: CHANNEL, run: RUN, attempt: ATTEMPT },
+            host::LinkDown::Park { run: RUN, attempt: ATTEMPT },
+        ),
+        (
             core::Held::Grant {
                 channel: CHANNEL,
                 run: RUN,

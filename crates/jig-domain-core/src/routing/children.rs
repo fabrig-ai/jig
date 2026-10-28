@@ -169,6 +169,9 @@ pub(super) fn tag_fleet(
             fleet::Request::Cancel { channel, run, attempt } => {
                 Request::Held(Box::new(Held::Cancel { channel, run, attempt }))
             }
+            fleet::Request::Park { channel, run, attempt } => {
+                Request::Held(Box::new(Held::Park { channel, run, attempt }))
+            }
             fleet::Request::Refuse { channel } => Request::Held(Box::new(Held::Refuse { channel })),
             fleet::Request::TurnBusy { channel, run, attempt, turn } => {
                 Request::Held(Box::new(Held::TurnBusy { channel, run, attempt, turn }))
@@ -706,6 +709,7 @@ pub(super) fn route_fleet(
         | fleet::Event::Adopt { .. }
         | fleet::Event::Cross { .. }
         | fleet::Event::Cancel { .. }
+        | fleet::Event::Park { .. }
         | fleet::Event::Acknowledge { .. }
         | fleet::Event::Loaded
         | fleet::Event::Hello { .. }
@@ -795,6 +799,7 @@ fn host_shape(event: &fleet::Event) -> bool {
         | fleet::Event::Adopt { .. }
         | fleet::Event::Cross { .. }
         | fleet::Event::Cancel { .. }
+        | fleet::Event::Park { .. }
         | fleet::Event::Acknowledge { .. }
         | fleet::Event::Answer { .. }
         | fleet::Event::Inbound { .. }

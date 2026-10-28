@@ -989,6 +989,7 @@ impl World {
                 self.sent(run, attempt, Down::Inbound);
                 self.down(channel, Message::Inbound { run: run.raw(), attempt: attempt.raw() });
             }
+            Request::Park { .. } => unreachable!("this world's scripts never request a park"),
             Request::Cancel { channel, run, attempt } => {
                 self.sent(run, attempt, Down::Cancel);
                 self.down(channel, Message::Cancel { run: run.raw(), attempt: attempt.raw() });
@@ -1354,6 +1355,7 @@ fn describe(event: &Event) -> String {
         | Event::Adopt { .. }
         | Event::Cross { .. }
         | Event::Cancel { .. }
+        | Event::Park { .. }
         | Event::Relayed { .. }
         | Event::Lost { .. }
         | Event::Answer { .. }

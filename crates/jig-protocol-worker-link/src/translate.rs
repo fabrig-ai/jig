@@ -453,6 +453,10 @@ pub(crate) fn down(
             let record = wire::Cancel::decode(limits, &mut reader).ok()?.into_parts();
             host::LinkDown::Cancel { run: Token::new(record.task), attempt: Token::new(record.attempt) }
         }
+        wire::Kind::Park => {
+            let record = wire::Park::decode(limits, &mut reader).ok()?.into_parts();
+            host::LinkDown::Park { run: Token::new(record.run), attempt: Token::new(record.attempt) }
+        }
         wire::Kind::Grant => {
             let record = wire::Granted::decode(limits, &mut reader).ok()?.into_parts();
             let grant = grant(record.grant, now, out)?;
