@@ -923,7 +923,7 @@ fn restore_order_is_independent_and_bad_or_oversized_records_refuse_start() {
     assert!(test.d.ready());
     test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
     test.send(Event::Restore { record: Stored::SignIn { number: 10, person: 99, expires: Wall::EPOCH } });
-    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| test.send(Event::Restored)));
+    let panic = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| test.send(Event::Restored)));
     let panic = panic.expect_err("missing sign-in owner panics at its link");
     let message =
         panic.downcast_ref::<String>().map(String::as_str).or_else(|| panic.downcast_ref::<&str>().copied()).unwrap();
@@ -2384,4 +2384,15 @@ fn reservations_alone_report_now_and_the_exact_count() {
         reply(&test.request(10, 3, ask(1))),
         Reply::Again(Again::Full { held: RESERVED_PLACES, room_at: Wall::EPOCH })
     );
+}
+
+#[test]
+#[should_panic(expected = "people: Person(2) links to identity")]
+fn restored_people_link_their_unique_identity_namespace_after_loading() {
+    let mut test = Test::new(LIMITS);
+    test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
+    for number in [1, 2] {
+        assert!(test.send(Event::Restore { record: Stored::Person { number, identity: identity(0, 1) } }).is_empty());
+    }
+    test.send(Event::Restored);
 }

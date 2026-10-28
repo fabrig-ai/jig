@@ -7,6 +7,7 @@ use crate::domain::{Domain, Startup, Task, activate, publish, record, snapshot, 
 use crate::{
     Active, Closing, Executor, Limits, Party, Phase, Problem, Refusal, Request, Stage, Stored, TaskRecord, Was,
 };
+use alloc::boxed::Box;
 use skein_lib::{Env, Queue};
 
 pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>, stored: Stored, out: &mut Queue<Request>) {
@@ -276,14 +277,12 @@ impl Domain {
     #[must_use]
     pub fn stored_record(&self, key: &crate::Key) -> Option<Stored> {
         Some(match *key {
-            crate::Key::Live(number) => Stored::Live(alloc::boxed::Box::new(self.task(number)?.clone())),
+            crate::Key::Live(number) => Stored::Live(Box::new(self.task(number)?.clone())),
             crate::Key::Stub(number) => Stored::Stub(*self.stubs.get(&number)?),
             crate::Key::Ledger(funder) => Stored::Ledger(*self.funding.get(&funder)?),
-            crate::Key::PlacedHold(number) => {
-                Stored::PlacedHold(alloc::boxed::Box::new(self.placed.get(&number)?.clone()))
-            }
+            crate::Key::PlacedHold(number) => Stored::PlacedHold(Box::new(self.placed.get(&number)?.clone())),
             crate::Key::PersonProposal(number) => {
-                Stored::PersonProposal(alloc::boxed::Box::new(self.person_proposals.get(&number)?.clone()))
+                Stored::PersonProposal(Box::new(self.person_proposals.get(&number)?.clone()))
             }
             crate::Key::Writer(number) => {
                 let mut found = None;
