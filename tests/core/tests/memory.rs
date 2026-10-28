@@ -65,7 +65,6 @@ fn both_worlds_check_the_counted_heap_at_every_iteration() {
     effects.delegate();
     effects.call(2, 9000);
     effects.restart(191, false);
-    assert!(jig_core_world::observations::root_bound(&world::limits()).is_some());
 }
 
 // Each named scenario preserves its own fixture and original assertions.

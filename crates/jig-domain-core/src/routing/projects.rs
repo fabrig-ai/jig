@@ -17,9 +17,6 @@ pub(super) fn rename_request(
     project: u32,
     name: Box<str>,
 ) {
-    if work.room() < 1 || out.room() < 1 {
-        return super::refusals::pool_again(work, request, people::Again::Busy);
-    }
     match core.rename(&env.limits, person, project, name) {
         Ok(()) => {
             let policy = core.authority.policy(project).expect("renamed project policy");
@@ -46,8 +43,7 @@ pub(super) fn make_project_request(
     name: Box<str>,
     policy: u32,
 ) {
-    // Roles, OpenPeriod, PeriodNext, Decided; policy row and the held root notification.
-    if work.room() < 4 || out.room() < 2 || core.tasks.funding_room() < 1 {
+    if core.tasks.funding_room() < 1 {
         return super::refusals::pool_again(work, request, people::Again::Busy);
     }
     match core.make_project(&env.limits, maker, name, policy) {

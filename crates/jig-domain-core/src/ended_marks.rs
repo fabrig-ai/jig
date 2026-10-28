@@ -30,7 +30,7 @@ pub(crate) fn loaded(core: &mut Core, env: &Env<Limits>, work: &mut Queue<Event>
         out.push(Request::Decided);
         return Requests::Out(out);
     }
-    let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+    let mut child = Queue::uncapped();
     core.people.mark_ended(
         &Env { now: env.now, wall: env.wall, limits: env.limits.people },
         people::EndedMark { request, project: mark.project, last_reply: mark.last_reply, seen: through },

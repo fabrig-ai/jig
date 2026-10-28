@@ -464,7 +464,7 @@ pub(crate) fn finish_watches(core: &mut Core, env: &Env<Limits>) -> Requests {
     if core.changed_views.is_empty() && !reconcile_runs {
         return end_invalid(core, env);
     }
-    let mut out = Queue::with_capacity(core.route_bound);
+    let mut out = Queue::uncapped();
     append(end_invalid(core, env), &mut out);
     // Retained runs are live independently of watches (QUESTIONS.md, item 41).
     // A committed turn stops being provisional; only an ended attempt frees
@@ -516,7 +516,7 @@ pub(super) fn end_invalid(core: &mut Core, env: &Env<Limits>) -> Requests {
         out.push(Request::Decided);
         return Requests::Out(out);
     }
-    let mut out = Queue::with_capacity(core.route_bound);
+    let mut out = Queue::uncapped();
     let mut watches = List::with_capacity(core.view_subjects.len());
     for (watcher, binding) in &core.view_subjects {
         if !core.views.is_closing(*watcher)

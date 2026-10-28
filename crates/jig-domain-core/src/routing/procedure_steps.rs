@@ -111,10 +111,9 @@ pub(super) fn apply(core: &mut Core, env: &Env<Limits>, task: u64, step: u64, ev
             revised.push(part.task).expect("amendments bounded");
         }
     }
-    let room = crate::settings::task_room(&env.limits);
-    let mut child = Queue::with_capacity(room);
+    let mut child = Queue::uncapped();
     tasks::step(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, event, &mut child);
-    let mut kept = Queue::with_capacity(room);
+    let mut kept = Queue::uncapped();
     let mut refusal = None;
     for _ in 0..child.len() {
         let request = child.pop().expect("task output count");
@@ -127,8 +126,8 @@ pub(super) fn apply(core: &mut Core, env: &Env<Limits>, task: u64, step: u64, ev
     if let Some(why) = refusal {
         return refused(core, task, step, why);
     }
-    let Requests::Out(mut routed) = super::task_routes::tag_tasks(core, env, kept, room, false, false, false);
-    let mut out = Queue::with_capacity(routed.capacity().checked_add(1).expect("step outcome room"));
+    let Requests::Out(mut routed) = super::task_routes::tag_tasks(core, env, kept, false, false, false);
+    let mut out = Queue::uncapped();
     for _ in 0..routed.len() {
         let request = routed.pop().expect("routed step count");
         if let Request::Decided = &request {

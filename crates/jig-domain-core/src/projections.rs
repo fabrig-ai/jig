@@ -285,8 +285,7 @@ pub fn finish_decision(core: &mut Core, env: &Env<Limits>) -> Requests {
     if !owed(core) {
         return crate::routing::finish_watches(core, env);
     }
-    let room = core.route_bound;
-    let mut out = Queue::with_capacity(room.checked_add(1).expect("feed mark"));
+    let mut out = Queue::uncapped();
     let commit = core.counters.deployment().commits;
     let mut goals = List::with_capacity(core.projections.len());
     for (number, _) in &core.projections {

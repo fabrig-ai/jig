@@ -81,12 +81,11 @@ pub(crate) fn unused(number: u64) -> Request {
 
 /// Puts the carried value's unused output before every other output, so
 /// the clients' component hears of it before the request's answer. The
-/// outputs keep the room they had for what their caller adds.
+/// remaining outputs retain their order.
 pub(crate) fn first(unused: Option<u64>, requests: Requests) -> Requests {
     let Some(number) = unused else { return requests };
     let Requests::Out(mut rest) = requests;
-    let capacity = rest.len().checked_add(rest.room()).expect("bounded route output");
-    let mut out = Queue::with_capacity(capacity.checked_add(1).expect("bounded route output"));
+    let mut out = Queue::uncapped();
     out.push(self::unused(number));
     for _ in 0..rest.len() {
         out.push(rest.pop().expect("route output count"));
@@ -172,7 +171,7 @@ pub(super) fn part(
     match admitted {
         Ok(route) => {
             flight.part = true;
-            let mut child = Queue::with_capacity(people::max_out(&env.limits.people));
+            let mut child = Queue::uncapped();
             child.push(route);
             super::people_routes::tag_people(core, env, child, work)
         }

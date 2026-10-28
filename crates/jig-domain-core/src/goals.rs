@@ -153,7 +153,7 @@ impl Core {
                 ))
             }
         };
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("authority room"));
+        let mut findings = Queue::uncapped();
         let ask = authority::PersonAsk {
             project,
             role: role.number(),

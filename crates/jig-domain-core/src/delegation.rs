@@ -133,7 +133,7 @@ impl Core {
                 })
                 .expect("bounded procedure batch");
         }
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("finding bound"));
+        let mut findings = Queue::uncapped();
         let checked = self.connector_batch_admit(
             context.project,
             &context.authority,
@@ -218,7 +218,7 @@ impl Core {
             }
             asked.push(authority::Delegate { executor, authority, symbolic }).expect("bounded delegation request");
         }
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("findings bound"));
+        let mut findings = Queue::uncapped();
         let checked = self.connector_batch_admit(
             context.project,
             &context.authority,

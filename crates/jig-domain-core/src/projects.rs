@@ -62,7 +62,7 @@ impl Core {
         let templates = configured.templates.clone();
         let project = u32::try_from(fresh(&mut self.counters, Family::Project).expect("project room checked"))
             .expect("project number room checked");
-        let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
+        let mut facts = Queue::uncapped();
         authority::step(&mut self.authority, authority::Event::Policy { project, policy }, &mut facts);
         assert!(facts.pop() == Some(authority::PolicyFact::Added { project }), "checked configured policy admission");
         self.projects.push(project).expect("project room checked");

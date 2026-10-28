@@ -16,7 +16,7 @@ use jig_domain_views as views;
 use skein_lib::{Env, List, Map, Queue, Token};
 
 pub(super) fn route_view(core: &mut Core, env: &Env<Limits>, event: views::Event) -> Requests {
-    let mut out = Queue::with_capacity(views::max_out(&env.limits.views));
+    let mut out = Queue::uncapped();
     views::step(&mut core.views, &Env { now: env.now, wall: env.wall, limits: env.limits.views }, event, &mut out);
     made_outputs(core, env, out)
 }
@@ -24,10 +24,9 @@ pub(super) use super::watch_marks::{touch_number, touch_people_event, touch_peop
 
 // Construct and move each document into the decision that asked for it.
 pub(super) fn made_outputs(core: &mut Core, env: &Env<Limits>, mut child: Queue<views::Request>) -> Requests {
-    let room = views::max_out(&env.limits.views);
-    let mut ready = Queue::with_capacity(room);
+    let mut ready = Queue::uncapped();
     let mut documents = Map::with_capacity(env.limits.views.watchers);
-    let mut out = Queue::with_capacity(room.checked_add(1).expect("view output room"));
+    let mut out = Queue::uncapped();
     for _ in 0..child.len() {
         match child.pop().expect("view output count") {
             views::Request::Make { watcher, .. } => {
@@ -484,7 +483,7 @@ pub(super) fn run_text(
     text: Box<[u8]>,
     call: Option<views::Call>,
 ) -> Requests {
-    let mut out = Queue::with_capacity(crate::route_bound(&env.limits).expect("bounded stream route"));
+    let mut out = Queue::uncapped();
     append_stream(super::watch_marks::end_invalid(core, env), &mut out);
     let live = match core.proofs.get(&run.raw()) {
         Some(proof) => {
@@ -535,7 +534,7 @@ pub(super) fn run_input(
     tool: Box<[u8]>,
     input: Box<[u8]>,
 ) -> Requests {
-    let mut out = Queue::with_capacity(crate::route_bound(&env.limits).expect("bounded input route"));
+    let mut out = Queue::uncapped();
     append_stream(super::watch_marks::end_invalid(core, env), &mut out);
     let live = match core.proofs.get(&run.raw()) {
         Some(proof) => {
@@ -579,7 +578,7 @@ pub(super) fn run_call(core: &mut Core, env: &Env<Limits>, run: Token, attempt: 
         Some(proof) => proof.attempt == attempt.raw() && proof.terminal.is_none(),
         None => false,
     };
-    let mut out = Queue::with_capacity(crate::route_bound(&env.limits).expect("bounded current-call route"));
+    let mut out = Queue::uncapped();
     if live {
         append_stream(super::watch_marks::end_invalid(core, env), &mut out);
         let before = (views::retained_attempt(&core.views, run), views::revision(&core.views, run));
@@ -629,7 +628,7 @@ fn changed_run(core: &mut Core, env: &Env<Limits>, run: Token, out: &mut Queue<R
 }
 
 pub(super) fn stream_delivered(core: &mut Core, env: &Env<Limits>, watcher: Token) -> Requests {
-    let mut out = Queue::with_capacity(crate::route_bound(&env.limits).expect("bounded stream terminal"));
+    let mut out = Queue::uncapped();
     append_stream(super::watch_marks::end_invalid(core, env), &mut out);
     append_stream(route_view(core, env, views::Event::StreamDelivered { watcher }), &mut out);
     out.push(Request::Decided);
@@ -685,7 +684,7 @@ pub(crate) fn retained_made(
     watcher: Token,
     document: Result<documents::Document, views::End>,
 ) -> Requests {
-    let mut child = Queue::with_capacity(views::max_out(&env.limits.views));
+    let mut child = Queue::uncapped();
     let view_env = Env { now: env.now, wall: env.wall, limits: env.limits.views };
     let outcome = match &document {
         Ok(_) => views::Made::Ready,
@@ -695,7 +694,7 @@ pub(crate) fn retained_made(
     if document.is_ok() {
         views::step(&mut core.views, &view_env, views::Event::EndWatch { watcher, end: views::End::Gone }, &mut child);
     }
-    let mut out = Queue::with_capacity(views::max_out(&env.limits.views).checked_add(1).expect("watch load output"));
+    let mut out = Queue::uncapped();
     for _ in 0..child.len() {
         match child.pop().expect("made output count") {
             views::Request::Deliver { .. } => {

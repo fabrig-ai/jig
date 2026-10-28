@@ -38,7 +38,7 @@ impl Driver {
     /// A signed-in party's chat, assigned to the walking world's worker.
     #[must_use]
     pub fn chat(seed: u64) -> Self {
-        Self::configured_chat(world::config(seed), world::limits())
+        Self::configured_chat(world::config(seed), &world::limits())
     }
 
     /// A chat fixture with room and a configured policy for two more projects.
@@ -70,16 +70,16 @@ impl Driver {
                 },
             )
             .expect("one configured policy");
-        Self::configured_chat(configuration, limits)
+        Self::configured_chat(configuration, &limits)
     }
 
-    fn configured_chat(configuration: root::Config, limits: root::Limits) -> Self {
+    fn configured_chat(configuration: root::Config, limits: &root::Limits) -> Self {
         let creating = fixtures::Creating::new(&configuration.core, limits.core.tasks.tree_tasks);
-        let bootstrap = effects::World::first_start_with_accounts(configuration, &limits);
+        let bootstrap = effects::World::first_start_with_accounts(configuration, limits);
         let (now, wall) = bootstrap.clocks();
         let mut driver = Self {
             domain: bootstrap.domain,
-            env: Env { now, wall, limits },
+            env: Env { now, wall, limits: *limits },
             events: VecDeque::new(),
             returned: 0,
             released: Vec::new(),

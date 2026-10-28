@@ -284,7 +284,7 @@ pub(crate) fn create_start(
     }
     let hard = !authority::at_most(&given, &policy.ceiling, &core.authority.rules().implies);
     let (source, numbers) = core.person_pool(project, person);
-    let mut findings = Queue::with_capacity(authority::max_out(core.authority.limits()).expect("authority room"));
+    let mut findings = Queue::uncapped();
     let ask = authority::PersonAsk {
         project,
         role: role.number(),
@@ -429,7 +429,7 @@ pub(crate) fn amendment_admit_places_in(
         Some(numbers) => numbers,
         None => tasks::Numbers { budget: 0, spent: 0, spent_below: 0, reserved: 0 },
     };
-    let mut findings = Queue::with_capacity(authority::max_out(core.authority.limits()).expect("authority bound"));
+    let mut findings = Queue::uncapped();
     let ask = authority::PersonAsk {
         project,
         role: role.number(),

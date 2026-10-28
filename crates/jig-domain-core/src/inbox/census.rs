@@ -22,7 +22,7 @@ impl Core {
             "people restored before census"
         );
         let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.people };
-        let mut out = Queue::with_capacity(people::max_out(&limits.people));
+        let mut out = Queue::uncapped();
         for task in self.tasks.view_tasks() {
             let row = self.tasks.task(task.number).expect("live view names its owner");
             if let Some(party) = self.conversation_requester(row) {
@@ -91,7 +91,7 @@ impl Core {
             }
             let owner = self.tasks.task(line.task).expect("named question owner");
             let entries = self.waiting_entries(limits, owner);
-            let mut out = Queue::with_capacity(people::max_out(&limits.people));
+            let mut out = Queue::uncapped();
             let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.people };
             people::step(&mut self.people, &env, people::Event::Waiting { task: line.task, entries }, &mut out);
             return out.is_empty();
@@ -116,7 +116,7 @@ impl Core {
         if !super::matches_ended(&row.phase) || !super::valid_header(self, limits, row) {
             return false;
         }
-        let mut out = Queue::with_capacity(people::max_out(&limits.people));
+        let mut out = Queue::uncapped();
         let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.people };
         match row.requester {
             tasks::Party::Person(party) => {

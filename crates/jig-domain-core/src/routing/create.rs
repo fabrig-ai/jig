@@ -104,7 +104,7 @@ pub(super) fn checked(
             tasks_left: env.limits.tasks.tree_tasks,
             request: authority::PersonRequest::Create(delegates.into_boxed()),
         };
-        let mut findings = Queue::with_capacity(authority::max_out(core.authority.limits()).expect("authority output"));
+        let mut findings = Queue::uncapped();
         let checked = authority::check_request(&core.authority, &ask, &mut findings);
         if checked.answer != authority::Answer::Allow {
             let mut refusal = core.request_refusal(&ask, checked.answer, &mut findings);

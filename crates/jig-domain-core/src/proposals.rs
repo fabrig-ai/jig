@@ -210,7 +210,7 @@ impl Core {
             tasks_left,
             request: authority::PersonRequest::Accept(action),
         };
-        let mut findings = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("authority bound"));
+        let mut findings = Queue::uncapped();
         let checked = authority::check_request(&self.authority, &ask, &mut findings);
         if checked.answer == authority::Answer::Allow {
             Ok(())

@@ -238,7 +238,7 @@ impl Core {
             | ToolKind::Read
             | ToolKind::Settings => authority::Call::Tool,
         };
-        let mut why = Queue::with_capacity(authority::max_out(self.authority.limits()).expect("bounded findings"));
+        let mut why = Queue::uncapped();
         let answer = authority::check_call(
             &self.authority,
             &authority::CallAsk {
@@ -252,7 +252,7 @@ impl Core {
         if answer == authority::Answer::Allow {
             return None;
         }
-        let mut findings = List::with_capacity(why.capacity());
+        let mut findings = List::with_capacity(why.len());
         for _ in 0..why.len() {
             findings.push(why.pop().expect("finding count")).expect("finding room");
         }
@@ -315,7 +315,7 @@ impl Core {
 
 /// The most one route of the core writes, or holds, including a sibling
 /// callback reached after a connector's own event. Pricing and the
-/// capacities sized from it read it; admission never does (a root
+/// finite fan-out loops read it; admission never does (a root
 /// admits by its watermark, `domain/root.md` 3).
 #[must_use]
 pub fn route_bound(limits: &Limits) -> Option<u32> {
@@ -353,8 +353,8 @@ pub fn step(core: &mut Core, env: &Env<Limits>, event: Event) -> Requests {
     core.run_now = env.now;
     core.run_wall = env.wall;
     let room = route_room(&env.limits);
-    let mut work = Queue::with_capacity(room);
-    let mut out = Queue::with_capacity(room.checked_add(1).expect("core output mark"));
+    let mut work = Queue::uncapped();
+    let mut out = Queue::uncapped();
     work.push(event);
     for _ in 0..room {
         let Some(next) = work.pop() else { break };
@@ -398,7 +398,7 @@ pub fn resume_fleet(core: &mut Core, env: &Env<Limits>) -> Requests {
     if core.stopping {
         return crate::stopping::empty();
     }
-    let mut child = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+    let mut child = Queue::uncapped();
     fleet::resume(&mut core.fleet, &Env { now: env.now, wall: env.wall, limits: env.limits.fleet }, &mut child);
     if !child.is_empty() {
         core.touch_deployment();
@@ -444,7 +444,7 @@ fn step_one(core: &mut Core, env: &Env<Limits>, event: Event, work: &mut Queue<E
         Event::ApplicationFinished { request, outcome } => {
             application_routes::finished(core, env, work, request, outcome)
         }
-        Event::ProjectionSettled { goal, connector } => route_projection_settled(core, env, goal, connector),
+        Event::ProjectionSettled { goal, connector } => route_projection_settled(core, goal, connector),
         Event::SettledCall { to, key, name, call } => {
             crate::conversation::settle(core, &env.limits, to, key, name, call)
         }
@@ -545,7 +545,7 @@ fn step_one(core: &mut Core, env: &Env<Limits>, event: Event, work: &mut Queue<E
         }
         Event::EndedTaskLoaded { request, row, busy } => result_reads::loaded(core, env, work, request, row, busy),
         Event::PartyInputsLoaded { request, row, busy } => {
-            let mut out = Queue::with_capacity(route_room(&env.limits));
+            let mut out = Queue::uncapped();
             party_inputs::loaded(core, env, &mut out, work, party_inputs::Loaded { request, row, busy });
             Requests::Out(out)
         }
@@ -589,20 +589,20 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
     let oldest = core.current.oldest;
     let Requests::Out(mut out) = match timer {
         Timer::People => {
-            let mut out = Queue::with_capacity(people::max_out(&env.limits.people));
+            let mut out = Queue::uncapped();
             people::fire(&mut core.people, &Env { now: env.now, wall: env.wall, limits: env.limits.people }, &mut out);
-            let mut work = Queue::with_capacity(route_room(&env.limits));
+            let mut work = Queue::uncapped();
             let requests = people_routes::tag_people(core, env, out, &mut work);
             assert!(work.is_empty(), "people expirations produce no sibling continuations");
             requests
         }
         Timer::Tasks => {
-            let mut out = Queue::with_capacity(crate::settings::task_room(&env.limits));
+            let mut out = Queue::uncapped();
             tasks::fire(&mut core.tasks, &Env { now: env.now, wall: env.wall, limits: env.limits.tasks }, &mut out);
-            tag_tasks(core, env, out, crate::settings::task_room(&env.limits), false, false, false)
+            tag_tasks(core, env, out, false, false, false)
         }
         Timer::Fleet => {
-            let mut out = Queue::with_capacity(fleet::max_out(&env.limits.fleet));
+            let mut out = Queue::uncapped();
             fleet::fire(&mut core.fleet, &Env { now: env.now, wall: env.wall, limits: env.limits.fleet }, &mut out);
             if !out.is_empty() {
                 core.touch_deployment();
@@ -612,16 +612,16 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
             tag_fleet(core, env, &mut Queue::with_capacity(0), out, fleet::max_out(&env.limits.fleet))
         }
         Timer::Brief => {
-            let mut out = Queue::with_capacity(brief::gather_max_out(&env.limits.brief));
+            let mut out = Queue::uncapped();
             brief::gather_fire(
                 &mut core.brief,
                 &Env { now: env.now, wall: env.wall, limits: env.limits.brief },
                 &mut out,
             );
-            tag_brief(core, env, out, brief::gather_max_out(&env.limits.brief))
+            tag_brief(core, env, out)
         }
         Timer::Account => {
-            let mut out = Queue::with_capacity(accounts::max_out(&env.limits.accounts));
+            let mut out = Queue::uncapped();
             accounts::fire(
                 &mut core.accounts,
                 &Env { now: env.now, wall: env.wall, limits: env.limits.accounts },
@@ -636,7 +636,7 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
             requests
         }
         Timer::View => {
-            let mut out = Queue::with_capacity(views::max_out(&env.limits.views));
+            let mut out = Queue::uncapped();
             views::fire(&mut core.views, &Env { now: env.now, wall: env.wall, limits: env.limits.views }, &mut out);
             made_outputs(core, env, out)
         }

@@ -75,7 +75,10 @@ fn a_wide_route_finishes_within_its_decision_before_a_later_entrance() {
                 assert_eq!(*outcome, people::Outcome::ProjectMade { project: PROJECT });
                 consequences.push("answer");
             }
-            _ => {}
+            root::Write::CopySettingsRevision(_)
+            | root::Write::Wires
+            | root::Write::Save(_)
+            | root::Write::Erase(_) => {}
         }
     }
     assert_eq!(consequences, ["policy", "roles", "period", "answer"], "all {HANDOFFS} hand-offs finish together");

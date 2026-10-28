@@ -431,7 +431,7 @@ impl Core {
             return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
         }
         let resize = self.resize(project, self.authority.policy(project).expect("existing policy"), &policy, limits)?;
-        let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
+        let mut facts = Queue::uncapped();
         authority::step(&mut self.authority, authority::Event::Policy { project, policy }, &mut facts);
         match facts.pop().expect("policy update terminal") {
             authority::PolicyFact::Changed { .. } => {
@@ -499,7 +499,7 @@ impl Core {
         {
             return false;
         }
-        let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
+        let mut facts = Queue::uncapped();
         authority::step(&mut self.authority, authority::Event::Restore { project, policy }, &mut facts);
         match facts.pop().expect("policy restore terminal") {
             authority::PolicyFact::Added { .. } => {
