@@ -121,8 +121,8 @@ fn a_crash_before_finished_decision_resumes_current_attempt() {
 }
 
 #[test]
-fn restore_rejects_corrupt_links_cycles_and_contracts_without_panicking() {
-    use jig_domain_tasks::{Request, max_out, step};
+fn restore_asserts_absent_links_and_loads_historical_shapes() {
+    use jig_domain_tasks::{max_out, step};
     use skein_lib::{Env, Queue, Time, Wall};
     let mut source = World::new(25, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[]), task(2, &[])]);
@@ -191,16 +191,23 @@ fn restore_rejects_corrupt_links_cycles_and_contracts_without_panicking() {
                 }
                 _ => unreachable!(),
             }
-            step(&mut domain, &env, Event::Restore { record: Stored::Live(Box::new(record)) }, &mut out);
+            let record = Stored::Live(Box::new(record));
+            step(&mut domain, &env, Event::Restore { record: record.clone() }, &mut out);
+            assert_eq!(domain.stored_record(&record.key()), Some(record));
         }
-        step(&mut domain, &env, Event::Check, &mut out);
-        let mut rejected = false;
-        while let Some(request) = out.pop() {
-            if matches!(request, Request::RestoreRefused { .. }) {
-                rejected = true;
-            }
+        for record in source.records.values().filter(|row| matches!(row, Stored::Ledger(_))) {
+            step(&mut domain, &env, Event::Restore { record: record.clone() }, &mut out);
         }
-        assert!(rejected);
+        if corrupt == 0 {
+            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                step(&mut domain, &env, Event::Check, &mut out);
+            }))
+            .expect_err("a missing root is a writer bug");
+            let message = panic.downcast_ref::<String>().expect("formatted link assertion");
+            assert_eq!(message, "tasks: Live(1) links to root 99, which is absent");
+        } else {
+            assert!(out.is_empty(), "bounded historical shapes load without a refusal");
+        }
     }
 }
 
@@ -340,26 +347,19 @@ fn restore_refuses_unrepresentable_eventual_funding_postings() {
 }
 
 #[test]
-fn malformed_unfinished_dependencies_refuse_at_restore_entrance() {
-    use jig_domain_tasks::{Request, step};
+fn bounded_unfinished_dependencies_load_without_subset_judgments() {
+    use jig_domain_tasks::step;
     use skein_lib::Queue;
     let mut source = World::new(31, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[])]);
-    for waiting in [
-        Box::new([99_u64]) as Box<[u64]>,
-        (1..=u64::from(LIMITS.dependencies) + 1).collect::<Vec<_>>().into_boxed_slice(),
-    ] {
-        let mut record = source.record(1).clone();
-        record.waiting_on = waiting;
-        let mut domain = jig_tasks_world::domain(&LIMITS, 31);
-        let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-        step(&mut domain, &source.env, Event::Restore { record: Stored::Live(Box::new(record)) }, &mut out);
-        assert!(
-            matches!(out.pop(), Some(Request::RestoreRefused { .. })),
-            "oversize/non-subset refused before Restored"
-        );
-        assert!(out.pop().is_none());
-    }
+    let mut record = source.record(1).clone();
+    record.waiting_on = Box::new([99]);
+    let record = Stored::Live(Box::new(record));
+    let mut domain = jig_tasks_world::domain(&LIMITS, 31);
+    let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
+    step(&mut domain, &source.env, Event::Restore { record: record.clone() }, &mut out);
+    assert!(out.is_empty());
+    assert_eq!(domain.stored_record(&record.key()), Some(record));
 }
 
 #[test]
@@ -394,8 +394,8 @@ fn restore_refuses_a_missing_unfinished_live_dependency_before_activation() {
 }
 
 #[test]
-fn impossible_settled_live_and_inconsistent_ledger_states_refuse_at_restore_entrance() {
-    use jig_domain_tasks::{Funder, Request, Stage, step};
+fn historical_settled_live_and_ledger_states_load_without_judgment() {
+    use jig_domain_tasks::{Funder, Stage, step};
     use skein_lib::Queue;
     let mut source = World::new(33, LIMITS);
     source.open_period(1, 300);
@@ -426,9 +426,9 @@ fn impossible_settled_live_and_inconsistent_ledger_states_refuse_at_restore_entr
     for record in invalid {
         let mut domain = jig_tasks_world::domain(&LIMITS, 33);
         let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-        step(&mut domain, &source.env, Event::Restore { record }, &mut out);
-        assert!(matches!(out.pop(), Some(Request::RestoreRefused { .. })));
-        assert!(out.pop().is_none());
+        step(&mut domain, &source.env, Event::Restore { record: record.clone() }, &mut out);
+        assert!(out.is_empty());
+        assert_eq!(domain.stored_record(&record.key()), Some(record));
     }
 }
 
@@ -474,8 +474,8 @@ fn restore_refuses_task_funding_outside_its_requester_ancestry() {
 }
 
 #[test]
-fn unresolved_or_inconsistent_escalation_rows_refuse_before_retention() {
-    use jig_domain_tasks::{Escalation, EscalationHolder, Hold, Request, Was, step};
+fn bounded_escalation_rows_load_without_recipient_or_revision_judgments() {
+    use jig_domain_tasks::{Escalation, EscalationHolder, Hold, Was, step};
     use skein_lib::Queue;
     let mut source = World::new(36, LIMITS);
     source.make(Party::Person(1), vec![task(1, &[])]);
@@ -496,16 +496,17 @@ fn unresolved_or_inconsistent_escalation_rows_refuse_before_retention() {
             5 => Escalation::Rejected {
                 revision: 1,
                 by: 1,
-                reason: vec![b'x'; usize::try_from(LIMITS.result_bytes).expect("configured bounded task result") + 1]
+                reason: vec![b'x'; usize::try_from(LIMITS.result_bytes).expect("configured bounded task result")]
                     .into_boxed_slice(),
             },
             _ => unreachable!(),
         };
         let mut domain = jig_tasks_world::domain(&LIMITS, 36);
         let mut out = Queue::with_capacity(jig_domain_tasks::max_out(&LIMITS));
-        step(&mut domain, &source.env, Event::Restore { record: Stored::Live(Box::new(task)) }, &mut out);
-        assert!(matches!(out.pop(), Some(Request::RestoreRefused { .. })));
-        assert!(out.pop().is_none());
+        let record = Stored::Live(Box::new(task));
+        step(&mut domain, &source.env, Event::Restore { record: record.clone() }, &mut out);
+        assert!(out.is_empty());
+        assert_eq!(domain.stored_record(&record.key()), Some(record));
     }
 }
 
