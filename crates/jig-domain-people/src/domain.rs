@@ -1878,7 +1878,6 @@ fn restore_failed(domain: &mut Domain, key: Key, refusal: Refusal, out: &mut Que
     out.push(Request::RestoreRefused { key, refusal });
 }
 
-#[expect(clippy::too_many_lines, reason = "all restored references are validated before requests open")]
 fn restored(domain: &mut Domain, env: &Env<Limits>, _out: &mut Queue<Request>) {
     match domain.phase {
         Phase::Ready | Phase::Failed => return,

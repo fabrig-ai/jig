@@ -80,16 +80,16 @@ fn decode(store: &mut Store, row: skein_kv::Row) -> Option<(Row, Option<Row>, u6
         Row::Jig(Record::People(jig_domain_people::Stored::EndedRead { task, .. })) => *task,
         Row::Jig(_) | Row::Application { .. } => return Some((row, None, size)),
     };
-    let (record, owner_size) = match ended(store, task)? {
-        Some(ended) => ended,
-        None => panic!(
-            "store: {:?} links to Ended({task}), which is absent",
-            match &row {
-                Row::Jig(record) => record.key(),
-                Row::Application { .. } => unreachable!("typed census row"),
-            }
-        ),
-    };
+    let ended = ended(store, task)?;
+    assert!(
+        ended.is_some(),
+        "store: {:?} links to Ended({task}), which is absent",
+        match &row {
+            Row::Jig(record) => record.key(),
+            Row::Application { .. } => unreachable!("typed census row"),
+        }
+    );
+    let (record, owner_size) = ended.expect("census owner linked above");
     if let Row::Jig(Record::People(jig_domain_people::Stored::EndedRead { .. })) = row {
         Some((row, Some(Row::Jig(record)), size.checked_add(owner_size)?))
     } else {
@@ -97,7 +97,8 @@ fn decode(store: &mut Store, row: skein_kv::Row) -> Option<(Row, Option<Row>, u6
     }
 }
 
-/// The restart's census join, shared with the check before the switch.
+/// The restart's census join distinguishes undecodable bytes from an absent owner.
+#[expect(clippy::option_option, reason = "outer None is a codec failure; inner None is an absent link target")]
 pub(crate) fn ended(store: &mut Store, task: u64) -> Option<Option<(Record, u64)>> {
     let key = Key::Tasks(tasks::Key::Ended(task));
     let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
@@ -113,7 +114,15 @@ pub(crate) fn ended(store: &mut Store, task: u64) -> Option<Option<(Record, u64)
     let value = match above.pop()? {
         skein_kv::Event::Got { value: Some(value), .. } => value,
         skein_kv::Event::Got { value: None, .. } => return Some(None),
-        _ => return None,
+        skein_kv::Event::Opened { .. }
+        | skein_kv::Event::Committed { .. }
+        | skein_kv::Event::Refused { .. }
+        | skein_kv::Event::Failed { .. }
+        | skein_kv::Event::Loaded { .. }
+        | skein_kv::Event::Closed { .. }
+        | skein_kv::Event::OpenFailed { .. }
+        | skein_kv::Event::Recovered { .. }
+        | skein_kv::Event::RecoveryFailed { .. } => return None,
     };
     let record = codec::decode(&key, &value, &store.codec, &store.names)?;
     if record.key() != key {

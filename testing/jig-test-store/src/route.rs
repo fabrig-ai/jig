@@ -319,7 +319,7 @@ fn restored(routes: &mut Routes, owner: Token, rows: Box<[Row]>, next: Option<st
         };
         assert!(advanced, "store: restore range {step:?} did not advance cursor {next:?}");
     }
-    *cursor = next.clone();
+    cursor.clone_from(&next);
     let step = *step;
     let limits = routes.limits.expect("configured routing");
     for row in rows {
