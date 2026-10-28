@@ -150,6 +150,7 @@ pub struct Frozen {
     pub runs: BTreeMap<u64, u64>,
     /// Requested stops awaiting terminal work (domain/tasks.md, 5.1).
     pub stops: BTreeSet<(u64, u64)>,
+    pub parks: BTreeSet<(u64, u64)>,
     /// Effects settlement gates (domain/tasks.md, 5.1).
     pub closing: BTreeSet<u64>,
     /// Committed requester outcomes (domain/tasks.md, 5.6).
@@ -205,6 +206,7 @@ pub struct World {
     pub contexts: BTreeMap<u64, RunContext>,
     pub runs: BTreeMap<u64, u64>,
     pub stops: BTreeSet<(u64, u64)>,
+    pub parks: BTreeSet<(u64, u64)>,
     pub closing: BTreeSet<u64>,
     pub results: BTreeMap<u64, Ending>,
     pub ended_topics: Vec<(u64, u64, u16)>,
@@ -243,6 +245,7 @@ impl World {
             contexts: BTreeMap::new(),
             runs: BTreeMap::new(),
             stops: BTreeSet::new(),
+            parks: BTreeSet::new(),
             closing: BTreeSet::new(),
             results: BTreeMap::new(),
             ended_topics: Vec::new(),
@@ -280,6 +283,7 @@ impl World {
             contexts: self.contexts,
             runs: self.runs,
             stops: self.stops,
+            parks: self.parks,
             closing: self.closing,
             results: self.results,
             ended_topics: self.ended_topics,
@@ -440,6 +444,7 @@ impl World {
             | Request::TurnAcknowledged { .. }
             | Request::Activate { .. }
             | Request::Stop { .. }
+                | Request::Park { .. }
             | Request::Adopt { .. }
             | Request::Close { .. }
             | Request::Release { .. }
@@ -761,6 +766,7 @@ impl World {
                 | Request::TurnAcknowledged { .. }
                 | Request::Activate { .. }
                 | Request::Stop { .. }
+                | Request::Park { .. }
                 | Request::Adopt { .. }
                 | Request::Close { .. }
                 | Request::Release { .. }
@@ -916,6 +922,9 @@ impl World {
                 Request::Activate { context } => {
                     self.activate(*context);
                 }
+                Request::Park { task, attempt } => {
+                    self.parks.insert((task, attempt));
+                }
                 Request::Stop { task, attempt } => {
                     self.stops.insert((task, attempt));
                 }
@@ -972,6 +981,8 @@ impl World {
                 live: live.clone(),
                 holds,
                 stops: self.stops.clone(),
+                parks: self.parks.clone(),
+                draining: live.iter().filter(|row| tasks::draining(&self.domain, row)).map(|row| row.number).collect(),
                 limits: Box::new(self.env.limits),
             });
         }
@@ -1274,6 +1285,7 @@ impl World {
         self.activations.clear();
         self.contexts.clear();
         self.stops.clear();
+        self.parks.clear();
         self.closing.clear();
         let rows = self.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
         for record in rows {

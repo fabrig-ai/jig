@@ -463,10 +463,6 @@ pub(super) fn hold_request(
     scope: people::HoldScope,
     reason: Box<[u8]>,
 ) {
-    if mode == people::HoldMode::Drain {
-        pool_refused(work, request, people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape });
-        return;
-    }
     let admission = match scope {
         people::HoldScope::Subtree { task } => {
             match core.control_admit(&people::Ask::Stop { project, task }, person, project, role, &env.limits.tasks) {
@@ -491,7 +487,7 @@ pub(super) fn hold_request(
             number,
             project,
             owner: tasks::Owner::Party { person },
-            mode: tasks::Mode::Stop,
+            mode: match mode { people::HoldMode::Stop => tasks::Mode::Stop, people::HoldMode::Drain => tasks::Mode::Drain },
             scope: match scope {
                 people::HoldScope::Subtree { task } => tasks::Scope::Subtree { task },
                 people::HoldScope::Project => tasks::Scope::Project,

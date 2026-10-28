@@ -1116,6 +1116,7 @@ pub(crate) fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<R
             | crate::Escalation::Routing { .. }
             | crate::Escalation::Rejected { .. } => {}
         }
+        crate::placed::restart(domain, number, out);
         match phase {
             Phase::Active(Active::Due | Active::Preparing) => {
                 let row = &mut task_mut(domain, number).expect("restored name exists").record;

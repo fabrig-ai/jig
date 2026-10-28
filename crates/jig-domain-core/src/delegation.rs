@@ -79,6 +79,8 @@ pub struct StepMessage {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StepEnd {
+    /// Finished existing work; hold under a drain, otherwise wait.
+    Idle,
     Result(tasks::TaskResult),
     Hold(tasks::Hold),
     Wait,

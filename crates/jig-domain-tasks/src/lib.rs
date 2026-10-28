@@ -98,7 +98,7 @@ mod parts;
 mod periods;
 mod placed;
 mod positions;
-pub use placed::{Mode, Owner, PlacedHold, Scope};
+pub use placed::{Mode, Owner, PlacedHold, Scope, draining};
 pub use positions::{AnswerLine, ProposalRow, QuestionLine};
 mod person;
 mod person_proposals;
@@ -164,3 +164,4 @@ pub use value::{
 };
 
 pub use run::run_attempt;
+

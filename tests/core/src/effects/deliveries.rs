@@ -110,8 +110,8 @@ impl World {
             root::Delivery::Core(core::Held::Grant { channel, run, attempt, grant }) => {
                 self.grant_delivered(channel, run, attempt, grant);
             }
-            root::Delivery::Core(core::Held::Park { .. }) => {
-                unreachable!("this world's scripts never request a park")
+            root::Delivery::Core(core::Held::Park { run, attempt, .. }) => {
+                self.parks.push((run.raw(), attempt.raw()));
             }
             root::Delivery::Core(core::Held::Cancel { run, attempt, .. }) => {
                 self.cancellations.push((run.raw(), attempt.raw()));
@@ -225,6 +225,7 @@ impl World {
                 | core::Held::NotesWritten { .. }
                 | core::Held::NotesDeleted { .. }
                 | core::Held::StopRun { .. }
+                | core::Held::ParkRun { .. }
                 | core::Held::CheckSource { .. }
                 | core::Held::SignOutSource { .. }
                 | core::Held::SourceSignedOut { .. }

@@ -393,6 +393,7 @@ pub(crate) fn activation(
         }
         End::Exceeded(_) | End::Parked | End::Failed(_) | End::Refused | End::Recheck => end,
     };
+    let draining = domain.parking.get(&number) == Some(&attempt);
     let parked = kept.parks(&end);
     let end = if parked { End::Parked } else { end };
     let refuses_live = match &end {
@@ -416,6 +417,9 @@ pub(crate) fn activation(
             End::FinishedWithFollowups { .. } => unreachable!("follow-ups normalized"),
         }
     };
+    if draining {
+        domain.parking.remove(&number);
+    }
     let next = if let Some(mut closing) = closing {
         closing.stage = Stage::Delegates;
         match &mut closing.ending {
@@ -440,7 +444,7 @@ pub(crate) fn activation(
                 let task = task_mut(domain, number).expect("terminal names live task");
                 task.record.tries = Tries::NONE;
                 task.record.refusals = 0;
-                if narrowed && !kept.blocks_claims() { Phase::Active(Active::Due) } else { Phase::Active(Active::Idle) }
+                if (narrowed || draining) && !kept.blocks_claims() { Phase::Active(Active::Due) } else { Phase::Active(Active::Idle) }
             }
             End::Exceeded(value) => exceeded(domain, number, value),
             End::Failed(class) => failure(domain, env, number, class),
@@ -482,7 +486,7 @@ pub(crate) fn activation(
     }
     crate::wake::after_run(domain, env, number, out);
     publish(domain, env, number, out);
-    if (narrowed || end_kind == crate::EndKind::Refused)
+    if (narrowed || draining || end_kind == crate::EndKind::Refused)
         && record(domain, number).expect("amended task live").phase == Phase::Active(Active::Due)
     {
         crate::domain::activate(domain, number, out);

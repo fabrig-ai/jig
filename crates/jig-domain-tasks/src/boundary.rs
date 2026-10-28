@@ -343,6 +343,8 @@ pub struct ProcedureMessage {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ProcedureEnd {
+    /// The connector is idle; a standing drain holds it in this commit.
+    Idle,
     Result(TaskResult),
     Hold(Hold),
     Wait,
@@ -1891,6 +1893,8 @@ pub enum Request {
         /** `Exact` live attempt to stop; its terminal remains owed before closing can advance. */
         attempt: u64,
     },
+    /// Park this live attempt at its next committed turn.
+    Park { task: u64, attempt: u64 },
     /// Ask root/fleet to reconcile a restored claim and highest committed turn.
     Adopt {
         /** `Restored` live task whose claim the root must reconcile with fleet. */
@@ -1970,6 +1974,8 @@ pub struct Added {
 /// (domain/engine.md, sections 7.1 and 9).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RunContext {
+    /// In a standing drain, with work still finishing.
+    pub draining: bool,
     pub ended_by: crate::EndedBy,
     pub llm: Option<crate::LlmChoice>,
     /// Current financial payer; preparations must recheck it before admission.

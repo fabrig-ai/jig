@@ -14,6 +14,8 @@ pub enum Seen {
         live: Vec<TaskRecord>,
         holds: Vec<jig_domain_tasks::PlacedHold>,
         stops: BTreeSet<(u64, u64)>,
+        parks: BTreeSet<(u64, u64)>,
+        draining: BTreeSet<u64>,
         limits: Box<Limits>,
     },
     Batch {
@@ -402,7 +404,7 @@ impl Expectations for Tasks {
                     judge.fail("live task limit exceeded");
                 }
             }
-            Seen::Placed { live, holds, stops, limits } => placed(&live, &holds, &stops, &limits, judge),
+            Seen::Placed { live, holds, stops, parks, draining, limits } => placed(&live, &holds, &stops, &parks, &draining, &limits, judge),
             Seen::Stored { live, limits } => {
                 stored(&live, &limits, judge);
                 self.preparing.clear();
@@ -720,6 +722,8 @@ fn placed(
     live: &[TaskRecord],
     holds: &[jig_domain_tasks::PlacedHold],
     stops: &BTreeSet<(u64, u64)>,
+    parks: &BTreeSet<(u64, u64)>,
+    draining: &BTreeSet<u64>,
     limits: &Limits,
     judge: &mut Judge<Name, Stimulus>,
 ) {
@@ -736,7 +740,7 @@ fn placed(
                         && (hold.lifted || in_scope(live, row.number, hold)) => {}
                 _ => judge.fail("task names missing or noncovering placed hold"),
             }
-            if !matches!(row.phase, Phase::Held { .. } | Phase::Closing(_)) {
+            if !matches!(row.phase, Phase::Held { .. } | Phase::Closing(_)) && !draining.contains(&row.number) {
                 judge.fail("placed task is not held or ending");
             }
         }
@@ -772,6 +776,7 @@ fn placed(
                 judge.fail("standing hold missed a task");
             }
             let attempt = match row.phase {
+                Phase::Active(jig_domain_tasks::Active::Claimed { attempt } | jig_domain_tasks::Active::Running { attempt }) => Some(attempt),
                 Phase::Held {
                     was:
                         Was::Active(
@@ -783,7 +788,10 @@ fn placed(
                 Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Held { .. } | Phase::Ended(_) => None,
             };
             if let Some(attempt) = attempt
-                && !stops.contains(&(row.number, attempt))
+                && !(match hold.mode {
+                    jig_domain_tasks::Mode::Stop => stops.contains(&(row.number, attempt)),
+                    jig_domain_tasks::Mode::Drain => parks.contains(&(row.number, attempt)) || stops.contains(&(row.number, attempt)),
+                })
             {
                 judge.fail("standing stop left a run uncancelled");
             }

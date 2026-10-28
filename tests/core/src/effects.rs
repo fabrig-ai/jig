@@ -72,6 +72,7 @@ pub struct World {
     move_provider: Option<u32>,
     pub assignments: Vec<(u64, u64)>,
     pub assignment_transcripts: Vec<AssignedTranscript>,
+    pub parks: Vec<(u64, u64)>,
     pub cancellations: Vec<(u64, u64)>,
     pub busy_turns: Vec<(u64, u64, u32)>,
     pub busy_calls: Vec<Box<[u8]>>,

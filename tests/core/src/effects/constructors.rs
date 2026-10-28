@@ -324,6 +324,7 @@ impl World {
             assignments: Vec::new(),
             assignment_transcripts: Vec::new(),
             cancellations: Vec::new(),
+            parks: Vec::new(),
             busy_turns: Vec::new(),
             busy_calls: Vec::new(),
             busy_events: Vec::new(),

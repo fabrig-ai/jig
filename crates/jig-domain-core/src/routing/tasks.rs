@@ -252,6 +252,7 @@ pub(super) fn tag_tasks(
                 core.adopt(env, task, attempt, kept);
                 continue;
             }
+            tasks::Request::Park { task, attempt } => Request::Held(Box::new(Held::ParkRun { task, attempt })),
             tasks::Request::Stop { task, attempt } => Request::Held(Box::new(Held::StopRun { task, attempt })),
             tasks::Request::RestoreRefused { .. } => {
                 core.restart_unresolved(crate::RestoreChild::Tasks, 1);

@@ -64,6 +64,7 @@ pub struct Domain {
     pub(crate) next_writer: u64,
     pub(crate) funding: Map<crate::Funder, crate::FundingRecord>,
     pub(crate) placed: Map<u64, crate::PlacedHold>,
+    pub(crate) parking: Map<u64, u64>,
     pub(crate) person_proposals: Map<u64, crate::PersonProposal>,
     pub(crate) charters: Box<[crate::CharterModels]>,
     /// Each configured model's count of declared efforts, in configuration's order.
@@ -247,6 +248,7 @@ impl Domain {
             funding: Map::with_capacity(limits.funders),
             person_proposals: Map::with_capacity(limits.tasks),
             placed: Map::with_capacity(limits.placed_holds),
+            parking: Map::with_capacity(limits.tasks),
             charters,
             efforts,
             rng: Rng::new(seed),
@@ -1000,6 +1002,7 @@ impl Domain {
                 .expect("bounded delegate snapshot");
         }
         Some(Box::new(crate::RunContext {
+            draining: crate::placed::draining(domain, task),
             ended_by: task.flags.ended_by,
             llm: task.llm.clone(),
             payer: domain.payer(number).expect("admitted financial chain has a payer"),
@@ -1085,7 +1088,7 @@ fn milestone(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queu
 }
 
 pub(crate) fn publish(domain: &mut Domain, env: &Env<Limits>, number: u64, out: &mut Queue<Request>) {
-    crate::placed::enforce(&mut task_mut(domain, number).expect("published task live").record);
+    crate::placed::enforce(domain, number);
     crate::settings::publish(domain, number);
     crate::waits::refresh(domain, number);
     crate::proposals::withdraw_on_close(domain, env, number, out);
@@ -1476,6 +1479,8 @@ pub(crate) fn make_admitted(
         let held = crate::placed::covering(domain, &crate::compound::Staged::new(0), number, None);
         task_mut(domain, number).expect("new task").record.placed = held;
         if let Some(hold) = held {
+            let row = &mut task_mut(domain, number).expect("new task").record;
+            row.phase = Phase::Held { was: crate::run::was(row.phase.clone()), why: crate::Hold::Placed { hold }, source: None };
             fact(domain, Fact::Held { task: number, why: crate::Hold::Placed { hold } });
         }
         publish(domain, env, number, out);

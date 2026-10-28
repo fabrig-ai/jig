@@ -900,6 +900,7 @@ pub(crate) fn check_release(
         Phase::Held { was: Was::Active(active @ (Active::Claimed { .. } | Active::Running { .. })), .. } => {
             Phase::Active(*active)
         }
+        Phase::Waiting | Phase::Active(_) | Phase::Closing(_) if placed.is_some() => task.phase.clone(),
         Phase::Waiting | Phase::Active(_) | Phase::Closing(_) | Phase::Ended(_) => {
             return Err(Refusal::State);
         }

@@ -132,6 +132,7 @@ fn has_watch_end(out: &[Request]) -> bool {
                 | Held::Refuse { .. }
                 | Held::TurnBusy { .. }
                 | Held::StopRun { .. }
+                | Held::ParkRun { .. }
                 | Held::Load(..)
                 | Held::NotesLoad { .. }
                 | Held::NotesWritten { .. }

@@ -210,6 +210,8 @@ pub enum Held {
     TurnBusy { channel: Token, run: Token, attempt: Token, turn: u32 },
     /// Cancel the current fenced run after its task decision commits.
     StopRun { task: u64, attempt: u64 },
+    /// Attempt-fenced park continuation, released behind the task commit.
+    ParkRun { task: u64, attempt: u64 },
     /// Store page requested by the notes child after earlier commits.
     NotesLoad { owner: Token, range: notes::Range },
     /// A note write's accepted revision.

@@ -81,6 +81,7 @@ pub(super) fn parts(
         }
     }
     let end = match &step.end {
+        StepEnd::Idle => tasks::ProcedureEnd::Idle,
         StepEnd::Wait => tasks::ProcedureEnd::Wait,
         StepEnd::Hold(why) => tasks::ProcedureEnd::Hold(*why),
         StepEnd::Result(result) => tasks::ProcedureEnd::Result(result.clone()),

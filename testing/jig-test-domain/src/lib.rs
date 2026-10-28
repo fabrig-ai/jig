@@ -994,6 +994,9 @@ pub fn release(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>)
                 step(domain, env, Event::RestartDone(core::RestartStep::Switch));
             }
             Delivery::Fleet(event) => step(domain, env, Event::Core(core::Event::Fleet(event))),
+            Delivery::Core(core::Held::ParkRun { task, attempt }) => {
+                step(domain, env, Event::Core(core::Event::Fleet(core::Core::park_run(task, attempt))));
+            }
             Delivery::Core(core::Held::StopRun { task, attempt }) => {
                 step(
                     domain,

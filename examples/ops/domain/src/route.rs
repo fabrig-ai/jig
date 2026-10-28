@@ -427,6 +427,10 @@ fn core_held(
         core::Held::Park { run, attempt, .. } => {
             child(decision, Released::Host(host::Event::Down(host::LinkDown::Park { run, attempt })));
         }
+        core::Held::ParkRun { task, attempt } => child(
+            decision,
+            Released::Fleet(core::Core::park_run(task, attempt)),
+        ),
         core::Held::StopRun { task, attempt } => child(
             decision,
             Released::Fleet(fleet::Event::Cancel { run: Token::new(task), attempt: Token::new(attempt) }),

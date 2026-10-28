@@ -439,7 +439,6 @@ fn unoffered_and_malformed_placements_change_nothing() {
         lifted: false,
     };
     let variants = [
-        PlacedHold { mode: Mode::Drain, ..good.clone() },
         PlacedHold { scope: Scope::Project, owner: Owner::Task { task: 1 }, ..good.clone() },
         PlacedHold { revision: 2, ..good.clone() },
         PlacedHold { lifted: true, ..good.clone() },
@@ -811,7 +810,6 @@ fn a_task_cannot_place_a_project_hold() {
     goal_tree(&mut w);
     for (owner, mode, project) in [
         (Owner::Task { task: 1 }, Mode::Stop, 1),
-        (Owner::Party { person: 1 }, Mode::Drain, 1),
         (Owner::Party { person: 1 }, Mode::Stop, 0),
     ] {
         let before = w.records.clone();
@@ -998,4 +996,243 @@ fn a_moved_conversation_uses_its_projected_requester_when_released_from_another_
     assert!(!w.placed_hold(101).expect("standing project stop").lifted);
     w.restart();
     due(&w, 2);
+}
+
+// Drains: live runs park, and procedures say when their existing work is idle.
+fn drain(w: &mut World, scope: Scope, by: u64, hold: u64) -> Reply {
+    let token = w.to().into_token();
+    w.send(Event::Place {
+        reply_to: skein_lib::ReplyTo::new(token),
+        hold: PlacedHold {
+            number: hold, project: 1, owner: Owner::Party { person: by }, mode: Mode::Drain, scope,
+            reason: b"finish existing work".as_slice().into(), placed_at: 0, revision: 1,
+            exempt: Box::new([]), lifted: false,
+        },
+    });
+    w.replies[&token.raw()].clone()
+}
+
+fn procedure(w: &mut World, number: u64) {
+    let mut new = task(number, &[]);
+    new.executor = tasks::Executor::Procedure { connector: 1, code: 1 };
+    assert_eq!(w.make(Party::Person(1), vec![new]), Reply::Made(vec![number]));
+}
+
+fn procedure_step(w: &mut World, number: u64, decision: tasks::ProcedureDecision) -> Reply {
+    let token = w.to().into_token();
+    let read = w.contexts[&number].inbox.last().map(|word| word.number);
+    w.send(Event::Procedure { reply_to: skein_lib::ReplyTo::new(token), task: number,
+        step: w.record(number).attempt + 1, read, decision });
+    w.replies[&token.raw()].clone()
+}
+
+#[test]
+fn a_drain_parks_each_live_run_and_holds_each_idle_task_at_once() {
+    let mut w = World::new(950, LIMITS);
+    goal_tree(&mut w);
+    let before = [1, 2, 4].map(|task| w.record(task).phase.clone());
+    assert_eq!(drain(&mut w, Scope::Subtree { task: 1 }, 1, 100), Reply::Done);
+    assert_eq!(w.parks, [(1, 1), (2, 2), (4, 4)].into_iter().collect());
+    assert!(w.stops.is_empty());
+    for (number, phase) in [1, 2, 4].into_iter().zip(before) {
+        assert_eq!(w.record(number).placed, Some(100));
+        assert_eq!(w.record(number).phase, phase);
+    }
+    placed(&w, 3, 100);
+}
+
+#[test]
+fn a_run_parked_by_a_drain_ends_due_with_no_try_spent_and_is_held() {
+    let mut w = World::new(951, LIMITS);
+    w.make(Party::Person(1), vec![task(1, &[])]);
+    w.claim(1, 1);
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    w.terminal(1, End::Parked);
+    placed(&w, 1, 100);
+    assert!(matches!(w.record(1).phase, Phase::Held { was: tasks::Was::Active(Active::Due), .. }));
+    assert_eq!(w.record(1).tries, tasks::Tries::NONE);
+    assert_eq!(w.record(1).refusals, 0);
+    assert_eq!(lift(&mut w, 100, 1, true), Reply::Lifted { released: 1 });
+    due(&w, 1);
+}
+
+#[test]
+fn a_due_task_under_a_drain_gets_no_run() {
+    let mut w = World::new(952, LIMITS);
+    drain(&mut w, Scope::Project, 1, 100);
+    assert_eq!(w.make(Party::Person(1), vec![task(1, &[])]), Reply::Made(vec![1]));
+    placed(&w, 1, 100);
+    assert!(!w.activations.contains(&1));
+    let before = w.record(1).clone();
+    let token = w.to().into_token();
+    w.send(Event::Prepare { reply_to: skein_lib::ReplyTo::new(token), task: 1 });
+    assert!(matches!(w.replies[&token.raw()], Reply::Refused(_)));
+    assert_eq!(w.record(1), &before);
+    // Even a new procedure is held, rather than asked to drain work it never began.
+    procedure(&mut w, 2);
+    placed(&w, 2, 100);
+    assert!(!w.activations.contains(&2));
+}
+
+#[test]
+fn a_run_finishing_its_turn_under_a_drain_delegates_nothing() {
+    let mut w = World::new(953, LIMITS);
+    goal_tree(&mut w);
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    assert!(matches!(w.make(Party::Task(1), vec![task(5, &[])]),
+        Reply::Refused(problem) if problem.why == Refusal::Placed { hold: 100 }));
+    assert_eq!(w.record(1).phase, Phase::Active(Active::Running { attempt: 1 }));
+}
+
+#[test]
+fn a_procedure_under_a_drain_steps_draining_until_its_connector_says_idle() {
+    let mut w = World::new(954, LIMITS);
+    procedure(&mut w, 1);
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    // Its current step was offered before placement; the next one hears the drain.
+    assert!(!w.contexts[&1].draining);
+    assert_eq!(procedure_step(&mut w, 1, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Wait)), Reply::Done);
+    assert_eq!(w.record(1).phase, Phase::Active(Active::Idle));
+    w.send(Event::WakeProcedure { task: 1 });
+    assert!(w.contexts[&1].draining);
+    let decision = tasks::ProcedureDecision { batch: Box::new([task(2, &[])]),
+        ..tasks::ProcedureDecision::new(tasks::ProcedureEnd::Wait) };
+    assert_eq!(procedure_step(&mut w, 1, decision), Reply::Made(vec![2]));
+    placed(&w, 2, 100);
+    assert!(!w.activations.contains(&2));
+    w.send(Event::WakeProcedure { task: 1 });
+    assert!(w.contexts[&1].draining);
+    assert_eq!(procedure_step(&mut w, 1, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Idle)), Reply::Done);
+    placed(&w, 1, 100);
+}
+
+#[test]
+fn an_idle_procedure_under_a_drain_is_stepped_to_say_whether_it_is_idle() {
+    let mut w = World::new(955, LIMITS);
+    procedure(&mut w, 1);
+    procedure_step(&mut w, 1, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Idle));
+    assert_eq!(w.record(1).phase, Phase::Active(Active::Idle));
+    let activations = w.activations(1);
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    assert_eq!(w.activations(1), activations + 1);
+    assert!(w.contexts[&1].draining);
+    assert_eq!(w.record(1).phase, Phase::Active(Active::Due));
+    procedure_step(&mut w, 1, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Idle));
+    placed(&w, 1, 100);
+}
+
+#[test]
+fn a_person_task_under_a_drain_is_held_at_once() {
+    let mut w = World::new(956, LIMITS);
+    let mut new = task(1, &[]);
+    new.executor = tasks::Executor::Person(tasks::PersonAddress::Person(1));
+    w.make(Party::Person(1), vec![new]);
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    placed(&w, 1, 100);
+    assert!(w.parks.is_empty());
+}
+
+#[test]
+fn a_closing_task_under_a_drain_finishes() {
+    let mut w = World::new(957, LIMITS);
+    w.make(Party::Person(1), vec![task(1, &[])]);
+    w.claim(1, 1);
+    w.finish(1);
+    let before = w.record(1).phase.clone();
+    assert!(matches!(before, Phase::Closing(_)));
+    drain(&mut w, Scope::Subtree { task: 1 }, 1, 100);
+    assert_eq!(w.record(1).phase, before);
+    w.settle(1);
+    assert!(matches!(w.results.get(&1), Some(tasks::Ending::Done(_))));
+    assert!(w.placed_hold(100).is_none());
+}
+
+#[test]
+fn a_project_drain_keeps_the_persons_chat_running() {
+    let mut w = World::new(958, LIMITS);
+    goal_tree(&mut w);
+    persons_chat(&mut w, 9);
+    w.claim(9, 9);
+    drain(&mut w, Scope::Project, 1, 100);
+    assert_eq!(w.record(9).placed, None);
+    assert_eq!(w.record(9).phase, Phase::Active(Active::Running { attempt: 9 }));
+    assert!(!w.parks.contains(&(9, 9)));
+    assert_eq!(w.parks.len(), 3);
+}
+
+#[test]
+fn lifting_a_drain_before_its_runs_park_lets_them_go_on() {
+    for with_tasks in [false, true] {
+        let mut w = World::new(959, LIMITS);
+        goal_tree(&mut w);
+        procedure(&mut w, 5);
+        drain(&mut w, Scope::Project, 1, 100);
+        assert_eq!(lift(&mut w, 100, 1, with_tasks), Reply::Lifted { released: u32::from(with_tasks) });
+        for number in [1, 2, 4, 5] { assert_eq!(w.record(number).placed, None); }
+        park(&mut w);
+        for number in [1, 2, 4] { due(&w, number); }
+        w.send(Event::WakeProcedure { task: 5 });
+        assert!(!w.contexts[&5].draining);
+        procedure_step(&mut w, 5, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Idle));
+        assert_eq!(w.record(5).phase, Phase::Active(Active::Idle));
+        if with_tasks { due(&w, 3); } else { placed(&w, 3, 100); }
+        w.restart();
+    }
+}
+
+#[test]
+fn a_task_released_from_a_drain_is_exempt_and_runs() {
+    for number in [2, 3] {
+        let mut w = World::new(960, LIMITS);
+        goal_tree(&mut w);
+        drain(&mut w, Scope::Project, 1, 100);
+        assert_eq!(release_from(&mut w, Party::Person(1), number), Reply::Done);
+        if number == 2 {
+            assert_eq!(w.record(2).phase, Phase::Active(Active::Running { attempt: 2 }));
+            w.terminal(2, End::Parked);
+        }
+        due(&w, number);
+        assert_eq!(w.placed_hold(100).unwrap().exempt.as_ref(), &[number]);
+        w.claim(number, 5);
+        assert_eq!(w.record(number).phase, Phase::Active(Active::Running { attempt: 5 }));
+        w.restart();
+        assert!(!w.parks.contains(&(number, 5)));
+    }
+}
+
+#[test]
+fn a_drain_in_progress_goes_on_draining_after_a_restart() {
+    let mut w = World::new(961, LIMITS);
+    goal_tree(&mut w);
+    procedure(&mut w, 5);
+    drain(&mut w, Scope::Project, 1, 100);
+    w.send(Event::WakeProcedure { task: 5 });
+    procedure_step(&mut w, 5, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Wait));
+    w.terminal(4, End::Parked);
+    w.restart();
+    assert_eq!(w.parks, [(1, 1), (2, 2)].into_iter().collect());
+    placed(&w, 3, 100);
+    placed(&w, 4, 100);
+    w.send(Event::WakeProcedure { task: 5 });
+    assert!(w.contexts[&5].draining);
+    for task in [1, 2] { w.terminal(task, End::Parked); placed(&w, task, 100); }
+    procedure_step(&mut w, 5, tasks::ProcedureDecision::new(tasks::ProcedureEnd::Idle));
+    placed(&w, 5, 100);
+    w.restart();
+    assert!(w.parks.is_empty());
+    for task in 1..=5 { placed(&w, task, 100); }
+}
+
+#[test]
+fn restart_refuses_an_unwrapped_task_under_a_drain_that_is_not_draining() {
+    let mut w = World::new(962, LIMITS);
+    goal_tree(&mut w);
+    drain(&mut w, Scope::Project, 1, 100);
+    let mut rows = w.records.values().filter(|row| row.key().live()).cloned().collect::<Vec<_>>();
+    for row in &mut rows {
+        if let Stored::Live(task) = row && task.number == 3 {
+            task.phase = Phase::Active(Active::Due);
+        }
+    }
+    assert!(check_rows(rows, &w.env).iter().any(|reply| matches!(reply, tasks::Request::RestoreRefused { .. })));
 }
