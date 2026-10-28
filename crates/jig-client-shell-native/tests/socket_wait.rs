@@ -252,9 +252,6 @@ impl Host for Process {
     fn is_empty(&self) -> bool {
         self.shell.as_ref().map_or_else(|| self.closing && self.io.is_empty(), Shell::is_empty)
     }
-    fn worst_case(&self) -> u64 {
-        self.shell.as_ref().map_or(0, Shell::worst_case)
-    }
     fn operations(&self) -> u32 {
         self.shell.as_ref().map_or_else(|| io::operations(&self.env.limits).expect("io operations"), Shell::operations)
     }

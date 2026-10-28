@@ -149,7 +149,7 @@ fn hidden_answers_have_notices_and_lingers_and_coalesced_saves_end_on_deadlines(
 #[test]
 fn full_containers_refuse_new_objects_intents_fields_and_notices() {
     let limits = full_limits();
-    check_worst_case(limits);
+    check_valid(limits);
     let mut domain = Fixture::new(&limits);
     let mut kept = List::with_capacity(1);
     kept.push(Record::Draft { version: STORE_VERSION, party: 7, task: 8, words: text(b"kept"), touched: 1 }).unwrap();
@@ -236,9 +236,7 @@ fn full_containers_refuse_new_objects_intents_fields_and_notices() {
     drive(&mut domain, &limits, Time::ZERO, Event::Went { place: Place::Jig(Address::Deployment) });
 }
 
-fn check_worst_case(limits: Limits) {
-    let bound = crate::worst_case(&limits).unwrap();
-    assert!(crate::worst_case(&Limits { notices: 2, ..limits }).unwrap() > bound);
+fn check_valid(limits: Limits) {
     for invalid in [
         Limits { watches: 0, ..limits },
         Limits { objects: u32::MAX, ..limits },

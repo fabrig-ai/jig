@@ -1,4 +1,4 @@
-use crate::{Limits, worst_case};
+use crate::Limits;
 
 #[test]
 fn turn_text_at_either_receiving_bound_is_valid() {
@@ -18,25 +18,6 @@ fn turn_text_outside_either_receiving_bound_is_refused() {
         let limits = Limits { turn_text, ..base };
         assert!(!crate::valid(&limits), "turn_text={turn_text}");
     }
-}
-
-#[test]
-fn pending_read_memory_includes_its_family_owner() {
-    use crate::{Handle, reads::PendingRead};
-    use skein_lib::{Map, Token};
-    let empty = Limits { reads: 0, ..super::fixtures::limits() };
-    let full = super::fixtures::limits();
-    let growth = worst_case(&full).unwrap().checked_sub(worst_case(&empty).unwrap()).unwrap();
-    let priced = Map::<Handle, PendingRead>::worst_case(full.reads)
-        .unwrap()
-        .checked_sub(Map::<Handle, PendingRead>::worst_case(0).unwrap())
-        .unwrap();
-    let token_only = Map::<Handle, Token>::worst_case(full.reads)
-        .unwrap()
-        .checked_sub(Map::<Handle, Token>::worst_case(0).unwrap())
-        .unwrap();
-    assert_eq!(growth, priced);
-    assert!(growth > token_only);
 }
 
 #[test]

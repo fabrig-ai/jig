@@ -171,13 +171,6 @@ impl Intents {
         self.slab.reclaim();
     }
 }
-/// Pending and retired intents, including an ask and its durable facts.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    Slab::<Intent>::worst_case(limits.intents)?
-        .checked_add(Map::<Id<Intent>, ()>::worst_case(limits.intents)?)?
-        .checked_add(u64::from(limits.intents).checked_mul(limits.document_bytes)?.checked_mul(3)?)
-}
 
 /// A card policy's one send, joined by object and act. Jig 21 calls this after
 /// validating its confirmation and completes the durable card transition.

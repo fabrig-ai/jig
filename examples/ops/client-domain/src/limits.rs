@@ -10,14 +10,12 @@ pub struct Limits {
     pub client: jig_client::Limits,
 }
 
+/// Whether the root's child limits are usable.
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.jig.kept < limits.client.domain.requests.requests {
-        return None;
-    }
-    let mut total = jig_client_view::worst_case(&limits.jig)?;
-    total = total.checked_add(infrastructure::worst_case(&limits.infrastructure)?)?;
-    total = total.checked_add(crate::observability::worst_case(&limits.observability)?)?;
-    total = total.checked_add(jig_client::worst_case(&limits.client)?)?;
-    Some(total)
+pub fn valid(limits: &Limits) -> bool {
+    limits.jig.kept >= limits.client.domain.requests.requests
+        && jig_client_view::valid(&limits.jig)
+        && infrastructure::valid(&limits.infrastructure)
+        && crate::observability::valid(&limits.observability)
+        && jig_client::valid(&limits.client)
 }

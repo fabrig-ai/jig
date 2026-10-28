@@ -246,7 +246,7 @@ fn family_terminal_envelopes_fit_full_rows_and_object_capacity_and_signed_out_pa
         let second_watch = opened(&rows);
         drive(&mut side, 1, first::Event::Ended { watch, end });
         assert_eq!(object(&side).terminal, Some(terminal));
-        assert!(first::worst_case(&limits()).unwrap() > 0);
+
         let other = side.find(Subject { scope: Scope::Project(3), kind: Kind::Panel(6) }).unwrap();
         assert_eq!(side.object(other).unwrap().terminal, None);
         drive(&mut side, 2, first::Event::Watch { watch: second_watch, event: family::WatchEvent::Alive });
@@ -287,7 +287,6 @@ fn valid_refuses_each_unrepresentable_limit() {
     connector.segment_bytes = u32::MAX;
     for (condition, invalid) in [
         ("positive retry", first::Limits { retry: Duration::ZERO, ..base }),
-        ("watch and read count", first::Limits { reads: u32::MAX, ..base }),
         ("retired object count", first::Limits { objects: u32::MAX, ..base }),
         ("row count", first::Limits { rows: u32::MAX, ..base }),
         ("connector document edge", first::Limits { connector, ..base }),

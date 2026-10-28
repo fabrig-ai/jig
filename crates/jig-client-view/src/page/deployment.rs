@@ -39,11 +39,6 @@ pub(crate) fn document(
     crate::page::project::show(domain, env, parts, out);
     domain.changed();
 }
-/// Deployment's decoded whole document remains within its document-byte bound.
-#[must_use]
-pub const fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    Some(limits.document_bytes)
-}
 
 /// Keep the whole owner value only for the admitted current deployment page.
 pub(crate) fn owner_document(

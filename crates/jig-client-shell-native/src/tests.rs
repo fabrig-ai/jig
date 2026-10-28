@@ -313,9 +313,6 @@ impl skein_shell::Host for Disk {
     fn is_empty(&self) -> bool {
         self.shell.is_empty()
     }
-    fn worst_case(&self) -> u64 {
-        self.shell.worst_case()
-    }
     fn operations(&self) -> u32 {
         self.shell.operations()
     }

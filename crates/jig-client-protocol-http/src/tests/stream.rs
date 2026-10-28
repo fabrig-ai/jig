@@ -1,5 +1,5 @@
 use super::fixtures;
-use crate::{Stream, worst_case};
+use crate::Stream;
 use alloc::boxed::Box;
 use jig_client_protocol_link::{Heard, Streamed};
 use skein_lib::Queue;
@@ -80,10 +80,6 @@ fn a_piece_after_the_end_is_dropped() {
     stream.body(fixtures::WHOLE_STREAM, &mut out);
     stream.ended(&mut out);
     assert!(out.is_empty());
-}
-#[test]
-fn the_stream_limits_have_a_finite_worst_case() {
-    assert!(worst_case(&fixtures::stream_limits()).is_some());
 }
 
 #[test]

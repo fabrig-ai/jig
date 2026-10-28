@@ -206,9 +206,3 @@ impl OwnerBudgetWords {
         &self.words
     }
 }
-
-/// Shared checked phrasebook allocation envelope, including its temporary saying.
-#[must_use]
-pub fn worst_case(limits: &PhraseLimits) -> Option<u64> {
-    skein_ui::phrases::worst_case(limits)
-}

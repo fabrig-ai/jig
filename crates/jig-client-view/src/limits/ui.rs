@@ -1,9 +1,7 @@
 //! Container capacities and byte bounds owned by the client.
 //! Every retained container is sized from these at new; jig 21–23 add their
 //! own entities. See client/domain/client.md, 14.
-use crate::{store::Record, ui::Timer};
-use alloc::boxed::Box;
-use skein_lib::{Deadlines, Duration, List, Map};
+use skein_lib::Duration;
 
 /// Configured capacities, payload bounds and durations for the client spine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -58,8 +56,7 @@ pub fn valid(limits: &Limits) -> bool {
     {
         return false;
     }
-    limits.watches.checked_add(limits.reads).is_some()
-        && timers(limits).is_some()
+    timers(limits).is_some()
         && tree_names(limits).is_some()
         && crate::page::conversations::valid(limits)
         && crate::page::inbox::valid(limits)
@@ -68,52 +65,6 @@ pub fn valid(limits: &Limits) -> bool {
         && crate::notices::kept::valid(limits)
         && crate::objects::valid(limits)
         && crate::windows::valid(limits)
-}
-
-/// The heap held by the implemented spine, including page reads and record payloads.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let timer_capacity = timers(limits)?;
-    let mut total = Map::<jig_client::Handle, crate::handles::Watched>::worst_case(limits.watches)?;
-    total = total.checked_add(List::<jig_client::contract::ObjectKey>::worst_case(tree_names(limits)?)?)?;
-    total = total.checked_add(List::<crate::page::Section>::worst_case(crate::page::MOST_SECTIONS)?)?;
-    total = total.checked_add(List::<crate::page::SectionStatus>::worst_case(crate::page::MOST_SECTIONS)?)?;
-    total = total.checked_add(crate::application::worst_case(limits)?)?;
-    total = total.checked_add(jig_client::thread::worst_case(&jig_client::thread::Limits {
-        lines: limits.rows.max(limits.conversation_words),
-        bytes: limits.document_bytes,
-        text: limits.text,
-    })?)?;
-    total = total.checked_add(List::<crate::page::navigation::Destination>::worst_case(limits.navigation_entries)?)?;
-    total = total.checked_add(crate::page::conversations::worst_case(limits)?)?;
-    total = total.checked_add(crate::page::inbox::worst_case(limits)?)?;
-    total = total.checked_add(crate::page::task::worst_case(limits)?)?;
-    total = total.checked_add(crate::page::project::worst_case(limits)?)?;
-    total = total.checked_add(crate::page::deployment::worst_case(limits)?)?;
-    total = total.checked_add(crate::intents::worst_case(limits)?)?;
-    total = total.checked_add(crate::notices::kept::worst_case(limits)?)?;
-    total = total.checked_add(crate::fields::worst_case(limits)?)?;
-    total = total.checked_add(crate::drafts::worst_case(limits)?)?;
-    total = total.checked_add(List::<u64>::worst_case(limits.records)?)?;
-    total = total.checked_add(List::<jig_client::contract::ObjectKey>::worst_case(limits.objects)?)?;
-    total = total.checked_add(Map::<jig_client::Key, u64>::worst_case(limits.kept)?)?;
-    total = total.checked_add(crate::confirm::worst_case(limits)?)?;
-    total = total.checked_add(List::<crate::objects::Context>::worst_case(limits.rows.checked_mul(2)?)?)?;
-    total = total.checked_add(crate::objects::worst_case(limits)?)?;
-    total = total.checked_add(Map::<jig_client::contract::ObjectKey, Box<jig_client::contract::Ask>>::worst_case(
-        limits.objects,
-    )?)?;
-    total = total.checked_add(Map::<jig_client::Handle, crate::handles::Reading>::worst_case(limits.reads)?)?;
-    total = total.checked_add(u64::from(limits.reads).checked_mul(limits.document_bytes)?)?;
-    total = total.checked_add(crate::windows::worst_case(limits)?)?;
-    total = total.checked_add(Deadlines::<Timer>::worst_case(timer_capacity)?)?;
-    total = total.checked_add(List::<Record>::worst_case(limits.records)?.checked_mul(2)?)?;
-    total = total.checked_add(u64::from(limits.records).checked_mul(u64::from(limits.text))?)?;
-    // Chips subjects own at most one configured task-number list each.
-    total.checked_add(u64::from(limits.watches).checked_mul(List::<u64>::worst_case(limits.rows)?)?)
 }
 
 /// One deadline per lingering object, visible notice and saved record,

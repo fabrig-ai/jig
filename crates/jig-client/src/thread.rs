@@ -562,23 +562,6 @@ fn has_call(rows: &List<ActivityLine>, name: CallName) -> bool {
     }
     false
 }
-/// Conversation fold/staging allocations beyond the shared activity window.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    words::worst_case(limits)?
-        // The borrowed projection clones at most the client's one provisional turn.
-        .checked_add(List::<LiveTurn>::worst_case(limits.lines)?)?
-        .checked_add(limits.bytes.checked_mul(u64::from(limits.lines))?)?
-        .checked_add(u64::from(limits.text).checked_mul(u64::from(limits.lines))?)?
-        .checked_add(Map::<CallName, ()>::worst_case(limits.lines)?)?
-        .checked_add(List::<CallName>::worst_case(limits.lines)?)?
-        .checked_add(List::<CallIdentity>::worst_case(limits.lines)?.checked_mul(2)?)?
-        .checked_add(limits.bytes.checked_mul(2)?)?
-        .checked_add(u64::from(limits.lines).checked_mul(u64::from(limits.text))?.checked_mul(2)?)?
-        .checked_add(List::<u64>::worst_case(limits.lines)?.checked_mul(2)?)?
-        .checked_add(List::<ActivityLine>::worst_case(limits.lines)?.checked_mul(3)?)?
-        .checked_add(u64::from(limits.lines).checked_mul(limits.bytes)?.checked_mul(4)?)
-}
 
 #[must_use]
 pub fn live_turn(value: RunText, limit: u32) -> LiveTurn {

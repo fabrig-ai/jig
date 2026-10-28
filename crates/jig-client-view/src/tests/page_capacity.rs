@@ -465,8 +465,7 @@ fn capacity_composes_siblings_fragments_and_application_pages_with_checked_overf
     let mut huge = CLIENT;
     huge.rows = u32::MAX;
     assert!(crate::page_nodes(&huge, 0).is_none());
-    assert!(crate::limits::jig_worst_case(&limits).is_some());
-    assert!(crate::jig_bindings_worst_case(limits.bindings, &CLIENT).is_some());
+
     let (mut d, _) = start();
     drive(&mut d, Event::Went { place: Place::Elsewhere });
     let mut b = Builder::new(&extra);

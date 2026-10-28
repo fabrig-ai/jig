@@ -85,10 +85,6 @@ impl Link {
         self.attempts.len()
     }
     pub fn reclaim(&mut self) {}
-    #[must_use]
-    pub fn worst_case(limits: &Limits) -> Option<u64> {
-        crate::worst_case(limits)
-    }
     pub fn step(&mut self, now: Time, event: Event, out: &mut Queue<Request>) {
         if let Event::Reply { exchange, .. } | Event::Lost { exchange } = &event
             && self.retiring == Some(*exchange)

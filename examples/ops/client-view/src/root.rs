@@ -43,7 +43,7 @@ impl View {
             "phrasebooks belong to their connector owners"
         );
         assert!(
-            crate::worst_case(limits, domain, &words, &observability_words, &infrastructure_words).is_some(),
+            crate::valid(limits, domain, &words, &observability_words, &infrastructure_words),
             "view capacities are checked"
         );
         Self {

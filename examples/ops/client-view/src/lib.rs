@@ -13,7 +13,7 @@ pub mod root;
 pub mod time;
 pub mod words;
 pub use jig_ops_client_domain::Action;
-pub use limits::{Limits, arrangement, worst_case};
+pub use limits::{Limits, arrangement, valid};
 pub use root::{View, build, decode};
 #[cfg(test)]
 mod tests;

@@ -648,24 +648,6 @@ pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.rows.checked_add(1).is_some()
 }
 
-/// Plan context, nested chip payloads and opaque subtree cursors.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    List::<TreeNode>::worst_case(limits.rows)?
-        .checked_add(List::<ProposalKey>::worst_case(limits.objects)?.checked_mul(2)?)?
-        .checked_add(List::<ProposalKey>::worst_case(limits.rows)?)?
-        .checked_add(List::<ObjectKey>::worst_case(limits.rows.checked_add(1)?)?)?
-        .checked_add(Map::<u64, bool>::worst_case(limits.rows.checked_add(1)?)?)?
-        .checked_add(List::<u64>::worst_case(limits.rows.checked_add(1)?)?)?
-        .checked_add(u64::from(limits.rows).checked_mul(limits.document_bytes)?.checked_mul(2)?)?
-        .checked_add(u64::from(limits.text).checked_mul(2)?)?
-        .checked_add(limits.document_bytes)?
-        .checked_add(limits.document_bytes)
-}
-
 pub(crate) fn ended(domain: &mut Ui, before: Option<contract::Cursor>, after: Option<contract::Cursor>) {
     domain.task_page.ended_before = before;
     domain.task_page.ended_after = after;

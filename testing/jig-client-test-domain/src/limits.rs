@@ -17,16 +17,3 @@ pub fn valid(limits: &Limits) -> bool {
         && first::valid(&limits.first)
         && jig_client::valid(&limits.client)
 }
-
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let mut total = jig_client_view::worst_case(&limits.jig)?;
-    total = total.checked_add(first::worst_case(&limits.first)?)?;
-    total =
-        total.checked_add(crate::second::worst_case(limits.second_parts, limits.first.segments, limits.first.text)?)?;
-    total = total.checked_add(jig_client::worst_case(&limits.client)?)?;
-    Some(total)
-}

@@ -403,7 +403,7 @@ fn whole_document_limits_keep_unknown_owner_facts_unknown() {
     assert_eq!(root.infrastructure().object(object).unwrap().value, infrastructure::Value::Known(Box::new(document)));
     let mut bound = limits();
     bound.jig.kept = bound.client.domain.requests.requests - 1;
-    assert_eq!(crate::worst_case(&bound), None);
+    assert!(!crate::valid(&bound));
 }
 #[test]
 #[expect(

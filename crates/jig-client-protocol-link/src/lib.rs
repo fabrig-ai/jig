@@ -15,7 +15,7 @@ pub use boundary::*;
 /// The kept name of the preceding client's stream (protocol/client.md, 10).
 pub const STREAM_KEY: &[u8] = b"stream";
 pub use component::Link;
-pub use limits::{Limits, Unusable, valid, worst_case};
+pub use limits::{Limits, Unusable, valid};
 pub use translate::Undecodable;
 #[cfg(test)]
 mod tests;

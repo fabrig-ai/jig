@@ -34,7 +34,6 @@ pub struct Transport {
     owner: u64,
     closing: bool,
     max: u32,
-    body_bytes: u32,
 }
 pub struct Shell {
     pub(super) transport: Transport,
@@ -210,7 +209,6 @@ impl Transport {
             owner,
             closing: false,
             max: sockets,
-            body_bytes: limits.body_bytes,
         }
     }
     pub fn down(&mut self, now: Time, request: client::Request) {
@@ -419,12 +417,6 @@ impl Shell {
     pub fn operations(&self) -> u32 {
         io::operations(&self.env.limits).expect("io operations") + 2
     }
-    #[must_use]
-    pub fn worst_case(&self) -> u64 {
-        io::worst_case(&self.env.limits).expect("io memory")
-            + self.transport.worst_case(&self.env.limits)
-            + Queue::<io::Request>::worst_case(self.max * 64).expect("io request queue")
-    }
 }
 impl Transport {
     #[must_use]
@@ -445,14 +437,6 @@ impl Transport {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.sockets.is_empty() && self.below.is_empty() && !self.connections.waiting()
-    }
-    #[must_use]
-    pub fn worst_case(&self, io: &io::Limits) -> u64 {
-        self.connections.stream_memory()
-            + u64::from(self.max)
-                * 256
-                * (u64::from(io.intake) + u64::from(io.output) + u64::from(self.body_bytes) + 1024)
-            + u64::from(self.max) * u64::from(io.intake)
     }
 }
 

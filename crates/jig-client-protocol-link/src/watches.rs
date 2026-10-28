@@ -82,7 +82,3 @@ impl Watches {
         }
     }
 }
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<Token, Opening>::worst_case(limits.client.watches)?
-        .checked_add(u64::from(limits.client.watches).checked_mul(limits.client.document_bytes)?)
-}

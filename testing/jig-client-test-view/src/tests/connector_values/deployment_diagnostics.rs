@@ -134,8 +134,5 @@ fn deployment_diagnostic_nodes_fit_the_existing_whole_envelope_with_empty_and_fu
                 assert!(run.text.len() <= text_per_node);
             }
         }
-        assert!(
-            render::worst_case(&limits(), &words).unwrap() >= jig_client_view::limits::jig_worst_case(&bounds).unwrap()
-        );
     }
 }

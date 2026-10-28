@@ -4,7 +4,7 @@
 //! See client/domain/client.md, 7. Row owners supply cursors for re-reading drops.
 use jig_client::thread::window::{Edge, Edges, End, edges, plan};
 
-use jig_client::contract::{ActivityLine, HistoryRow, ObjectKey, TaskLine};
+use jig_client::contract::{HistoryRow, ObjectKey, TaskLine};
 use skein_lib::List;
 
 /// Object names on a page.
@@ -300,21 +300,4 @@ fn move_historywindow(rows: List<HistoryRow>, start: u32, count: u32, out: &mut 
 #[must_use]
 pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.rows.checked_mul(2).is_some()
-}
-
-/// Concrete row containers and the maximum row payloads while sliding.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let mut total = List::<ObjectKey>::worst_case(limits.rows)?;
-    total = total.checked_add(List::<TaskLine>::worst_case(limits.rows)?)?;
-    total = total.checked_add(List::<ActivityLine>::worst_case(limits.rows)?)?;
-    total = total.checked_add(List::<HistoryRow>::worst_case(limits.rows)?)?;
-    total
-        .checked_mul(2)?
-        .checked_add(List::<u64>::worst_case(limits.rows.checked_mul(2)?)?)?
-        .checked_add(u64::from(limits.text))?
-        .checked_add(u64::from(limits.rows).checked_mul(limits.document_bytes)?.checked_mul(6)?)
 }

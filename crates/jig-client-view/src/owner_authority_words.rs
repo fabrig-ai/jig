@@ -221,10 +221,3 @@ impl OwnerAuthorityWords {
         &self.words
     }
 }
-
-/// Heap envelope for checked authority words and their temporary saying.
-/// The shared phrasebook model includes its shapes, languages and capacities.
-#[must_use]
-pub fn worst_case(limits: &PhraseLimits) -> Option<u64> {
-    skein_ui::phrases::worst_case(limits)
-}

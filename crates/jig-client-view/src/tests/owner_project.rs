@@ -468,7 +468,7 @@ fn owner_project_public_required_envelope_checks_last_nested_capacity_and_both_l
         let f = view::required(&value, &limits(), w).unwrap();
         let (tree, _) = build(&value, w);
         assert!(tree.len() <= f.nodes);
-        assert!(crate::jig_bindings_worst_case(f.bindings, &limits()).is_some());
+
         assert_eq!(has(&tree, b"second "), selected);
     }
     let w = words(false);

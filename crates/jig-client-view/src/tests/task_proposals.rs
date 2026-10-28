@@ -107,8 +107,7 @@ fn build_tree(d: &Fixture) -> Tree {
     b.close();
     let tree = b.finish();
     assert!(tree.len() <= nodes);
-    assert!(crate::limits::jig_worst_case(&limits).is_some());
-    assert!(crate::jig_bindings_worst_case(nodes, &CLIENT).is_some());
+
     tree
 }
 fn cards(tree: &Tree, key: ProposalKey) -> usize {

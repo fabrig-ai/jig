@@ -113,7 +113,3 @@ pub fn decode(bindings: &Bindings, token: Token, act: Act) -> Option<Action> {
     }
     None
 }
-#[must_use]
-pub fn worst_case(capacity: u32, text: u32) -> Option<u64> {
-    List::<Entry>::worst_case(capacity)?.checked_add(u64::from(capacity).checked_mul(u64::from(text).checked_mul(2)?)?)
-}

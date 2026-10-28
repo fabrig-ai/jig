@@ -196,22 +196,6 @@ impl Connections {
             chunk: self.limits.http.read,
         }
     }
-    pub(crate) fn stream_memory(&self) -> u64 {
-        mapping::worst_case(&self.stream_limits())
-            .expect("stream memory")
-            .checked_add(
-                Queue::<mapping::Heard>::worst_case(
-                    self.limits
-                        .http
-                        .read
-                        .checked_mul(3)
-                        .and_then(|v| v.checked_add(8))
-                        .expect("bounded stream outputs"),
-                )
-                .expect("stream output queue"),
-            )
-            .expect("stream memory fits")
-    }
     fn env(&self, now: Time) -> Env<http::Limits> {
         Env { now, wall: Wall::EPOCH, limits: self.limits.http }
     }

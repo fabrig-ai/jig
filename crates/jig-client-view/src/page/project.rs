@@ -343,26 +343,6 @@ pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.rows.checked_mul(2).is_some()
 }
 
-/// Whole documents, nested bounded rows, note handles, cursors and pending goal words.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    limits.rows.checked_mul(2)?;
-    u64::from(limits.rows)
-        .checked_mul(limits.document_bytes)?
-        .checked_mul(6)?
-        .checked_add(limits.document_bytes.checked_mul(4)?)?
-        .checked_add(List::<u16>::worst_case(limits.rows)?)?
-        .checked_add(List::<TaskLine>::worst_case(limits.rows)?.checked_mul(4)?)?
-        .checked_add(List::<TaskLine>::worst_case(limits.rows)?)?
-        .checked_add(List::<Id<Object>>::worst_case(limits.rows)?)?
-        .checked_add(List::<contract::SpendPeriod>::worst_case(limits.rows)?)?
-        .checked_add(u64::from(limits.text).checked_mul(10)?)?
-        .checked_add(limits.document_bytes)
-}
-
 pub(crate) fn ended(
     domain: &mut Ui,
     env: &Env<crate::Limits>,

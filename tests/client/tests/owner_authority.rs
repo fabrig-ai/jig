@@ -117,7 +117,7 @@ fn authority_document_cut_is_separate_from_whole_payload_and_keeps_exact_codes()
 }
 
 #[test]
-fn saturated_owner_authority_renderer_and_words_fit_composed_heap_envelopes() {
+fn saturated_owner_authority_renderer_fits_its_fragment_envelope() {
     use jig_client_view::owner_authority as view;
     use jig_client_view::owner_authority_words::{self as words, OwnerAuthorityWords};
     use skein_ui::Builder;
@@ -126,10 +126,9 @@ fn saturated_owner_authority_renderer_and_words_fit_composed_heap_envelopes() {
 
     let language_limits =
         PhraseLimits { languages: 1, phrases: 23, holes: 1, segments: 40, text_bytes: 4096, hole_bytes: 0 };
-    let word_meter = Meter::new();
     let words = OwnerAuthorityWords::load(Box::new([words::english()]), &language_limits, 0, 0)
         .expect("closed English authority words");
-    assert!(word_meter.held() <= words::worst_case(&language_limits).expect("checked word envelope"));
+
     let value = OwnerAuthorityDocument { authority: authority(), cut: true };
     let envelope = view::worst_case(3, 3, 4, &words).expect("full view envelope");
     let required = view::document_required(&value, &words, 3).expect("value capacity");
@@ -150,12 +149,12 @@ fn saturated_owner_authority_renderer_and_words_fit_composed_heap_envelopes() {
         scene_marks: 0,
         scene_bytes: 0,
     };
-    let meter = Meter::new();
+
     let mut builder = Builder::new(&limits);
     view::document(&mut builder, &value, &words, 4, 3);
     let tree = builder.finish();
     assert_eq!(tree.len(), 63);
-    assert!(meter.held() <= jig_client_view::limits::jig_worst_case(&limits).expect("tree heap envelope"));
+
     assert_eq!(
         tree.nodes().iter().flat_map(|n| &n.text).filter(|r| r.text.as_ref() == b"a/b\0").count(),
         6,

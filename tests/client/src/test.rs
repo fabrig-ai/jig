@@ -164,7 +164,6 @@ pub(crate) fn phrasebooks(limits: &domain::Limits) -> &'static Books {
 struct Fixture {
     books: &'static Books,
     bounds: view::Limits,
-    worst_case: u64,
 }
 fn fixture(limits: &domain::Limits) -> &'static Fixture {
     fixture_with(limits, false)
@@ -179,14 +178,11 @@ fn fixture_with(limits: &domain::Limits, arranged: bool) -> &'static Fixture {
     let books = phrasebooks(limits);
     let bounds = view::Limits::for_world(limits, &books.0, &books.1, if arranged { 1024 } else { 512 }, 256)
         .expect("view bounds fit");
-    let worst_case = domain::worst_case(limits).expect("root worst case")
-        // The shell model is bounded by another renderer envelope.
-        + 2 * view::worst_case(&bounds, limits, &books.0, &books.1).expect("view worst case");
-    let fixture = Box::leak(Box::new(Fixture { books, bounds, worst_case }));
+    let fixture = Box::leak(Box::new(Fixture { books, bounds }));
     fixtures.push((*limits, arranged, fixture));
     fixture
 }
-/// Constructs the test application's root and view with one declared bound.
+/// Constructs the test application's root and view with their receiving bounds.
 #[must_use]
 pub fn new(limits: &domain::Limits, seed: u64) -> (domain::Domain, view::View<'static>) {
     from_fixture(limits, seed, fixture(limits), false)
@@ -367,9 +363,6 @@ impl App for Test {
     }
     fn patch_limit(view: &Self::View) -> u32 {
         view.limits().tree.patches
-    }
-    fn worst_case(limits: &Self::Limits) -> u64 {
-        fixture(limits).worst_case
     }
     fn window_changed(event: &Self::Event) -> bool {
         crate::observe::window_changed(event)

@@ -230,7 +230,7 @@ fn build(value: &OwnerHistoryLine, words: &Words) -> (Tree, JigBindings) {
         scene_marks: 0,
         scene_bytes: 0,
     };
-    assert!(crate::limits::jig_worst_case(&limits).is_some());
+
     let mut bindings = JigBindings::new(f.bindings, 8);
     let mut b = Builder::new(&limits);
     view::render(&mut b, value, words, &mut bindings, client_limits().rows);
