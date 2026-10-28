@@ -196,6 +196,28 @@ fn default_restore_replays_the_same_durable_whole_request_without_making_it_twic
 }
 
 #[test]
+fn a_linked_start_erases_expired_sign_ins_before_the_switch() {
+    let (mut world, sign_in) = world();
+    let commits = world.commits.len();
+    pause(&mut world);
+    // The fixture's sign-in lifetime is 60 seconds. Every child is still
+    // loading while this sign-in expires, so no timer may sweep it yet.
+    world.advance(Duration::from_secs(75));
+    world.hold_switch = true;
+    world.finish_restore_pages();
+    assert_eq!(world.domain.restart_step(), Some(core::RestartStep::Switch));
+    assert!(world.domain.core().tasks.checked(), "the task link pass finished");
+    assert!(
+        !world.commits[commits..].iter().any(|writes| writes.contains(&root::Write::Wires)),
+        "the switch remains held"
+    );
+    assert!(
+        !world.store.rows.contains_key(&root::Key::Core(core::Key::People(people::Key::SignIn(sign_in)))),
+        "people: expired SignIn({sign_in}) remains committed after every link, before the switch"
+    );
+}
+
+#[test]
 fn a_held_restore_expires_sign_ins_at_the_current_external_wall_time() {
     let (mut world, sign_in) = world();
     let rows = world.store.rows.clone();
