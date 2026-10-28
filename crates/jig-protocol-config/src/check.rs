@@ -88,6 +88,22 @@ pub(crate) fn integer(
         }
     }
 }
+pub(crate) fn optional_integer(
+    object: &mut read::Object,
+    document: &Document,
+    name: &[u8],
+    path: &Path,
+    problems: &mut Problems,
+) -> Option<u64> {
+    let at = object.member(document, name)?;
+    match read::integer(document, at, u64::MAX) {
+        Ok(value) => Some(value),
+        Err(what) => {
+            problems.push(path.member(name), what);
+            None
+        }
+    }
+}
 pub(crate) fn count(
     object: &mut read::Object,
     document: &Document,
@@ -216,7 +232,6 @@ pub(crate) fn local(address: &Address, path: &Path, problems: &mut Problems) {
 pub(crate) fn worker(
     limits: &crate::Limits,
     graces: Option<crate::Graces>,
-    memory: Option<u64>,
     problems: &mut Problems,
 ) -> Option<Duration> {
     let path = Path::root();
@@ -235,15 +250,8 @@ pub(crate) fn worker(
     if graces.is_some() && bound.is_none() {
         problems.push(path.member(b"graces"), What::StopBound);
     }
-    if let Some(memory) = memory {
-        match jig_domain_host::worst_case(&limits.hub) {
-            Some(bytes) => {
-                if let Err(what) = crate::fits(memory, &[crate::Share { name: b"hub", bytes }]) {
-                    problems.push(path.member(b"memory_bytes"), what);
-                }
-            }
-            None => problems.push(path.member(b"limits"), What::Bound),
-        }
+    if jig_domain_host::worst_case(&limits.hub).is_none() {
+        problems.push(path.member(b"limits"), What::Bound);
     }
     bound
 }

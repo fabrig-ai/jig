@@ -315,19 +315,19 @@ fn a_message_bound_below_a_delegate_result_is_refused() {
         What::Message,
     );
 }
-// The small engine fixture's components sum (core, hub and provider
-// terms) less the one byte its memory supplies: 20,728,169,811 bytes at
-// jig 0d5ed2767. A ceiling, a quarter above, rounded up to two
-// significant digits (skein's dynamic-memory draft, 7.1); it moves by
-// hand only in the commit of a real change that passes it, never on a
-// type's size.
-const SMALL_ENGINE_DEFICIT_CEILING: u64 = 26_000_000_000;
 #[test]
-fn memory_below_the_components_sum_is_refused() {
+fn an_engines_memory_bytes_is_handed_on_unchecked() {
     let document = fixtures::with(fixtures::ENGINE_SMALL, br#""memory_bytes": 34359738368"#, br#""memory_bytes": 1"#);
+    assert_eq!(fixtures::engine(&document).unwrap().memory, 1);
+}
+#[test]
+fn an_engine_without_memory_bytes_is_refused() {
+    let document = fixtures::with(fixtures::ENGINE_SMALL, br#""memory_bytes": 34359738368,"#, b"");
     let problems = fixtures::engine(&document).unwrap_err();
-    let What::Memory { over } = problems.problems.get(0).unwrap().what else { panic!("memory refusal") };
-    assert!(over <= SMALL_ENGINE_DEFICIT_CEILING, "{over}");
+    assert_eq!(problems.problems.len(), 1);
+    let problem = problems.problems.get(0).unwrap();
+    assert_eq!(problem.path, fixtures::path(&[b"memory_bytes"]));
+    assert_eq!(problem.what, What::Missing);
 }
 fn instruction_file(files: &[crate::File]) -> &crate::File {
     for file in files {
