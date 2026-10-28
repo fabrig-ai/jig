@@ -1,6 +1,6 @@
 //! Ops's two proof-of-concept stories on jig's independent conformance loop.
 mod application;
-mod config;
+pub(crate) mod config;
 pub use config::chat;
 #[cfg(test)]
 mod creating;

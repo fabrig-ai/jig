@@ -8,6 +8,7 @@ pub use infrastructure_world::{InfrastructureWorld, infra_environment, infra_ser
 pub use world::{World, limits, service};
 
 pub mod conformance;
+pub mod direct;
 pub mod protocol;
 
 /// Ops client adapters on the reusable client world.
