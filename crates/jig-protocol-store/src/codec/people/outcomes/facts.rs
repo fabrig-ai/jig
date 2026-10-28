@@ -520,6 +520,7 @@ pub(crate) fn encode_refusal(value: &domain::Refusal, limits: &wire::Limits) -> 
                 proposable: match proposable {
                     None => None,
                     Some(domain::Accepter::Nobody) => Some(wire::Accepter::Nobody),
+                    Some(domain::Accepter::HoldOwner) => Some(wire::Accepter::HoldOwner),
                     Some(domain::Accepter::Role(role)) => Some(wire::Accepter::Role(wire::AccepterRole::new(
                         limits,
                         wire::AccepterRoleParts { role: *role },
@@ -647,6 +648,7 @@ pub(crate) fn decode_refusal(value: wire::Refusal) -> domain::Refusal {
                 proposable: match proposable {
                     None => None,
                     Some(wire::Accepter::Nobody) => Some(domain::Accepter::Nobody),
+                    Some(wire::Accepter::HoldOwner) => Some(domain::Accepter::HoldOwner),
                     Some(wire::Accepter::Role(role)) => Some(domain::Accepter::Role(role.into_parts().role)),
                 },
             }

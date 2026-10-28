@@ -557,7 +557,7 @@ fn party_refusal(why: people::Refusal) -> parties::Refusal {
         people::Refusal::Role { held } => parties::Refusal::Role { held: held.map(people::Role::number) },
         people::Refusal::Authority { proposable, lacking } => parties::Refusal::Authority {
             proposable: match proposable {
-                Some(people::Accepter::Role(_)) => Some(true),
+                Some(people::Accepter::Role(_) | people::Accepter::HoldOwner) => Some(true),
                 Some(people::Accepter::Nobody) => Some(false),
                 None => None,
             },

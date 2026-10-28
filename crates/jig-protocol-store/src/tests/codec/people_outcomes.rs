@@ -258,3 +258,13 @@ fn placed_hold_requests_answers_and_owner_facts_round_trip_in_people_13() {
         now: domain::Moved::PlacedHold { revision: 2 },
     })));
 }
+
+#[test]
+fn a_hold_owner_refusal_keeps_the_named_owner_and_proposability() {
+    for owner in [domain::HoldOwner::Party { person: 7 }, domain::HoldOwner::Task { task: 11 }] {
+        people_round_trip(values::answered(domain::Outcome::Refused(domain::Refusal::Authority {
+            lacking: domain::Lack::HoldOwner { hold: 5, owner },
+            proposable: Some(domain::Accepter::HoldOwner),
+        })));
+    }
+}

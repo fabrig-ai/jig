@@ -316,3 +316,24 @@ fn a_projects_holds_page_crosses_the_native_boundary() {
         assert_eq!(read, core::reads::Read::Holds { project: u32::MAX, from: Some(after) });
     }
 }
+
+#[test]
+fn a_hold_owner_refusal_says_a_release_proposal_could_be_accepted() {
+    for owner in [p::HoldOwner::Party { person: 7 }, p::HoldOwner::Task { task: 11 }] {
+        let w::Final::Refused(refused) = answer(p::Reply::Outcome(p::Outcome::Refused(p::Refusal::Authority {
+            lacking: p::Lack::HoldOwner { hold: 5, owner },
+            proposable: Some(p::Accepter::HoldOwner),
+        }))) else {
+            panic!("refused")
+        };
+        let w::Refusal::Authority(value) = refused.refusal() else { panic!("authority") };
+        assert_eq!(value.proposable(), &Some(true));
+        let w::Lacking::HoldOwner(value) = value.lacking() else { panic!("hold owner") };
+        assert_eq!(value.hold(), 5);
+        match (owner, value.owner()) {
+            (p::HoldOwner::Party { person }, w::HoldOwner::Party(value)) => assert_eq!(value.person(), person),
+            (p::HoldOwner::Task { task }, w::HoldOwner::Task(value)) => assert_eq!(value.task(), task),
+            _ => panic!("owner preserved"),
+        }
+    }
+}

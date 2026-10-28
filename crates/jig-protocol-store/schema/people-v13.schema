@@ -236,7 +236,7 @@ enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: 
 enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record RefusalRole { held: option Role }
 record AccepterRole { role: u32 }
-enum Accepter { nobody, role: AccepterRole }
+enum Accepter { nobody, role: AccepterRole, hold_owner }
 record RefusalAuthority { lacking: Lack proposable: option Accepter }
 record RefusalLimit { which: LimitKind }
 record RefusalMoved { now: Moved }

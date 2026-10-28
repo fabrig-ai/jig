@@ -15,7 +15,7 @@ pub fn refusal(value: people::Refusal) -> Result<client::Refusal, super::owner::
         people::Refusal::Authority { lacking, proposable } => client::Refusal::Authority {
             lacking: lack(lacking),
             proposable: match proposable {
-                Some(people::Accepter::Role(_)) => Some(true),
+                Some(people::Accepter::Role(_) | people::Accepter::HoldOwner) => Some(true),
                 Some(people::Accepter::Nobody) => Some(false),
                 None => None,
             },

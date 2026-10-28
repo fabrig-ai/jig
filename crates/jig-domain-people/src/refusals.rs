@@ -14,6 +14,8 @@ pub enum Accepter {
     Nobody,
     /// The lowest-numbered policy role deciding this kind.
     Role(u32),
+    /// The owner already named by `Lack::HoldOwner`.
+    HoldOwner,
 }
 
 /// A final reason a keyed request was refused.

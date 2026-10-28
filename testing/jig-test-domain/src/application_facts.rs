@@ -28,7 +28,7 @@ pub(super) fn refusal(value: people::Refusal) -> application::Refusal {
         },
         people::Refusal::Authority { proposable, lacking } => application::Refusal::Authority {
             proposable: match proposable {
-                Some(people::Accepter::Role(_)) => Some(true),
+                Some(people::Accepter::Role(_) | people::Accepter::HoldOwner) => Some(true),
                 Some(people::Accepter::Nobody) => Some(false),
                 None => None,
             },
