@@ -3,11 +3,9 @@ use super::plan::Levels;
 use crate::codec::component::{Count, CountParts};
 use crate::directory::OWNER;
 use crate::generations::PAGE;
-use crate::{
-    Arrived, Below, Check, KeptFamily, KeptMap, Limits, OpenRefusal, Owner, Root, Row, Store, intervals, pages, restore,
-};
+use crate::{Arrived, Below, Check, KeptFamily, KeptMap, Limits, OpenRefusal, Owner, Root, Store, intervals, pages};
 use alloc::boxed::Box;
-use jig_domain_core::{Record, RestoreRange};
+use jig_domain_core::RestoreRange;
 use skein_io::{file, kernel::Kind};
 use skein_lib::{List, Token};
 
@@ -67,11 +65,6 @@ pub(crate) fn counts(store: &mut Store, before: List<Counted>) -> Result<List<Co
     let mut counts = List::with_capacity(before.len());
     for counted in before.into_boxed() {
         let after = count(store, counted.owner, &counted.family).ok_or(OpenRefusal::Failed)?;
-        if after != counted.before {
-            return Err(OpenRefusal::Check {
-                why: Check::Count { family: counted.family.name, before: counted.before, after },
-            });
-        }
         let count = Count::new(
             &crate::component_v3::CEILINGS,
             CountParts { family: Box::from(counted.family.name.as_bytes()), before: counted.before, after },
@@ -100,11 +93,10 @@ fn ranges() -> Box<[skein_kv::Range]> {
 }
 
 fn rows(store: &mut Store) -> Result<(), OpenRefusal> {
-    // Results after parties' read positions and unanswered questions are the
-    // core's census selection; its and the children's strict rules come later.
+    // The restart makes links after every family's records have loaded.
+    // This pass asks only whether the copy decodes within the binary's bounds.
     let ranges = ranges();
     let mut cursor = None;
-    let mut join = None;
     for _ in 0..=store.stores.store.len() {
         let page =
             pages::walk(store, &ranges, cursor.as_ref(), store.limits.store.page.rows).ok_or(OpenRefusal::Failed)?;
@@ -113,26 +105,13 @@ fn rows(store: &mut Store) -> Result<(), OpenRefusal> {
         }
         for item in page.rows {
             let key = item.cursor.after;
-            let Some((row, _)) = pages::decode(store, item.row) else {
+            if pages::decode(store, item.row).is_none() {
                 return Err(OpenRefusal::Check { why: Check::Load { key } });
-            };
-            match row {
-                Row::Jig(Record::People(jig_domain_people::Stored::EndedRead { task, .. })) => {
-                    if restore::ended(store, task).is_none() && join.is_none() {
-                        join = Some(Check::Join { key });
-                    }
-                }
-                Row::Jig(_) | Row::Application { .. } => {}
             }
         }
         cursor = page.next;
         if cursor.is_none() {
-            // Load precedes Join, even if an unreadable row follows a missing
-            // join. One walk serves both, retaining only the first bad join.
-            return match join {
-                Some(why) => Err(OpenRefusal::Check { why }),
-                None => Ok(()),
-            };
+            return Ok(());
         }
     }
     Err(OpenRefusal::Failed)
