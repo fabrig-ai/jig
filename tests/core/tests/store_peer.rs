@@ -25,6 +25,7 @@ fn sign_in(number: u8) -> root::Event {
 
 fn observed_world(seed: u64) -> World {
     let mut world = World::new(seed, false);
+    world.skip_restart_oracle("these store-capture fixtures deliberately use non-UTF-8 identities and opaque turns");
     assert!(world.store_peer.is_none(), "default bootstrap has no capturing peer");
     let mut peer = StorePeer::after(world.store.applied);
     peer.capture(Time::ZERO, &world.store);
