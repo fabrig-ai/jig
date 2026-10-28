@@ -177,7 +177,7 @@ fn check(
     if let ProcedureEnd::Result(result) = &decision.end {
         let end = crate::End::Finished { result: result.clone(), cancel_delegates: false };
         if crate::run::ends::kept(domain, number).parks(&end) {
-            return Err(crate::Problem::naming(Some(number), Refusal::Kept, &task.waiting_on));
+            return Err(domain.waiting_effect_problem(number).expect("kept task names its reason"));
         }
         if !task.delegates.is_empty() || !decision.batch.is_empty() {
             return Err(crate::Problem::live_delegates(number, &task.delegates));

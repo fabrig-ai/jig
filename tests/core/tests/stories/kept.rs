@@ -126,7 +126,7 @@ fn a_party_reads_the_kept_agents_activity_naming_its_pending_dependency() {
     let core::reads::Answer::Page(page) = jig_core_world::reads::latest(&world) else { panic!("activity page") };
     assert!(page.rows.iter().any(|row| matches!(row,
         core::reads::PageRow::Activity { line, .. }
-            if line.task == kept && line.line == tasks::Line::Kept { attempt: run.1, pending: Box::new([dependency]) })));
+            if line.task == kept && line.line == tasks::Line::Kept { attempt: run.1, pending: Box::new([dependency]), question: None })));
 }
 
 #[test]

@@ -90,7 +90,7 @@ fn kept_lines_and_met_notices_cross_both_client_translations() {
     for removed in [false, true] {
         let mut rows = List::with_capacity(2);
         for (position, line) in [
-            (13, t::Line::Kept { attempt: 3, pending: Box::new([19, 23]) }),
+            (13, t::Line::Kept { attempt: 3, pending: Box::new([19, 23]), question: None }),
             (
                 11,
                 t::Line::Heard(t::Word {
@@ -121,7 +121,7 @@ fn kept_lines_and_met_notices_cross_both_client_translations() {
             jig_client_protocol_link::translate::pages::activity_page(record, &fixtures::client_limits()).unwrap();
         let c::Activity::Owner { source, decoded } = &actual.rows.get(0).unwrap().event else { panic!("owner") };
         assert!(decoded.is_none());
-        let c::OwnerActivity::Kept { attempt, pending } = &source.line else { panic!("kept") };
+        let c::OwnerActivity::Kept { attempt, pending, question: None } = &source.line else { panic!("kept") };
         assert_eq!((*attempt, pending.as_slice()), (3, [19, 23].as_slice()));
         let c::Activity::Owner { source, .. } = &actual.rows.get(1).unwrap().event else { panic!("owner") };
         let c::OwnerActivity::Heard(word) = &source.line else { panic!("heard") };

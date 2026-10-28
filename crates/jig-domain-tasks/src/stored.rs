@@ -408,6 +408,8 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             | crate::MessageKind::EffectNotMade { .. }
             | crate::MessageKind::Words
             | crate::MessageKind::Question
+            | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionEnded { .. }
             | crate::MessageKind::Answer { .. }
             | crate::MessageKind::Notice { .. }
             | crate::MessageKind::Timer { .. }
@@ -423,6 +425,12 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
         .saturating_sub(usize::from(met))
         .saturating_add(task.delegates.len())
         .saturating_add(task.questions.len())
+        .saturating_add(crate::inbox::received_credits(
+            task.requester,
+            &task.question_lines,
+            &task.questions,
+            &task.inbox,
+        ))
         .saturating_add(usize::from(task.proposal.is_some()))
         .saturating_add(subscription_count)
         > usize::try_from(limits.inbox_messages).expect("u32 fits usize")
@@ -482,7 +490,9 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
             },
             crate::MessageKind::EffectNotMade { .. }
             | crate::MessageKind::Amendment { .. }
-            | crate::MessageKind::Met { .. } => match word.from {
+            | crate::MessageKind::Met { .. }
+            | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionEnded { .. } => match word.from {
                 Party::Task(_) | Party::Person(_) => true,
                 Party::Deployment { .. } => false,
             },
@@ -540,6 +550,8 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 | crate::MessageKind::Escalation { .. }
                 | crate::MessageKind::PersonStalled { .. }
                 | crate::MessageKind::Met { .. }
+                | crate::MessageKind::QuestionAnswered { .. }
+                | crate::MessageKind::QuestionEnded { .. }
                 | crate::MessageKind::Timer { .. } => 0,
             }
         };
@@ -559,6 +571,8 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
                 | crate::MessageKind::FinishRequested { .. }
                 | crate::MessageKind::Amendment { .. }
                 | crate::MessageKind::Met { .. }
+                | crate::MessageKind::QuestionAnswered { .. }
+                | crate::MessageKind::QuestionEnded { .. }
                 | crate::MessageKind::Notice { .. }
                 | crate::MessageKind::News { .. }
                 | crate::MessageKind::Timer { .. } => false,
@@ -627,7 +641,12 @@ fn valid_record(domain: &Domain, limits: &Limits, task: &TaskRecord) -> bool {
         }
     }
     for (at, credit) in task.questions.iter().enumerate() {
-        if credit.number == 0 || credit.answerer == 0 {
+        if credit.number == 0
+            || !question_party(credit.answerer)
+            || !question_party(credit.asked)
+            || credit.line == 0
+            || credit.line > task.activity
+        {
             return false;
         }
         for earlier in task.questions.iter().take(at) {
@@ -1018,6 +1037,8 @@ fn links(domain: &Domain, env: &Env<Limits>, task: &TaskRecord) -> bool {
             | crate::MessageKind::SettingsDecision { .. }
             | crate::MessageKind::ProposalDecision { .. }
             | crate::MessageKind::Question
+            | crate::MessageKind::QuestionAnswered { .. }
+            | crate::MessageKind::QuestionEnded { .. }
             | crate::MessageKind::Answer { .. }
             | crate::MessageKind::Notice { .. }
             | crate::MessageKind::Timer { .. }
@@ -1032,6 +1053,12 @@ fn links(domain: &Domain, env: &Env<Limits>, task: &TaskRecord) -> bool {
         .saturating_sub(amendments)
         .saturating_add(task.delegates.len())
         .saturating_add(task.questions.len())
+        .saturating_add(crate::inbox::received_credits(
+            task.requester,
+            &task.question_lines,
+            &task.questions,
+            &task.inbox,
+        ))
         .saturating_add(usize::from(task.proposal.is_some()))
         .saturating_add(subscriptions)
         .saturating_add(stalls);
@@ -1217,4 +1244,11 @@ pub(crate) fn valid_amendment(limits: &Limits, amendment: &crate::Amendment) -> 
             Some(wake) => crate::wake::valid(wake),
             None => true,
         }
+}
+
+fn question_party(party: Party) -> bool {
+    match party {
+        Party::Task(number) | Party::Person(number) => number != 0,
+        Party::Deployment { .. } => false,
+    }
 }

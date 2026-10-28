@@ -56,9 +56,20 @@ impl Core {
             if !super::questions_live(&row.phase) {
                 continue;
             }
-            for line in &row.question_lines {
-                if line.answer.is_none() {
-                    questions.push((row.number, line.line)).expect("bounded open questions");
+            for credit in &row.questions {
+                questions.push((row.number, credit.line)).expect("reserved answer slot bounds original questions");
+            }
+            if let jig_domain_tasks::Party::Person(_) = row.requester {
+                for line in &row.question_lines {
+                    let mut outgoing = false;
+                    for credit in &row.questions {
+                        outgoing |= credit.line == line.line;
+                    }
+                    if line.answer.is_none() && !outgoing {
+                        questions
+                            .push((row.number, line.line))
+                            .expect("reserved notice slot bounds received questions");
+                    }
                 }
             }
         }

@@ -159,6 +159,11 @@ fn kinds() -> Box<[(OwnerMessageKind, &'static [u8])]> {
             },
             b"Kind: settings decision",
         ),
+        (
+            OwnerMessageKind::QuestionAnswered { question: u64::MAX },
+            b"Person answered question in inbox: 18446744073709551615",
+        ),
+        (OwnerMessageKind::QuestionEnded { question: u64::MAX }, b"Question ended unanswered: 18446744073709551615"),
         (OwnerMessageKind::Words, b"Kind: words"),
         (OwnerMessageKind::Met { dependency: 7, removed: false }, b"T7 is done; the task can go on"),
         (OwnerMessageKind::EffectNotMade { entry: u64::MAX }, b"Kind: effect not made"),
@@ -202,7 +207,7 @@ fn owner_activity_all_nine_lines_keep_task_commit_clock_and_exact_variant_facts(
         ),
         (OwnerActivity::Decided { revision: u64::MAX }, b"Decision recorded"),
         (OwnerActivity::Milestone { position: u64::MAX }, b"Milestone"),
-        (OwnerActivity::Kept { attempt: u64::MAX, pending: List::with_capacity(0) }, b"parked"),
+        (OwnerActivity::Kept { attempt: u64::MAX, pending: List::with_capacity(0), question: None }, b"parked"),
     ]);
     assert_eq!(lines.len(), 9);
     for (line, label) in lines {
@@ -268,7 +273,9 @@ fn assert_line_fields(tree: &Tree, line: &OwnerActivity) {
 }
 #[test]
 fn owner_activity_all_message_kinds_keep_whole_word_hits_clock_and_flags() {
-    assert_eq!(kinds().len(), 17);
+    // The original seventeen fixture rows plus the two question terminal notices.
+    const MESSAGE_CASES: usize = 19;
+    assert_eq!(kinds().len(), MESSAGE_CASES);
     for (kind, label) in kinds() {
         let word = fixture(kind);
         let original = word.clone();
@@ -331,7 +338,11 @@ fn assert_kind_numbers(tree: &Tree, kind: &OwnerMessageKind) {
             assert!(has(tree, b"Subscription: 18446744073709551615"));
         }
         OwnerMessageKind::Met { .. } => assert!(has(tree, b"T7 is done; the task can go on")),
-        OwnerMessageKind::Words | OwnerMessageKind::Question | OwnerMessageKind::Result(_) => {}
+        OwnerMessageKind::QuestionAnswered { .. }
+        | OwnerMessageKind::QuestionEnded { .. }
+        | OwnerMessageKind::Words
+        | OwnerMessageKind::Question
+        | OwnerMessageKind::Result(_) => {}
     }
 }
 #[test]
@@ -710,7 +721,7 @@ fn a_kept_run_is_parked_and_met_names_the_ended_or_removed_dependency() {
     let mut pending = List::with_capacity(2);
     pending.push(7).unwrap();
     pending.push(8).unwrap();
-    let tree = build(&activity(OwnerActivity::Kept { attempt: 3, pending }), normal_words());
+    let tree = build(&activity(OwnerActivity::Kept { attempt: 3, pending, question: None }), normal_words());
     assert!(has(&tree, b"parked"));
     assert!(has(&tree, b"Attempt: 3"));
     assert!(has(&tree, b"kept until T7 is done"));
@@ -747,4 +758,13 @@ fn dependency_refusals_name_the_circle_the_ending_and_the_kept_answer() {
         normal_words().refusal(&mut b, &refusal, client_limits().text);
         assert!(has(&b.finish(), expected));
     }
+}
+
+#[test]
+fn a_kept_activity_names_its_question_as_a_question() {
+    let tree = build(
+        &activity(OwnerActivity::Kept { attempt: 3, pending: List::with_capacity(0), question: Some(12) }),
+        normal_words(),
+    );
+    assert!(has(&tree, b"Kept by question: 12"));
 }

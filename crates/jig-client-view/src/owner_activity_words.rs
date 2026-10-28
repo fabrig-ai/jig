@@ -116,8 +116,12 @@ pub enum ActivityPhrase {
     Resource,
     ResultFailed,
     ResultCancelled,
+    QuestionAnswered,
+    QuestionEnded,
+    KeptQuestion,
 }
-pub const ALL: [ActivityPhrase; 107] = [
+// The original 107 activity phrases plus three question-rail captions.
+pub const ALL: [ActivityPhrase; 110] = [
     ActivityPhrase::Activity,
     ActivityPhrase::Task,
     ActivityPhrase::Position,
@@ -225,6 +229,9 @@ pub const ALL: [ActivityPhrase; 107] = [
     ActivityPhrase::Resource,
     ActivityPhrase::ResultFailed,
     ActivityPhrase::ResultCancelled,
+    ActivityPhrase::QuestionAnswered,
+    ActivityPhrase::QuestionEnded,
+    ActivityPhrase::KeptQuestion,
 ];
 impl ActivityPhrase {
     #[must_use]
@@ -341,6 +348,9 @@ impl ActivityPhrase {
             Self::Resource => 7301,
             Self::ResultFailed => 7302,
             Self::ResultCancelled => 7303,
+            Self::QuestionAnswered => 7307,
+            Self::QuestionEnded => 7308,
+            Self::KeptQuestion => 7309,
         };
         PhraseId { owner: Owner::Jig.opaque(), number }
     }
@@ -447,6 +457,9 @@ impl ActivityPhrase {
             | Self::ProposalNumber
             | Self::Entry
             | Self::QuestionNumber
+            | Self::QuestionAnswered
+            | Self::QuestionEnded
+            | Self::KeptQuestion
             | Self::Subscription
             | Self::Target
             | Self::Code
@@ -569,12 +582,15 @@ impl ActivityPhrase {
             Self::Resource => b"Resource: ",
             Self::ResultFailed => b"Result: failed",
             Self::ResultCancelled => b"Result: cancelled",
+            Self::QuestionAnswered => b"Person answered question in inbox: ",
+            Self::QuestionEnded => b"Question ended unanswered: ",
+            Self::KeptQuestion => b"Kept by question: ",
         }
     }
 }
 #[must_use]
 pub fn shapes() -> Box<[PhraseShape]> {
-    let mut result = List::with_capacity(107);
+    let mut result = List::with_capacity(u32::try_from(ALL.len()).expect("activity phrase count fits"));
     for phrase in ALL {
         let holes: Box<[HoleShape]> = match phrase.hole() {
             Some(kind) => Box::new([HoleShape { kind, bytes: 0 }]),
@@ -586,7 +602,7 @@ pub fn shapes() -> Box<[PhraseShape]> {
 }
 #[must_use]
 pub fn language() -> Language {
-    let mut result = List::with_capacity(107);
+    let mut result = List::with_capacity(u32::try_from(ALL.len()).expect("activity phrase count fits"));
     for phrase in ALL {
         let segments: Box<[Segment]> = match phrase.hole() {
             Some(kind) => Box::new([Segment::Text(copy_of(phrase.label())), Segment::Hole { index: 0, kind }]),

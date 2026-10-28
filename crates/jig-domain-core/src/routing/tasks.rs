@@ -1399,6 +1399,25 @@ pub(super) fn tag_tasks(
                 }
                 continue;
             }
+            tasks::Request::QuestionEndedDue { task, questions } => {
+                let mut notices = List::with_capacity(env.limits.tasks.inbox_messages);
+                for question in questions {
+                    let message = crate::fresh(&mut core.counters, crate::Family::Message)
+                        .expect("question notice number admitted");
+                    notices.push(tasks::QuestionNotice { question, message }).expect("bounded question batch");
+                }
+                let mut follow = Queue::with_capacity(room);
+                tasks::step(
+                    &mut core.tasks,
+                    &Env { now: env.now, wall: env.wall, limits: env.limits.tasks },
+                    tasks::Event::QuestionEndedNotice { task, notices: notices.into_boxed() },
+                    &mut follow,
+                );
+                for _ in 0..follow.len() {
+                    pending.push(follow.pop().expect("question notice output count"));
+                }
+                continue;
+            }
             tasks::Request::MetDue { task, dependency, removed, by } => {
                 let message =
                     crate::fresh(&mut core.counters, crate::Family::Message).expect("met notice number admitted");

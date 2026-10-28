@@ -485,7 +485,17 @@ fn memory_below_the_components_sum_is_refused() {
     let wall_expiry_index = skein_lib::Set::<(skein_lib::Wall, u64)>::worst_case(limits.people.sign_ins).unwrap();
     let reconciliation_growth = u64::from(limits.views.runs) * RECONCILIATION_GROWTH_PER_RUN;
     let ending_saving = u64::from(limits.views.watchers) * ENDING_SAVING_PER_WATCHER;
-    let without_acts = BEFORE_FINISHING_OVER + wall_expiry_index + reconciliation_growth - ending_saving
+    // Question rails: each credit grows 16 -> 48 bytes in three retained/
+    // scratch copies per live task, four per compound member and one shared row.
+    // Batch retirement owns two task-ID lists, one per-task list map and T*Q IDs.
+    // As in the existing owner bounds, container headers are not heap terms.
+    let task_count = limits.tasks.tasks;
+    let question_count = limits.tasks.inbox_messages;
+    let question_rails = u64::from(question_count) * 32 * (7 * u64::from(task_count) + 1)
+        + 2 * skein_lib::List::<u64>::worst_case(task_count).unwrap()
+        + skein_lib::Map::<u64, skein_lib::List<u64>>::worst_case(task_count).unwrap()
+        + u64::from(task_count) * u64::from(question_count) * 8;
+    let without_acts = question_rails + BEFORE_FINISHING_OVER + wall_expiry_index + reconciliation_growth - ending_saving
         + SOURCE_DEADLINE_GROWTH
         + SIGN_IN_CANCEL_GROWTH
         + PASTED_FINISH_GROWTH

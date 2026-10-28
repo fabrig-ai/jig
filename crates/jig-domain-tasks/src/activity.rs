@@ -57,6 +57,7 @@ pub enum Line {
     Kept {
         attempt: u64,
         pending: Box<[u64]>,
+        question: Option<u64>,
     },
 }
 
@@ -107,6 +108,8 @@ pub(crate) fn message(task: &mut TaskRecord, word: &Word, bound: u32, out: &mut 
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionEnded { .. }
         | MessageKind::Notice { .. }
         | MessageKind::Timer { .. }
         | MessageKind::News { .. }
@@ -130,5 +133,10 @@ pub fn line_bytes_limit(limits: &crate::Limits) -> Option<u64> {
 /// plus one notice for each bounded standing interest. Included in `max_out`.
 #[must_use]
 pub fn lines_per_decision(limits: &crate::Limits) -> Option<u32> {
-    limits.tasks.checked_mul(12)?.checked_add(limits.tasks.checked_mul(limits.subscriptions)?)
+    let lifecycle = limits.tasks.checked_mul(12)?.checked_add(limits.tasks.checked_mul(limits.subscriptions)?)?;
+    // One task's numbered terminal batch is a separate event: at most one
+    // activity per retired question and its wake milestone, alongside the common
+    // per-task lifecycle/hold-expiry pass. It does not send subscription news.
+    let notices = limits.tasks.checked_mul(12)?.checked_add(limits.inbox_messages)?.checked_add(1)?;
+    Some(lifecycle.max(notices))
 }

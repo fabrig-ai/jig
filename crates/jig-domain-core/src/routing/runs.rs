@@ -487,6 +487,42 @@ pub(super) fn named_action(
             );
         }
         NamedAction::Message { target, kind, words } => {
+            match kind {
+                tasks::MessageKind::Answer { question }
+                    if core.people.question_person(key.task, question).is_some() =>
+                {
+                    call_decision(
+                        core,
+                        &mut out,
+                        ReplyTo::new(token),
+                        key,
+                        CallPart::MessageRefused(tasks::Problem::new(
+                            Some(target),
+                            tasks::Refusal::PersonAnswers { question },
+                        )),
+                    );
+                    out.push(Request::Decided);
+                    return Requests::Out(out);
+                }
+                tasks::MessageKind::EffectNotMade { .. }
+                | tasks::MessageKind::Words
+                | tasks::MessageKind::Question
+                | tasks::MessageKind::QuestionAnswered { .. }
+                | tasks::MessageKind::QuestionEnded { .. }
+                | tasks::MessageKind::Proposal { .. }
+                | tasks::MessageKind::Escalation { .. }
+                | tasks::MessageKind::FinishRequested { .. }
+                | tasks::MessageKind::Amendment { .. }
+                | tasks::MessageKind::Met { .. }
+                | tasks::MessageKind::SettingsDecision { .. }
+                | tasks::MessageKind::ProposalDecision { .. }
+                | tasks::MessageKind::PersonStalled { .. }
+                | tasks::MessageKind::Result(_)
+                | tasks::MessageKind::Notice { .. }
+                | tasks::MessageKind::Timer { .. }
+                | tasks::MessageKind::News { .. }
+                | tasks::MessageKind::Answer { .. } => {}
+            }
             let Some(context) = core.tasks.delegation(key.task) else {
                 call_decision(
                     core,

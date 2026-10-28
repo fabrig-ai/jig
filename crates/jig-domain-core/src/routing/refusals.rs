@@ -83,7 +83,9 @@ fn task_answer(core: &Core, problem: tasks::Problem) -> people::Outcome {
                 tasks::AccountWhy::Limited => people::AccountWhy::Limited,
             },
         },
-        tasks::Refusal::Reference => people::Refusal::Authority { proposable: None, lacking: people::Lack::Reference },
+        tasks::Refusal::PersonAnswers { .. } | tasks::Refusal::KeptQuestion { .. } | tasks::Refusal::Reference => {
+            people::Refusal::Authority { proposable: None, lacking: people::Lack::Reference }
+        }
         tasks::Refusal::Funding => people::Refusal::Authority { proposable: None, lacking: people::Lack::Funding },
         tasks::Refusal::AuthorityShape => people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape },
         tasks::Refusal::Duplicate => people::Refusal::Limit { which: people::LimitKind::Duplicate },

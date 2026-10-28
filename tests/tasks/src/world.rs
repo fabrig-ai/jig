@@ -372,6 +372,21 @@ impl World {
                     &mut self.out,
                 );
             }
+            Request::QuestionEndedDue { task, questions } => {
+                let notices = questions
+                    .iter()
+                    .map(|question| {
+                        self.message = self.message.checked_add(1).expect("question notice number room");
+                        tasks::QuestionNotice { question: *question, message: self.message }
+                    })
+                    .collect();
+                tasks::step(
+                    &mut self.domain,
+                    &self.env,
+                    Event::QuestionEndedNotice { task: *task, notices },
+                    &mut self.out,
+                );
+            }
             Request::MetDue { task, dependency, removed, by } => {
                 self.message = self.message.checked_add(1).expect("met message number room");
                 tasks::step(
@@ -526,6 +541,9 @@ impl World {
             | Event::HoldFrom { .. }
             | Event::EffectsSettled { .. }
             | Event::Retained { .. }
+            | Event::PersonQuestionAnswer { .. }
+            | Event::QuestionEndedNotice { .. }
+            | Event::CancelQuestion { .. }
             | Event::Settled { .. }
             | Event::Restore { .. }
             | Event::Check
@@ -549,6 +567,14 @@ impl World {
         match event {
             Event::DecideSettingsProposal { decision, .. } => {
                 self.message = self.message.max(decision.message);
+            }
+            Event::PersonQuestionAnswer { word, notice, .. } => {
+                self.message = self.message.max(word.number).max(*notice);
+            }
+            Event::QuestionEndedNotice { notices, .. } => {
+                for notice in notices {
+                    self.message = self.message.max(notice.message);
+                }
             }
             Event::Amend { message, .. } => {
                 self.message = self.message.max(*message);
@@ -609,6 +635,7 @@ impl World {
             | Event::HoldFrom { .. }
             | Event::EffectsSettled { .. }
             | Event::Retained { .. }
+            | Event::CancelQuestion { .. }
             | Event::Settled { .. }
             | Event::Restore { .. }
             | Event::Check
@@ -776,6 +803,7 @@ impl World {
                 | Request::ResolveUncertain { .. }
                 | Request::Sent { .. }
                 | Request::Relay { .. }
+                | Request::QuestionEndedDue { .. }
                 | Request::MetDue { .. }
                 | Request::PersonStallDue { .. }
                 | Request::Notify { .. }
@@ -869,6 +897,7 @@ impl World {
                 | Request::Ended { .. }
                 | Request::EscalationNeeded { .. }
                 | Request::Relay { .. }
+                | Request::QuestionEndedDue { .. }
                 | Request::MetDue { .. }
                 | Request::PersonStallDue { .. }
                 | Request::Notify { .. }

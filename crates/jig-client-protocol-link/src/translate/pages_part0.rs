@@ -86,6 +86,10 @@ pub(crate) fn owner_message_kind_fields(
         w::OwnerMessageKind::Met(row) => {
             c::OwnerMessageKind::Met { dependency: row.dependency(), removed: row.removed() }
         }
+        w::OwnerMessageKind::QuestionAnswered(row) => {
+            c::OwnerMessageKind::QuestionAnswered { question: row.question() }
+        }
+        w::OwnerMessageKind::QuestionEnded(row) => c::OwnerMessageKind::QuestionEnded { question: row.question() },
         w::OwnerMessageKind::Words => c::OwnerMessageKind::Words,
         w::OwnerMessageKind::EffectNotMade(row) => c::OwnerMessageKind::EffectNotMade { entry: row.entry() },
         w::OwnerMessageKind::Amendment(row) => c::OwnerMessageKind::Amendment { revision: row.revision() },
@@ -176,7 +180,7 @@ pub(crate) fn owner_activity_fields(value: &w::OwnerActivity, limits: &Limits) -
         }
         w::OwnerActivity::Decided(row) => c::OwnerActivity::Decided { revision: row.revision() },
         w::OwnerActivity::Kept(row) => {
-            c::OwnerActivity::Kept { attempt: row.attempt(), pending: row.pending().clone() }
+            c::OwnerActivity::Kept { attempt: row.attempt(), pending: row.pending().clone(), question: *row.question() }
         }
         w::OwnerActivity::Milestone(row) => c::OwnerActivity::Milestone { position: row.position() },
     })

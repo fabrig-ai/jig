@@ -139,13 +139,13 @@ fn word(h: &mut Harness, task: u64, from: Party, number: u64, kind: MessageKind)
 
 #[test]
 fn a_tasks_answer_names_the_line_in_the_delegates_activity() {
-    let mut h = question_cohort(2);
-    start(&mut h, 1);
-    let _question = word(&mut h, 1, Party::Task(2), 1, MessageKind::Question);
+    let mut h = question_cohort(3);
+    start(&mut h, 2);
+    let _question = word(&mut h, 2, Party::Task(3), 1, MessageKind::Question);
     h.send(Event::Turn {
         refused: Box::new([]),
         reply_to: to(),
-        task: 1,
+        task: 2,
         attempt: 1,
         turn: 1,
         read: Some(1),
@@ -153,22 +153,25 @@ fn a_tasks_answer_names_the_line_in_the_delegates_activity() {
         outstanding: Box::new([]),
         cumulative: 0,
     });
-    let activity = live(&h, 1).activity;
-    assert!(live(&h, 1).inbox.is_empty());
-    let _answer = word(&mut h, 2, Party::Task(1), 2, MessageKind::Answer { question: 1 });
-    let expected = Some(crate::AnswerLine { task: 2, position: 2 });
-    assert_eq!(live(&h, 1).question_lines[0].answer, expected);
-    assert_eq!(live(&h, 1).activity, activity, "the answering task gains no line");
-    let Stored::Live(saved) = &h.stored[&Key::Live(1)] else { panic!("answer pointer saved") };
+    let activity = live(&h, 2).activity;
+    assert!(live(&h, 2).inbox.is_empty());
+    let answer_position = live(&h, 3).activity + 1;
+    let _answer = word(&mut h, 3, Party::Task(2), 2, MessageKind::Answer { question: 1 });
+    let expected = Some(crate::AnswerLine { task: 3, position: answer_position });
+    assert_eq!(live(&h, 2).question_lines[0].answer, expected);
+    assert_eq!(live(&h, 2).activity, activity, "the answering task gains no line");
+    let Stored::Live(saved) = &h.stored[&Key::Live(2)] else { panic!("answer pointer saved") };
     assert_eq!(saved.question_lines[0].answer, expected);
-    let Stored::Activity(line) = &h.stored[&Key::Activity { task: 2, position: 2 }] else { panic!("answer line") };
+    let Stored::Activity(line) = &h.stored[&Key::Activity { task: 3, position: answer_position }] else {
+        panic!("answer line")
+    };
     let crate::Line::Words { kind, .. } = &line.line else { panic!("answer words") };
     assert_eq!(*kind, MessageKind::Answer { question: 1 });
-    let original = live(&h, 1).clone();
-    let _again = word(&mut h, 2, Party::Task(1), 3, MessageKind::Answer { question: 1 });
-    assert_eq!(live(&h, 1), &original, "the first answer stays");
+    let original = live(&h, 2).clone();
+    let _again = word(&mut h, 3, Party::Task(2), 3, MessageKind::Answer { question: 1 });
+    assert_eq!(live(&h, 2), &original, "the first answer stays");
     h.restart();
-    assert_eq!(live(&h, 1).question_lines[0].answer, expected);
+    assert_eq!(live(&h, 2).question_lines[0].answer, expected);
 }
 
 #[test]
@@ -241,7 +244,24 @@ fn a_person_can_answer_after_the_run_reads_and_the_first_answer_closes_the_line(
     });
     assert!(live(&h, 1).inbox.is_empty());
     assert_eq!(live(&h, 1).question_lines[0].answer, None);
-    let out = word(&mut h, 1, Party::Person(9), 2, MessageKind::Answer { question: 1 });
+    let answer = crate::Word {
+        number: 2,
+        from: Party::Person(9),
+        kind: MessageKind::Answer { question: 1 },
+        words: b"yes".as_slice().into(),
+        at: h.env.wall,
+        hits: 1,
+        eligible: false,
+    };
+    let out = h.send(Event::PersonQuestionAnswer {
+        reply_to: to(),
+        project: 1,
+        asked: 1,
+        person: 9,
+        question: 1,
+        word: answer,
+        notice: 3,
+    });
     assert!(
         out.iter().any(|request| match request {
             Request::Sent { .. } => true,
@@ -251,19 +271,19 @@ fn a_person_can_answer_after_the_run_reads_and_the_first_answer_closes_the_line(
     );
     let first = live(&h, 1).question_lines[0].answer;
     assert!(first.is_some());
-    assert_eq!(live(&h, 2).questions.len(), 1, "a person's answer leaves the delegate's credit open");
+    assert!(live(&h, 2).questions.is_empty(), "the person's answer consumes the delegate's credit");
     h.send(Event::Turn {
         refused: Box::new([]),
         reply_to: to(),
         task: 1,
         attempt: 1,
         turn: 2,
-        read: Some(2),
-        offered: Some(2),
+        read: Some(3),
+        offered: Some(3),
         outstanding: Box::new([]),
         cumulative: 0,
     });
-    let out = word(&mut h, 1, Party::Person(9), 3, MessageKind::Answer { question: 1 });
+    let out = word(&mut h, 1, Party::Person(9), 4, MessageKind::Answer { question: 1 });
     assert!(
         out.iter().any(|request| match request {
             Request::Refused { problem, .. } => problem.why == crate::Refusal::Reference,
@@ -319,7 +339,7 @@ fn questions_check_message_and_byte_bounds_at_both_inboxes() {
 }
 
 #[test]
-fn two_person_answers_in_one_compound_are_refused_whole() {
+fn person_answers_to_the_received_task_are_refused_whole() {
     let mut h = question_cohort(2);
     start(&mut h, 1);
     let _question = word(&mut h, 1, Party::Task(2), 1, MessageKind::Question);
@@ -341,7 +361,7 @@ fn two_person_answers_in_one_compound_are_refused_whole() {
     let out = compound::compound(&mut h, operations, 1000);
     assert!(
         out.iter().any(|request| match request {
-            Request::CompoundRefused { at: 1, problem, .. } => problem.why == crate::Refusal::Reference,
+            Request::CompoundRefused { at: 0, problem, .. } => problem.why == crate::Refusal::Reference,
             _ => false,
         }),
         "{out:?}"

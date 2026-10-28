@@ -21,7 +21,7 @@ pub enum OwnerActivity {
     Turn { reply: u64, attempt: u64, turn: u32, read: Option<u64> },
     Decided { revision: u64 },
     Milestone { position: u64 },
-    Kept { attempt: u64, pending: List<u64> },
+    Kept { attempt: u64, pending: List<u64>, question: Option<u64> },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OwnerRunWhy {
@@ -74,6 +74,12 @@ pub enum OwnerMessageKind {
     ProposalDecision {
         proposal: u64,
         accepted: bool,
+    },
+    QuestionAnswered {
+        question: u64,
+    },
+    QuestionEnded {
+        question: u64,
     },
     Words,
     EffectNotMade {

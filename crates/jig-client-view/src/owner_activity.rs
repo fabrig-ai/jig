@@ -61,6 +61,8 @@ fn message_fits(kind: &OwnerMessageKind, words: &Text, limits: &Limits) -> Optio
         | OwnerMessageKind::Words
         | OwnerMessageKind::EffectNotMade { .. }
         | OwnerMessageKind::Met { .. }
+        | OwnerMessageKind::QuestionAnswered { .. }
+        | OwnerMessageKind::QuestionEnded { .. }
         | OwnerMessageKind::Amendment { .. }
         | OwnerMessageKind::Question
         | OwnerMessageKind::Answer { .. }
@@ -238,6 +240,8 @@ fn kind(b: &mut Builder, value: &OwnerMessageKind, words: &Words) {
             caption(b, words, P::Amendment);
             number(b, words, P::Revision, *revision);
         }
+        OwnerMessageKind::QuestionAnswered { question } => number(b, words, P::QuestionAnswered, *question),
+        OwnerMessageKind::QuestionEnded { question } => number(b, words, P::QuestionEnded, *question),
         OwnerMessageKind::Met { dependency, removed } => words.text(
             b,
             if *removed {
@@ -382,7 +386,10 @@ fn line(b: &mut Builder, value: &OwnerActivity, words: &Words) {
             caption(b, words, P::Decided);
             number(b, words, P::Revision, *revision);
         }
-        OwnerActivity::Kept { attempt, pending } => {
+        OwnerActivity::Kept { attempt, pending, question } => {
+            if let Some(question) = question {
+                number(b, words, P::KeptQuestion, *question);
+            }
             words.text(b, crate::phrases::jig::JigPhrase::DependencyParked, &[]);
             number(b, words, P::Attempt, *attempt);
             for dependency in pending {
