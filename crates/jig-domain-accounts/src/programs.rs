@@ -107,13 +107,12 @@ pub fn declare(
 
 pub(crate) fn restore(domain: &mut Domain, number: u32, holder: Holder, name: Box<[u8]>, signed_out: bool) -> bool {
     let Some(name) = crate::SourceName::new(&name) else { return false };
-    if number == u32::MAX || domain.accounts.contains_key(&number) {
-        return false;
-    }
     for (other_number, issued) in &domain.issued {
-        if *other_number == number || issued.name == name {
-            return false;
-        }
+        assert!(
+            *other_number == number || issued.name != name,
+            "accounts: Issued({number}) links to name {:?}, reserved by source {other_number}",
+            name.as_bytes()
+        );
     }
     domain.issued.insert(number, Issued { holder, name, signed_out }).is_ok()
 }
@@ -136,37 +135,22 @@ pub(crate) fn finish_restore(domain: &mut Domain, out: &mut Queue<Request>) {
             out.push(Request::Save { record: Stored::Issued { number, holder, name, signed_out: false } });
         }
     }
-    let mut rejected = List::with_capacity(domain.sources.capacity());
     for (number, source) in &domain.sources {
-        let valid = match source.kind {
-            Kind::Program => match domain.issued.get(number) {
-                Some(issued) => match domain.accounts.get(&source.account) {
-                    Some(account) => issued.holder == account.holder && issued.name.as_bytes() == source.name.as_ref(),
-                    None => false,
-                },
-                None => false,
-            },
-            Kind::SignIn | Kind::Key | Kind::None => !domain.issued.contains_key(number),
-        };
-        if !valid {
-            rejected.push(*number).expect("at most one rejected row per source");
+        if source.kind == Kind::Program {
+            let account = domain.accounts.get(&source.account).expect("source account linked on load");
+            let issued = domain.issued.get(number);
+            assert!(
+                issued.is_some(),
+                "accounts: Source({number}) links to issued name {:?}, which is absent",
+                source.name
+            );
+            let issued = issued.expect("linked issued name");
+            assert!(
+                issued.holder == account.holder && issued.name.as_bytes() == source.name.as_ref(),
+                "accounts: Source({number}) links to name {:?} reserved by another source",
+                source.name
+            );
         }
-    }
-    for number in &rejected {
-        let Some(source) = domain.sources.remove(number) else { continue };
-        if let Some(account) = domain.accounts.get_mut(&source.account) {
-            let mut at = None;
-            for (place, kept) in &account.sources {
-                if kept == number {
-                    at = Some(*place);
-                }
-            }
-            if let Some(place) = at {
-                account.sources.remove(&place);
-            }
-        }
-        domain.alarms.cancel(*number);
-        domain.unrestored = domain.unrestored.saturating_add(1);
     }
     let mut numbers = List::with_capacity(domain.accounts.capacity());
     for (number, _) in &domain.accounts {

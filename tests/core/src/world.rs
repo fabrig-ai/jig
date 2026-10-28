@@ -1,7 +1,6 @@
 //! Seeded fixtures and scripts for the testing application.
 
 mod deliveries;
-use crate::Store;
 use jig_domain_accounts as accounts;
 use jig_domain_authority as authority;
 use jig_domain_core as core;
@@ -410,10 +409,8 @@ pub fn config(seed: u64) -> root::Config {
 /// store rows. The core and connectors remain inside the testing root.
 #[derive(Debug)]
 pub struct World {
-    /// The application under test.
-    pub domain: root::Domain,
-    /// The ordered fake store.
-    pub store: Store,
+    /// The runtime owns the shared cold-restart teardown.
+    runtime: crate::effects::World,
     /// External events not yet delivered.
     pub events: VecDeque<root::Event>,
     /// Every output observed from outside the root.
@@ -520,8 +517,7 @@ impl World {
         observer.fresh_mark(0, &bootstrap.store);
         World {
             creating: crate::fixtures::Creating::new(&config(seed).core, limits.core.tasks.tree_tasks),
-            domain: bootstrap.domain,
-            store: bootstrap.store,
+            runtime: bootstrap,
             events,
             trace: Vec::new(),
             sign_in: None,
@@ -549,12 +545,13 @@ impl World {
         let now = Time::from_nanos(self.iteration * 1_000_000);
         let env = Env { now, wall: Wall::from_nanos(self.iteration * 1_000_000), limits: self.limits };
         if let Some(mut event) = self.events.pop_front() {
-            self.observer.inbound(&self.store, self.iteration * 1_000_000, &mut event);
+            self.runtime.remember_oracle_hello(&event);
+            self.observer.inbound(&self.runtime.store, self.iteration * 1_000_000, &mut event);
             self.trace.push(format!("input {event:?}"));
-            root::step(&mut self.domain, &env, event);
+            root::step(&mut self.runtime.domain, &env, event);
         }
         let mut out = Queue::with_capacity(128);
-        root::release(&mut self.domain, &env, &mut out);
+        root::release(&mut self.runtime.domain, &env, &mut out);
         while let Some(request) = out.pop() {
             self.trace.push(format!("output {request:?}"));
             match request {
@@ -563,9 +560,9 @@ impl World {
                     while let Some(write) = writes.pop() {
                         rows.push(write);
                     }
-                    self.store.submit(number, rows.into_boxed_slice(), 0);
-                    let applied = self.store.tick(false).expect("store did not fail").expect("ready commit");
-                    self.observer.durable(self.iteration * 1_000_000, &self.store);
+                    self.runtime.store.submit(number, rows.into_boxed_slice(), 0);
+                    let applied = self.runtime.store.tick(false).expect("store did not fail").expect("ready commit");
+                    self.observer.durable(self.iteration * 1_000_000, &self.runtime.store);
                     self.events.push_front(root::Event::Committed { number: applied, fill: 0 });
                 }
                 root::Request::Deliver(delivery) => self.delivered(delivery),
@@ -597,14 +594,14 @@ impl World {
                     | core::Now::SeenConversation { .. }
                     | core::Now::LoadEndedRead { .. }
                     | core::Now::StartPreparation { from: Some(_), .. }),
-                ) => self.store.ask(jig_test_store::StoreOut::Now(now)),
+                ) => self.runtime.store.ask(jig_test_store::StoreOut::Now(now)),
                 root::Request::Now(_) => {}
                 root::Request::Restart(_) => panic!("walking fixture uses restored markers"),
                 root::Request::Busy { .. } => panic!("this world does not stop"),
                 root::Request::Stop => panic!("testing root stopped: {:?}", self.trace),
             }
         }
-        for answer in self.store.answers() {
+        for answer in self.runtime.store.answers() {
             match answer {
                 jig_test_store::Up::Root(event) => self.events.push_back(event),
                 jig_test_store::Up::Restore(_) | jig_test_store::Up::Ask(_) => {
@@ -612,13 +609,13 @@ impl World {
                 }
             }
         }
-        self.domain.reclaim();
+        self.runtime.domain.reclaim();
         self.observer.observe(self.iteration * 1_000_000, self.heap.observed());
         if self.scenario == Scenario::Goal
             && self.delegated
             && !self.goal_answer_sent
             && let Some(procedure) = self.procedure
-            && self.store.rows.contains_key(&root::Key::Core(core::Key::Tasks(tasks::Key::Ended(procedure))))
+            && self.runtime.store.rows.contains_key(&root::Key::Core(core::Key::Tasks(tasks::Key::Ended(procedure))))
         {
             let assignment = self.assignment.as_ref().expect("goal worker was assigned");
             self.goal_answer_sent = true;
@@ -639,7 +636,7 @@ impl World {
     /// Run until the worker and party have seen the terminal, within a fixed bound.
     pub fn run_chat(&mut self) {
         for _ in 0..300 {
-            if self.results == 1 && self.answer_acks == 1 && self.events.is_empty() && self.domain.quiescent() {
+            if self.results == 1 && self.answer_acks == 1 && self.events.is_empty() && self.runtime.domain.quiescent() {
                 return;
             }
             self.iterate();
@@ -650,7 +647,11 @@ impl World {
     /// Run the goal, delegated procedure and person's final result.
     pub fn run_goal(&mut self) {
         for _ in 0..300 {
-            if self.results == 1 && self.procedure.is_some() && self.events.is_empty() && self.domain.quiescent() {
+            if self.results == 1
+                && self.procedure.is_some()
+                && self.events.is_empty()
+                && self.runtime.domain.quiescent()
+            {
                 return;
             }
             self.iterate();
@@ -661,7 +662,7 @@ impl World {
     /// Run through the named batch refusal and its durable reply.
     pub fn run_batch(&mut self) {
         for _ in 0..300 {
-            if self.batch_refusals == 1 && self.events.is_empty() && self.domain.quiescent() {
+            if self.batch_refusals == 1 && self.events.is_empty() && self.runtime.domain.quiescent() {
                 return;
             }
             self.iterate();
@@ -676,3 +677,15 @@ pub use credentials::with_workspace_credential;
 
 mod funding;
 pub use funding::edit_role;
+
+impl std::ops::Deref for World {
+    type Target = crate::effects::World;
+    fn deref(&self) -> &Self::Target {
+        &self.runtime
+    }
+}
+impl std::ops::DerefMut for World {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.runtime
+    }
+}
