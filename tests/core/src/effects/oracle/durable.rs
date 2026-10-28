@@ -16,13 +16,14 @@ pub(super) struct Transients {
     engine_runs: BTreeMap<u64, u64>,
 }
 impl Transients {
-    pub(super) fn from_core(core: &core::Core) -> Self {
+    pub(super) fn from_core(core: &core::Core, workers_in_process: bool) -> Self {
         Self {
             engine_runs: core
                 .proofs
                 .iter()
                 .filter_map(|(task, proof)| {
-                    if proof.host != fleet::HostKind::Engine {
+                    // engine.md 6: an in-process worker dies with the engine too.
+                    if proof.host != fleet::HostKind::Engine && !workers_in_process {
                         return None;
                     }
                     Some((*task, core.tasks.task(*task)?.run_reserved))
@@ -70,10 +71,23 @@ impl Transients {
                 }
             }
             Document::Chips(chips) => self.chips(chips),
+            Document::Project(project) => {
+                // engine.md 6 step 3: project spend embeds the same local run
+                // observations and own reservation as the task document.
+                for index in 0..project.spend.len() {
+                    let spend = project.spend.get_mut(index).expect("spend index");
+                    if let Some((reservation, true)) = self.runtime(&spend.chip) {
+                        spend.numbers.reserved = spend.numbers.reserved.checked_sub(reservation).expect("run held");
+                    }
+                    self.chip(&mut spend.chip);
+                }
+                for index in 0..project.recurring.len() {
+                    self.chip(&mut project.recurring.get_mut(index).expect("recurring index").chip);
+                }
+            }
             // Fields without an evidenced transient declaration stay in the comparison.
             Document::Frame(_)
             | Document::Inbox(_)
-            | Document::Project(_)
             | Document::Run(_)
             | Document::Lines(_)
             | Document::Proposal(_)
