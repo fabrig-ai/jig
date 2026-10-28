@@ -126,7 +126,7 @@ fn full_account_source_and_deadline_tables_stay_within_the_worst_case() {
         while out.pop().is_some() {}
         meter.check(measured, bound, &number);
     }
-    assert_eq!(domain.unrestored(), 0);
+    assert_eq!(domain.restore_limit(), None);
     assert_eq!(domain.accounts(), LIMITS.accounts);
     assert_eq!(domain.source_views().len(), LIMITS.accounts * LIMITS.sources);
     assert!(domain.usable(number(0, None)));
@@ -437,7 +437,7 @@ fn restore_move_accounts(domain: &mut Domain, run: &mut Run) {
             "move credentials",
         );
     }
-    assert_eq!(domain.unrestored(), 0);
+    assert_eq!(domain.restore_limit(), None);
     assert_eq!(domain.accounts(), run.env.limits.accounts);
 }
 #[test]
