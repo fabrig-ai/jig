@@ -16,6 +16,14 @@ pub fn frame(domain: &core::Limits, transcript_bytes: u32) -> Option<u32> {
     body.checked_add(crate::transcripts::frame::WRAPPER_BYTES)
 }
 
+/// A restart page can carry a maximum stored row and its census owner.
+/// This is the two-row workspace already priced by the store (store.md, 13),
+/// independent of an authenticated read's `load_bytes` allowance.
+#[must_use]
+pub fn restore_bytes(store: &skein_kv::Limits) -> u64 {
+    (u64::from(store.key) + u64::from(store.value)) * 2
+}
+
 /// Largest whole manifest: 88 fixed bytes, plus a length and two counts
 /// beside each family's name (protocol/store.md, 2, 10.3 and 13).
 pub const MANIFEST_BYTES: u32 = {
