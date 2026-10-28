@@ -1,8 +1,10 @@
 //! Read back party documents after the cold start has made every link.
 use super::{World, core, fleet, root};
-use core::documents::{self, Document, Missing, Subject, Window};
+use core::documents::{self, Missing, Subject, Window};
 
-type Answer = (u64, Subject, Result<Document, Missing>);
+mod durable;
+use durable::{DurableView, Transients};
+type Answer = (u64, Subject, Result<DurableView, Missing>);
 
 impl World {
     /// End a story by restoring its actual store and reading the same public documents.
@@ -14,7 +16,10 @@ impl World {
         self.hold_restart_reads = false;
         self.hold_switch = false;
         self.release_commits();
-        let before = self.oracle_documents();
+        let transients = Transients::from_core(self.domain.core());
+        let stored = self.store.readback_rows();
+        self.oracle_child_views(&stored);
+        let before = self.oracle_documents(&transients);
         let hosts = self.domain.core().fleet.host_views();
         let hellos: Vec<_> = self
             .oracle_hellos
@@ -81,6 +86,8 @@ impl World {
         self.hold_switch = true;
         self.restart_with(configuration);
         assert_eq!(self.domain.restart_step(), Some(core::RestartStep::Switch), "the cold restart makes every link");
+        assert_eq!(self.store.readback_rows(), stored, "loading preserves complete stored child views");
+        self.oracle_child_views(&stored);
         self.finish_switch();
         assert!(self.domain.ready(), "cold restart finishes before readback");
         // The account component is outside the engine's process. Its surviving
@@ -98,10 +105,38 @@ impl World {
         for (worker, channel, hello) in hellos {
             self.send(root::Event::Core(core::Event::Fleet(fleet::Event::Hello { worker, channel, hello })));
         }
-        let after = self.oracle_documents();
+        let after = self.oracle_documents(&transients);
         assert_eq!(after.len(), before.len(), "cold restart preserves every document subject");
         for (actual, expected) in after.iter().zip(&before) {
             assert_eq!(actual, expected, "cold restart preserves {:?} for party {}", expected.1, expected.0);
+        }
+    }
+
+    fn oracle_child_views(&self, stored: &std::collections::BTreeMap<root::Key, root::Record>) {
+        use jig_domain_people::Stored as People;
+        use jig_domain_tasks::Stored as Tasks;
+        let core = self.domain.core();
+        for (key, row) in stored {
+            match row {
+                root::Record::Core(core::Record::Tasks(Tasks::Live(row))) => {
+                    assert_eq!(core.tasks.task(row.number), Some(row.as_ref()), "tasks stored view {key:?}")
+                }
+                root::Record::Core(core::Record::Tasks(Tasks::Ledger(row))) => {
+                    assert_eq!(core.tasks.funding_records().get(&row.funder), Some(row), "ledger stored view {key:?}")
+                }
+                root::Record::Core(core::Record::People(People::Person { number, identity })) => {
+                    assert_eq!(core.people.identity(*number), Some(identity), "people stored view {key:?}")
+                }
+                root::Record::Core(core::Record::People(People::Roles { project, holdings })) => assert_eq!(
+                    core.people.project_members(*project),
+                    Some(holdings.as_ref()),
+                    "roles stored view {key:?}"
+                ),
+                root::Record::Core(core::Record::Core(core::CoreRecord::RunProof(row))) => {
+                    assert_eq!(core.proofs.get(&row.task), Some(row), "proof stored view {key:?}")
+                }
+                _ => {}
+            }
         }
     }
 
@@ -112,7 +147,7 @@ impl World {
         }
     }
 
-    fn oracle_documents(&self) -> Vec<Answer> {
+    fn oracle_documents(&self, transients: &Transients) -> Vec<Answer> {
         let core = self.domain.core();
         let window = Window { rows: self.limits.core.documents.rows, after: None };
         let mut answers = Vec::new();
@@ -134,7 +169,7 @@ impl World {
             }
             for subject in subjects {
                 let answer = documents::make(core, &self.limits.core, *party, &subject, &window, self.env().wall);
-                answers.push((*party, subject, answer));
+                answers.push((*party, subject, answer.map(|document| transients.durable(&document))));
             }
         }
         answers
