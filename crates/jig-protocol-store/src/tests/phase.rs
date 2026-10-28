@@ -794,8 +794,8 @@ struct SecretFixture {
     accounts: Box<[u8]>,
 }
 fn secret_row(store: &mut Store, key: &[u8]) -> Box<[u8]> {
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &crate::memory_env(store.limits.secrets),
@@ -1790,7 +1790,7 @@ fn fresh_with_raw_proof(key: Box<[u8]>, record: jig_domain_core::Record) -> Vec<
         skein_kv::Op::Put { key, value: crate::codec::encode(&record, &store.codec, &[]).expect("raw proof") },
     ]);
     let env = crate::memory_env(store.limits.store);
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     skein_kv::down(
         &mut store.stores.store,

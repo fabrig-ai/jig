@@ -147,7 +147,7 @@ fn the_sweep_continues_one_bounded_page_per_fire() {
     assert_eq!(get(&mut store, SecretOwner::SignIn, 0), None);
     assert!(get(&mut store, SecretOwner::SignIn, 2).is_some());
     for _ in 0_u8..2 {
-        let mut above = skein_lib::Queue::with_capacity(crate::MAX_OUT_DOWN);
+        let mut above = skein_lib::Queue::uncapped();
         let mut below = fixtures::below();
         crate::fire(&mut store, &fixtures::env(), &mut above, &mut below);
         assert!(above.is_empty());
@@ -487,8 +487,8 @@ fn encoded_carried(kind: CarriedKind, value: Secret) -> Box<[u8]> {
 fn lay(store: &mut Store, owner: SecretOwner, number: u64, value: Box<[u8]>) {
     let key = crate::secrets::key(owner, number, store.limits.secrets.key).expect("fixture key");
     let env = crate::directory::env(store, &fixtures::env(), true);
-    let mut above = skein_lib::Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = skein_lib::Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = skein_lib::Queue::uncapped();
+    let mut below = skein_lib::Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &env,

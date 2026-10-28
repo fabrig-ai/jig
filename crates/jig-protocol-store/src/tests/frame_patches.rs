@@ -644,7 +644,7 @@ fn serving_machines_follow_the_switch_without_overlapping_the_copy() {
     let mut disk = Disk::new(&items);
     let mut store = disk.store();
     store.patch_sets(SETS);
-    let mut above = skein_lib::Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = skein_lib::Queue::uncapped();
     let mut below = fixtures::below();
     let env = fixtures::env();
     crate::down(

@@ -102,7 +102,7 @@ fn kv_down(
     below: &mut Below,
 ) {
     let kv_env = directory::env(store, env, secret);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     if secret {
         skein_kv::down(&mut store.stores.secrets, &kv_env, request, &mut events, &mut below.secrets);
     } else {
@@ -176,13 +176,13 @@ pub(crate) fn up(store: &mut Store, env: &Env<Limits>, io: Io, above: &mut Queue
         return file_up(store, env, arrived, secret, above, below);
     }
     let kv_env = directory::env(store, env, secret);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     if secret {
         skein_kv::up(&mut store.stores.secrets, &kv_env, arrived.event, &mut events, &mut below.secrets);
     } else {
         skein_kv::up(&mut store.stores.store, &kv_env, arrived.event, &mut events, &mut below.store);
     }
-    for _ in 0..skein_kv::MAX_OUT.above {
+    for _ in 0..events.len() {
         let Some(event) = events.pop() else {
             break;
         };
@@ -459,8 +459,5 @@ pub(crate) fn worst_case(limits: &Limits, sets: &crate::PatchSets) -> Option<u64
         .checked_add(manifest)?
         .checked_add(super::machines::worst_case(sets, super::machines::Rooms::of(limits))?)?
         .checked_add(u64::try_from(size_of::<Patching>()).ok()?)?
-        .checked_add(u64::try_from(size_of::<Pending>()).ok()?)?
-        .checked_add(Queue::<Event>::worst_case(crate::MAX_OUT_DOWN)?)?
-        .checked_add(Queue::<file::Request>::worst_case(skein_kv::MAX_OUT.below.checked_mul(2)?)?)?
-        .checked_add(Queue::<skein_kv::Event>::worst_case(skein_kv::MAX_OUT.above)?)
+        .checked_add(u64::try_from(size_of::<Pending>()).ok()?)
 }

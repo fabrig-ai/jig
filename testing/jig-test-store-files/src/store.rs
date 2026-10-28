@@ -159,8 +159,8 @@ impl Store {
     pub fn into_wires(mut self) -> Box<[u8]> {
         let mut stores = self.component.take().expect("component").into_stores();
         let env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: self.component_limits.store };
-        let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-        let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+        let mut above = Queue::uncapped();
+        let mut below = Queue::uncapped();
         let key = protocol::keys::encode_own(&protocol::keys::Own::Wires, env.limits.key).expect("wires key");
         skein_kv::down(
             &mut stores.store,
@@ -331,7 +331,7 @@ impl Store {
             self.switch_requests += 1;
         }
         let request = route::down(&mut self.routes, out).expect("root has room for its store request");
-        self.drive(VecDeque::from([request]), Queue::with_capacity(protocol::MAX_OUT_DOWN));
+        self.drive(VecDeque::from([request]), Queue::uncapped());
     }
     pub fn answers(&mut self) -> Vec<Up> {
         let mut replies = std::mem::take(&mut self.replies);
@@ -358,7 +358,7 @@ impl Store {
         };
         self.drive(
             VecDeque::from([Request::Open { owner: Token::new(0), root, installation: INSTALLATION }]),
-            Queue::with_capacity(protocol::MAX_OUT_DOWN),
+            Queue::uncapped(),
         );
         assert!(!self.failed, "durable stores reopen after their files are cut");
         if !self.rows.is_empty() {
@@ -385,7 +385,7 @@ impl Store {
         for key in keys {
             self.drive(
                 VecDeque::from([Request::Get { owner: Token::new(0), key: protocol::Get::Jig(key) }]),
-                Queue::with_capacity(protocol::MAX_OUT_DOWN),
+                Queue::uncapped(),
             );
         }
         assert!(!self.failed, "patched mirror rows read back through the component");
@@ -394,11 +394,7 @@ impl Store {
         Env { now: Time::ZERO, wall: Wall::EPOCH, limits: self.component_limits }
     }
     fn drive(&mut self, mut requests: VecDeque<Request>, mut above: Queue<Event>) {
-        let mut below = Below {
-            store: Queue::with_capacity(skein_kv::MAX_OUT.below),
-            secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
-            transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
-        };
+        let mut below = Below { store: Queue::uncapped(), secrets: Queue::uncapped(), transcripts: Queue::uncapped() };
         loop {
             if self.disk.is_some() {
                 let env = self.env();
@@ -563,7 +559,7 @@ impl Store {
         while let Some(event) = ready.pop() {
             self.route(event, &mut requests);
         }
-        self.drive(requests, Queue::with_capacity(protocol::MAX_OUT_DOWN));
+        self.drive(requests, Queue::uncapped());
     }
 }
 /// Derive admission from the caller's actual budgets, never from fixture counts.

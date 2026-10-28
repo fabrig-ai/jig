@@ -134,8 +134,8 @@ struct Loaded {
 }
 fn load(store: &mut Store, env: &Env<Limits>, range: skein_kv::Range, max: skein_kv::Page) -> Option<Loaded> {
     let kv_env = directory::env(store, env, true);
-    let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-    let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+    let mut above = Queue::uncapped();
+    let mut below = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &kv_env,
@@ -176,7 +176,7 @@ fn submit(
     }
     store.secret_state.next = next;
     let kv_env = directory::env(store, env, true);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &kv_env,
@@ -203,7 +203,7 @@ pub(crate) fn committed(store: &mut Store, owner: Token, above: &mut Queue<Event
 /// The durable value under `key`; `Err` when the store answered otherwise.
 fn durable(store: &mut Store, env: &Env<Limits>, key: Box<[u8]>, below: &mut Below) -> Result<Option<Box<[u8]>>, ()> {
     let kv_env = directory::env(store, env, true);
-    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut events = Queue::uncapped();
     skein_kv::down(
         &mut store.stores.secrets,
         &kv_env,

@@ -161,14 +161,14 @@ fn a_failed_skein_commit_on_disk_answers_failed() {
 #[test]
 fn a_recovery_beneath_the_store_stops_it() {
     let mut store = fixtures::opened();
-    let mut kv = Queue::with_capacity(skein_kv::MAX_OUT.above);
+    let mut kv = Queue::uncapped();
     kv.push(skein_kv::Event::Recovered { last: 0 });
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     crate::directory::events_up(&mut store, false, &mut kv, &mut above, &mut fixtures::below());
     assert_eq!(store.phase, Phase::Stopped);
 }
 fn submit(store: &mut Store, number: u64) -> Below {
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         store,
@@ -209,7 +209,7 @@ fn a_disk_secret_waits_for_its_own_sync() {
     let mut store = disk();
     // This IO transition starts in the post-mark serving state.
     store.mark = crate::Mark::Durable;
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     let mut below = fixtures::below();
     crate::down(
         &mut store,
@@ -674,7 +674,7 @@ fn the_first_manifest_records_the_binarys_levels_and_the_write_clock() {
     let Some(file::Request::OpenPrivate { owner, .. }) = below.secrets.pop() else { panic!("first secrets") };
     let mut env = fixtures::env();
     env.wall = skein_lib::Wall::from_nanos(WRITTEN);
-    let mut above = Queue::with_capacity(crate::MAX_OUT_DOWN);
+    let mut above = Queue::uncapped();
     crate::up(
         &mut store,
         &env,

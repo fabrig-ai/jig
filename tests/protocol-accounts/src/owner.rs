@@ -207,11 +207,11 @@ impl Owner {
             submissions: Queue::with_capacity(ROOM),
             store: memory(&store_limits),
             store_limits,
-            store_above: Queue::with_capacity(store::MAX_OUT_DOWN),
+            store_above: Queue::uncapped(),
             below: store::Below {
-                store: Queue::with_capacity(skein_kv::MAX_OUT.below),
-                secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
-                transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
+                store: Queue::uncapped(),
+                secrets: Queue::uncapped(),
+                transcripts: Queue::uncapped(),
             },
             records: Records::new(limits.accounts),
             moves: moves::Moves::new(bytes::copy_of(fixtures::MOVE_APPLICATION), limits.accounts),
@@ -469,13 +469,20 @@ impl Owner {
     }
     /// The actual durable source record, read after the story has settled.
     pub fn read_record(&mut self) -> Option<Box<[u8]>> {
-        self.secrets(
-            self.now,
-            Wall::EPOCH,
-            GET,
-            store::Secrets::Get { owner: store::SecretOwner::Source, number: u64::from(self.account) },
+        // This inspection runs outside the world's measured calls. Keep its
+        // answer allocation local so it cannot change the owner's retained heap.
+        let mut above = Queue::uncapped();
+        store::down(
+            &mut self.store,
+            &Env { now: self.now, wall: Wall::EPOCH, limits: self.store_limits },
+            store::Request::Secrets {
+                owner: GET,
+                request: store::Secrets::Get { owner: store::SecretOwner::Source, number: u64::from(self.account) },
+            },
+            &mut above,
+            &mut self.below,
         );
-        let Some(store::Event::Secret { owner: GET, value }) = self.store_above.pop() else {
+        let Some(store::Event::Secret { owner: GET, value }) = above.pop() else {
             panic!("the memory store answers Get immediately");
         };
         value.map(|value| {
@@ -656,10 +663,16 @@ impl Owner {
         owner: store::SecretOwner,
         number: u64,
     ) -> Option<Secret> {
-        self.secrets(env.now, env.wall, exchange, store::Secrets::Get { owner, number });
-        let Some(store::Event::Secret { owner, value }) = self.store_above.pop() else {
-            panic!("immediate secret read")
-        };
+        // The move referee also reads after settlement, outside measured calls.
+        let mut above = Queue::uncapped();
+        store::down(
+            &mut self.store,
+            &Env { now: env.now, wall: env.wall, limits: self.store_limits },
+            store::Request::Secrets { owner: exchange, request: store::Secrets::Get { owner, number } },
+            &mut above,
+            &mut self.below,
+        );
+        let Some(store::Event::Secret { owner, value }) = above.pop() else { panic!("immediate secret read") };
         assert_eq!(owner, exchange);
         value.map(|value| match value {
             store::SecretValue::Record(value)
@@ -788,7 +801,7 @@ impl Owner {
     /// or a handed-in record is handed in, only once the record is durable.
     fn answers(&mut self, env: &Env<driver::Limits>) {
         // A batch may contain several erasures; their readbacks get their own answer queue.
-        let mut answers = std::mem::replace(&mut self.store_above, Queue::with_capacity(store::MAX_OUT_DOWN));
+        let mut answers = std::mem::replace(&mut self.store_above, Queue::uncapped());
         while let Some(event) = answers.pop() {
             let request = match event {
                 store::Event::Kept { owner } | store::Event::Stale { owner }

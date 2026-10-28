@@ -73,8 +73,8 @@ fn every_first_commit_crash_keeps_the_three_creation_rows_or_none() {
             (Box::from([1, 4, 3]), codec::accounts::Installation { id: FIRST }.encode()),
         ];
         for (key, value) in expected {
-            let mut above = Queue::with_capacity(skein_kv::MAX_OUT.above);
-            let mut below = Queue::with_capacity(skein_kv::MAX_OUT.below);
+            let mut above = Queue::uncapped();
+            let mut below = Queue::uncapped();
             skein_kv::down(
                 &mut stores.store,
                 &env,

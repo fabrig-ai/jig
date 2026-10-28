@@ -213,8 +213,8 @@ fn drive(store: &mut Store, walking: &mut Walking, above: &mut Queue<Event>) -> 
             if let Some(next) = walking.step() {
                 walking.selected = walking.pending.machines.walked(next);
             }
-            // At most one Patched per invocation, so MAX_OUT stays independent
-            // of the number of patches in the binary. fire resumes the next.
+            // At most one Patched per invocation, independent of the number
+            // of patches in the binary. fire resumes the next.
             return Some(false);
         }
         if !*walking.selected.get(walking.family).expect("one bit per machine") {
@@ -433,7 +433,7 @@ pub(super) fn resume(store: &mut Store, env: &Env<Limits>, above: &mut Queue<Eve
                 KeptMap::Store => commits::submit(store, env, number, ops, above, below),
                 KeptMap::Secrets => {
                     let kv_env = crate::directory::env(store, env, true);
-                    let mut events = Queue::with_capacity(skein_kv::MAX_OUT.above);
+                    let mut events = Queue::uncapped();
                     skein_kv::down(
                         &mut store.stores.secrets,
                         &kv_env,

@@ -40,11 +40,11 @@ impl World {
                 },
             ),
             limits,
-            above: Queue::with_capacity(store::MAX_OUT_DOWN),
+            above: Queue::uncapped(),
             below: store::Below {
-                store: Queue::with_capacity(skein_kv::MAX_OUT.below),
-                secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
-                transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
+                store: Queue::uncapped(),
+                secrets: Queue::uncapped(),
+                transcripts: Queue::uncapped(),
             },
         };
         let root = store::Root { token: Token::new(1), fd: skein_io::kernel::Fd::new(3) };
