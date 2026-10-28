@@ -34,7 +34,9 @@ impl SourceName {
             return None;
         }
         let mut bytes = [0; 32];
-        bytes.get_mut(..value.len())?.copy_from_slice(value);
+        for (index, byte) in value.iter().enumerate() {
+            *bytes.get_mut(index)? = *byte;
+        }
         Some(Self { length: u8::try_from(value.len()).ok()?, bytes })
     }
     #[must_use]

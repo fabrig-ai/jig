@@ -21,7 +21,11 @@ pub fn frame(domain: &core::Limits, transcript_bytes: u32) -> Option<u32> {
 /// independent of an authenticated read's `load_bytes` allowance.
 #[must_use]
 pub fn restore_bytes(store: &skein_kv::Limits) -> u64 {
-    (u64::from(store.key) + u64::from(store.value)) * 2
+    u64::from(store.key)
+        .checked_add(u64::from(store.value))
+        .expect("two u32 bounds fit u64")
+        .checked_mul(2)
+        .expect("two rows with u32 bounds fit u64")
 }
 
 /// Largest whole manifest: 88 fixed bytes, plus a length and two counts
