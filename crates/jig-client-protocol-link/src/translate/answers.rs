@@ -319,6 +319,7 @@ pub(crate) fn lacking(value: &w::Lacking, limits: &Limits) -> c::Lacking {
         w::Lacking::Reference => c::Lacking::Reference,
         w::Lacking::ResourceAccess => c::Lacking::ResourceAccess,
         w::Lacking::ResourceUnavailable => c::Lacking::ResourceUnavailable,
+        w::Lacking::Ceiling(value) => c::Lacking::Ceiling(decode_ceiling(value)),
         w::Lacking::Shape => c::Lacking::Shape,
         w::Lacking::Again(row) => c::Lacking::Again { required: row.required() },
         w::Lacking::Account => c::Lacking::Account,
@@ -719,5 +720,29 @@ fn original_nonzero_recipient_survives_wire_decoding_and_contract_translation() 
             owner_outcome(&decoded, &limits).expect("contract translation"),
             c::OwnerOutcome::Proposed { proposal: 31, to }
         );
+    }
+}
+
+fn decode_ceiling(value: &w::Ceiling) -> c::Ceiling {
+    c::Ceiling {
+        holder: match value.holder() {
+            w::CeilingHolder::Rules => c::CeilingHolder::Rules,
+            w::CeilingHolder::Project => c::CeilingHolder::Project,
+            w::CeilingHolder::Role(row) => c::CeilingHolder::Role { role: row.role() },
+        },
+        role: *value.role(),
+        dimension: match value.dimension() {
+            w::CeilingDimension::PeriodSpend => c::CeilingDimension::PeriodSpend,
+            w::CeilingDimension::Spend => c::CeilingDimension::Spend,
+            w::CeilingDimension::Tools => c::CeilingDimension::Tools,
+            w::CeilingDimension::Tasks => c::CeilingDimension::Tasks,
+            w::CeilingDimension::Depth => c::CeilingDimension::Depth,
+            w::CeilingDimension::Executors => c::CeilingDimension::Executors,
+            w::CeilingDimension::Grants => c::CeilingDimension::Grants,
+            w::CeilingDimension::Deadline => c::CeilingDimension::Deadline,
+            w::CeilingDimension::Notes => c::CeilingDimension::Notes,
+        },
+        value: *value.value(),
+        edit: *value.edit(),
     }
 }

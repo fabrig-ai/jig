@@ -271,14 +271,6 @@ pub fn at_most(a: &Authority, b: &Authority, implies: &Implies) -> bool {
     differences(a, b, b.delegation.tasks, b.delegation.depth, b.budget.spend, implies).is_empty()
 }
 
-/// Whether every part of `a` but its models is at most `b`. A policy's ceiling or a role naming
-/// models beyond the rules' or the ceiling's is narrowed to their intersection (`Domain::models`,
-/// section 6), not refused, so a policy's validity leaves models out.
-pub(crate) fn at_most_but_models(a: &Authority, b: &Authority, implies: &Implies) -> bool {
-    let lacks = differences(a, b, b.delegation.tasks, b.delegation.depth, b.budget.spend, implies);
-    Lacks { models: false, ..lacks }.is_empty()
-}
-
 /// Whether the child's authority fits, with spend and lifetime task capacity taken from separate
 /// current inputs. The caller reserves `FITS_MAX_OUT` queue slots. A batch additionally consumes
 /// one task slot for each immediate child and sums reservations. Pure fitting query over

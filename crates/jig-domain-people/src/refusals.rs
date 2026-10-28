@@ -129,27 +129,74 @@ pub enum Malformed {
     EndedBy,
 }
 
+/// The ceiling a policy edit crossed (domain/authority.md, 6; client/domain/contract.md, 4).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Ceiling {
+    pub holder: CeilingHolder,
+    /// The role whose authority or period spend was checked; absent for the project.
+    pub role: Option<u32>,
+    pub dimension: CeilingDimension,
+    /// Scalar values only; a deadline without a value is unbounded.
+    pub value: Option<u64>,
+    pub edit: Option<u64>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingHolder {
+    Rules,
+    Project,
+    Role { role: u32 },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingDimension {
+    PeriodSpend,
+    Spend,
+    Tools,
+    Tasks,
+    Depth,
+    Executors,
+    Grants,
+    Deadline,
+    Notes,
+}
+
 /// Authority missing from a party's request.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Lack {
+    Ceiling(Ceiling),
     /// A placed hold waits for its owner (domain/tasks.md, 5.9).
-    HoldOwner { hold: u64, owner: HoldOwner },
+    HoldOwner {
+        hold: u64,
+        owner: HoldOwner,
+    },
     /// No policy role may accept this kind of party proposal.
     Approver,
     /// Requested spend exceeds what this source can supply.
-    Budget { needs: u64, left: u64 },
+    Budget {
+        needs: u64,
+        left: u64,
+    },
     /// No grant covers this operation kind.
-    Grant { kind: u16 },
+    Grant {
+        kind: u16,
+    },
     /// No valid funding relation supports the requested reservation.
     Funding,
     /// The requested executor is not allowed.
-    TaskKind { executor: Option<crate::TaskExecutor> },
+    TaskKind {
+        executor: Option<crate::TaskExecutor>,
+    },
     /// Descendant depth exceeds this maximum.
-    Depth { most: u32 },
+    Depth {
+        most: u32,
+    },
     /// The deadline is past or later than permitted.
     Deadline,
     /// Lifetime task capacity cannot supply the request.
-    Tasks { left: u32 },
+    Tasks {
+        left: u32,
+    },
     /// The tool family is absent.
     Tool,
     /// The note scope is absent.
@@ -165,17 +212,28 @@ pub enum Lack {
     /// The authority value has an invalid shape.
     Shape,
     /// Whether an unrecoverable effect choice was required or unexpected.
-    Again { required: bool },
+    Again {
+        required: bool,
+    },
     /// A required model account is unusable.
     Account,
     /// A written resource is held elsewhere.
     Writer,
     /// A required judge has no usable fact.
-    Required { connector: u16, kind: u16 },
+    Required {
+        connector: u16,
+        kind: u16,
+    },
     /// A required judge refused the effect.
-    Failed { connector: u16, kind: u16 },
+    Failed {
+        connector: u16,
+        kind: u16,
+    },
     /// The effect cannot guard a required fact.
-    Unguarded { connector: u16, kind: u16 },
+    Unguarded {
+        connector: u16,
+        kind: u16,
+    },
 }
 
 /// The bound a final refusal identifies.

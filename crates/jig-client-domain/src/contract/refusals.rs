@@ -3,9 +3,42 @@
 use super::{AdmissionLimit, Ending, Executor, Grant, HoldReason, Revision};
 use alloc::boxed::Box;
 use skein_lib::Wall;
+/// The ceiling a policy edit crossed (domain/authority.md, 6; client/domain/contract.md, 4).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Ceiling {
+    pub holder: CeilingHolder,
+    /// The role whose authority or period spend was checked; absent for the project.
+    pub role: Option<u32>,
+    pub dimension: CeilingDimension,
+    /// Scalar values only; a deadline without a value is unbounded.
+    pub value: Option<u64>,
+    pub edit: Option<u64>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingHolder {
+    Rules,
+    Project,
+    Role { role: u32 },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingDimension {
+    PeriodSpend,
+    Spend,
+    Tools,
+    Tasks,
+    Depth,
+    Executors,
+    Grants,
+    Deadline,
+    Notes,
+}
+
 /// The authority the engine found lacking.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Lacking {
+    Ceiling(Ceiling),
     HoldOwner {
         hold: u64,
         owner: HoldOwner,

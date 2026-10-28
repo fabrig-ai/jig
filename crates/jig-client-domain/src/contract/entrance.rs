@@ -28,7 +28,8 @@ fn fixed(refusal: &Refusal) -> bool {
     match refusal {
         Refusal::Authority { lacking, .. } => match lacking {
             Lacking::Grant(_) => false,
-            Lacking::Approver
+            Lacking::Ceiling(_)
+            | Lacking::Approver
             | Lacking::Budget { .. }
             | Lacking::GrantKind { .. }
             | Lacking::Funding

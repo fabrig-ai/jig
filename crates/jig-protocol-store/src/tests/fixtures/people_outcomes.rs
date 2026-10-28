@@ -80,6 +80,13 @@ pub fn lack_values() -> Box<[domain::Lack]> {
         domain::Lack::Reference,
         domain::Lack::ResourceAccess,
         domain::Lack::ResourceUnavailable,
+        domain::Lack::Ceiling(domain::Ceiling {
+            holder: domain::CeilingHolder::Rules,
+            role: None,
+            dimension: domain::CeilingDimension::PeriodSpend,
+            value: Some(449_696),
+            edit: Some(449_697),
+        }),
         domain::Lack::Shape,
         domain::Lack::Again { required: true },
         domain::Lack::Account,

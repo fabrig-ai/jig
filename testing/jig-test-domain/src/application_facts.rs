@@ -82,6 +82,7 @@ pub(super) fn lack(value: people::Lack) -> application::Lack {
         people::Lack::HoldOwner { .. } | people::Lack::Reference => application::Lack::Reference,
         people::Lack::ResourceAccess => application::Lack::ResourceAccess,
         people::Lack::ResourceUnavailable => application::Lack::ResourceUnavailable,
+        people::Lack::Ceiling(_) => unreachable!("policy edits do not pass through this entrance"),
         people::Lack::Shape => application::Lack::Shape,
         people::Lack::Account => application::Lack::Account,
         people::Lack::Writer => application::Lack::Writer,

@@ -348,7 +348,11 @@ fn policy_fault(
     let policy = &configured.policy;
     if let Some(reason) = authority::policy_refusal(rules, &limits.authority, policy) {
         return Some(match reason {
-            authority::PolicyRefusal::AboveRules => Fault::Rules,
+            authority::PolicyRefusal::Ceiling(ceiling) => match ceiling.holder {
+                authority::CeilingHolder::Rules => Fault::Rules,
+                authority::CeilingHolder::Project if ceiling.role.is_none() => Fault::Rules,
+                authority::CeilingHolder::Project | authority::CeilingHolder::Role { .. } => Fault::Shape,
+            },
             authority::PolicyRefusal::Oversized | authority::PolicyRefusal::InvalidRole => Fault::Shape,
             authority::PolicyRefusal::Full => Fault::Count,
         });

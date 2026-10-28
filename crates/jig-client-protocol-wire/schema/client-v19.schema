@@ -417,7 +417,11 @@ record LackingDepth { needed: option u32 allowed: u32 }
 record LackingDeadline { asked: option u64 latest: option u64 }
 record LackingTasks { needed: option u32 left: u32 }
 record LackingHoldOwner { hold: u64 owner: HoldOwner }
-enum Lacking { approver, budget: LackingBudget, grant: LackingGrant, grant_kind: LackingGrantKind, funding, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackingAgain, account, writer, required: LackingRequired, failed: LackingFailed, unguarded: LackingUnguarded, task_kind: LackingTaskKind, depth: LackingDepth, deadline: LackingDeadline, tasks: LackingTasks, models, hold_owner: LackingHoldOwner }
+record CeilingRole { role: u32 }
+enum CeilingHolder { rules, project, role: CeilingRole }
+enum CeilingDimension { period_spend, spend, tools, tasks, depth, executors, grants, deadline, notes }
+record Ceiling { holder: CeilingHolder role: option u32 dimension: CeilingDimension value: option u64 edit: option u64 }
+enum Lacking { approver, budget: LackingBudget, grant: LackingGrant, grant_kind: LackingGrantKind, funding, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackingAgain, account, writer, required: LackingRequired, failed: LackingFailed, unguarded: LackingUnguarded, task_kind: LackingTaskKind, depth: LackingDepth, deadline: LackingDeadline, tasks: LackingTasks, models, hold_owner: LackingHoldOwner, ceiling: Ceiling }
 enum AdmissionLimit { goals, operations, grace, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, accounts, holder_accounts, sources, sign_ins, projects, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record LimitAdmission { which: AdmissionLimit }
 record LimitLiveTasks { project: u32 limit: u32 }

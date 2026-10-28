@@ -127,7 +127,8 @@ fn filled(why: Refusal) -> bool {
                     }
             }
             Lack::Budget { needs, left } => needs > left,
-            Lack::Approver
+            Lack::Ceiling(_)
+            | Lack::Approver
             | Lack::Grant { .. }
             | Lack::Funding
             | Lack::TaskKind { .. }

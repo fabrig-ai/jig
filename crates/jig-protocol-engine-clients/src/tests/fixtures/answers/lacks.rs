@@ -1,5 +1,5 @@
 use super::*;
-pub fn lacks() -> [(p::Lack, w::Lacking); 21] {
+pub fn lacks() -> [(p::Lack, w::Lacking); 22] {
     let limits = wire();
     [
         (p::Lack::Approver, w::Lacking::Approver),
@@ -10,6 +10,28 @@ pub fn lacks() -> [(p::Lack, w::Lacking); 21] {
         (p::Lack::Reference, w::Lacking::Reference),
         (p::Lack::ResourceAccess, w::Lacking::ResourceAccess),
         (p::Lack::ResourceUnavailable, w::Lacking::ResourceUnavailable),
+        (
+            p::Lack::Ceiling(p::Ceiling {
+                holder: p::CeilingHolder::Rules,
+                role: None,
+                dimension: p::CeilingDimension::PeriodSpend,
+                value: Some(449_696),
+                edit: Some(449_697),
+            }),
+            w::Lacking::Ceiling(
+                w::Ceiling::new(
+                    &limits,
+                    w::CeilingParts {
+                        holder: w::CeilingHolder::Rules,
+                        role: None,
+                        dimension: w::CeilingDimension::PeriodSpend,
+                        value: Some(449_696),
+                        edit: Some(449_697),
+                    },
+                )
+                .expect("ceiling scalars"),
+            ),
+        ),
         (p::Lack::Shape, w::Lacking::Shape),
         (p::Lack::Account, w::Lacking::Account),
         (p::Lack::Writer, w::Lacking::Writer),

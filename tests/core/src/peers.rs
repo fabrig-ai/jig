@@ -615,6 +615,7 @@ fn party_lack(value: people::Lack) -> parties::Lack {
         people::Lack::HoldOwner { .. } | people::Lack::Reference => parties::Lack::Reference,
         people::Lack::ResourceAccess => parties::Lack::ResourceAccess,
         people::Lack::ResourceUnavailable => parties::Lack::ResourceUnavailable,
+        people::Lack::Ceiling(_) => unreachable!("policy edits do not pass through this entrance"),
         people::Lack::Shape => parties::Lack::Shape,
         people::Lack::Again { required } => parties::Lack::Again { required },
         people::Lack::Account => parties::Lack::Account,

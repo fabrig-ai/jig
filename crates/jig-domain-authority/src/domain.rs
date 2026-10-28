@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use skein_lib::{List, Map, Queue};
 
 use crate::limits::{authority_within, requirements_within, within};
-use crate::order::at_most_but_models;
+use crate::order::differences;
 use crate::{Limits, Models, Policy, Requirement, Role, Rules, max_out, worst_case};
 
 /// Bounded live project-policy table and immutable deployment rules; contains no task ledger,
@@ -38,15 +38,47 @@ pub enum Event {
     },
 }
 
+/// The ceiling a policy edit crossed (domain/authority.md, 6; client/domain/contract.md, 4).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Ceiling {
+    pub holder: CeilingHolder,
+    /// The role whose authority or period spend was checked; absent for the project.
+    pub role: Option<u32>,
+    pub dimension: CeilingDimension,
+    /// Scalar values only; a deadline without a value is unbounded.
+    pub value: Option<u64>,
+    pub edit: Option<u64>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingHolder {
+    Rules,
+    Project,
+    Role { role: u32 },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CeilingDimension {
+    PeriodSpend,
+    Spend,
+    Tools,
+    Tasks,
+    Depth,
+    Executors,
+    Grants,
+    Deadline,
+    Notes,
+}
+
 /// Terminal policy admission reason; refused updates preserve the previous policy.
 /// (domain/authority.md, sections 2 and 6).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum PolicyRefusal {
     /// An owned candidate collection or byte field exceeds its configured bound.
     Oversized,
-    /// Project authority or period spend exceeds deployment rules.
-    AboveRules,
-    /// Role authority, period spend, permission bits, uniqueness or escalation identity is invalid.
+    /// A policy ceiling, with its holder and exact scalar evidence.
+    Ceiling(Ceiling),
+    /// Role permission bits, uniqueness or escalation identity is invalid.
     InvalidRole,
     /// A new project cannot fit in the bounded table; existing entries are retained.
     Full,
@@ -230,11 +262,21 @@ fn invalid(rules: &Rules, limits: &Limits, policy: &Policy, restoring: bool) -> 
     {
         return Some(PolicyRefusal::Oversized);
     }
-    if !restoring
-        && (!at_most_but_models(&policy.ceiling, &rules.ceiling, &rules.implies)
-            || policy.period_spend > rules.period_spend)
-    {
-        return Some(PolicyRefusal::AboveRules);
+    if !restoring {
+        if let Some(ceiling) =
+            authority_ceiling(&policy.ceiling, &rules.ceiling, &rules.implies, CeilingHolder::Rules, None)
+        {
+            return Some(PolicyRefusal::Ceiling(ceiling));
+        }
+        if policy.period_spend > rules.period_spend {
+            return Some(PolicyRefusal::Ceiling(Ceiling {
+                holder: CeilingHolder::Rules,
+                role: None,
+                dimension: CeilingDimension::PeriodSpend,
+                value: Some(rules.period_spend),
+                edit: Some(policy.period_spend),
+            }));
+        }
     }
     for grant in &policy.projections {
         if !crate::limits::pattern_within(&grant.pattern, limits) {
@@ -245,18 +287,40 @@ fn invalid(rules: &Rules, limits: &Limits, policy: &Policy, restoring: bool) -> 
             covered |= crate::grant_at_most(grant, ceiling, &rules.implies);
         }
         if !restoring && !covered {
-            return Some(PolicyRefusal::AboveRules);
+            return Some(PolicyRefusal::Ceiling(Ceiling {
+                holder: CeilingHolder::Project,
+                role: None,
+                dimension: CeilingDimension::Grants,
+                value: None,
+                edit: None,
+            }));
         }
     }
     for (position, role) in policy.roles.iter().enumerate() {
         if !authority_within(&role.authority, limits) {
             return Some(PolicyRefusal::Oversized);
         }
-        if (!restoring && !at_most_but_models(&role.authority, &policy.ceiling, &rules.implies))
-            || role.period_spend > policy.period_spend
-            || role.requests.0 & !crate::Requests::ALL.0 != 0
-            || role.decides.0 & !crate::Proposals::ALL.0 != 0
+        if !restoring
+            && let Some(ceiling) = authority_ceiling(
+                &role.authority,
+                &policy.ceiling,
+                &rules.implies,
+                CeilingHolder::Project,
+                Some(role.number),
+            )
         {
+            return Some(PolicyRefusal::Ceiling(ceiling));
+        }
+        if role.period_spend > policy.period_spend {
+            return Some(PolicyRefusal::Ceiling(Ceiling {
+                holder: CeilingHolder::Project,
+                role: Some(role.number),
+                dimension: CeilingDimension::PeriodSpend,
+                value: Some(policy.period_spend),
+                edit: Some(role.period_spend),
+            }));
+        }
+        if role.requests.0 & !crate::Requests::ALL.0 != 0 || role.decides.0 & !crate::Proposals::ALL.0 != 0 {
             return Some(PolicyRefusal::InvalidRole);
         }
         for earlier in policy.roles.get(..position).expect("enumerated position is in the roles") {
@@ -278,4 +342,43 @@ fn invalid(rules: &Rules, limits: &Limits, policy: &Policy, restoring: bool) -> 
         }
     }
     None
+}
+
+// Permission lists are identified without copying their bounded contents.
+fn authority_ceiling(
+    edit: &crate::Authority,
+    value: &crate::Authority,
+    implies: &crate::Implies,
+    holder: CeilingHolder,
+    role: Option<u32>,
+) -> Option<Ceiling> {
+    let lacks = differences(edit, value, value.delegation.tasks, value.delegation.depth, value.budget.spend, implies);
+    let (dimension, limit, asked) = if lacks.tools {
+        (CeilingDimension::Tools, None, None)
+    } else if lacks.grants {
+        (CeilingDimension::Grants, None, None)
+    } else if lacks.executors {
+        (CeilingDimension::Executors, None, None)
+    } else if lacks.tasks {
+        (CeilingDimension::Tasks, Some(u64::from(value.delegation.tasks)), Some(u64::from(edit.delegation.tasks)))
+    } else if lacks.depth {
+        (CeilingDimension::Depth, Some(u64::from(value.delegation.depth)), Some(u64::from(edit.delegation.depth)))
+    } else if lacks.spend {
+        (CeilingDimension::Spend, Some(value.budget.spend), Some(edit.budget.spend))
+    } else if lacks.deadline {
+        let mut limit = None;
+        if let Some(wall) = value.budget.deadline {
+            limit = Some(wall.as_nanos());
+        }
+        let mut asked = None;
+        if let Some(wall) = edit.budget.deadline {
+            asked = Some(wall.as_nanos());
+        }
+        (CeilingDimension::Deadline, limit, asked)
+    } else if lacks.notes {
+        (CeilingDimension::Notes, None, None)
+    } else {
+        return None;
+    };
+    Some(Ceiling { holder, role, dimension, value: limit, edit: asked })
 }

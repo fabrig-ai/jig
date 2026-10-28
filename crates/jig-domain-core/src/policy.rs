@@ -406,6 +406,10 @@ impl Core {
             Some(entries) => entries.clone(),
             None => Box::new([]),
         };
+        let mut project_cut = false;
+        if let people::PolicyChange::ProjectSpend { period_spend } = &change {
+            project_cut = *period_spend < policy.period_spend;
+        }
         if apply(
             &mut policy,
             &mut permissions,
@@ -430,6 +434,9 @@ impl Core {
         } {
             return Err(people::Refusal::Limit { which: people::LimitKind::Policy });
         }
+        if let Some(reason) = authority::policy_refusal(self.authority.rules(), self.authority.limits(), &policy) {
+            return Err(policy_refusal(reason, project_cut));
+        }
         let resize = self.resize(project, self.authority.policy(project).expect("existing policy"), &policy, limits)?;
         let mut facts = Queue::with_capacity(authority::POLICY_MAX_OUT);
         authority::step(&mut self.authority, authority::Event::Policy { project, policy }, &mut facts);
@@ -439,9 +446,7 @@ impl Core {
                 assert!(self.template_overrides.insert(project, templates).is_ok(), "admitted template policy");
                 Ok((snapshot, resize))
             }
-            authority::PolicyFact::Refused { .. } => {
-                Err(people::Refusal::Authority { proposable: None, lacking: people::Lack::Shape })
-            }
+            authority::PolicyFact::Refused { reason, .. } => Err(policy_refusal(reason, project_cut)),
             authority::PolicyFact::Added { .. } | authority::PolicyFact::Dropped { .. } => {
                 unreachable!("existing project policy replacement")
             }
@@ -543,4 +548,45 @@ fn grants_to_people(grants: &[authority::Grant]) -> Option<Box<[people::Grant]>>
             .ok()?;
     }
     Some(result.into_boxed())
+}
+
+fn policy_refusal(reason: authority::PolicyRefusal, project_cut: bool) -> people::Refusal {
+    let lacking = match reason {
+        authority::PolicyRefusal::Ceiling(mut ceiling) => {
+            if project_cut
+                && ceiling.dimension == authority::CeilingDimension::PeriodSpend
+                && let Some(role) = ceiling.role
+            {
+                ceiling.holder = authority::CeilingHolder::Role { role };
+                ceiling.role = None;
+                core::mem::swap(&mut ceiling.value, &mut ceiling.edit);
+            }
+            people::Lack::Ceiling(people::Ceiling {
+                holder: match ceiling.holder {
+                    authority::CeilingHolder::Rules => people::CeilingHolder::Rules,
+                    authority::CeilingHolder::Project => people::CeilingHolder::Project,
+                    authority::CeilingHolder::Role { role } => people::CeilingHolder::Role { role },
+                },
+                role: ceiling.role,
+                dimension: match ceiling.dimension {
+                    authority::CeilingDimension::PeriodSpend => people::CeilingDimension::PeriodSpend,
+                    authority::CeilingDimension::Spend => people::CeilingDimension::Spend,
+                    authority::CeilingDimension::Tools => people::CeilingDimension::Tools,
+                    authority::CeilingDimension::Tasks => people::CeilingDimension::Tasks,
+                    authority::CeilingDimension::Depth => people::CeilingDimension::Depth,
+                    authority::CeilingDimension::Executors => people::CeilingDimension::Executors,
+                    authority::CeilingDimension::Grants => people::CeilingDimension::Grants,
+                    authority::CeilingDimension::Deadline => people::CeilingDimension::Deadline,
+                    authority::CeilingDimension::Notes => people::CeilingDimension::Notes,
+                },
+                value: ceiling.value,
+                edit: ceiling.edit,
+            })
+        }
+        authority::PolicyRefusal::InvalidRole => people::Lack::Shape,
+        authority::PolicyRefusal::Oversized | authority::PolicyRefusal::Full => {
+            return people::Refusal::Limit { which: people::LimitKind::Policy };
+        }
+    };
+    people::Refusal::Authority { lacking, proposable: None }
 }

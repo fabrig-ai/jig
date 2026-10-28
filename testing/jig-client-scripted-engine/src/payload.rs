@@ -1056,6 +1056,7 @@ impl Payload for Lacking {
             | Self::Funding
             | Self::Tool
             | Self::Scope
+            | Self::Ceiling(_)
             | Self::HoldOwner { .. }
             | Self::Models
             | Self::Reference

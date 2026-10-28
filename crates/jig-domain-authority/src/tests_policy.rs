@@ -7,11 +7,12 @@ use core::mem::{size_of, size_of_val};
 use skein_lib::{Duration, Map, Queue, Wall, bytes::copy_of};
 
 use crate::{
-    Action, Answer, Authority, BatchAsk, Call, CallAsk, Delegate, Domain, Effect, EffectAccess, EffectAsk,
-    EffectResource, Event, FITS_MAX_OUT, Finding, Given, Grant, Guard, Holder, Implication, Judge, Lack, Last, Limits,
-    Models, Name, Numbers, Pattern, PersonAsk, PersonRequest, Policy, PolicyFact, PolicyRefusal, ProposalKind,
-    Proposals, Requests, Requirement, RunAsk, Scopes, Source, Tools, Verdict, Write, Writer, at_most, check_batch,
-    check_call, check_effect, check_request, check_run, covers, fits, max_out, needs, resolve_task_grants, worst_case,
+    Action, Answer, Authority, BatchAsk, Call, CallAsk, Ceiling, CeilingDimension, CeilingHolder, Delegate, Domain,
+    Effect, EffectAccess, EffectAsk, EffectResource, Event, FITS_MAX_OUT, Finding, Given, Grant, Guard, Holder,
+    Implication, Judge, Lack, Last, Limits, Models, Name, Numbers, Pattern, PersonAsk, PersonRequest, Policy,
+    PolicyFact, PolicyRefusal, ProposalKind, Proposals, Requests, Requirement, RunAsk, Scopes, Source, Tools, Verdict,
+    Write, Writer, at_most, check_batch, check_call, check_effect, check_request, check_run, covers, fits, max_out,
+    needs, resolve_task_grants, worst_case,
 };
 
 use crate::tests_fixtures::*;
@@ -1022,7 +1023,7 @@ fn policy_lifecycle_refuses_bad_replacements_and_memory_bounds_full_owned_contai
             }
             1 => {
                 invalid.ceiling.budget.spend = 101;
-                PolicyRefusal::AboveRules
+                ceiling(CeilingHolder::Rules, None, CeilingDimension::Spend, Some(100), Some(101))
             }
             2 => {
                 invalid.roles = Box::new([role(authority()), role(authority())]);
@@ -1055,19 +1056,28 @@ fn policy_lifecycle_refuses_bad_replacements_and_memory_bounds_full_owned_contai
     invalid.period_spend = 1_001;
     assert_eq!(
         apply(&mut domain, Event::Policy { project: 1, policy: invalid }),
-        PolicyFact::Refused { project: 1, reason: PolicyRefusal::AboveRules }
+        PolicyFact::Refused {
+            project: 1,
+            reason: ceiling(CeilingHolder::Rules, None, CeilingDimension::PeriodSpend, Some(1000), Some(1001))
+        }
     );
     let mut invalid = policy(authority());
     invalid.roles[0].period_spend = 501;
     assert_eq!(
         apply(&mut domain, Event::Policy { project: 1, policy: invalid }),
-        PolicyFact::Refused { project: 1, reason: PolicyRefusal::InvalidRole }
+        PolicyFact::Refused {
+            project: 1,
+            reason: ceiling(CeilingHolder::Project, Some(7), CeilingDimension::PeriodSpend, Some(500), Some(501))
+        }
     );
     let mut invalid = policy(authority());
     invalid.roles[0].authority.budget.spend = 101;
     assert_eq!(
         apply(&mut domain, Event::Policy { project: 1, policy: invalid }),
-        PolicyFact::Refused { project: 1, reason: PolicyRefusal::InvalidRole }
+        PolicyFact::Refused {
+            project: 1,
+            reason: ceiling(CeilingHolder::Project, Some(7), CeilingDimension::Spend, Some(100), Some(101))
+        }
     );
     let mut invalid = policy(authority());
     invalid.roles[0].decides = Proposals(32);
@@ -1250,7 +1260,10 @@ fn projection_policy_rejects_oversized_and_above_ceiling_grants_without_replacem
     selected.projections = Box::new([Grant { connector: 2, kind: 3, pattern: pattern() }]);
     assert_eq!(
         apply(&mut domain, Event::Policy { project: 1, policy: selected.clone() }),
-        PolicyFact::Refused { project: 1, reason: PolicyRefusal::AboveRules }
+        PolicyFact::Refused {
+            project: 1,
+            reason: ceiling(CeilingHolder::Project, None, CeilingDimension::Grants, None, None)
+        }
     );
     let mut grants = skein_lib::List::with_capacity(4);
     for _ in 0_u32..4 {
@@ -1369,4 +1382,64 @@ fn replacement_rules_and_restore_preserve_a_project_above_the_new_ceiling() {
         assert_eq!(Some(finding), after.pop());
     }
     assert!(after.is_empty());
+}
+
+fn ceiling(
+    holder: CeilingHolder,
+    role: Option<u32>,
+    dimension: CeilingDimension,
+    value: Option<u64>,
+    edit: Option<u64>,
+) -> PolicyRefusal {
+    PolicyRefusal::Ceiling(Ceiling { holder, role, dimension, value, edit })
+}
+
+#[test]
+fn revalidated_authority_names_every_ceiling_dimension() {
+    use CeilingDimension as D;
+    for dimension in [D::Tools, D::Tasks, D::Depth, D::Executors, D::Grants, D::Spend, D::Deadline, D::Notes] {
+        let mut selected = policy(authority());
+        let mut rules = rules(authority());
+        let (value, edit) = match dimension {
+            D::Tools => {
+                rules.ceiling.tools = Tools(0);
+                (None, None)
+            }
+            D::Tasks => {
+                rules.ceiling.delegation.tasks = 0;
+                (Some(0), Some(u64::from(selected.ceiling.delegation.tasks)))
+            }
+            D::Depth => {
+                rules.ceiling.delegation.depth = 0;
+                (Some(0), Some(u64::from(selected.ceiling.delegation.depth)))
+            }
+            D::Executors => {
+                rules.ceiling.delegation.kinds = Box::new([]);
+                (None, None)
+            }
+            D::Grants => {
+                rules.ceiling.grants = Box::new([]);
+                (None, None)
+            }
+            D::Spend => {
+                selected.ceiling.budget.spend += 1;
+                (Some(100), Some(101))
+            }
+            D::Deadline => {
+                rules.ceiling.budget.deadline = Some(Wall::EPOCH);
+                selected.ceiling.budget.deadline = None;
+                (Some(0), None)
+            }
+            D::Notes => {
+                rules.ceiling.notes = Scopes(0);
+                (None, None)
+            }
+            D::PeriodSpend => unreachable!(),
+        };
+        assert_eq!(
+            crate::policy_refusal(&rules, &LIMITS, &selected),
+            Some(ceiling(CeilingHolder::Rules, None, dimension, value, edit)),
+            "{dimension:?}"
+        );
+    }
 }

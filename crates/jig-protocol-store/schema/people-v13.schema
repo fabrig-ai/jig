@@ -227,7 +227,11 @@ record LackRequired { connector: u16 kind: u16 }
 record LackFailed { connector: u16 kind: u16 }
 record LackUnguarded { connector: u16 kind: u16 }
 record LackTaskKind { executor: option TaskExecutor }
-enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: LackTaskKind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackAgain, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models, hold_owner: LackHoldOwner }
+record CeilingRole { role: u32 }
+enum CeilingHolder { rules, project, role: CeilingRole }
+enum CeilingDimension { period_spend, spend, tools, tasks, depth, executors, grants, deadline, notes }
+record Ceiling { holder: CeilingHolder role: option u32 dimension: CeilingDimension value: option u64 edit: option u64 }
+enum Lack { approver, budget: LackBudget, grant: LackGrant, funding, task_kind: LackTaskKind, depth: LackDepth, deadline, tasks: LackTasks, tool, scope, reference, resource_access, resource_unavailable, shape, again: LackAgain, account, writer, required: LackRequired, failed: LackFailed, unguarded: LackUnguarded, models, hold_owner: LackHoldOwner, ceiling: Ceiling }
 enum LimitKind { projects, operations, words, identity, roles, arithmetic, duplicate, empty, batch, project_live_tasks, live_tasks, tree, depth, delegates, subscription, dependencies, cycle, spec, contract, authority, inputs, attempts, live_delegates, restore, read, turn, hold_kind, hold_taken, holds, inbox_full, notes, revision, question, priority, policy, resource, service, grace, goals, accounts, holder_accounts, sources, sign_ins, settings_proposals, placed_holds, project_placed_holds, party_placed_holds, exemptions }
 record RefusalRole { held: option Role }
 record AccepterRole { role: u32 }

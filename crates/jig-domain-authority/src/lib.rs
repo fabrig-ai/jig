@@ -61,7 +61,10 @@ pub use check::{
     check_batch, check_call, check_effect, check_projection, check_request, check_request_with_standing, check_run,
     covers, needed_judges, needs,
 };
-pub use domain::{Domain, Event, POLICY_MAX_OUT, PolicyFact, PolicyRefusal, policy_refusal, step, valid_rules};
+pub use domain::{
+    Ceiling, CeilingDimension, CeilingHolder, Domain, Event, POLICY_MAX_OUT, PolicyFact, PolicyRefusal, policy_refusal,
+    step, valid_rules,
+};
 pub use limits::{Limits, max_out, rules_worst_case, worst_case};
 pub use numbers::{Numbers, carve, charge, left, settle};
 pub use order::{FITS_MAX_OUT, Lack, Lacks, fits};
