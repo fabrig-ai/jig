@@ -334,6 +334,18 @@ impl Component {
         body: Box<[u8]>,
         out: &mut Queue<Request>,
     ) {
+        if self.connections.len() == self.connections.capacity() {
+            let full = w::StreamFull::new(
+                &env.limits.wire,
+                w::StreamFullParts { bound: w::StreamBound::Exchanges, size: self.connections.capacity() },
+            )
+            .expect("fixed full refusal");
+            out.push(Request::Transport(crate::ToTransport::Reply {
+                exchange: owner,
+                reply: crate::Reply::StreamFull(full),
+            }));
+            return;
+        }
         let exchange = self.name();
         let mut connection = Exchange::new(exchange, route == Route::Stream);
         self.body(env, &mut connection, route, body, credential, out);

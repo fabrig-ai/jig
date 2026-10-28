@@ -326,3 +326,36 @@ fn a_third_stream_is_refused_full_naming_the_component_bound_of_two() {
     assert_eq!(full.size(), 2);
     assert_eq!(world.component.streams.len(), 2);
 }
+
+#[test]
+fn a_full_connection_map_refuses_the_next_exchange_naming_its_bound() {
+    let mut world = fixtures::Exchange::new();
+    let count = world.env.limits.exchanges;
+    for number in 0..count {
+        world
+            .component
+            .connections
+            .insert(Token::new(u64::from(number)), crate::exchange::Exchange::new(Token::new(u64::from(number)), false))
+            .unwrap();
+    }
+    let refused = Token::new(999);
+    world.component.down(
+        &world.env,
+        Event::Transport(crate::FromTransport::Exchange {
+            exchange: refused,
+            credential: None,
+            message: crate::Message::SignOut(Box::new([])),
+        }),
+        &mut world.out,
+    );
+    let Some(Request::Transport(crate::ToTransport::Reply { exchange, reply: crate::Reply::StreamFull(full) })) =
+        world.out.pop()
+    else {
+        panic!("one named refusal")
+    };
+    assert_eq!(exchange, refused);
+    assert_eq!(full.bound(), &w::StreamBound::Exchanges);
+    assert_eq!(full.size(), count);
+    assert_eq!(world.component.connections.len(), count);
+    assert!(world.out.is_empty(), "no authentication or core side effects");
+}

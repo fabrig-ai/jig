@@ -199,6 +199,7 @@ impl Host for Process {
                     | client::Event::Read { .. }
                     | client::Event::Send { .. }
                     | client::Event::Carry { .. }
+                    | client::Event::Full { .. }
                     | client::Event::Streamed { .. }
                     | client::Event::StreamGone
                     | client::Event::Stored

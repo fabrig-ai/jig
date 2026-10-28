@@ -88,10 +88,15 @@ fn the_stream_limits_have_a_finite_worst_case() {
 
 #[test]
 fn a_409_preserves_full_across_every_body_cut() {
-    for bound in [jig_client_domain::StreamBound::Component, jig_client_domain::StreamBound::Transport] {
+    for bound in [
+        jig_client_domain::StreamBound::Component,
+        jig_client_domain::StreamBound::Transport,
+        jig_client_domain::StreamBound::Exchanges,
+    ] {
         let tag = match bound {
             jig_client_domain::StreamBound::Component => 0,
             jig_client_domain::StreamBound::Transport => 1,
+            jig_client_domain::StreamBound::Exchanges => 2,
         };
         let body = [tag, 0, 0, 0, 2];
         for cut in 0..=body.len() {
@@ -112,7 +117,7 @@ fn a_409_preserves_full_across_every_body_cut() {
 }
 #[test]
 fn a_malformed_409_drops_once_without_claiming_full() {
-    for body in [&[][..], &[0, 0, 0, 0][..], &[2, 0, 0, 0, 2][..], &[0, 0, 0, 0, 2, 0][..]] {
+    for body in [&[][..], &[0, 0, 0, 0][..], &[3, 0, 0, 0, 2][..], &[0, 0, 0, 0, 2, 0][..]] {
         let (mut stream, mut out) = fixtures::reader();
         stream.opened(409, &mut out);
         stream.body(body, &mut out);

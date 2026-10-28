@@ -201,11 +201,12 @@ pub enum Link {
     OutOfDate,
 }
 
-/// The engine-wide bound which refused a stream opening (protocol/client.md, 4).
+/// The engine-wide bound which refused a client connection (protocol/client.md, 4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StreamBound {
     Component,
     Transport,
+    Exchanges,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StreamFull {

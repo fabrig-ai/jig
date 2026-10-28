@@ -85,3 +85,20 @@ fn a_printed_link_under_another_prefix_is_refused() {
         Err(Unlinked::NoSecret)
     );
 }
+
+#[test]
+fn a_full_exchange_409_keeps_its_bound_and_size_and_malformed_conflicts_are_lost() {
+    let exchange = Token::new(EXCHANGE);
+    assert_eq!(
+        answered(exchange, 409, Box::new([2, 0, 0, 0, 8])),
+        Heard::Full {
+            exchange,
+            full: jig_client_domain::StreamFull { bound: jig_client_domain::StreamBound::Exchanges, size: 8 }
+        }
+    );
+    for body in
+        [Box::<[u8]>::from([]), Box::from([2, 0, 0, 8]), Box::from([3, 0, 0, 0, 8]), Box::from([2, 0, 0, 0, 8, 0])]
+    {
+        assert_eq!(answered(exchange, 409, body), Heard::Lost { exchange });
+    }
+}

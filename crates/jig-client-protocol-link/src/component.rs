@@ -99,7 +99,7 @@ impl Link {
         crate::worst_case(limits)
     }
     pub fn step(&mut self, now: Time, event: Event, out: &mut Queue<Request>) {
-        if let Event::Reply { exchange, .. } | Event::Lost { exchange } = &event
+        if let Event::Reply { exchange, .. } | Event::Lost { exchange } | Event::Full { exchange, .. } = &event
             && self.retiring == Some(*exchange)
         {
             self.retiring = None;
@@ -131,6 +131,14 @@ impl Link {
             Event::Send { attempt, key, ask, value } => self.send(now, attempt, key, ask, value, out),
             Event::Read { read, what } => self.read(now, read, what, out),
             Event::Reply { exchange, message } => self.answered(exchange, &message, out),
+            Event::Full { exchange, full } => {
+                self.stream_full = Some(full);
+                out.push(Request::Fact { fact: Fact::StreamFull { full } });
+                if let Some(attempt) = self.attempts.remove(&exchange) {
+                    self.failure(attempt, out);
+                }
+                self.drop_stream(now, out);
+            }
             Event::Lost { exchange } => {
                 if let Some(attempt) = self.attempts.remove(&exchange) {
                     self.failure(attempt, out);

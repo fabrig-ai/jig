@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use jig_client_protocol_link::{Heard, Message};
 use skein_http::{Header, Method};
 use skein_lib::{
-    List, Secret, Token, Writer,
+    List, Reader, Secret, Token, Writer,
     base64::{self, Alphabet},
     bytes,
 };
@@ -60,7 +60,24 @@ pub(crate) fn call(
 }
 #[must_use]
 pub fn answered(exchange: Token, status: u16, body: Box<[u8]>) -> Heard {
-    if status == 200 { Heard::Reply { exchange, message: body } } else { Heard::Lost { exchange } }
+    if status == 200 {
+        return Heard::Reply { exchange, message: body };
+    }
+    if status == 409 {
+        let mut reader = Reader::new(&body);
+        if let Ok(full) =
+            jig_client_protocol_wire::v19::StreamFull::decode(&jig_client_protocol_wire::v19::CEILINGS, &mut reader)
+            && reader.remaining() == 0
+        {
+            let bound = match full.bound() {
+                jig_client_protocol_wire::v19::StreamBound::Component => jig_client_domain::StreamBound::Component,
+                jig_client_protocol_wire::v19::StreamBound::Transport => jig_client_domain::StreamBound::Transport,
+                jig_client_protocol_wire::v19::StreamBound::Exchanges => jig_client_domain::StreamBound::Exchanges,
+            };
+            return Heard::Full { exchange, full: jig_client_domain::StreamFull { bound, size: full.size() } };
+        }
+    }
+    Heard::Lost { exchange }
 }
 
 #[must_use]

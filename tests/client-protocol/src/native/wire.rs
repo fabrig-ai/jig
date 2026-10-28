@@ -205,7 +205,7 @@ impl Wire {
                     | w::StreamEvent::Ended(_) => vec![],
                 }
             }
-            Event::Lost { exchange } => {
+            Event::Lost { exchange } | Event::Full { exchange, .. } => {
                 self.exchanges.remove(exchange);
                 vec![]
             }

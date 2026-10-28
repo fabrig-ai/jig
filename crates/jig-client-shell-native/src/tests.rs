@@ -262,6 +262,7 @@ impl skein_shell::Host for Disk {
                 | client::Event::StartUnlinked { .. }
                 | client::Event::Send { .. }
                 | client::Event::Carry { .. }
+                | client::Event::Full { .. }
                 | client::Event::Read { .. }
                 | client::Event::Reply { .. }
                 | client::Event::Watch { .. }

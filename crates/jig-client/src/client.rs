@@ -23,6 +23,7 @@ pub enum Event {
     Carry { key: Key, name: skein_lib::RequestKey, request: Ask, value: Option<Secret> },
     Reply { exchange: Token, message: Box<[u8]> },
     Lost { exchange: Token },
+    Full { exchange: Token, full: crate::StreamFull },
     Streamed { message: Streamed },
     StreamGone,
     Stored,
@@ -216,6 +217,7 @@ impl Client {
                 self.link_step(now, link::Event::Reply { exchange, message });
             }
             Event::Lost { exchange } => self.link_step(now, link::Event::Lost { exchange }),
+            Event::Full { exchange, full } => self.link_step(now, link::Event::Full { exchange, full }),
             Event::Streamed { message } => self.link_step(now, link::Event::Streamed { message }),
             Event::StreamGone => self.link_step(now, link::Event::StreamGone),
             Event::Stored => self.store_answer(&env, true),
@@ -331,6 +333,7 @@ impl Client {
             Event::Start { .. }
             | Event::Reply { .. }
             | Event::Lost { .. }
+            | Event::Full { .. }
             | Event::Streamed { .. }
             | Event::StreamGone => {
                 assert!(self.link.is_some(), "wire events require a linked client");

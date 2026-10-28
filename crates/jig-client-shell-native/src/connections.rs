@@ -418,6 +418,7 @@ impl Connections {
             self.events.push_back(match heard {
                 mapping::Heard::Reply { exchange, message } => client::Event::Reply { exchange, message },
                 mapping::Heard::Lost { exchange } => client::Event::Lost { exchange },
+                mapping::Heard::Full { exchange, full } => client::Event::Full { exchange, full },
                 mapping::Heard::Streamed { message } => client::Event::Streamed { message },
                 mapping::Heard::StreamGone => {
                     gone = true;

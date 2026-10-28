@@ -129,6 +129,7 @@ impl Side {
             | Event::Send { .. }
             | Event::Carry { .. }
             | Event::Lost { .. }
+            | Event::Full { .. }
             | Event::Streamed { .. }
             | Event::StreamGone
             | Event::Stored
@@ -326,6 +327,7 @@ fn callback(event: &Event) -> Option<Callback> {
         | Event::Send { .. }
         | Event::Carry { .. }
         | Event::Lost { .. }
+        | Event::Full { .. }
         | Event::Stored
         | Event::NotStored
         | Event::Up { .. } => None,

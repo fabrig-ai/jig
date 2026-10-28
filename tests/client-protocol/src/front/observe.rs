@@ -34,6 +34,7 @@ pub(super) fn callback(event: &jig_client::Event) -> Option<Callback> {
         | jig_client::Event::Send { .. }
         | jig_client::Event::Carry { .. }
         | jig_client::Event::Lost { .. }
+        | jig_client::Event::Full { .. }
         | jig_client::Event::Stored
         | jig_client::Event::NotStored
         | jig_client::Event::Up { .. } => None,

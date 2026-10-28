@@ -67,6 +67,7 @@ impl Stream {
                     let bound = match full.bound() {
                         w::StreamBound::Component => jig_client_domain::StreamBound::Component,
                         w::StreamBound::Transport => jig_client_domain::StreamBound::Transport,
+                        w::StreamBound::Exchanges => jig_client_domain::StreamBound::Exchanges,
                     };
                     out.push(Heard::Streamed {
                         message: Streamed::Full(jig_client_domain::StreamFull { bound, size: full.size() }),

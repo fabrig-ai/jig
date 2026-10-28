@@ -51361,6 +51361,8 @@ pub enum StreamBound {
     Component,
     /// `transport` without a payload.
     Transport,
+    /// `exchanges` without a payload.
+    Exchanges,
 }
 
 impl StreamBound {
@@ -95685,7 +95687,7 @@ impl StreamBound {
     #[must_use]
     pub fn measure(&self) -> u32 {
         match self {
-            Self::Component | Self::Transport => 1,
+            Self::Component | Self::Transport | Self::Exchanges => 1,
         }
     }
 
@@ -95694,6 +95696,7 @@ impl StreamBound {
         match self {
             Self::Component => writer.put(&[0_u8])?,
             Self::Transport => writer.put(&[1_u8])?,
+            Self::Exchanges => writer.put(&[2_u8])?,
         }
         Ok(())
     }
@@ -95710,6 +95713,7 @@ impl StreamBound {
         let value = match tag {
             0 => Self::Component,
             1 => Self::Transport,
+            2 => Self::Exchanges,
             _ => return Err(Problem { path: Path::StreamBoundTag, reason: skein_codec::Reason::Tag }),
         };
         Ok(value)
@@ -131311,7 +131315,7 @@ mod golden_tests {
         table(&GOLDEN_2);
     }
 
-    static GOLDEN_3: [Case; 952] = [
+    static GOLDEN_3: [Case; 954] = [
         ("enum_owner_person_capacity_action_service_smallest", || { let value = OwnerPersonCapacityAction::Service; let bytes: &[u8] = &[4]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerPersonCapacityAction::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_person_capacity_action_service_full", || { let value = OwnerPersonCapacityAction::Service; let bytes: &[u8] = &[4]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerPersonCapacityAction::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_owner_person_capacity_action_adoption_smallest", || { let value = OwnerPersonCapacityAction::Adoption; let bytes: &[u8] = &[5]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, OwnerPersonCapacityAction::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -132262,6 +132266,8 @@ mod golden_tests {
         ("enum_stream_bound_component_full", || { let value = StreamBound::Component; let bytes: &[u8] = &[0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_stream_bound_transport_smallest", || { let value = StreamBound::Transport; let bytes: &[u8] = &[1]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("enum_stream_bound_transport_full", || { let value = StreamBound::Transport; let bytes: &[u8] = &[1]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_stream_bound_exchanges_smallest", || { let value = StreamBound::Exchanges; let bytes: &[u8] = &[2]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("enum_stream_bound_exchanges_full", || { let value = StreamBound::Exchanges; let bytes: &[u8] = &[2]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_stream_full_smallest", || { let value = StreamFull::new(&CEILINGS, StreamFullParts { bound: StreamBound::Component, size: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamFull::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_stream_full_full", || { let value = StreamFull::new(&CEILINGS, StreamFullParts { bound: StreamBound::Component, size: u32::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, StreamFull::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
     ];

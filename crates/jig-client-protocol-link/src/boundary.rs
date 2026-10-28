@@ -53,6 +53,10 @@ pub enum Event {
     Lost {
         exchange: Token,
     },
+    Full {
+        exchange: Token,
+        full: jig_client_domain::StreamFull,
+    },
     Open {
         watch: Token,
         subject: Watchable,
@@ -181,6 +185,7 @@ pub enum Message {
 pub enum Heard {
     Reply { exchange: Token, message: Box<[u8]> },
     Lost { exchange: Token },
+    Full { exchange: Token, full: jig_client_domain::StreamFull },
     Streamed { message: Streamed },
     StreamGone,
 }

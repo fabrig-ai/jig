@@ -90,7 +90,7 @@ fn a_read_whose_exchange_is_lost_is_answered_unreachable() {
 #[test]
 fn a_stream_full_refusal_reaches_the_caller_through_retries_until_hello() {
     use skein_lib::{Secret, Time};
-    for bound in [StreamBound::Component, StreamBound::Transport] {
+    for bound in [StreamBound::Component, StreamBound::Transport, StreamBound::Exchanges] {
         let mut c = Client::new();
         c.step(Event::SignIn { with: With::Held(Secret::new(Box::new([7; 40]))) });
         let full = StreamFull { bound, size: 2 };
@@ -114,4 +114,13 @@ fn a_stream_full_refusal_reaches_the_caller_through_retries_until_hello() {
         c.stream(fixtures::hello(jig_client_protocol_wire::VERSION));
         assert_eq!(c.machine.link().stream_full, None);
     }
+}
+
+#[test]
+fn a_full_exchange_reaches_the_caller_as_a_named_refusal() {
+    let mut c = Client::signed_in();
+    c.step(Event::Read { handle: TASK, read: Readable::Jig(contract::Read::Project { project: PROJECT }) });
+    let full = StreamFull { bound: StreamBound::Exchanges, size: 8 };
+    c.step(Event::Full { exchange: c.exchange(), full });
+    assert_eq!(c.machine.link().stream_full, Some(full));
 }

@@ -657,3 +657,17 @@ fn http_calls_override_leaves_room_beside_eight_streams() {
         problem(document, &[b"limits", b"overrides", b"clients_http.calls"], What::Override);
     }
 }
+
+#[test]
+fn exchanges_override_is_checked_without_changing_the_small_profile() {
+    let limits = parse(br#"{"profile":"small","overrides":{"clients.exchanges":12}}"#).unwrap();
+    assert_eq!(limits.clients.exchanges, 12);
+    assert_eq!(limits.clients.exchanges_per_client, 2);
+    assert_eq!(small().clients.exchanges, 8);
+    for document in [
+        br#"{"profile":"small","overrides":{"clients.exchanges":0}}"#.as_slice(),
+        br#"{"profile":"small","overrides":{"clients.exchanges":4294967296}}"#.as_slice(),
+    ] {
+        problem(document, &[b"limits", b"overrides", b"clients.exchanges"], What::Override);
+    }
+}
