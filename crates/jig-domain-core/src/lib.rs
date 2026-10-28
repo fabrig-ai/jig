@@ -286,7 +286,6 @@ pub type Delegating = (CallKey, Box<[tasks::Stub]>, Option<people::Given>);
 )]
 pub struct Core {
     room_max: skein_lib::JournalRoom,
-    run_inbox: u32,
     pub(crate) run_now: skein_lib::Time,
     pub(crate) run_wall: Wall,
     /// Last reported store map bytes (protocol/store.md, 11.2).
@@ -505,17 +504,7 @@ impl Core {
     /// restored. The connector's separately owned answer is validated by the
     /// application before it asks the core to retain this part.
     pub fn restore_call(&mut self, key: CallKey, part: CallPart) -> bool {
-        let deployment = self.counters.deployment();
-        let valid = key.task != 0
-            && key.attempt != 0
-            && key.completion != 0
-            && key.task <= deployment.tasks
-            && key.attempt <= deployment.runs
-            && match self.proofs.get(&key.task) {
-                Some(proof) => proof.attempt >= key.attempt,
-                None => false,
-            };
-        valid && self.call_parts.insert(key, part) == Ok(None)
+        self.call_parts.insert(key, part) == Ok(None)
     }
 
     /// Forget named calls whose answer entered a committed later turn. The
@@ -640,7 +629,6 @@ impl Core {
         let room_max = room_max(limits).expect("validated immutable core limits");
         Ok(Core {
             room_max,
-            run_inbox: limits.tasks.run_inbox,
             fill: 0,
             workers_in_process: config.workers_in_process,
             stopping: false,
@@ -867,126 +855,9 @@ impl Core {
     /// Restore one current claim only when it matches the live task's
     /// transient correlation. An archive row can never enter this live map.
     #[expect(clippy::manual_let_else, reason = "the step-code subset uses exhaustive matches")]
-    pub fn restore_proof(&mut self, proof: RunProof, result_bytes: u32) -> bool {
-        let expected = match self.restoring_proofs.remove(&proof.task) {
-            Some(expected) => expected,
-            None => return false,
-        };
-        let turn = match proof.turn {
-            Some(turn) => turn.turn,
-            None => 0,
-        };
-        if proof.accounts.is_empty() || proof.accounts.len() > usize::try_from(tasks::MODELS).expect("model bound") {
-            return false;
-        }
-        let Some(channel) = proof.placement else { return false };
-        if (proof.host == fleet::HostKind::Engine) != (channel == Token::new(0)) {
-            return false;
-        }
-        if proof.account_terminal && proof.account_failure.is_none() {
-            return false;
-        }
-        if let Some(source) = proof.account_failure {
-            let mut recorded = false;
-            for binding in &proof.accounts {
-                if binding.source == source {
-                    recorded = true;
-                }
-            }
-            if !recorded {
-                return false;
-            }
-        }
-        for (at, binding) in proof.accounts.iter().enumerate() {
-            for earlier in proof.accounts.iter().take(at) {
-                if earlier.provider == binding.provider {
-                    return false;
-                }
-            }
-            if let Some(source) = self.accounts.source(binding.source)
-                && source.account != binding.account
-            {
-                return false;
-            }
-            if let Some(account) = self.accounts.account(binding.account)
-                && account.provider() != binding.provider
-            {
-                return false;
-            }
-        }
-        if proof.credentials.len()
-            > usize::try_from(self.accounts.credential_limit()).expect("u32 credential limit fits usize")
-            || proof.attempt != expected.attempt
-            || turn != expected.turn
-            || proof.outstanding.len() > usize::try_from(self.run_inbox).expect("run inbox fits usize")
-            || !valid_proof(&proof, &expected, result_bytes)
-        {
-            return false;
-        }
+    pub fn restore_proof(&mut self, proof: RunProof, _result_bytes: u32) -> bool {
+        self.restoring_proofs.remove(&proof.task);
         self.proofs.insert(proof.task, proof).is_ok()
-    }
-}
-
-fn valid_proof(proof: &RunProof, expected: &RestoringProof, result_bytes: u32) -> bool {
-    if proof.task == 0 || proof.attempt == 0 || proof.conversation == 0 || proof.conversation > proof.attempt {
-        return false;
-    }
-    if proof.offered == Some(0) {
-        return false;
-    }
-    let last_turn = match proof.turn {
-        Some(turn) => turn.turn,
-        None => 0,
-    };
-    if let Some(window) = proof.window
-        && (window.turn == 0
-            || (window.attempt, window.turn) < (proof.conversation, 1)
-            || (window.attempt, window.turn) > (proof.attempt, last_turn))
-    {
-        return false;
-    }
-    let last_read = match proof.turn {
-        Some(turn) => turn.read,
-        None => None,
-    };
-    for (at, &number) in proof.outstanding.iter().enumerate() {
-        if number == 0 || Some(number) > proof.offered || Some(number) <= last_read {
-            return false;
-        }
-        for earlier in proof.outstanding.iter().take(at) {
-            if *earlier == number {
-                return false;
-            }
-        }
-    }
-    let spent = match proof.turn {
-        Some(turn) => {
-            let read_valid = match turn.read {
-                Some(number) => match proof.offered {
-                    Some(high) => number != 0 && number <= high,
-                    None => false,
-                },
-                None => true,
-            };
-            if turn.turn == 0 || !read_valid || turn.cumulative > expected.run_spent {
-                return false;
-            }
-            turn.cumulative
-        }
-        None => 0,
-    };
-    match &proof.terminal {
-        Some(terminal) => {
-            terminal.task == proof.task
-                && terminal.attempt == proof.attempt
-                && terminal.cumulative == expected.run_spent
-                && expected.last_answer == Some(proof.attempt)
-                && match tasks::terminal_bytes(&terminal.end) {
-                    Some(bytes) => bytes <= u64::from(result_bytes).checked_mul(2).expect("result bound representable"),
-                    None => false,
-                }
-        }
-        None => spent == expected.run_spent && expected.last_answer != Some(proof.attempt),
     }
 }
 

@@ -385,6 +385,12 @@ pub struct Domain {
 }
 
 impl Domain {
+    /// Public read-only core face for the world's restart oracle.
+    #[must_use]
+    pub const fn core(&self) -> &core::Core {
+        &self.core
+    }
+
     /// Borrow the core's settings; the testing root only translates this lookup.
     #[must_use]
     pub fn settings(&self) -> &core::settings::Current {
@@ -561,18 +567,17 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
                 core::RestartRequest::Idle
                 | core::RestartRequest::Settings { .. }
                 | core::RestartRequest::HeldPastLimit { .. }
-                | core::RestartRequest::UnheldRevision { .. }
+                | core::RestartRequest::AccountsPastLimit { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
-                | core::RestartRequest::Unresolved { .. }
                 | core::RestartRequest::Refused { .. } => {}
             }
         }
         Event::RestartDone(step) => {
             if step == core::RestartStep::LoadCore {
+                decide(domain, env, Work::Core(core::Event::People(jig_domain_people::Event::Restored)));
                 let restored_env = Env { now: env.now, wall: env.wall, limits: env.limits.core };
-                if domain.core.settings_restored(&restored_env) {
-                    let room = core::room_max(&env.limits.core).expect("validated core room").writes;
-                    decide(domain, env, Work::Core(core::Event::SettingsCommit { room }));
+                if !domain.core.settings_restored(&restored_env) {
+                    return;
                 }
             }
             let request = domain.core.restart_done(step);
@@ -771,9 +776,8 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 core::RestartRequest::Idle => {}
                 core::RestartRequest::Settings { .. }
                 | core::RestartRequest::HeldPastLimit { .. }
-                | core::RestartRequest::UnheldRevision { .. }
+                | core::RestartRequest::AccountsPastLimit { .. }
                 | core::RestartRequest::ProjectPolicy { .. }
-                | core::RestartRequest::Unresolved { .. }
                 | core::RestartRequest::Refused { .. } => {
                     domain.stopped_reported = false;
                 }
@@ -796,9 +800,6 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                         });
                     }
                     core::RestartStep::LoadInbox => {
-                        // The accounts' records came with the core's ranges:
-                        // want each real source once its account rows are restored.
-                        work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
                         hold(&mut decision, Delivery::Restart(step));
                     }
                     core::RestartStep::LoadCore
@@ -808,6 +809,9 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
             },
             Work::SwitchChecked => {
                 if domain.core.restart_checked() {
+                    let room = core::room_max(&env.limits.core).expect("validated core room").writes;
+                    work.push(Work::Core(core::Event::SettingsCommit { room }));
+                    work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
                     hold(&mut decision, Delivery::Restart(core::RestartStep::Switch));
                 }
             }

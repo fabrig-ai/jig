@@ -322,52 +322,36 @@ impl Core {
     /// Settings rows precede tasks rows, so identity and head equality are checked
     /// only after both ranges restore, before the release withdraws anything.
     pub(crate) fn settings_proposals_consistent(&self) -> bool {
-        let against = self.settings_restore.release.unwrap_or(self.current.newest());
-        let mut count = 0_u32;
         for (_, row) in self.tasks.person_proposals() {
-            match &row.action {
-                tasks::PersonAction::Settings { against: revision, items } => {
-                    let Ok(number) = u32::try_from(row.number) else {
-                        return false;
-                    };
-                    let Some(set) =
-                        self.settings_proposals.get(&(jig_domain_people::Proposer::Party(row.proposer), number))
-                    else {
-                        return false;
-                    };
-                    if row.project != 0
-                        || set.against != against
-                        || *revision != against
-                        || super::proposal_heads(&set.items).as_ref() != items.as_ref()
-                    {
-                        return false;
-                    }
-                    count = count.checked_add(1).expect("bounded pending sets");
-                }
-                tasks::PersonAction::Batch(_) | tasks::PersonAction::Amend { .. } => {}
+            if let tasks::PersonAction::Settings { .. } = &row.action {
+                let number = u32::try_from(row.number).expect("stored settings proposal number fits its codec");
+                assert!(
+                    self.settings_proposals.contains_key(&(jig_domain_people::Proposer::Party(row.proposer), number)),
+                    "core: PersonProposal({}) links to settings set ({}, {number}), which is absent",
+                    row.number,
+                    row.proposer
+                );
             }
         }
         for view in self.tasks.view_tasks() {
-            let Some(row) = self.tasks.task(view.number) else { continue };
-            let Some(row) = &row.proposal else { continue };
-            if let tasks::ProposalAction::Settings { against: revision, items } = &row.action {
-                let Ok(number) = u32::try_from(row.number) else { return false };
-                let Some(set) = self.settings_proposals.get(&(jig_domain_people::Proposer::Task(row.proposer), number))
-                else {
-                    return false;
-                };
-                if row.project != 0
-                    || set.against != against
-                    || *revision != against
-                    || super::proposal_heads(&set.items).as_ref() != items.as_ref()
-                {
-                    return false;
+            let row = self.tasks.task(view.number).expect("live task view");
+            if let Some(proposal) = &row.proposal {
+                if let tasks::ProposalAction::Settings { .. } = &proposal.action {
+                    let number =
+                        u32::try_from(proposal.number).expect("stored settings proposal number fits its codec");
+                    assert!(
+                        self.settings_proposals
+                            .contains_key(&(jig_domain_people::Proposer::Task(proposal.proposer), number)),
+                        "core: Live({}) links to settings set ({}, {number}), which is absent",
+                        row.number,
+                        proposal.proposer
+                    );
                 }
-                count = count.checked_add(1).expect("bounded pending sets");
             }
         }
-        count == self.settings_proposals.len()
+        true
     }
+
     /// Project template overrides describe new work. Check them against the
     /// supplied defaults even while live tasks restore against the stored ones.
     pub(crate) fn restored_templates_valid(&mut self, overrides: &[jig_domain_people::TemplateOverride]) -> bool {

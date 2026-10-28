@@ -367,7 +367,7 @@ fn a_limited_source_keeps_its_reset_across_a_restart() {
     assert!(world.domain.ready());
     let restored = world.domain.accounts();
     assert_eq!(restored.source(1).expect("the configured source").state, limited, "the same reset after the restart");
-    assert_eq!(restored.unrestored(), 0);
+    assert_eq!(restored.restore_limit(), None);
 }
 
 fn restored_task(world: &World, task: u64) -> &tasks::TaskRecord {

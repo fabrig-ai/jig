@@ -75,6 +75,10 @@ pub(crate) fn work(
         Work::Restart(request) => crate::restart::route(domain, env, decision, request, work),
         Work::SwitchChecked => {
             if domain.core.restart_checked() {
+                work.push(Work::Core(core::Event::SettingsCommit {
+                    room: core::room_max(&env.limits.core).expect("validated core room").writes,
+                }));
+                work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
                 held(decision, Output::Switch);
             }
         }
