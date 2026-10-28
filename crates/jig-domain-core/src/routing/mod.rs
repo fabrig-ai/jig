@@ -672,6 +672,9 @@ pub fn fire(core: &mut Core, env: &Env<Limits>, timer: Timer) -> Requests {
     if core.stopping && crate::stopping::waits(timer) {
         return crate::stopping::empty();
     }
+    if core.restart_step().is_some() {
+        return crate::stopping::empty();
+    }
     let oldest = core.current.oldest;
     let Requests::Out(mut out) = match timer {
         Timer::People => {

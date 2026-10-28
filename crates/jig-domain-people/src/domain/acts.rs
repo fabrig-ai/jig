@@ -191,13 +191,9 @@ pub(super) fn restore(
     act: Act,
     outcome: Outcome,
     at: Wall,
-    out: &mut Queue<Request>,
+    _out: &mut Queue<Request>,
 ) {
-    if answer_expiry(at, &env.limits) <= env.wall {
-        out.push(Request::Erase { key: Key::Acted(key) });
-    } else {
-        retain(domain, env, key, act, outcome, at);
-    }
+    retain(domain, env, key, act, outcome, at);
 }
 
 fn permanent(outcome: &Outcome) -> bool {
@@ -243,81 +239,6 @@ fn permanent(outcome: &Outcome) -> bool {
         | Outcome::AccountRemoved { .. }
         | Outcome::AccountSignedOut { .. }
         | Outcome::Refused(_) => true,
-    }
-}
-
-pub(super) fn valid_outcome(limits: &Limits, act: &Act, outcome: &Outcome) -> bool {
-    if let Outcome::Refused(_) = outcome {
-        return true;
-    }
-    match act {
-        Act::Close { project, .. } => match outcome {
-            Outcome::Compound { project: answered, operations, first_message } => {
-                answered == project && *operations != 0 && *operations <= limits.operations && *first_message != 0
-            }
-            Outcome::CompoundRefused { at, .. } => *at < limits.operations,
-            Outcome::Again(_)
-            | Outcome::SignedOut
-            | Outcome::MarkedSeen { .. }
-            | Outcome::Applied { .. }
-            | Outcome::NoteEdited { .. }
-            | Outcome::ServiceMade { .. }
-            | Outcome::Adopted { .. }
-            | Outcome::RolesSet { .. }
-            | Outcome::PolicyChanged { .. }
-            | Outcome::Renamed { .. }
-            | Outcome::ProjectMade { .. }
-            | Outcome::SettingsChanged { .. }
-            | Outcome::MovedToNewest { .. }
-            | Outcome::PoolSet { .. }
-            | Outcome::Said { .. }
-            | Outcome::QuestionAnswered { .. }
-            | Outcome::Amended { .. }
-            | Outcome::Moved { .. }
-            | Outcome::Stopped { .. }
-            | Outcome::Cancelled { .. }
-            | Outcome::Lifted { .. }
-            | Outcome::Released { .. }
-            | Outcome::Created { .. }
-            | Outcome::Proposed { .. }
-            | Outcome::Withdrawn { .. }
-            | Outcome::PersonTaken { .. }
-            | Outcome::PersonHandedBack { .. }
-            | Outcome::PersonAnswered { .. }
-            | Outcome::EscalationDecided { .. }
-            | Outcome::ProposalDecided { .. }
-            | Outcome::AccountSignInStarted { .. }
-            | Outcome::AccountProgramDeclared { .. }
-            | Outcome::AccountKeyKept { .. }
-            | Outcome::AccountMovingOut { .. }
-            | Outcome::AccountFinishing { .. }
-            | Outcome::AccountMovedIn { .. }
-            | Outcome::AccountChanged
-            | Outcome::AccountRemoved { .. }
-            | Outcome::AccountSignedOut { .. }
-            | Outcome::Refused(_) => false,
-        },
-        Act::AddKey { provider, join, digest } => super::valid_answer_shape(
-            &crate::Ask::AccountChange {
-                holder: crate::AccountHolder::Deployment,
-                change: crate::AccountChange::AddKey { provider: *provider, join: *join, digest: *digest },
-            },
-            outcome.clone(),
-        ),
-        Act::RemoveAccount { account } => super::valid_answer_shape(
-            &crate::Ask::AccountChange {
-                holder: crate::AccountHolder::Deployment,
-                change: crate::AccountChange::Remove { account: *account },
-            },
-            outcome.clone(),
-        ),
-        Act::MakeProject { name, policy, .. } => {
-            super::valid_answer_shape(&crate::Ask::MakeProject { name: name.clone(), policy: *policy }, outcome.clone())
-        }
-        Act::Adopt { project, adoption } => super::valid_answer_shape(
-            &crate::Ask::Adopt { project: *project, adoption: adoption.clone() },
-            outcome.clone(),
-        ),
     }
 }
 

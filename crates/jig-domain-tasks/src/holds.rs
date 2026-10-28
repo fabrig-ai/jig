@@ -658,57 +658,6 @@ pub(crate) fn retained(
     check_waiters(domain, env, name(holding), out);
 }
 
-/// Validate one live row against the configured kinds and prior restored rows.
-pub(crate) fn valid_record(domain: &Domain, limits: &Limits, row: &TaskRecord) -> bool {
-    let bound = if row.root == row.number {
-        limits.tasks.checked_mul(limits.holdings).expect("validated live hold bound")
-    } else {
-        limits.holdings
-    };
-    if row.holdings.len() > usize::try_from(bound).expect("u32 fits usize") {
-        return false;
-    }
-    for (at, holding) in row.holdings.iter().enumerate() {
-        if !shape(limits, name(holding)) {
-            return false;
-        }
-        let valid_kind = match rule(domain, holding) {
-            Some(rule) => matching(holding, rule) || domain.resources.contains_key(name(holding)),
-            None => false,
-        };
-        if !valid_kind {
-            return false;
-        }
-        for earlier in row.holdings.iter().take(at) {
-            if same(earlier, holding) {
-                return false;
-            }
-        }
-        if row.holds_taken
-            && let Holding::Write { .. } = holding
-            && holder(domain, holding).is_some()
-        {
-            return false;
-        }
-    }
-    let (must_take, must_free) = match row.phase {
-        Phase::Waiting | Phase::Held { was: Was::Waiting, .. } => (false, true),
-        Phase::Active(_) | Phase::Held { was: Was::Active(_), .. } => (true, false),
-        Phase::Closing(_) | Phase::Held { was: Was::Closing(_), .. } => (false, false),
-        Phase::Ended(_) => return false,
-    };
-    if (must_take && !row.holds_taken) || (must_free && row.holds_taken) {
-        return false;
-    }
-    if row.hold_wait_since.is_some() && (row.holds_taken || row.holdings.is_empty()) {
-        return false;
-    }
-    if row.hold_bound_since.is_some() && row.hold_wait_since.is_none() {
-        return false;
-    }
-    true
-}
-
 /// Rebuild the wall-projected wait timers after all live rows were restored.
 pub(crate) fn restore(domain: &mut Domain, env: &Env<Limits>) {
     for (number, _) in &domain.names {

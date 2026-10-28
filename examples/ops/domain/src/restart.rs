@@ -23,20 +23,12 @@ pub(crate) fn route(
         core::RestartRequest::Idle
         | core::RestartRequest::Settings { .. }
         | core::RestartRequest::HeldPastLimit { .. }
-        | core::RestartRequest::UnheldRevision { .. }
+        | core::RestartRequest::AccountsPastLimit { .. }
         | core::RestartRequest::ProjectPolicy { .. }
-        | core::RestartRequest::Unresolved { .. }
         | core::RestartRequest::Refused { .. } => {}
         core::RestartRequest::Step(step) => match step {
             core::RestartStep::LoadCore => held(decision, Output::Load { step, range: Range::Core }),
             core::RestartStep::LoadInbox => {
-                // The accounts' records came with the core's ranges: want
-                // each real source once its account rows are restored.
-                let requests = core::want_accounts(
-                    &mut domain.core,
-                    &Env { now: env.now, wall: env.wall, limits: env.limits.core },
-                );
-                crate::route::core_out(domain, env, decision, requests, work);
                 let census = domain.core.census(&env.limits.core);
                 held(decision, Output::Load { step, range: Range::Census(census) });
             }
@@ -115,9 +107,6 @@ pub(crate) fn store(
                 if !domain.core.settings_restored(&Env { now: env.now, wall: env.wall, limits: env.limits.core }) {
                     return;
                 }
-                work.push(Work::Core(core::Event::SettingsCommit {
-                    room: core::room_max(&env.limits.core).expect("validated core room").writes,
-                }));
                 // The completed core range is also the people's restoration
                 // terminal. Retain it when copying this cold-load adapter.
                 work.push(Work::Core(core::Event::People(people::Event::Restored)));

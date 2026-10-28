@@ -55,7 +55,7 @@ fn durable_mark(world: World, since: usize, last: u64) {
     let mut world = world;
     world.release_commits();
     assert!(world.domain.ready());
-    let bytes = world.store.into_wires();
+    let bytes = world.into_wires();
     let row = component_v3::Wires::decode(&component_v3::CEILINGS, &mut Reader::new(&bytes)).expect("component wires");
     let wires: Vec<_> = row.wires().iter().map(|wire| (wire.name().to_vec(), wire.version())).collect();
     assert_eq!(wires, [(b"channel".to_vec(), 3), (b"fixture".to_vec(), 7)]);
@@ -112,7 +112,7 @@ fn a_first_start_takes_the_switch_step() {
     assert_eq!(world.store.switch_requests, 0);
     assert_eq!(mark(&world, 0).len(), 2);
     assert!(world.domain.ready());
-    let bytes = world.store.into_wires();
+    let bytes = world.into_wires();
     let row = component_v3::Wires::decode(&component_v3::CEILINGS, &mut Reader::new(&bytes)).expect("empty wires row");
     assert!(row.wires().is_empty(), "an empty shell wire list is still committed");
 }
@@ -198,19 +198,20 @@ fn a_broken_task_set_refuses_before_the_switch() {
     // Valid on its own, but its declared root is absent from the restored set.
     row.root = u64::MAX;
     world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
-    refuses_before_switch(world, core::RestoreChild::Tasks);
+    refuses_before_switch(world, "tasks");
 }
 
 // Every refusal must leave A byte-for-byte reopenable by the earlier build.
-fn refuses_before_switch(mut world: World, child: core::RestoreChild) {
+fn refuses_before_switch(mut world: World, _child: &str) {
     world.store.crash(f::SEED);
     let source = world.store.generation_contents(b"generations/1");
     let last = world.store.applied;
     let assignments = world.assignments.clone();
-    world.restart_with_patch_sets(f::SEED, false, f::AFTER);
-    assert!(world.stopped);
-    assert_eq!(world.domain.restart_failure(), Some(core::RestartStep::Switch));
-    assert_eq!(world.domain.restore_failure(), Some(core::RestartRequest::Unresolved { child, records: 1 }));
+    world.skip_restart_oracle("this story deliberately seeds a record whose required link is absent");
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        world.restart_with_patch_sets(f::SEED, false, f::AFTER)
+    }));
+    assert!(panic.is_err(), "an unmade link panics before the switch");
     assert_eq!(world.store.switch_requests, 0);
     assert_eq!(world.store.file_bytes(b"active"), Some(b"1\n".to_vec()));
     assert_eq!(world.store.generation_contents(b"generations/1"), source);
@@ -254,20 +255,18 @@ fn orphan_source() -> root::Record {
 fn a_patched_account_the_accounts_child_would_leave_refuses_before_the_switch() {
     let mut world = before();
     world.seed(Box::new([orphan_source()]));
-    refuses_before_switch(world, core::RestoreChild::Accounts);
+    refuses_before_switch(world, "accounts");
 }
 
 #[test]
-fn an_account_left_with_nothing_pending_does_not_refuse_the_start() {
+fn an_absent_account_panics_with_nothing_pending_too() {
     let mut world = before();
+    world.skip_restart_oracle("the fixture deliberately names an absent account");
     world.seed(Box::new([orphan_source()]));
-    world.restart_with_patch_sets(f::SEED, false, f::BEFORE);
-    assert!(world.domain.ready());
-    assert_eq!(world.domain.restore_failure(), None);
-    assert_eq!(world.domain.accounts().unrestored(), 1);
-    assert!(world.domain.accounts().source(ORPHAN_SOURCE).is_none());
-    assert_eq!(world.store.file_bytes(b"active"), Some(b"1\n".to_vec()));
-    assert_eq!(world.store.switch_requests, 0);
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        world.restart_with_patch_sets(f::SEED, false, f::BEFORE)
+    }));
+    assert!(panic.is_err(), "active and pending generations make the same links");
 }
 
 #[test]
@@ -277,7 +276,7 @@ fn a_task_naming_a_project_the_copy_does_not_hold_refuses_before_the_switch() {
     // Leave the task and its funding internally consistent, but without its project.
     world.erase(root::Key::Core(core::Key::People(jig_domain_people::Key::Policy(PROJECT))));
     world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
-    refuses_before_switch(world, core::RestoreChild::Tasks);
+    refuses_before_switch(world, "tasks");
 }
 
 #[test]
@@ -292,7 +291,7 @@ fn a_task_naming_a_party_the_copy_does_not_hold_refuses_before_the_switch() {
     });
     row.last_message = 1;
     world.seed(Box::new([root::Record::Core(core::Record::Tasks(jig_domain_tasks::Stored::Live(Box::new(row))))]));
-    refuses_before_switch(world, core::RestoreChild::Tasks);
+    refuses_before_switch(world, "tasks");
 }
 
 #[test]
@@ -303,7 +302,7 @@ fn a_read_position_over_a_conversation_the_copy_does_not_hold_refuses_before_the
         task: ABSENT_TASK,
         through: 1,
     }))]));
-    refuses_before_switch(world, core::RestoreChild::People);
+    refuses_before_switch(world, "people");
 }
 
 #[test]

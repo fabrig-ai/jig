@@ -226,27 +226,14 @@ pub(crate) fn restore(domain: &mut Domain, limits: &Limits, slot: WriterSlot) ->
     domain.writers.insert(slot.resource.clone(), slot).is_ok()
 }
 
-pub(crate) fn valid_restored(domain: &Domain, limit: u32) -> bool {
+pub(crate) fn link(domain: &Domain) {
     for (resource, slot) in &domain.writers {
-        if slot.resource != *resource {
-            return false;
-        }
         match slot.writer {
-            Writer::Run { task, attempt } => {
-                if attempt == 0 || !covers(domain, task, resource, limit) {
-                    return false;
-                }
-                let Some(row) = record(domain, task) else { return false };
-                if row.attempt != attempt || (row.last_answer == Some(attempt)) != slot.lost {
-                    return false;
-                }
-            }
-            Writer::Effect { entry } => {
-                if entry == 0 || slot.lost || crate::holds::writer_holder(domain, resource).is_none() {
-                    return false;
-                }
-            }
+            Writer::Run { task, .. } => assert!(
+                record(domain, task).is_some(),
+                "tasks: Writer({resource:?}) links to task {task}, which is absent"
+            ),
+            Writer::Effect { .. } => {}
         }
     }
-    true
 }
