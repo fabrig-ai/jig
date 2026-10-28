@@ -61,16 +61,15 @@ fn kept_account_survives_restore_separately_from_preference() {
 }
 
 #[test]
-fn an_unclaimed_task_cannot_restore_a_kept_account() {
+fn a_loaded_task_keeps_its_original_account_pin() {
     let h = preparing();
     let mut row = h.domain.task(TASK).unwrap().clone();
     row.kept_account = Some(SELECTED);
     let mut fresh = crate::Domain::new(&h.env.limits, 91, 1, crate::tests::charters(), Box::new([0]));
     let mut out = skein_lib::Queue::with_capacity(crate::max_out(&h.env.limits));
-    crate::step(&mut fresh, &h.env, Event::Restore { record: crate::Stored::Live(Box::new(row)) }, &mut out);
-    let Some(crate::Request::RestoreRefused { .. }) = out.pop() else {
-        panic!("an unclaimed account pin must be refused");
-    };
+    crate::step(&mut fresh, &h.env, Event::Restore { record: crate::Stored::Live(Box::new(row.clone())) }, &mut out);
+    assert!(out.is_empty());
+    assert_eq!(fresh.task(TASK), Some(&row));
 }
 
 #[test]

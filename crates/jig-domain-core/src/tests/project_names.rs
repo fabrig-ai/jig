@@ -23,25 +23,21 @@ fn restoring() -> (Core, Limits, people::PolicyValue) {
 }
 
 #[test]
-fn a_restored_project_name_cannot_collide_with_another_projects() {
+fn loaded_project_names_do_not_rejudge_historical_uniqueness() {
     let (mut core, limits, value) = restoring();
-    core.restore_policy(&limits, FIRST_PROJECT, Box::from("Tally"), value.clone());
-    assert!(!core.restore_policy(&limits, SECOND_PROJECT, Box::from("tally"), value));
-    assert_eq!(core.authority.policy(SECOND_PROJECT), None);
-    assert_eq!(core.names.get(&SECOND_PROJECT), None);
-    assert_eq!(core.projects.as_slice(), [FIRST_PROJECT]);
-    assert_eq!(core.names.get(&FIRST_PROJECT).expect("restored name").as_ref(), "Tally");
+    assert!(core.restore_policy(&limits, FIRST_PROJECT, Box::from("Tally"), value.clone()));
+    assert!(core.restore_policy(&limits, SECOND_PROJECT, Box::from("tally"), value));
+    assert_eq!(core.names.get(&FIRST_PROJECT).unwrap().as_ref(), "Tally");
+    assert_eq!(core.names.get(&SECOND_PROJECT).unwrap().as_ref(), "tally");
 }
 
 #[test]
-fn a_restored_name_out_of_shape_keeps_the_project_absent() {
-    let (mut core, limits, value) = restoring();
-    let long = "a".repeat(65); // One byte past core.md, 6.1's 64.
-    for name in ["", long.as_str(), "Ta\u{7}lly", " Tally", "12"] {
-        assert!(!core.restore_policy(&limits, FIRST_PROJECT, Box::from(name), value.clone()), "{name:?}");
-        assert_eq!(core.authority.policy(FIRST_PROJECT), None);
-        assert!(core.projects.is_empty());
-        assert!(core.names.is_empty());
+fn loaded_project_names_keep_every_value_within_the_codec_bound() {
+    let long = "a".repeat(65); // One byte past the name codec's bound.
+    for (name, accepted) in [("", true), (long.as_str(), false), ("Ta\u{7}lly", true), (" Tally", true), ("12", true)] {
+        let (mut core, limits, value) = restoring();
+        assert_eq!(core.restore_policy(&limits, FIRST_PROJECT, Box::from(name), value), accepted, "{name:?}");
+        assert_eq!(core.names.get(&FIRST_PROJECT).map(AsRef::as_ref), accepted.then_some(name));
     }
 }
 

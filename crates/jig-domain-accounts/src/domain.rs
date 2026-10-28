@@ -177,6 +177,41 @@ pub struct Domain {
     phase: Phase,
 }
 impl Domain {
+    /// Copy a durable account row, excluding component state and grants (accounts.md, 3).
+    #[must_use]
+    pub fn stored_record(&self, key: crate::Key, env: &Env<Limits>) -> Option<Stored> {
+        Some(match key {
+            crate::Key::Next => Stored::Next { number: self.kept },
+            crate::Key::Issued { number } => {
+                let row = self.issued.get(&number)?;
+                Stored::Issued {
+                    number,
+                    holder: row.holder,
+                    name: skein_lib::bytes::copy_of(row.name.as_bytes()),
+                    signed_out: row.signed_out,
+                }
+            }
+            crate::Key::Account { number } => {
+                let row = self.accounts.get(&number)?;
+                Stored::Account {
+                    number,
+                    provider: row.provider,
+                    holder: row.holder,
+                    place: row.place,
+                    uses: row.uses.clone(),
+                    subject: row.subject.clone(),
+                    display: row.display.clone(),
+                }
+            }
+            crate::Key::Source { account, number } => {
+                if self.sources.get(&number)?.account != account {
+                    return None;
+                }
+                stored(self, env, number)
+            }
+        })
+    }
+
     /// Providers are configuration; accounts and sources are durable runtime records.
     #[must_use]
     pub fn new(limits: &Limits, providers: Providers) -> Domain {

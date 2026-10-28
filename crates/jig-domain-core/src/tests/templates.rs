@@ -295,22 +295,20 @@ fn requester_template_overrides_refuse_invalid_ending_authority_without_changing
 }
 
 #[test]
-fn requester_template_restore_refuses_invalid_ending_authority_without_changing_policy() {
+fn loaded_template_overrides_keep_the_original_ending_authority() {
     for (conversation, executor) in
         [(false, people::TemplateExecutor::Charter(PROJECT)), (true, people::TemplateExecutor::Chosen)]
     {
         let (mut core, limits) = make_tree();
         core.current.test_templates(Box::new([requester_template(conversation)]));
-        let templates = crate::templates::current_merged(&core.current, &[]);
         let before = template_policy(&core);
         clear_projects(&mut core, &limits);
         let mut restored = before.clone();
         restored.templates =
             Box::new([people::TemplateOverride { executor: Some(executor), ..executor_override(PROJECT) }]);
-        assert!(!core.restore_policy(&limits, PROJECT, Box::from("Project 1"), restored));
-        assert!(core.authority.policy(PROJECT).is_none());
-        assert_eq!(crate::templates::current_merged(&core.current, &[]), templates);
-        assert!(core.template_overrides.is_empty());
+        let overrides = restored.templates.clone();
+        assert!(core.restore_policy(&limits, PROJECT, Box::from("Project 1"), restored));
+        assert_eq!(core.template_overrides.get(&PROJECT), Some(&overrides));
     }
 }
 
@@ -344,7 +342,7 @@ fn an_incompatible_template_edit_leaves_the_entire_policy_unchanged() {
 }
 
 #[test]
-fn invalid_restored_template_overrides_leave_the_entire_policy_unchanged() {
+fn loaded_template_overrides_do_not_rejudge_family_rules() {
     let (mut core, limits) = template_core();
     let before = template_policy(&core);
     for (name, overrides) in [
@@ -356,8 +354,9 @@ fn invalid_restored_template_overrides_leave_the_entire_policy_unchanged() {
         let mut restored = before.clone();
         restored.period_spend = 1; // A second field must not slip through a refused restore.
         restored.templates = overrides;
-        assert!(!core.restore_policy(&limits, PROJECT, Box::from("Project 1"), restored), "{name}");
-        assert!(core.authority.policy(PROJECT).is_none(), "{name}");
+        let overrides = restored.templates.clone();
+        assert!(core.restore_policy(&limits, PROJECT, Box::from("Project 1"), restored), "{name}");
+        assert_eq!(core.template_overrides.get(&PROJECT), Some(&overrides), "{name}");
     }
 }
 

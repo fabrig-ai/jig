@@ -333,9 +333,6 @@ pub(crate) fn restore(
     policy.requirements = requirements.into_boxed();
     *permissions = value.permissions;
     *templates = value.templates;
-    if !map_valid(policy, permissions) {
-        return None;
-    }
     Some(())
 }
 
@@ -456,21 +453,14 @@ impl Core {
         name: Box<str>,
         value: people::PolicyValue,
     ) -> bool {
-        if project == 0
-            || self.authority.policy(project).is_some()
+        if self.authority.policy(project).is_some()
             || self.projects.len() >= self.projects.capacity()
             || self.names.len() >= self.names.capacity()
             || self.permission_roles.len() >= self.permission_roles.capacity()
             || self.template_overrides.len() >= self.template_overrides.capacity()
-            || u64::from(project) > self.counters.deployment().projects
-            || people::name_rule(&name).is_some()
+            || name.len() > people::NAME_BYTES
         {
             return false;
-        }
-        for (&other, previous) in &self.names {
-            if project != other && people::same_name(&name, previous) {
-                return false;
-            }
         }
         match people::policy_bytes(&value) {
             Some(bytes) if bytes <= limits.policy_bytes => {}
@@ -495,7 +485,6 @@ impl Core {
         }
         let mut templates: Box<[people::TemplateOverride]> = Box::new([]);
         if restore(&mut policy, &mut permissions, &mut templates, value, self.authority.limits().requirements).is_none()
-            || !self.restored_templates_valid(&templates)
         {
             return false;
         }

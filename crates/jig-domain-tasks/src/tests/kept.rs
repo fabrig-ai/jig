@@ -34,7 +34,7 @@ fn shared_kept_rule_separates_claims_from_finish_authority() {
 }
 
 #[test]
-fn requester_ending_survives_restore_only_with_its_existing_person_authority() {
+fn loaded_requester_endings_keep_the_committed_authority() {
     let mut h = Harness::new();
     let mut open = task(1, &[]);
     open.flags.conversation = true;
@@ -48,12 +48,7 @@ fn requester_ending_survives_restore_only_with_its_existing_person_authority() {
         broken.requester = requester;
         let mut cold = Harness::new();
         cold.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
-        let out = cold.send(Event::Restore { record: Stored::Live(Box::new(broken)) });
-        let mut refused = false;
-        for request in out {
-            let Request::RestoreRefused { .. } = request else { continue };
-            refused = true;
-        }
-        assert!(refused);
+        assert!(cold.send(Event::Restore { record: Stored::Live(Box::new(broken.clone())) }).is_empty());
+        assert_eq!(cold.domain.task(broken.number), Some(&broken));
     }
 }
