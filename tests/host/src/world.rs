@@ -647,6 +647,7 @@ impl World {
                 | LinkDown::Message { .. }
                 | LinkDown::Grant { .. }
                 | LinkDown::Cancel { .. }
+                | LinkDown::Park { .. }
                 | LinkDown::Relayed { .. }
                 | LinkDown::TurnKept { .. },
             )

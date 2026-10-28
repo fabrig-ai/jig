@@ -258,6 +258,7 @@ impl World {
                 Request::Placed { .. }
                 | Request::Listed { .. }
                 | Request::Cancel { .. }
+                | Request::Park { .. }
                 | Request::Answered { .. }
                 | Request::Acknowledge { .. } => {}
                 Request::Refuse { .. } => {

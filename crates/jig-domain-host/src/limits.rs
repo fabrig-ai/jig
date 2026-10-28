@@ -90,6 +90,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         return None;
     }
     let sources = crate::sources::worst_case(limits)?;
+    // Hosted includes its inline park intent, with no additional allocation.
     let hosted = Slab::<Hosted>::worst_case(limits.slots)?;
     let names = Map::<Token, Id<Hosted>>::worst_case(limits.slots)?;
     let answers = Map::<(Token, Token), Id<Hosted>>::worst_case(limits.slots)?;

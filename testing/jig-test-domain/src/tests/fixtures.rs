@@ -229,9 +229,9 @@ pub fn work() -> Queue<crate::Work> {
 }
 
 pub fn channel_records() -> Box<[(crate::Delivery, host::LinkDown)]> {
-    let mut records = List::with_capacity(7);
+    let mut records = List::with_capacity(8);
     for (value, down) in held_records() {
-        records.push((crate::Delivery::Core(value), down)).expect("seven complete records");
+        records.push((crate::Delivery::Core(value), down)).expect("eight complete records");
     }
     records
         .push((
@@ -243,7 +243,7 @@ pub fn channel_records() -> Box<[(crate::Delivery, host::LinkDown)]> {
                 answer: host::Relayed::Busy,
             },
         ))
-        .expect("seven complete records");
+        .expect("eight complete records");
     records
         .push((
             crate::Delivery::CallAnswer {
@@ -265,7 +265,7 @@ pub fn channel_records() -> Box<[(crate::Delivery, host::LinkDown)]> {
                 answer: host::Relayed::Answer { error: true, text: b"refused".as_slice().into() },
             },
         ))
-        .expect("seven complete records");
+        .expect("eight complete records");
     records
         .push((
             crate::Delivery::Message {
@@ -291,7 +291,7 @@ pub fn channel_records() -> Box<[(crate::Delivery, host::LinkDown)]> {
                 finish_requested: false,
             },
         ))
-        .expect("seven complete records");
+        .expect("eight complete records");
     records.into_boxed()
 }
 
@@ -306,7 +306,7 @@ pub fn start_refusal() -> host::LinkUp {
     host::LinkUp::Answer { run, attempt, answer }
 }
 
-fn held_records() -> [(core::Held, host::LinkDown); 4] {
+fn held_records() -> [(core::Held, host::LinkDown); 5] {
     [
         (
             core::Held::Acknowledge { channel: CHANNEL, run: RUN, attempt: ATTEMPT },
@@ -319,6 +319,10 @@ fn held_records() -> [(core::Held, host::LinkDown); 4] {
         (
             core::Held::Cancel { channel: CHANNEL, run: RUN, attempt: ATTEMPT },
             host::LinkDown::Cancel { run: RUN, attempt: ATTEMPT },
+        ),
+        (
+            core::Held::Park { channel: CHANNEL, run: RUN, attempt: ATTEMPT },
+            host::LinkDown::Park { run: RUN, attempt: ATTEMPT },
         ),
         (
             core::Held::Grant {

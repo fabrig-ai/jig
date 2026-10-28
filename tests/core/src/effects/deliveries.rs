@@ -110,6 +110,9 @@ impl World {
             root::Delivery::Core(core::Held::Grant { channel, run, attempt, grant }) => {
                 self.grant_delivered(channel, run, attempt, grant);
             }
+            root::Delivery::Core(core::Held::Park { .. }) => {
+                unreachable!("this world's scripts never request a park")
+            }
             root::Delivery::Core(core::Held::Cancel { run, attempt, .. }) => {
                 self.cancellations.push((run.raw(), attempt.raw()));
             }

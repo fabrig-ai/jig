@@ -202,6 +202,8 @@ pub enum Held {
     AcknowledgeTurn { channel: Token, run: Token, attempt: Token, turn: u32 },
     /// Fence and cancel one hosted attempt after the decision commits.
     Cancel { channel: Token, run: Token, attempt: Token },
+    /// Park at the next committed turn; replayed on unanswered listings.
+    Park { channel: Token, run: Token, attempt: Token },
     /// Refuse one host request after the decision commits.
     Refuse { channel: Token },
     /// Ask the host to retain and retry a turn that did not enter a decision.

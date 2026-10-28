@@ -116,6 +116,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         0
     };
     let tracked = tracked(limits)?;
+    // Attempt owns its inline park intent; the slab prices it with every claim.
     let attempts = Slab::<Attempt>::worst_case(tracked)?
         .checked_add(Map::<(Token, Token), Id<Attempt>>::worst_case(tracked)?)?
         .checked_add(Map::<Token, Run>::worst_case(tracked)?)?

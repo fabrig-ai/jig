@@ -662,3 +662,14 @@ fn retained_versions_on_every_host_stay_within_the_memory_bound() {
     }
     assert_eq!(fleet.domain.workers(), limits.workers);
 }
+
+#[test]
+fn park_intents_at_capacity_stay_within_the_fleets_memory_bound() {
+    eprintln!("park memory price: {}", worst_case(&LIMITS).expect("bounded"));
+    let (mut fleet, placed, _calls) = fill(LIMITS);
+    for (channel, run, attempt) in placed {
+        assert_eq!(fleet.step(Event::Park { run, attempt }), [Request::Park { channel, run, attempt }]);
+        assert!(fleet.step(Event::Park { run, attempt }).is_empty());
+    }
+    assert!(fleet.step(Event::Park { run: Token::new(999), attempt: Token::new(1000) }).is_empty());
+}

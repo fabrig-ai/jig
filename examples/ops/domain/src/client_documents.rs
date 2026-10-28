@@ -144,6 +144,7 @@ pub(crate) fn document(
                 | core::Held::AcknowledgeTurn { .. }
                 | core::Held::Drained
                 | core::Held::Cancel { .. }
+                | core::Held::Park { .. }
                 | core::Held::Sources { .. }
                 | core::Held::CheckSource { .. }
                 | core::Held::SignOutSource { .. }

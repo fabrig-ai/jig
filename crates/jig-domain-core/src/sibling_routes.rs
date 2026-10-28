@@ -242,6 +242,12 @@ impl Core {
         fleet::Event::Cancel { run: Token::new(task), attempt: Token::new(attempt) }
     }
 
+    /// Translate a drain into the fleet's attempt-fenced park control.
+    #[must_use]
+    pub fn park_run(task: u64, attempt: u64) -> fleet::Event {
+        fleet::Event::Park { run: Token::new(task), attempt: Token::new(attempt) }
+    }
+
     /// Route a refused goal flight back to the requesting party. The hub's
     /// structural reasons are translated at the core's sibling boundary.
     pub fn goal_refused(&mut self, request: Token, why: tasks::Refusal) -> Option<people::Event> {

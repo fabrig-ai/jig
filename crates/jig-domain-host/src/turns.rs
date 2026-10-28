@@ -8,6 +8,13 @@ use skein_lib::{Map, Token};
 use crate::boundary::Turn;
 use crate::limits::Limits;
 
+/// Parking drains retention without issuing another agent read credit.
+pub(crate) enum Mode {
+    Live,
+    Stopping,
+    Parking,
+}
+
 /// A turn's name on the engine link.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub(crate) struct Name {
@@ -90,12 +97,17 @@ impl Turns {
         &mut self,
         run: Token,
         attempt: Token,
-        stopping: bool,
+        mode: Mode,
         limits: &Limits,
         out: &mut skein_lib::Queue<crate::Request>,
     ) {
+        let (limited, acknowledge) = match mode {
+            Mode::Live => (true, true),
+            Mode::Stopping => (false, true),
+            Mode::Parking => (false, false),
+        };
         for _ in 0..limits.turns {
-            if !stopping && !self.credit(run, attempt, limits) {
+            if limited && !self.credit(run, attempt, limits) {
                 break;
             }
             let mut next = None;
@@ -111,7 +123,9 @@ impl Turns {
             let pending = self.pending.get_mut(&name).expect("staged turn exists");
             pending.admitted = true;
             out.push(crate::Request::Up(crate::LinkUp::Turn { run, attempt, turn: copy(&pending.turn) }));
-            out.push(crate::Request::AcknowledgeAgentTurn { agent: pending.agent, turn: name.turn });
+            if acknowledge {
+                out.push(crate::Request::AcknowledgeAgentTurn { agent: pending.agent, turn: name.turn });
+            }
         }
     }
 

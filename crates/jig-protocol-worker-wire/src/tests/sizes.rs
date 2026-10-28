@@ -10,10 +10,10 @@ fn the_largest_turn_kept_body_is_twenty_bytes() {
 
 #[test]
 fn the_engine_cap_for_one_slot_is_the_hand_summed_bytes() {
-    // Assignment342, message65, relayed58, kept20, ack16, cancel16, grants2*73;
-    // eight frame headers add64:350+73+66+28+24+24+162=727.
+    // Assignment342, message65, relayed58, kept20, ack16, cancel16, park16, grants2*73;
+    // Nine frame headers add72:350+73+66+28+24+24+24+162=751.
     // Sources84 + two checks44 + two sign-outs44 add260 and five frames.
-    assert_eq!(engine_cap(&SIZES_ONE_SLOT), Some(Cap { bytes: 987, frames: 13 }));
+    assert_eq!(engine_cap(&SIZES_ONE_SLOT), Some(Cap { bytes: 1011, frames: 14 }));
 }
 
 #[test]

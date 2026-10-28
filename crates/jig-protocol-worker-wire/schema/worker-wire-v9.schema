@@ -135,6 +135,7 @@ record TurnKept { task: u64 attempt: u64 number: u32 }
 record TurnBusy { task: u64 attempt: u64 number: u32 }
 record Acknowledge { task: u64 attempt: u64 }
 record Cancel { task: u64 attempt: u64 }
+record Park { run: u64 attempt: u64 }
 record Granted { task: u64 attempt: u64 grant: Grant }
 
 # Host-wide program sources (protocol/channel.md, 5). Every Logins is whole.

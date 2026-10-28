@@ -562,6 +562,7 @@ impl Component {
                     | host::LinkDown::Assign { .. }
                     | host::LinkDown::Message { .. }
                     | host::LinkDown::Cancel { .. }
+                    | host::LinkDown::Park { .. }
                     | host::LinkDown::Grant { .. } => true,
                 };
                 if forward {

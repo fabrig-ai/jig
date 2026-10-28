@@ -91,6 +91,7 @@ pub(super) fn route_core(
                 | core::Held::Drained
                 | core::Held::Grant { .. }
                 | core::Held::Cancel { .. }
+                | core::Held::Park { .. }
                 | core::Held::Sources { .. }
                 | core::Held::CheckSource { .. }
                 | core::Held::SignOutSource { .. }

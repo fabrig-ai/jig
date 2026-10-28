@@ -50,6 +50,7 @@ fn fuzzy_down_decoders_never_panic_and_reencode_what_they_read() {
         check!(&bytes, TurnBusy);
         check!(&bytes, Acknowledge);
         check!(&bytes, Cancel);
+        check!(&bytes, Park);
         check!(&bytes, Granted);
         check!(&bytes, Sources);
         check!(&bytes, Check);

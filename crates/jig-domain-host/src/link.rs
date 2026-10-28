@@ -14,6 +14,7 @@ pub enum LinkDown {
     TurnKept { run: Token, attempt: Token, turn: u32 },
     Acknowledge { run: Token, attempt: Token },
     Cancel { run: Token, attempt: Token },
+    Park { run: Token, attempt: Token },
     Grant { run: Token, attempt: Token, grant: Grant },
 }
 

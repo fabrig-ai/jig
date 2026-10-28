@@ -575,6 +575,12 @@ pub enum Path {
     CancelAttempt,
     /// Bytes after `Cancel`.
     CancelTail,
+    /// The `run` field of `Park`.
+    ParkRun,
+    /// The `attempt` field of `Park`.
+    ParkAttempt,
+    /// Bytes after `Park`.
+    ParkTail,
     /// The `task` field of `Granted`.
     GrantedTask,
     /// The `attempt` field of `Granted`.
@@ -3766,6 +3772,44 @@ impl Cancel {
     /// Moves the fields out without copying.
     #[must_use]
     pub fn into_parts(self) -> CancelParts { CancelParts { task: self.task, attempt: self.attempt } }
+
+}
+
+/// Movable fields of `Park`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ParkParts {
+    /// The `run` field.
+    pub run: u64,
+    /// The `attempt` field.
+    pub attempt: u64,
+}
+
+/// `Park` in this codec family.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Park {
+    run: u64,
+    attempt: u64,
+}
+
+impl Park {
+    /// Makes a value within the given limits.
+    pub fn new(_limits: &Limits, parts: ParkParts) -> Result<Self, Problem> {
+        let ParkParts { run, attempt } = parts;
+        let value = Self { run, attempt };
+        Ok(value)
+    }
+
+    /// Reads the `run` field.
+    #[must_use]
+    pub fn run(&self) -> u64 { self.run }
+
+    /// Reads the `attempt` field.
+    #[must_use]
+    pub fn attempt(&self) -> u64 { self.attempt }
+
+    /// Moves the fields out without copying.
+    #[must_use]
+    pub fn into_parts(self) -> ParkParts { ParkParts { run: self.run, attempt: self.attempt } }
 
 }
 
@@ -7295,6 +7339,39 @@ impl Cancel {
     }
 }
 
+impl Park {
+    /// Measures this record's wire encoding.
+    #[must_use]
+    pub fn measure(&self) -> u32 {
+        let mut size = 0_u32;
+        size = size.checked_add(8).expect("schema ceilings fit u32");
+        size = size.checked_add(8).expect("schema ceilings fit u32");
+        size
+    }
+
+    /// Writes into a writer with room for the measured bytes.
+    pub fn encode(&self, writer: &mut skein_lib::Writer) -> Result<(), skein_lib::Overflow> {
+        let field_run = &self.run;
+        writer.put(&field_run.to_be_bytes())?;
+        let field_attempt = &self.attempt;
+        writer.put(&field_attempt.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Reads a whole record and refuses trailing bytes.
+    pub fn decode(limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let value = Self::decode_from(limits, reader)?;
+        if !reader.is_empty() { return Err(Problem { path: Path::ParkTail, reason: skein_codec::Reason::Trailing }); }
+        Ok(value)
+    }
+
+    fn decode_from(_limits: &Limits, reader: &mut skein_lib::Reader<'_>) -> Result<Self, Problem> {
+        let decoded_run = reader.u64().ok_or(Problem { path: Path::ParkRun, reason: skein_codec::Reason::Short })?;
+        let decoded_attempt = reader.u64().ok_or(Problem { path: Path::ParkAttempt, reason: skein_codec::Reason::Short })?;
+        Ok(Self { run: decoded_run, attempt: decoded_attempt })
+    }
+}
+
 impl Granted {
     /// Measures this record's wire encoding.
     #[must_use]
@@ -9857,6 +9934,34 @@ impl Cancel {
     }
 }
 
+impl Park {
+    /// Maximum encoded bytes under these limits.
+    #[must_use]
+    pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_bytes_within(limits)
+    }
+
+    pub(crate) fn worst_case_bytes_within(_limits: &Limits) -> Option<u64> {
+        let mut size = 0_u64;
+        size = size.checked_add(8_u64)?.checked_add(8_u64)?;
+        size.checked_add(0)
+    }
+
+    /// Maximum heap held by one decoded value under these limits.
+    #[must_use]
+    pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
+        if check_limits(limits).is_err() { return None; }
+        Self::worst_case_heap_within(limits)
+    }
+
+    pub(crate) fn worst_case_heap_within(_limits: &Limits) -> Option<u64> {
+        let mut heap = 0_u64;
+        heap = heap.checked_add(0_u64)?.checked_add(0_u64)?;
+        heap.checked_add(0)
+    }
+}
+
 impl Granted {
     /// Maximum encoded bytes under these limits.
     #[must_use]
@@ -10298,6 +10403,7 @@ pub fn worst_case_bytes(limits: &Limits) -> Option<u64> {
     biggest = biggest.max(TurnBusy::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Acknowledge::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Cancel::worst_case_bytes_within(limits)?);
+    biggest = biggest.max(Park::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Granted::worst_case_bytes_within(limits)?);
     biggest = biggest.max(ProgramSource::worst_case_bytes_within(limits)?);
     biggest = biggest.max(Sources::worst_case_bytes_within(limits)?);
@@ -10391,6 +10497,7 @@ pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
     biggest = biggest.max(TurnBusy::worst_case_heap_within(limits)?);
     biggest = biggest.max(Acknowledge::worst_case_heap_within(limits)?);
     biggest = biggest.max(Cancel::worst_case_heap_within(limits)?);
+    biggest = biggest.max(Park::worst_case_heap_within(limits)?);
     biggest = biggest.max(Granted::worst_case_heap_within(limits)?);
     biggest = biggest.max(ProgramSource::worst_case_heap_within(limits)?);
     biggest = biggest.max(Sources::worst_case_heap_within(limits)?);
@@ -10409,7 +10516,7 @@ pub fn worst_case_heap(limits: &Limits) -> Option<u64> {
 
 #[cfg(test)]
 mod golden_tests {
-    use super::{CEILINGS, Credential, CredentialParts, ModelBound, ModelBoundParts, Bounds, BoundsParts, Phase, Hosting, HostingParts, Hello, HelloParts, MessageRefusal, Refused, RefusedParts, Turn, TurnParts, Call, CallParts, StartCause, InvalidStart, InvalidStartParts, Invalid, InvalidValue, InvalidValueParts, Refusal, RefusalValue, RefusalValueParts, Work, WorkParts, Ended, EndedParts, Parked, ParkedParts, Resource, ResourceParts, Preparation, PreparationValue, PreparationValueParts, LimitedAccount, LimitedAccountParts, RefusedAccount, RefusedAccountParts, Bound, Exceeded, ExceededParts, RunFailure, RunFailureValue, RunFailureValueParts, AgentFailure, AgentFailureValue, AgentFailureValueParts, CancelReason, CancelReasonValue, CancelReasonValueParts, Failure, Failed, FailedParts, Ending, Answer, AnswerParts, Operation, Long, LongParts, CountKind, Count, CountParts, PhaseValue, PhaseValueParts, InputCall, InputCallParts, LiveKind, Piece, PieceParts, FactValue, Fact, FactParts, Unauthorized, UnauthorizedParts, Limited, LimitedParts, AccountRefused, AccountRefusedParts, Message, MessageParts, Workspace, WorkspaceParts, HostAnswer, HostAnswerParts, DeliveryOutcome, DeliveryAnswer, DeliveryAnswerParts, SettledAnswer, AnsweredCall, AnsweredCallParts, Scheme, CredentialValue, CredentialValueParts, ApplicationValue, ApplicationValueParts, ProgramValue, ProgramValueParts, GrantValue, Grant, GrantParts, LiveAsk, LiveAskParts, Assignment, AssignmentParts, Inbound, InboundParts, RelayText, RelayTextParts, RelayAnswer, Relayed, RelayedParts, TurnKept, TurnKeptParts, TurnBusy, TurnBusyParts, Acknowledge, AcknowledgeParts, Cancel, CancelParts, Granted, GrantedParts, ProgramSource, ProgramSourceParts, Sources, SourcesParts, Check, CheckParts, SignOut, SignOutParts, SourceFailure, SourceFailed, SourceFailedParts, LoginOtherwise, LoginOtherwiseParts, LoginState, Login, LoginParts, Logins, LoginsParts, SignOutResult, SignedOut, SignedOutParts, Path};
+    use super::{CEILINGS, Credential, CredentialParts, ModelBound, ModelBoundParts, Bounds, BoundsParts, Phase, Hosting, HostingParts, Hello, HelloParts, MessageRefusal, Refused, RefusedParts, Turn, TurnParts, Call, CallParts, StartCause, InvalidStart, InvalidStartParts, Invalid, InvalidValue, InvalidValueParts, Refusal, RefusalValue, RefusalValueParts, Work, WorkParts, Ended, EndedParts, Parked, ParkedParts, Resource, ResourceParts, Preparation, PreparationValue, PreparationValueParts, LimitedAccount, LimitedAccountParts, RefusedAccount, RefusedAccountParts, Bound, Exceeded, ExceededParts, RunFailure, RunFailureValue, RunFailureValueParts, AgentFailure, AgentFailureValue, AgentFailureValueParts, CancelReason, CancelReasonValue, CancelReasonValueParts, Failure, Failed, FailedParts, Ending, Answer, AnswerParts, Operation, Long, LongParts, CountKind, Count, CountParts, PhaseValue, PhaseValueParts, InputCall, InputCallParts, LiveKind, Piece, PieceParts, FactValue, Fact, FactParts, Unauthorized, UnauthorizedParts, Limited, LimitedParts, AccountRefused, AccountRefusedParts, Message, MessageParts, Workspace, WorkspaceParts, HostAnswer, HostAnswerParts, DeliveryOutcome, DeliveryAnswer, DeliveryAnswerParts, SettledAnswer, AnsweredCall, AnsweredCallParts, Scheme, CredentialValue, CredentialValueParts, ApplicationValue, ApplicationValueParts, ProgramValue, ProgramValueParts, GrantValue, Grant, GrantParts, LiveAsk, LiveAskParts, Assignment, AssignmentParts, Inbound, InboundParts, RelayText, RelayTextParts, RelayAnswer, Relayed, RelayedParts, TurnKept, TurnKeptParts, TurnBusy, TurnBusyParts, Acknowledge, AcknowledgeParts, Cancel, CancelParts, Park, ParkParts, Granted, GrantedParts, ProgramSource, ProgramSourceParts, Sources, SourcesParts, Check, CheckParts, SignOut, SignOutParts, SourceFailure, SourceFailed, SourceFailedParts, LoginOtherwise, LoginOtherwiseParts, LoginState, Login, LoginParts, Logins, LoginsParts, SignOutResult, SignedOut, SignedOutParts, Path};
     use super::Limits;
 
     use alloc::boxed::Box;
@@ -10462,7 +10569,7 @@ mod golden_tests {
         };
         at && past
     }
-    static GOLDEN_0: [Case; 326] = [
+    static GOLDEN_0: [Case; 328] = [
         ("record_credential_smallest", || { let value = Credential::new(&CEILINGS, CredentialParts { name: Box::from([].as_slice()), secret: skein_lib::Secret::new(Box::from([].as_slice())), payload: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Credential::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_credential_full", || { let value = Credential::new(&CEILINGS, CredentialParts { name: Box::from([97_u8, 98_u8, 99_u8].as_slice()), secret: skein_lib::Secret::new(Box::from([0_u8, 127_u8, 255_u8].as_slice())), payload: u32::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 3, 97, 98, 99, 0, 0, 0, 3, 0, 127, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Credential::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_model_bound_smallest", || { let value = ModelBound::new(&CEILINGS, ModelBoundParts { name: Box::from([].as_slice()), window: 0_u32, output: 0_u32 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ModelBound::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
@@ -10743,6 +10850,8 @@ mod golden_tests {
         ("record_acknowledge_full", || { let value = Acknowledge::new(&CEILINGS, AcknowledgeParts { task: u64::MAX, attempt: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Acknowledge::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_cancel_smallest", || { let value = Cancel::new(&CEILINGS, CancelParts { task: 0_u64, attempt: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Cancel::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_cancel_full", || { let value = Cancel::new(&CEILINGS, CancelParts { task: u64::MAX, attempt: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Cancel::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_park_smallest", || { let value = Park::new(&CEILINGS, ParkParts { run: 0_u64, attempt: 0_u64 }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Park::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
+        ("record_park_full", || { let value = Park::new(&CEILINGS, ParkParts { run: u64::MAX, attempt: u64::MAX }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Park::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_granted_smallest", || { let value = Granted::new(&CEILINGS, GrantedParts { task: 0_u64, attempt: 0_u64, grant: Grant::new(&CEILINGS, GrantParts { number: 0_u32, generation: 0_u64, valid: skein_lib::Duration::from_nanos(0_u64), value: GrantValue::Credential(CredentialValue::new(&CEILINGS, CredentialValueParts { scheme: Scheme::Bearer, bytes: skein_lib::Secret::new(Box::from([].as_slice())) }).expect("golden within ceilings")) }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Granted::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_granted_full", || { let value = Granted::new(&CEILINGS, GrantedParts { task: u64::MAX, attempt: u64::MAX, grant: Grant::new(&CEILINGS, GrantParts { number: u32::MAX, generation: u64::MAX, valid: skein_lib::Duration::from_nanos(u64::MAX), value: GrantValue::Credential(CredentialValue::new(&CEILINGS, CredentialValueParts { scheme: Scheme::Bearer, bytes: skein_lib::Secret::new(Box::from([0_u8, 127_u8, 255_u8].as_slice())) }).expect("golden within ceilings")) }).expect("golden within ceilings") }).expect("golden within ceilings"); let bytes: &[u8] = &[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 3, 0, 127, 255]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, Granted::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),
         ("record_program_source_smallest", || { let value = ProgramSource::new(&CEILINGS, ProgramSourceParts { name: Box::from([].as_slice()) }).expect("golden within ceilings"); let bytes: &[u8] = &[0, 0, 0, 0]; let mut writer = skein_lib::Writer::new(usize::try_from(value.measure()).expect("size fits usize")); let encoded = match value.encode(&mut writer) { Ok(()) => Ok(writer.finish()), Err(problem) => Err(problem) }; golden(value, bytes, encoded, ProgramSource::decode(&CEILINGS, &mut skein_lib::Reader::new(bytes))) }),

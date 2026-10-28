@@ -26,6 +26,7 @@ pub enum Kind {
     SignOut,
     Logins,
     SignedOut,
+    Park,
 }
 
 impl Kind {
@@ -72,6 +73,7 @@ pub const KINDS: &[KindRule] = &[
     KindRule { kind: 0x0188, direction: Direction::FromResponder, body: Kind::Sources },
     KindRule { kind: 0x0189, direction: Direction::FromResponder, body: Kind::Check },
     KindRule { kind: 0x018a, direction: Direction::FromResponder, body: Kind::SignOut },
+    KindRule { kind: 0x018b, direction: Direction::FromResponder, body: Kind::Park },
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,6 +101,7 @@ pub fn schema(limits: &v9::Limits) -> Result<Schema, Overflow> {
             Kind::TurnBusy => v9::TurnBusy::worst_case_bytes(limits),
             Kind::Acknowledge => v9::Acknowledge::worst_case_bytes(limits),
             Kind::Cancel => v9::Cancel::worst_case_bytes(limits),
+            Kind::Park => v9::Park::worst_case_bytes(limits),
             Kind::Sources => v9::Sources::worst_case_bytes(limits),
             Kind::Check => v9::Check::worst_case_bytes(limits),
             Kind::SignOut => v9::SignOut::worst_case_bytes(limits),

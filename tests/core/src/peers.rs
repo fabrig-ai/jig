@@ -194,6 +194,9 @@ impl Peers {
             root::Delivery::Core(core::Held::Acknowledge { channel, run, attempt }) => {
                 self.worker(channel.raw()).acknowledge_answer(run.raw(), attempt.raw());
             }
+            root::Delivery::Core(core::Held::Park { .. }) => {
+                unreachable!("this world's scripts never request a park")
+            }
             root::Delivery::Core(core::Held::Cancel { channel, run, attempt }) => {
                 self.worker(channel.raw()).cancel(run.raw(), attempt.raw());
             }

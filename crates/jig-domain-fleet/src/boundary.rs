@@ -276,6 +276,11 @@ pub enum Event {
         run: Token,
         attempt: Token,
     },
+    /// Park at the next committed turn; replayed on unanswered listings.
+    Park {
+        run: Token,
+        attempt: Token,
+    },
     /// From the parent, the one answer to a `Relay`.
     Relayed {
         to: ReplyTo,
@@ -498,6 +503,12 @@ pub enum Request {
     /// again on every channel whose hello lists it unanswered, the first
     /// having maybe been lost.
     Cancel {
+        channel: Token,
+        run: Token,
+        attempt: Token,
+    },
+    /// Park at the next committed turn; replayed on unanswered listings.
+    Park {
         channel: Token,
         run: Token,
         attempt: Token,

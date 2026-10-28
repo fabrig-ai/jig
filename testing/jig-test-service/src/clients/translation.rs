@@ -33,6 +33,7 @@ pub(crate) fn to_component(held: core::Held) -> Option<kit::Event> {
         | core::Held::TaskTurnKept { .. }
         | core::Held::AcknowledgeTurn { .. }
         | core::Held::Cancel { .. }
+        | core::Held::Park { .. }
         | core::Held::Sources { .. }
         | core::Held::CheckSource { .. }
         | core::Held::SignOutSource { .. }

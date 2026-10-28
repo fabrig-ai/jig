@@ -45,6 +45,8 @@ pub(crate) struct Hosted {
     delivery: Option<Id<Call>>,
     runtime: Runtime,
     state: State,
+    /// Engine drain intent; retained turns must commit before settlement.
+    parking: bool,
     observed: Option<Phase>,
 }
 
@@ -121,6 +123,8 @@ enum RunEnding {
     Ended { outcome: Box<[u8]> },
     /// It parked, as it said.
     Parked,
+    /// The host selected a turn boundary; the run may still give its own ending.
+    Parking,
     /// It failed: as it said, or its agent broke the rules saying it, or
     /// exited without a word.
     Failed { failure: Failure, detail: Box<[u8]> },
@@ -232,6 +236,7 @@ fn assign_runtime(
         delivery: None,
         runtime,
         state: State::Preparing { charter, held },
+        parking: false,
         observed: Some(Phase::Preparing),
     };
     let id = hosted.insert(entry).expect("checked for room above");
@@ -326,7 +331,38 @@ pub(crate) fn cancel(domain: &mut Domain, env: &Env<Limits>, run: Token, attempt
     let Some(id) = fenced(&domain.names, &domain.hosted, run, attempt) else {
         return;
     };
+    domain.hosted.get_mut(id).expect("fenced run").parking = false;
     stop(domain, env, id, Reason::Engine, out);
+}
+
+/// Remember the drain while a turn runs; other live states stop at once.
+pub(crate) fn park(domain: &mut Domain, env: &Env<Limits>, run: Token, attempt: Token, out: &mut Queue<Request>) {
+    let Some(id) = fenced(&domain.names, &domain.hosted, run, attempt) else { return };
+    let entry = domain.hosted.get_mut(id).expect("fenced run");
+    if entry.parking {
+        return;
+    }
+    let active = match entry.state {
+        State::Active { .. } => true,
+        State::Preparing { .. } | State::Starting { .. } | State::Waiting { .. } => false,
+        State::Cancelling { .. }
+        | State::Unwanted { .. }
+        | State::Stopping { .. }
+        | State::Saving { .. }
+        | State::Closed => return,
+    };
+    entry.parking = true;
+    if !active {
+        stop(domain, env, id, Reason::Engine, out);
+    }
+}
+
+fn stopped(entry: &Hosted, reason: Reason) -> RunEnding {
+    if entry.parking {
+        RunEnding::Parking
+    } else {
+        RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) }
+    }
 }
 
 pub(crate) fn is_hosting(domain: &Domain, run: Token, attempt: Token) -> bool {
@@ -424,6 +460,7 @@ pub(crate) fn resume(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Req
     };
     let (id, reason) = (*id, *reason);
     domain.ready.remove(&id);
+    domain.hosted.get_mut(id).expect("ready run").parking = false;
     stop(domain, env, id, reason, out);
 }
 
@@ -466,7 +503,7 @@ fn start_prepared(domain: &mut Domain, owner: Token, workspace: Option<Token>, o
             State::Starting { workspace, held }
         }
         State::Cancelling { reason } => {
-            let ending = RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) };
+            let ending = stopped(entry, reason);
             release(entry, facts, workspace, ending, None, out)
         }
         State::Starting { .. }
@@ -502,7 +539,7 @@ pub(crate) fn unprepared(
         }
         // Cancelled first: the prepare's failure is not the answer's.
         State::Cancelling { reason } => {
-            let ending = RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) };
+            let ending = stopped(entry, reason);
             answer(entry, facts, ending, None, out)
         }
         State::Starting { .. }
@@ -544,7 +581,7 @@ pub(crate) fn started(domain: &mut Domain, env: &Env<Limits>, owner: Token, agen
         }
         State::Unwanted { workspace, reason } => {
             out.push(Request::Stop { agent });
-            let ending = RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) };
+            let ending = stopped(entry, reason);
             State::Stopping { workspace, agent, ending, gone: false }
         }
         State::Preparing { .. }
@@ -654,7 +691,7 @@ pub(crate) fn refused_message(
     conclude(domain, id, out);
 }
 
-pub(crate) fn yielded(domain: &mut Domain, owner: Token, out: &mut Queue<Request>) {
+pub(crate) fn yielded(domain: &mut Domain, env: &Env<Limits>, owner: Token, out: &mut Queue<Request>) {
     let id = Id::<Hosted>::from_token(owner);
     let entry = domain.hosted.get_mut(id).expect("a run lives until its agent has gone");
     let state = mem::replace(&mut entry.state, State::Closed);
@@ -672,6 +709,9 @@ pub(crate) fn yielded(domain: &mut Domain, owner: Token, out: &mut Queue<Request
         | State::Saving { .. }
         | State::Closed => unreachable!("only an agent that has started and not gone yields"),
     };
+    if entry.parking {
+        stop(domain, env, id, Reason::Engine, out);
+    }
     conclude(domain, id, out);
 }
 
@@ -698,6 +738,7 @@ pub(crate) fn finish_run(
                 // Stopped by the host, the run says how it finishes as it
                 // winds down: its own ending wins.
                 RunEnding::Stopped { failure, detail: _ } => said(finish, failure, &env.limits),
+                RunEnding::Parking => said(finish, Failure::Run(RunFailure::Cancelled), &env.limits),
                 // It said how it finishes already, or its agent exited.
                 ending @ (RunEnding::Ended { .. } | RunEnding::Parked | RunEnding::Failed { .. }) => ending,
             };
@@ -759,7 +800,7 @@ pub(crate) fn gone(domain: &mut Domain, env: &Env<Limits>, owner: Token, detail:
             release(entry, facts, workspace, ending, None, out)
         }
         State::Unwanted { workspace, reason } => {
-            let ending = RunEnding::Stopped { failure: Failure::Cancelled(reason), detail };
+            let ending = explained(stopped(entry, reason), detail);
             release(entry, facts, workspace, ending, None, out)
         }
         // It exited without saying how its run finishes.
@@ -869,10 +910,16 @@ fn stop(domain: &mut Domain, env: &Env<Limits>, id: Id<Hosted>, reason: Reason, 
             State::Unwanted { workspace, reason }
         }
         State::Active { workspace, agent } | State::Waiting { workspace, agent } => {
-            let ending = RunEnding::Stopped { failure: Failure::Cancelled(reason), detail: Box::new([]) };
+            let ending = stopped(entry, reason);
             leave(entry.run, entry.attempt, &entry.relays, calls, out);
             out.push(Request::Stop { agent });
             State::Stopping { workspace, agent, ending, gone: false }
+        }
+        State::Stopping { workspace, agent, ending: RunEnding::Parking, gone } if !entry.parking => {
+            State::Stopping { workspace, agent, ending: stopped(entry, reason), gone }
+        }
+        State::Saving { workspace, ending: RunEnding::Parking } if !entry.parking => {
+            State::Saving { workspace, ending: stopped(entry, reason) }
         }
         // How the run ends is decided already, or it is stopping.
         state @ (State::Cancelling { .. } | State::Unwanted { .. } | State::Stopping { .. } | State::Saving { .. }) => {
@@ -898,7 +945,8 @@ fn drain_stopping(domain: &mut Domain, env: &Env<Limits>, id: Id<Hosted>, out: &
         | State::Closed => false,
     };
     if stopping {
-        domain.turns.admit(entry.run, entry.attempt, true, &env.limits, out);
+        let mode = if entry.parking { crate::turns::Mode::Parking } else { crate::turns::Mode::Stopping };
+        domain.turns.admit(entry.run, entry.attempt, mode, &env.limits, out);
     }
 }
 
@@ -906,13 +954,18 @@ fn drain_stopping(domain: &mut Domain, env: &Env<Limits>, id: Id<Hosted>, out: &
 /// that has settled saves, or releases its workspace and answers; and a
 /// Closed run is retired, leaving the names and the ready list.
 fn conclude(domain: &mut Domain, id: Id<Hosted>, out: &mut Queue<Request>) {
-    let Domain { hosted, names, ready, facts, answers, refusals_lost, .. } = domain;
+    let Domain { hosted, names, ready, facts, answers, refusals_lost, turns, .. } = domain;
     let entry = hosted.get_mut(id).expect("a run lives until it is retired");
     facts.phase(entry.run, entry.attempt, &mut entry.observed, phase(&entry.state));
     *refusals_lost = refusals_lost.saturating_add(entry.refusals.lost);
     entry.refusals.lost = 0;
     let settled = match &entry.state {
-        State::Stopping { gone, .. } => *gone && entry.delivery.is_none() && entry.relays.is_empty(),
+        State::Stopping { gone, .. } => {
+            *gone
+                && entry.delivery.is_none()
+                && entry.relays.is_empty()
+                && (!entry.parking || !turns.has_run(entry.run, entry.attempt))
+        }
         State::Preparing { .. }
         | State::Cancelling { .. }
         | State::Starting { .. }
@@ -979,7 +1032,7 @@ fn settle(
 ) -> State {
     let delivered_end = match &ending {
         RunEnding::Ended { .. } => entry.left.is_some(),
-        RunEnding::Parked | RunEnding::Failed { .. } | RunEnding::Stopped { .. } => false,
+        RunEnding::Parked | RunEnding::Parking | RunEnding::Failed { .. } | RunEnding::Stopped { .. } => false,
     };
     match workspace {
         Some(workspace) if entry.save && !delivered_end => {
@@ -1020,7 +1073,7 @@ fn answer(
             facts.push(Fact::Ended { run, attempt });
             Ending::Ended { outcome, work }
         }
-        RunEnding::Parked => {
+        RunEnding::Parked | RunEnding::Parking => {
             facts.push(Fact::Parked { run, attempt });
             Ending::Parked { work }
         }
@@ -1206,7 +1259,7 @@ fn explained(ending: RunEnding, detail: Box<[u8]>) -> RunEnding {
     match ending {
         RunEnding::Failed { failure, detail: _ } => RunEnding::Failed { failure, detail },
         RunEnding::Stopped { failure, detail: _ } => RunEnding::Stopped { failure, detail },
-        ending @ (RunEnding::Ended { .. } | RunEnding::Parked) => ending,
+        ending @ (RunEnding::Ended { .. } | RunEnding::Parked | RunEnding::Parking) => ending,
     }
 }
 
@@ -1311,12 +1364,14 @@ pub(crate) fn turned(
     } else {
         entry.runtime.turns = turn.turn;
         entry.runtime.read = turn.read;
+        entry.runtime.spent = turn.spent;
         true
     };
     if valid {
         let (run, attempt) = (entry.run, entry.attempt);
         turn.refused = entry.refusals.take();
         domain.turns.retain(agent, run, attempt, turn);
+        let parking = entry.parking;
         let stopping = match entry.state {
             State::Stopping { .. } => true,
             State::Preparing { .. }
@@ -1328,7 +1383,17 @@ pub(crate) fn turned(
             | State::Saving { .. }
             | State::Closed => false,
         };
-        domain.turns.admit(run, attempt, stopping, &env.limits, out);
+        if parking && !stopping {
+            stop(domain, env, id, Reason::Engine, out);
+        }
+        let mode = if parking {
+            crate::turns::Mode::Parking
+        } else if stopping {
+            crate::turns::Mode::Stopping
+        } else {
+            crate::turns::Mode::Live
+        };
+        domain.turns.admit(run, attempt, mode, &env.limits, out);
     } else {
         faulted(domain, env, owner, AgentFailure::Rules, out);
     }
@@ -1344,7 +1409,16 @@ pub(crate) fn acknowledge_turn(
     out: &mut Queue<Request>,
 ) {
     domain.turns.acknowledge(run, attempt, turn);
-    domain.turns.admit(run, attempt, false, &env.limits, out);
+    let id = fenced(&domain.names, &domain.hosted, run, attempt);
+    let parking = match id {
+        Some(id) => domain.hosted.get(id).expect("fenced run").parking,
+        None => false,
+    };
+    let mode = if parking { crate::turns::Mode::Parking } else { crate::turns::Mode::Live };
+    domain.turns.admit(run, attempt, mode, &env.limits, out);
+    if let Some(id) = id {
+        conclude(domain, id, out);
+    }
 }
 
 #[expect(clippy::too_many_arguments, reason = "one last word carries its fence and accounting")]
