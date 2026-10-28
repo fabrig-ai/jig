@@ -1451,180 +1451,6 @@ pub(crate) fn invalid_ask(limits: &Limits, ask: &Ask) -> Refusal {
     Refusal::Limit { which }
 }
 
-#[expect(clippy::too_many_lines, reason = "one exhaustive keyed request-to-answer shape table")]
-fn valid_answer_shape(ask: &Ask, outcome: Outcome) -> bool {
-    #[derive(PartialEq, Eq)]
-    enum Expected {
-        Compound(u32, u32),
-        MarkSeen(Seen),
-        Application(u16),
-        Note(u64),
-        Service,
-        Create,
-        Propose,
-        Withdraw(u64),
-        Stop(u64),
-        Cancel(u64),
-        Release(u64),
-        Lift(u64),
-        Take(u64),
-        HandBack(u64),
-        AnswerPerson(u64),
-        Move(u64),
-        Proposal(crate::Proposer, u64),
-        Say(u64),
-        AnswerQuestion(u64, u64),
-        Amend(u64, bool),
-        Roles(u32, bool),
-        Policy(u32),
-        Rename(u32),
-        MakeProject,
-        ChangeSettings,
-        MoveToNewest,
-        Pool(u32, u64),
-        Adoption(u32),
-        Escalation,
-        AccountSignIn,
-        AccountSignOut,
-        AccountKey,
-        AccountProgram,
-        AccountChanged,
-        AccountRemoved,
-        AccountMovingOut(u32),
-        AccountMovedIn,
-        AccountFinishing(u32),
-    }
-
-    let expected = match ask {
-        Ask::Compound { project, operations } => Expected::Compound(*project, operations.len()),
-        Ask::MarkSeen { seen } => Expected::MarkSeen(*seen),
-        Ask::Application { connector, .. } => Expected::Application(*connector),
-        Ask::EditNote { name, .. } => Expected::Note(*name),
-        Ask::MakeService { .. } => Expected::Service,
-        Ask::Adopt { project, .. } => Expected::Adoption(*project),
-        Ask::Create { .. } => Expected::Create,
-        Ask::Propose { .. } => Expected::Propose,
-        Ask::Withdraw { proposal, .. } => Expected::Withdraw(*proposal),
-        Ask::Stop { task, .. } => Expected::Stop(*task),
-        Ask::Cancel { task, .. } => Expected::Cancel(*task),
-        Ask::Release { task, .. } => Expected::Release(*task),
-        Ask::Lift { hold, .. } => Expected::Lift(*hold),
-        Ask::TakePerson { task, .. } => Expected::Take(*task),
-        Ask::HandBackPerson { task, .. } => Expected::HandBack(*task),
-        Ask::AnswerPerson { task, .. } => Expected::AnswerPerson(*task),
-        Ask::Move { task, .. } => Expected::Move(*task),
-        Ask::DecideProposal { proposer, proposal, .. } => Expected::Proposal(*proposer, *proposal),
-        Ask::Say { task, .. } => Expected::Say(*task),
-        Ask::AnswerQuestion { task, question, .. } => Expected::AnswerQuestion(*task, *question),
-        Ask::Amend { task, release, .. } => Expected::Amend(*task, release.is_some()),
-        Ask::SetRoles { project, holdings } => {
-            let mut valid = true;
-            for (at, holding) in holdings.iter().enumerate() {
-                if holding.person == 0 {
-                    valid = false;
-                }
-                for earlier in holdings.get(..at).expect("enumerated holding position is in bounds") {
-                    if earlier.person == holding.person {
-                        valid = false;
-                    }
-                }
-            }
-            Expected::Roles(*project, valid)
-        }
-        Ask::ChangePolicy { project, .. } => Expected::Policy(*project),
-        Ask::Rename { project, .. } => Expected::Rename(*project),
-        Ask::MakeProject { .. } => Expected::MakeProject,
-        Ask::ChangeSettings { .. } => Expected::ChangeSettings,
-        Ask::MoveToNewest { .. } => Expected::MoveToNewest,
-        Ask::SetPool { project, person, .. } => Expected::Pool(*project, *person),
-        Ask::DecideEscalation { .. } => Expected::Escalation,
-        Ask::AccountSignIn { .. } => Expected::AccountSignIn,
-        Ask::AccountSignOut { .. } => Expected::AccountSignOut,
-        Ask::AccountChange { change, .. } => match change {
-            crate::AccountChange::AddKey { .. } | crate::AccountChange::ReplaceKey { .. } => Expected::AccountKey,
-            crate::AccountChange::DeclareProgram { .. } => Expected::AccountProgram,
-            crate::AccountChange::Remove { .. } => Expected::AccountRemoved,
-            crate::AccountChange::MoveOut { account } => Expected::AccountMovingOut(*account),
-            crate::AccountChange::FinishSignIn { source, .. } => Expected::AccountFinishing(*source),
-            crate::AccountChange::MoveIn { .. } => Expected::AccountMovedIn,
-            crate::AccountChange::Written { .. }
-            | crate::AccountChange::CheckProgram { .. }
-            | crate::AccountChange::RemoveKey { .. }
-            | crate::AccountChange::Resume { .. }
-            | crate::AccountChange::MoveAccount { .. }
-            | crate::AccountChange::MoveSource { .. }
-            | crate::AccountChange::SetUses { .. } => Expected::AccountChanged,
-        },
-    };
-
-    match outcome {
-        Outcome::Compound { project, operations, first_message } => {
-            expected == Expected::Compound(project, operations) && first_message != 0
-        }
-        Outcome::CompoundRefused { at, .. } => {
-            if let Ask::Compound { operations, .. } = ask {
-                at < operations.len()
-            } else {
-                false
-            }
-        }
-        Outcome::MarkedSeen { seen } => expected == Expected::MarkSeen(seen),
-        Outcome::Applied { connector, token } => expected == Expected::Application(connector) && token.raw() != 0,
-        Outcome::NoteEdited { name } => expected == Expected::Note(name),
-        Outcome::ServiceMade { person } => expected == Expected::Service && person != 0,
-        Outcome::Adopted { project } => expected == Expected::Adoption(project),
-        Outcome::Created { first, last, .. } => expected == Expected::Create && first != 0 && last >= first,
-        Outcome::Proposed { proposal, .. } => expected == Expected::Propose && proposal != 0,
-        Outcome::Withdrawn { proposal } => expected == Expected::Withdraw(proposal),
-        Outcome::Stopped { task } => expected == Expected::Stop(task),
-        Outcome::Cancelled { task } => expected == Expected::Cancel(task),
-        Outcome::Released { task } => expected == Expected::Release(task),
-        Outcome::Lifted { hold, .. } => expected == Expected::Lift(hold),
-        Outcome::PersonTaken { task } => expected == Expected::Take(task),
-        Outcome::PersonHandedBack { task } => expected == Expected::HandBack(task),
-        Outcome::PersonAnswered { task } => expected == Expected::AnswerPerson(task),
-        Outcome::Moved { task } => expected == Expected::Move(task),
-        Outcome::ProposalDecided { proposer, proposal, .. } => expected == Expected::Proposal(proposer, proposal),
-        Outcome::Said { task, message } => expected == Expected::Say(task) && message != 0,
-        Outcome::QuestionAnswered { task, question, message } => {
-            expected == Expected::AnswerQuestion(task, question) && message != 0
-        }
-        Outcome::Amended { task, released } => {
-            expected == Expected::Amend(task, true) || !released && expected == Expected::Amend(task, false)
-        }
-        Outcome::RolesSet { project } => expected == Expected::Roles(project, true),
-        Outcome::PolicyChanged { project } => expected == Expected::Policy(project),
-        Outcome::Renamed { project } => expected == Expected::Rename(project),
-        Outcome::MovedToNewest { newest, .. } => expected == Expected::MoveToNewest && newest != 0,
-        Outcome::SettingsChanged { revision } => expected == Expected::ChangeSettings && revision != 0,
-        Outcome::ProjectMade { project } => expected == Expected::MakeProject && project != crate::DEPLOYMENT,
-        Outcome::PoolSet { project, person } => expected == Expected::Pool(project, person),
-        Outcome::EscalationDecided { .. } => expected == Expected::Escalation,
-        Outcome::AccountSignInStarted { .. } => expected == Expected::AccountSignIn,
-        Outcome::AccountProgramDeclared { source, name } => {
-            if expected != Expected::AccountProgram || source == u32::MAX || !crate::program_name(&name) {
-                return false;
-            }
-            let Ask::AccountChange { change: crate::AccountChange::DeclareProgram { name: asked, .. }, .. } = ask
-            else {
-                return false;
-            };
-            *asked == name
-        }
-        Outcome::AccountKeyKept { source } => expected == Expected::AccountKey && source != u32::MAX,
-        Outcome::AccountChanged => expected == Expected::AccountChanged,
-        Outcome::AccountMovingOut { account, number, source } => {
-            expected == Expected::AccountMovingOut(account) && number != u32::MAX && source != u32::MAX
-        }
-        Outcome::AccountFinishing { source } => expected == Expected::AccountFinishing(source),
-        Outcome::AccountMovedIn { account, .. } => expected == Expected::AccountMovedIn && account != u32::MAX,
-        Outcome::AccountRemoved { .. } => expected == Expected::AccountRemoved,
-        Outcome::AccountSignedOut { .. } => expected == Expected::AccountSignOut,
-        Outcome::Refused(_) => true,
-        Outcome::Again(_) | Outcome::SignedOut => false,
-    }
-}
-
 fn role(domain: &Domain, person: u64, project: u32) -> Option<Role> {
     for holding in &**domain.roles.get(&project)? {
         if holding.person == person {
@@ -1975,17 +1801,12 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
     }
     let key = record.key();
     let valid = match &record {
-        Stored::Acted { key, act, outcome, at } => {
-            acts::valid(&env.limits, act).is_ok()
-                && valid_program_outcome(&env.limits, outcome)
-                && acts::valid_outcome(&env.limits, act, outcome)
-                && !domain.acted.contains_key(key)
-                && (answer_expiry(*at, &env.limits) <= env.wall
-                    || domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests)
+        Stored::Acted { key, .. } => {
+            !domain.acted.contains_key(key)
+                && domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests
         }
         Stored::Person { number, identity } => {
-            valid_identity(&env.limits, identity)
-                && !domain.people.contains_key(number)
+            !domain.people.contains_key(number)
                 && !domain.identities.contains_key(&identity.key)
                 && domain.people.len() < env.limits.people
         }
@@ -2006,18 +1827,14 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
             !domain.sign_ins.contains_key(number) && domain.sign_ins.len() < env.limits.sign_ins
         }
         Stored::Roles { project, holdings } => {
-            valid_roles(domain, &env.limits, *project, holdings).is_ok() && !domain.roles.contains_key(project)
+            holdings.len() <= usize::try_from(env.limits.holdings).expect("u32 fits usize")
+                && !domain.roles.contains_key(project)
         }
         Stored::Policy { .. } | Stored::EndedRead { .. } => false,
-        Stored::Answer { key, ask, models, outcome, at } => {
-            valid_ask(&env.limits, ask)
-                && crate::batch::restore_shaped(ask)
-                && crate::valid_model_context(ask, models)
-                && valid_program_outcome(&env.limits, outcome)
-                && valid_answer_shape(ask, outcome.clone())
+        Stored::Answer { key, ask, models, .. } => {
+            crate::valid_model_context(ask, models)
                 && !domain.answers.contains_key(key)
-                && (answer_expiry(*at, &env.limits) <= env.wall
-                    || domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests)
+                && domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests
         }
     };
     if !valid {
@@ -2054,15 +1871,10 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
             unreachable!("root does not restore on-demand records into people")
         }
         Stored::Answer { key, ask, models, outcome, at } => {
-            if answer_expiry(at, &env.limits) <= env.wall {
-                out.push(Request::Erase { key: Key::Answer(key) });
-            } else {
-                let due = deadline(env, answer_expiry(at, &env.limits));
-                let saved = domain.answers.insert(key, Answered { ask: *ask, models, outcome, at, due });
-                assert!(saved.is_ok(), "restored answer admitted");
-                let armed = domain.answer_alarms.arm(key, due);
-                assert!(armed.is_ok(), "one expiry per restored answer");
-            }
+            let due = deadline(env, answer_expiry(at, &env.limits));
+            let saved = domain.answers.insert(key, Answered { ask: *ask, models, outcome, at, due });
+            assert!(saved.is_ok(), "restored answer admitted");
+            assert!(domain.answer_alarms.arm(key, due).is_ok(), "one expiry per restored answer");
         }
     }
 }
@@ -2073,134 +1885,46 @@ fn restore_failed(domain: &mut Domain, key: Key, refusal: Refusal, out: &mut Que
 }
 
 #[expect(clippy::too_many_lines, reason = "all restored references are validated before requests open")]
-fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
+fn restored(domain: &mut Domain, env: &Env<Limits>, _out: &mut Queue<Request>) {
     match domain.phase {
         Phase::Ready | Phase::Failed => return,
         Phase::Restoring => {}
     }
-    // Restore order is immaterial; validate references once all rows arrived.
+    // Link every retained owner before expiry can erase any of them.
     for (number, signin) in &domain.sign_ins {
-        if !domain.people.contains_key(&signin.person) {
-            return restore_failed(domain, Key::SignIn(*number), Refusal::Unknown, out);
-        }
+        assert!(
+            domain.people.contains_key(&signin.person),
+            "people: SignIn({number}) links to person {}, which is absent",
+            signin.person
+        );
     }
     for (project, holdings) in &domain.roles {
         for holding in &**holdings {
-            if !domain.people.contains_key(&holding.person) {
-                return restore_failed(domain, Key::Roles(*project), Refusal::Unknown, out);
-            }
+            assert!(
+                domain.people.contains_key(&holding.person),
+                "people: Roles({project}) links to person {}, which is absent",
+                holding.person
+            );
         }
     }
-    for (key, answer) in &domain.answers {
-        if !domain.people.contains_key(&key.person) {
-            return restore_failed(domain, Key::Answer(*key), Refusal::Unknown, out);
-        }
-        match answer.outcome {
-            Outcome::ServiceMade { person } => {
-                let Some(identity) = domain.people.get(&person) else {
-                    return restore_failed(domain, Key::Answer(*key), Refusal::Unknown, out);
-                };
-                if identity.key.provider != domain.deployment_provider {
-                    return restore_failed(domain, Key::Answer(*key), Refusal::Unknown, out);
-                }
-            }
-            Outcome::RolesSet { .. } => match &answer.ask {
-                Ask::SetRoles { project, holdings } => {
-                    if !domain.roles.contains_key(project) {
-                        return restore_failed(domain, Key::Answer(*key), Refusal::Unknown, out);
-                    }
-                    for holding in holdings {
-                        if !domain.people.contains_key(&holding.person) {
-                            return restore_failed(domain, Key::Answer(*key), Refusal::Unknown, out);
-                        }
-                    }
-                }
-                Ask::Compound { .. }
-                | Ask::MarkSeen { .. }
-                | Ask::Application { .. }
-                | Ask::EditNote { .. }
-                | Ask::MakeService { .. }
-                | Ask::Adopt { .. }
-                | Ask::ChangePolicy { .. }
-                | Ask::Rename { .. }
-                | Ask::MakeProject { .. }
-                | Ask::ChangeSettings { .. }
-                | Ask::MoveToNewest { .. }
-                | Ask::SetPool { .. }
-                | Ask::DecideEscalation { .. }
-                | Ask::DecideProposal { .. }
-                | Ask::Say { .. }
-                | Ask::AnswerQuestion { .. }
-                | Ask::Amend { .. }
-                | Ask::Move { .. }
-                | Ask::TakePerson { .. }
-                | Ask::HandBackPerson { .. }
-                | Ask::AnswerPerson { .. }
-                | Ask::Stop { .. }
-                | Ask::Cancel { .. }
-                | Ask::Lift { .. }
-                | Ask::Release { .. }
-                | Ask::Create { .. }
-                | Ask::Propose { .. }
-                | Ask::Withdraw { .. }
-                | Ask::AccountSignIn { .. }
-                | Ask::AccountSignOut { .. }
-                | Ask::AccountChange { .. } => {
-                    unreachable!("restored role success has a matching roster ask");
-                }
-            },
-            Outcome::Compound { .. }
-            | Outcome::CompoundRefused { .. }
-            | Outcome::MarkedSeen { .. }
-            | Outcome::Applied { .. }
-            | Outcome::NoteEdited { .. }
-            | Outcome::Adopted { .. }
-            | Outcome::PolicyChanged { .. }
-            | Outcome::Renamed { .. }
-            | Outcome::ProjectMade { .. }
-            | Outcome::SettingsChanged { .. }
-            | Outcome::MovedToNewest { .. }
-            | Outcome::PoolSet { .. }
-            | Outcome::Said { .. }
-            | Outcome::QuestionAnswered { .. }
-            | Outcome::Amended { .. }
-            | Outcome::Moved { .. }
-            | Outcome::PersonTaken { .. }
-            | Outcome::PersonHandedBack { .. }
-            | Outcome::PersonAnswered { .. }
-            | Outcome::Stopped { .. }
-            | Outcome::Cancelled { .. }
-            | Outcome::Lifted { .. }
-            | Outcome::Released { .. }
-            | Outcome::Created { .. }
-            | Outcome::Proposed { .. }
-            | Outcome::Withdrawn { .. }
-            | Outcome::EscalationDecided { .. }
-            | Outcome::ProposalDecided { .. }
-            | Outcome::AccountSignInStarted { .. }
-            | Outcome::AccountProgramDeclared { .. }
-            | Outcome::AccountKeyKept { .. }
-            | Outcome::AccountMovingOut { .. }
-            | Outcome::AccountFinishing { .. }
-            | Outcome::AccountMovedIn { .. }
-            | Outcome::AccountChanged
-            | Outcome::AccountRemoved { .. }
-            | Outcome::AccountSignedOut { .. }
-            | Outcome::Refused(_) => {}
-            Outcome::Again(_) | Outcome::SignedOut => {
-                return restore_failed(domain, Key::Answer(*key), Refusal::Limit { which: LimitKind::Restore }, out);
-            }
-        }
+    for (key, _) in &domain.answers {
+        assert!(
+            domain.people.contains_key(&key.person),
+            "people: Answer({key:?}) links to person {}, which is absent",
+            key.person
+        );
     }
     for (person, _) in &domain.results_seen {
-        if !domain.people.contains_key(person) {
-            return restore_failed(domain, Key::ReadResults { party: *person }, Refusal::Unknown, out);
-        }
+        assert!(
+            domain.people.contains_key(person),
+            "people: ReadResults({person}) links to person {person}, which is absent"
+        );
     }
     for ((party, task), _) in &domain.conversations_seen {
-        if !domain.people.contains_key(party) {
-            return restore_failed(domain, Key::ReadConversation { party: *party, task: *task }, Refusal::Unknown, out);
-        }
+        assert!(
+            domain.people.contains_key(party),
+            "people: ReadConversation({party}, {task}) links to person {party}, which is absent"
+        );
     }
     domain.phase = Phase::Ready;
     // A bounded snapshot lets cleanup and projection mutate the table.
@@ -2209,14 +1933,9 @@ fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
         recovered.push((*number, *signin)).expect("one snapshot row per admitted sign-in");
     }
     for (number, mut signin) in recovered.into_boxed() {
-        if signin.expires <= env.wall {
-            end_signin(domain, number, out);
-        } else {
-            signin.due = deadline(env, signin.expires);
-            let saved = domain.sign_ins.insert(number, signin);
-            assert!(saved.is_ok(), "restored sign-in already exists");
-            arm(domain, env, number, signin.expires);
-        }
+        signin.due = deadline(env, signin.expires);
+        assert!(domain.sign_ins.insert(number, signin).is_ok(), "restored sign-in already exists");
+        arm(domain, env, number, signin.expires);
     }
 }
 
@@ -2412,77 +2131,4 @@ pub fn application_part_done(domain: &mut Domain, request: Token) {
     if let Some(flight) = domain.party_pending_mut(Id::from_token(request)) {
         flight.part = None;
     }
-}
-
-fn valid_program_outcome(limits: &Limits, outcome: &Outcome) -> bool {
-    if let Outcome::Refused(why) | Outcome::CompoundRefused { why, .. } = outcome {
-        if let Refusal::Circle { tasks, .. } | Refusal::Full { tasks, .. } = why {
-            return tasks.len() <= usize::try_from(crate::NAMED_TASKS).expect("named tasks bound");
-        }
-        if let Refusal::Kept { pending } = why {
-            return pending.len() <= 64;
-        }
-    }
-
-    let (confirmed, rows) = match outcome {
-        Outcome::AccountSignedOut { confirmed, failed_hosts } | Outcome::AccountRemoved { confirmed, failed_hosts } => {
-            (*confirmed, failed_hosts)
-        }
-        Outcome::AccountProgramDeclared { name, .. } => return crate::program_name(name),
-        Outcome::Compound { .. }
-        | Outcome::CompoundRefused { .. }
-        | Outcome::MarkedSeen { .. }
-        | Outcome::Applied { .. }
-        | Outcome::NoteEdited { .. }
-        | Outcome::ServiceMade { .. }
-        | Outcome::Adopted { .. }
-        | Outcome::Created { .. }
-        | Outcome::Proposed { .. }
-        | Outcome::Withdrawn { .. }
-        | Outcome::Stopped { .. }
-        | Outcome::Cancelled { .. }
-        | Outcome::Lifted { .. }
-        | Outcome::Released { .. }
-        | Outcome::PersonTaken { .. }
-        | Outcome::PersonHandedBack { .. }
-        | Outcome::PersonAnswered { .. }
-        | Outcome::Moved { .. }
-        | Outcome::ProposalDecided { .. }
-        | Outcome::Said { .. }
-        | Outcome::QuestionAnswered { .. }
-        | Outcome::Amended { .. }
-        | Outcome::RolesSet { .. }
-        | Outcome::PolicyChanged { .. }
-        | Outcome::Renamed { .. }
-        | Outcome::ProjectMade { .. }
-        | Outcome::SettingsChanged { .. }
-        | Outcome::MovedToNewest { .. }
-        | Outcome::PoolSet { .. }
-        | Outcome::EscalationDecided { .. }
-        | Outcome::AccountSignInStarted { .. }
-        | Outcome::AccountKeyKept { .. }
-        | Outcome::AccountMovingOut { .. }
-        | Outcome::AccountFinishing { .. }
-        | Outcome::AccountMovedIn { .. }
-        | Outcome::AccountChanged
-        | Outcome::SignedOut
-        | Outcome::Again(_)
-        | Outcome::Refused(_) => return true,
-    };
-    if rows.len() > usize::try_from(limits.program_hosts).unwrap_or(0) || confirmed && !rows.is_empty() {
-        return false;
-    }
-    for at in 0..rows.len() {
-        let Some(row) = rows.get(at) else { return false };
-        if row.name.len() > usize::try_from(limits.program_host_name_bytes).unwrap_or(0) {
-            return false;
-        }
-        let Some(prefix) = rows.get(..at) else { return false };
-        for earlier in prefix {
-            if earlier.name == row.name {
-                return false;
-            }
-        }
-    }
-    true
 }

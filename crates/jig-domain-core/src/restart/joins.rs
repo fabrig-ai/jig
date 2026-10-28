@@ -2,17 +2,22 @@
 use crate::{Core, tasks};
 
 impl Core {
-    pub(super) fn unresolved_tasks(&self) -> u32 {
-        let mut records = 0_u32;
+    pub(super) fn link_tasks(&self) {
         for task in self.tasks.view_tasks() {
             let row = self.tasks.task(task.number).expect("live task view");
-            if !self.task_references_resolve(row) {
-                records = records.saturating_add(1);
-            }
+            assert!(
+                self.authority.policy(row.project).is_some(),
+                "core: Live({}) links to project {}, which is absent",
+                row.number,
+                row.project
+            );
+            assert!(
+                self.task_references_resolve(row),
+                "core: Live({}) links to a person or placed hold in {:?}, which is absent",
+                row.number,
+                row
+            );
         }
-        // People expose identities after the live restore, not while each
-        // tasks row is arriving. Check every hold, including one masked by an
-        // earlier overlapping hold that no task currently displays.
         let mut after = 0;
         while let Some(hold) = self.tasks.next_placed_hold(after) {
             after = hold.number;
@@ -20,11 +25,18 @@ impl Core {
                 tasks::Owner::Party { person } => tasks::Party::Person(person),
                 tasks::Owner::Task { task } => tasks::Party::Task(task),
             };
-            if self.authority.policy(hold.project).is_none() || !self.party_resolves(owner) {
-                records = records.saturating_add(1);
-            }
+            assert!(
+                self.authority.policy(hold.project).is_some(),
+                "core: PlacedHold({}) links to project {}, which is absent",
+                hold.number,
+                hold.project
+            );
+            assert!(
+                self.party_resolves(owner),
+                "core: PlacedHold({}) links to owner {owner:?}, which is absent",
+                hold.number
+            );
         }
-        records
     }
 
     pub(crate) fn task_references_resolve(&self, row: &tasks::TaskRecord) -> bool {
