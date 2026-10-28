@@ -20,6 +20,13 @@ pub struct Outcome {
     pub acknowledgements: usize,
     pub starts: usize,
     pub starts_after_cancel: usize,
+    pub admission_waits: u64,
+}
+
+enum Cancel {
+    None,
+    Ready,
+    Sent,
 }
 
 struct Judge {
@@ -29,8 +36,7 @@ struct Judge {
     rules: Rules,
     views: Views,
     period: bool,
-    cancel: bool,
-    sent: bool,
+    cancel: Cancel,
     done: bool,
     outcome: Rc<RefCell<Outcome>>,
     starts_at_cancel: Option<usize>,
@@ -41,7 +47,7 @@ impl skein_world::Referee<Proc> for Judge {
         if !self.done {
             self.accounts.party(now, procs, &mut self.party, &mut self.views, Story::Chat);
         }
-        if self.cancel && !self.sent {
+        if matches!(self.cancel, Cancel::Ready) {
             let assignment = procs.iter().find_map(|proc| {
                 let Proc::Engine(host) = proc else { return None };
                 host.wire.frames.iter().find_map(|(_, kind, bytes)| {
@@ -66,7 +72,7 @@ impl skein_world::Referee<Proc> for Judge {
                         grace: None,
                     })),
                 });
-                self.sent = true;
+                self.cancel = Cancel::Sent;
             }
         }
         for proc in procs {
@@ -84,18 +90,21 @@ impl skein_world::Referee<Proc> for Judge {
                         });
                         self.period = true;
                     }
-                    if self.done {
+                    if self.done && !host.stopping {
+                        host.stopping = true;
                         host.service.shutdown();
                     }
                 }
-                Proc::Worker(host) if self.done => host.service.shutdown(),
+                Proc::Worker(host) => {
+                    self.outcome.borrow_mut().admission_waits =
+                        host.service.worker(0).expect("worker").admission_waits();
+                    if self.done && !host.stopping {
+                        host.stopping = true;
+                        host.service.shutdown();
+                    }
+                }
                 Proc::Peer(peer) if self.done => peer.shutdown(),
-                Proc::Worker(_)
-                | Proc::Peer(_)
-                | Proc::Agent { .. }
-                | Proc::Client(_)
-                | Proc::Auth(_)
-                | Proc::Probe(_) => {}
+                Proc::Peer(_) | Proc::Agent { .. } | Proc::Client(_) | Proc::Auth(_) | Proc::Probe(_) => {}
             }
         }
     }
@@ -138,8 +147,17 @@ impl skein_world::Referee<Proc> for Judge {
     }
 }
 
-/// Today's world exposes no worker-admission pressure seam. Phase one proves
-/// the orders with the ordinary limits; the swap supplies typed watermark tuning.
+// One admitted io request holds the next waiting record until dispatch drains it.
+const WATERMARK: u32 = 1;
+
+fn worker(root: skein_io::kernel::Fd) -> Proc {
+    let mut proc = processes::worker(root);
+    let Proc::Worker(host) = &mut proc else { unreachable!("worker factory") };
+    host.service.worker(0).expect("worker").set_watermark(WATERMARK);
+    proc
+}
+
+/// Run the original order stories with a one-entry admission watermark.
 #[must_use]
 pub fn run(cancel: bool) -> Outcome {
     let mut script = fixtures::one_chat(b"Hello");
@@ -154,8 +172,7 @@ pub fn run(cancel: bool) -> Outcome {
         rules: Rules::default(),
         views: Views::default(),
         period: false,
-        cancel,
-        sent: false,
+        cancel: if cancel { Cancel::Ready } else { Cancel::None },
         done: false,
         outcome: outcome.clone(),
         starts_at_cancel: None,
@@ -177,7 +194,7 @@ pub fn run(cancel: bool) -> Outcome {
         vec![skein_world::StartupRoot { name: b"state".as_slice().into(), path: b"state".as_slice().into() }],
         processes::engine,
     );
-    harness.spawn_root(skein_sim::Handle::new(worker_root.raw()), processes::worker);
+    harness.spawn_root(skein_sim::Handle::new(worker_root.raw()), worker);
     harness.spawn_root(skein_sim::Handle::new(client_root.raw()), |root| {
         let mut client = jig_client_protocol_world::native::NativeClient::new(
             jig_client_protocol_world::native::settings(),

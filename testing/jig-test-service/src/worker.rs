@@ -20,6 +20,7 @@ pub struct WorkerRuntime {
 pub struct Worker {
     pub(super) root: root::Domain,
     pub(super) root_steps: u64,
+    admission_waits: u64,
     env: Env<root::Limits>,
     agent: Agent,
     sources: crate::program_sources::Component,
@@ -77,6 +78,7 @@ impl Worker {
         limits.slots = config.slots;
         limits.source_interval = config.check_interval;
         let root_limits = root::Limits {
+            watermark: root::WATERMARK,
             hub: limits,
             agent: agent.host_limits,
             bounds: agent.bounds.clone(),
@@ -93,13 +95,13 @@ impl Worker {
             seed,
         )
         .or(Err(problem(index, b"limits", What::Bound)))?;
-        let room = root::max_out(&root_limits).checked_mul(2).ok_or(problem(index, b"limits", What::Bound))?;
         let slots = config.slots;
         let prefix = worker_prefix(u64::from(index).checked_add(1).ok_or(problem(index, b"slots", What::Bound))?)
             .ok_or(problem(index, b"slots", What::Bound))?;
         Ok(Self {
             root: root::Domain::new(&root_limits),
             root_steps: 0,
+            admission_waits: 0,
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: root_limits },
             agent: Agent {
                 endpoints: agent.endpoints.clone(),
@@ -111,9 +113,9 @@ impl Worker {
             source_events: Queue::with_capacity(2),
             link,
             link_out: Queue::with_capacity(link::MAX_OUT_DOWN),
-            out: Queue::with_capacity(room),
-            events: Queue::with_capacity(room),
-            process_events: Queue::with_capacity(room),
+            out: Queue::uncapped(),
+            events: Queue::uncapped(),
+            process_events: Queue::uncapped(),
             processes: Map::with_capacity(slots),
             owners: Map::with_capacity(slots),
             entities: Map::with_capacity(slots.checked_mul(4).expect("process entities")),
@@ -126,7 +128,7 @@ impl Worker {
                 config.limits.core.accounts.credentials.checked_add(1).expect("credential slots"),
                 config.limits.token,
             ),
-            io: Queue::with_capacity(room.checked_mul(link::MAX_OUT_DOWN).expect("worker lower room")),
+            io: Queue::uncapped(),
             address,
             socket: None,
             prefix,
@@ -196,12 +198,30 @@ impl Worker {
         }
     }
     pub(super) fn queue_room(&self) -> u32 {
-        self.out.capacity()
+        // Shared kernel handoffs stay capped, independently of internal queue growth.
+        // Preserve the old small-profile channel fixture's 2 x 1,053 entries.
+        self.link_out.capacity().max(2_106)
     }
     pub(super) fn room(&self) -> bool {
-        self.io.room() >= root::max_out(&self.env.limits).checked_mul(link::MAX_OUT_DOWN).expect("worker batch")
-            && self.events.room() >= link::MAX_OUT_DOWN
-            && self.process_events.room() >= 8
+        self.backlog() < u64::from(self.env.limits.watermark)
+    }
+    #[must_use]
+    pub fn backlog(&self) -> u64 {
+        // `events` is the waiting room; counting it would let waiting records hold admission shut.
+        self.root
+            .backlog()
+            .saturating_add(u64::from(self.out.len()))
+            .saturating_add(u64::from(self.process_events.len()))
+            .saturating_add(u64::from(self.io.len()))
+    }
+    /// Tune this reference worker's pacing without a document key.
+    pub fn set_watermark(&mut self, watermark: u32) {
+        self.env.limits.watermark = watermark;
+    }
+    /// Offers holding engine records at admission, for the reference service's worlds.
+    #[must_use]
+    pub fn admission_waits(&self) -> u64 {
+        self.admission_waits
     }
     pub(super) fn up(&mut self, now: Time, mut event: io::Event) {
         let owner = crate::workers::owner(&event).expect("routed owner");
@@ -339,8 +359,7 @@ impl Worker {
     pub(super) fn step(&mut self, event: root::Event) {
         self.root_steps = self.root_steps.wrapping_add(1);
         root::step(&mut self.root, &self.env, event, &mut self.out);
-        for _ in 0..self.out.capacity() {
-            let Some(request) = self.out.pop() else { break };
+        while let Some(request) = self.out.pop() {
             match request {
                 root::Request::Source { owner, name, operation, deadline } => {
                     let io_owner = Token::new(self.prefix.checked_add(self.next).expect("source owner range"));
@@ -526,8 +545,14 @@ impl Worker {
                 let _event = self.events.pop();
             }
         }
-        for _ in 0..self.events.capacity() {
+        for _ in 0..self.events.len() {
             if !self.room() {
+                for event in &self.events {
+                    if let root::Event::Link(_) = event {
+                        self.admission_waits = self.admission_waits.saturating_add(1);
+                        break;
+                    }
+                }
                 break;
             }
             let Some(event) = self.events.pop() else { break };
@@ -566,8 +591,7 @@ impl Worker {
         }
         for agent in &agents {
             if let Some(process) = self.processes.get_mut(agent) {
-                for _ in 0..self.out.capacity() {
-                    let Some(request) = process.next_channel_down() else { break };
+                while let Some(request) = process.next_channel_down() {
                     process.channel_down(request, &mut self.io);
                 }
             }
@@ -694,6 +718,7 @@ pub(super) fn worst_case(worker: &config::Worker, agent: &Agent, root_bytes: usi
     let mut hub = worker.limits.hub;
     hub.slots = worker.slots;
     let limits = root::Limits {
+        watermark: root::WATERMARK,
         hub,
         agent: agent.host_limits,
         bounds: agent.bounds.clone(),
@@ -704,8 +729,8 @@ pub(super) fn worst_case(worker: &config::Worker, agent: &Agent, root_bytes: usi
     // The environment and the retained agent each own the endpoint declaration;
     // root::worst_case also prices its one transient hello handoff.
     let endpoint_copies = u64::try_from(agent.bounds.program_endpoints.len()).ok()?.checked_mul(4)?.checked_mul(2)?;
-    let room = root::max_out(&limits).checked_mul(2)?;
-    let lower = room.checked_mul(link::MAX_OUT_DOWN)?;
+    // Payload pricing at the service fixture (2 x 753), independent of admission.
+    let room = 1_506_u32;
     let payload = smith::worst_case(&agent.host_limits)?.checked_add(host::worst_case(&agent.limits)?)?;
     let mut command = u64::try_from(root_bytes).ok()?.checked_add(u64::try_from(worker.agent.program.len()).ok()?)?;
     for argument in &worker.agent.arguments {
@@ -729,11 +754,7 @@ pub(super) fn worst_case(worker: &config::Worker, agent: &Agent, root_bytes: usi
             worker.limits.core.accounts.credentials.checked_add(1)?,
             worker.limits.token,
         )?)?
-        .checked_add(Queue::<root::Request>::worst_case(room)?)?
-        .checked_add(Queue::<root::Event>::worst_case(room)?)?
-        .checked_add(Queue::<host::ProcessEvent>::worst_case(room)?)?
         .checked_add(Queue::<link::Request>::worst_case(link::MAX_OUT_DOWN)?)?
-        .checked_add(Queue::<io::Request>::worst_case(lower)?)?
         .checked_add(Map::<Token, host::Process>::worst_case(worker.slots)?)?
         .checked_add(Map::<Token, Token>::worst_case(worker.slots.checked_mul(5)?)?)?
         .checked_add(List::<Token>::worst_case(worker.slots)?.checked_mul(6)?)?
@@ -770,5 +791,77 @@ mod program_grant_tests {
             account(&table, &program_grant(), Time::ZERO),
             Some(smith_protocol_channel::GrantValue::Program(b"personal".as_slice().into()))
         );
+    }
+}
+
+impl crate::Service {
+    /// Access a reference worker to tune its pacing and observe admission in worlds.
+    pub fn worker(&mut self, index: u32) -> Option<&mut Worker> {
+        self.workers.get_mut(index)
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use crate::tests::fixtures;
+
+    /// Two waiting engine records must not themselves keep admission shut.
+    const WAITING_RECORDS: u32 = 2;
+    /// One request may bring admitted work past the pacing mark.
+    const MARK: u32 = 2;
+    /// These unsubmitted requests share a sink that the test drains by hand.
+    const IO_ENTITY: Token = Token::new(71);
+    /// The real initial dial fills a one-entry watermark.
+    const DIAL_MARK: u32 = 1;
+
+    fn started_service() -> crate::Service {
+        let mut service = fixtures::worker_service();
+        service.worker(0).expect("worker").iterate(Time::ZERO, Wall::EPOCH);
+        service
+    }
+
+    #[test]
+    fn the_engines_records_wait_at_the_watermark_and_completions_drain_the_backlog() {
+        for requests in [MARK, MARK + 1] {
+            let mut service = started_service();
+            let layer = service.worker(0).expect("worker");
+            while layer.io.pop().is_some() {}
+            layer.set_watermark(MARK);
+            for _ in 0..requests {
+                layer.io.push(io::Request::Close { entity: IO_ENTITY });
+            }
+            for _ in 0..WAITING_RECORDS {
+                layer.events.push(root::Event::Link(jig_domain_host::LinkDown::Sources { sources: Box::default() }));
+            }
+            let before = layer.root_steps;
+            layer.iterate(Time::ZERO, Wall::EPOCH);
+            assert_eq!(layer.root_steps, before, "records wait at and past the mark");
+            assert_eq!(layer.events.len(), WAITING_RECORDS);
+            // The service's io dispatch drains admitted requests independently of admission.
+            // No new record or completion is needed to reopen this FIFO.
+            while layer.io.len() >= MARK {
+                let _request = layer.io.pop();
+            }
+            layer.iterate(Time::ZERO, Wall::EPOCH);
+            assert_eq!(layer.root_steps, before + u64::from(WAITING_RECORDS));
+            assert!(layer.events.is_empty(), "waiting records cannot hold admission shut");
+        }
+    }
+
+    #[test]
+    fn the_service_drains_worker_io_while_admission_waits() {
+        let mut service = started_service();
+        let layer = service.worker(0).expect("worker");
+        layer.set_watermark(DIAL_MARK);
+        layer.events.push(root::Event::Link(jig_domain_host::LinkDown::Sources { sources: Box::default() }));
+        let before = service.root_steps();
+        crate::iterate(&mut service, Time::ZERO, Wall::EPOCH);
+        assert_eq!(service.root_steps(), before);
+        assert!(service.worker(0).expect("worker").io.is_empty(), "the io sink progresses despite admission");
+        // No completion or new engine record arrives: draining alone reopens admission.
+        crate::iterate(&mut service, Time::ZERO, Wall::EPOCH);
+        assert!(service.root_steps() > before);
+        assert!(service.worker(0).expect("worker").events.is_empty());
     }
 }
