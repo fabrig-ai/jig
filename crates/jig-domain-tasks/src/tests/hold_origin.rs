@@ -1,7 +1,7 @@
 //! Public task entrances preserve immutable connector reference facts.
 
 use super::revisions::{Harness, LIMITS, task, to};
-use crate::{Active, Cause, Control, Domain, End, Event, Hold, HoldSource, Key, Name, Party, Phase, Request, Stored};
+use crate::{Active, Cause, Control, Domain, End, Event, Hold, HoldSource, Key, Name, Party, Phase, Stored};
 use alloc::boxed::Box;
 use skein_lib::Wall;
 
