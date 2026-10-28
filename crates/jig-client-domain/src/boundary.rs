@@ -81,6 +81,7 @@ pub enum Why {
     Unknown,
     NotAllowed,
     SubjectEnded,
+    TooLinked { joins: u32 },
     SignedOut,
     Limit,
 }

@@ -46,6 +46,9 @@ pub(crate) fn ended(why: views::End) -> w::WatchEnd {
     match why {
         views::End::Unwatched => w::WatchEnd::Closed,
         views::End::Gone => w::WatchEnd::SubjectEnded,
+        views::End::TooLinked { joins } => w::WatchEnd::TooLinked(
+            w::WatchTooLinked::new(&w::CEILINGS, w::WatchTooLinkedParts { joins }).expect("no bounded field"),
+        ),
         views::End::NotAllowed => w::WatchEnd::NotAllowed,
         views::End::SignedOut => w::WatchEnd::SignedOut,
         views::End::Stopping => w::WatchEnd::Stopping,

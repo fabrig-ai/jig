@@ -351,3 +351,16 @@ fn a_kept_stream_name_is_sent_gone_before_the_first_open() {
         assert!(h.has(&Request::OpenStream { credential: None }), "lost={lost}");
     }
 }
+
+#[test]
+fn a_too_linked_watch_ending_decodes_its_join_bound() {
+    for joins in [4, u32::MAX] {
+        let mut harness = fixtures::Harness::streaming(fixtures::frame_subject());
+        let (_, name) = harness.opening();
+        let why = w::WatchEnd::TooLinked(
+            w::WatchTooLinked::new(&fixtures::limits().wire, w::WatchTooLinkedParts { joins }).expect("join bound"),
+        );
+        harness.stream_record(&fixtures::ending(name, why));
+        assert_eq!(harness.ended(fixtures::WATCH), Some(c::WatchEnd::TooLinked { joins }));
+    }
+}

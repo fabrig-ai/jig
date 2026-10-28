@@ -176,3 +176,20 @@ fn an_ended_tree_fits_when_the_tasks_whole_authority_does_not() {
     assert_eq!(tree.root.number, RETAINED);
     assert_eq!(tree.root.phase, PhaseLine::Ended);
 }
+
+#[test]
+fn a_retained_watch_too_linked_ends_as_too_linked() {
+    // Small permits four joins per read (profile/small.rs).
+    const SMALL_JOINS: u32 = 4;
+    for subject in [Watched::Task { task: RETAINED }, Watched::Tree { task: RETAINED }] {
+        let (mut core, limits) = watch_core();
+        let load = open_retained(&mut core, &limits, subject);
+        let out = watch_outputs(
+            &mut core,
+            &limits,
+            Event::ReadLoaded { load, result: reads::Loaded::TooLinked { joins: SMALL_JOINS } },
+        );
+        assert_one_watch_ending(&out, views::End::TooLinked { joins: SMALL_JOINS });
+        assert!(core.view_subjects.is_empty());
+    }
+}

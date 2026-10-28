@@ -311,3 +311,25 @@ fn an_accounts_document_is_watched_but_never_read() {
         Err(w::Problem { path: w::Path::ReadValueTag, reason: skein_codec::Reason::Tag })
     );
 }
+
+#[test]
+fn a_too_linked_watch_ending_encodes_its_join_bound() {
+    // Small's four joins and the full-width field both survive the stream record.
+    for joins in [4, u32::MAX] {
+        let packet = watches::end_packet(jig_domain_views::End::TooLinked { joins }, ENDED_WATCH, &fixtures::wire())
+            .expect("ending packet");
+        let bytes = watches::packet(&packet);
+        let w::StreamEvent::Ended(ended) =
+            w::StreamEvent::decode(&fixtures::wire(), &mut Reader::new(&bytes)).expect("ending decodes")
+        else {
+            panic!("ended event")
+        };
+        assert_eq!(ended.watch(), ENDED_WATCH);
+        assert_eq!(
+            ended.why(),
+            &w::WatchEnd::TooLinked(
+                w::WatchTooLinked::new(&fixtures::wire(), w::WatchTooLinkedParts { joins }).expect("join bound"),
+            )
+        );
+    }
+}

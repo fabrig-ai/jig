@@ -204,7 +204,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: Told, out: &mut Q
         Told::Ended { handle, why } => first::Event::Ended {
             watch: Token::new(handle.number),
             end: match why {
-                Why::Unknown => first::WatchEnd::Unknown,
+                Why::Unknown | Why::TooLinked { .. } => first::WatchEnd::Unknown,
                 Why::NotAllowed => first::WatchEnd::NotAllowed,
                 Why::SubjectEnded => first::WatchEnd::SubjectEnded,
                 Why::SignedOut => first::WatchEnd::SignedOut,

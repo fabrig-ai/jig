@@ -1225,6 +1225,7 @@ impl Payload for WatchEnd {
             | Self::NotAllowed
             | Self::Busy
             | Self::SubjectEnded
+            | Self::TooLinked { .. }
             | Self::SignedOut
             | Self::Stopping => Some(0),
         }

@@ -198,6 +198,7 @@ fn each_watch_end_but_dropped_round_trips() {
         WatchEnd::SubjectEnded,
         WatchEnd::SignedOut,
         WatchEnd::Stopping,
+        WatchEnd::TooLinked(WatchTooLinked::new(&limits, WatchTooLinkedParts { joins: 4 }).unwrap()),
     ] {
         let ended = fixtures::ended(&limits, why);
         let bytes = fixtures::encoded(&ended, Ended::measure, Ended::encode);

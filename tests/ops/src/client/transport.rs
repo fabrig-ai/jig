@@ -177,6 +177,7 @@ fn end(channel: Channel, local: Token, why: WatchEnd) -> Event {
                 WatchEnd::NotServed
                 | WatchEnd::Dropped
                 | WatchEnd::Unknown
+                | WatchEnd::TooLinked { .. }
                 | WatchEnd::NotAllowed
                 | WatchEnd::Busy
                 | WatchEnd::SubjectEnded
@@ -191,6 +192,7 @@ fn end(channel: Channel, local: Token, why: WatchEnd) -> Event {
                 WatchEnd::NotServed
                 | WatchEnd::Dropped
                 | WatchEnd::Unknown
+                | WatchEnd::TooLinked { .. }
                 | WatchEnd::NotAllowed
                 | WatchEnd::Busy
                 | WatchEnd::SubjectEnded

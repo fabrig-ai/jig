@@ -284,3 +284,12 @@ const UTF8_TEXT: &[u8] = b"~\0\x07";
 // The task and signed-in person supplied by confirmation::task and objects::live.
 const PAGE_TASK: u64 = 8;
 const CANCELLING_PARTY: u64 = 7;
+
+#[test]
+fn a_too_linked_task_watch_names_its_join_bound() {
+    let (mut domain, _) = objects::live();
+    let watch = task_watch(&mut domain, PAGE_TASK);
+    terminal(&mut domain, watch, WatchEnd::TooLinked { joins: 4 });
+    let (notice, ()) = domain.notices().ids().into_iter().next().expect("refusal notice");
+    assert_eq!(domain.notices().get(*notice).unwrap().kind, crate::notices::kept::Kind::TooLinked { joins: 4 });
+}

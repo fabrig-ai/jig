@@ -1,11 +1,12 @@
 use super::fixtures::{self, Client, ME, OTHER, OTHER_SUBJECT, SUBJECT_TASK, TASK, delivery, task};
 use crate::*;
 use skein_lib::{Duration, Time};
-const REFUSALS: [(contract::WatchEnd, Why); 4] = [
+const REFUSALS: [(contract::WatchEnd, Why); 5] = [
     (contract::WatchEnd::Unknown, Why::Unknown),
     (contract::WatchEnd::NotAllowed, Why::NotAllowed),
     (contract::WatchEnd::SubjectEnded, Why::SubjectEnded),
     (contract::WatchEnd::SignedOut, Why::SignedOut),
+    (contract::WatchEnd::TooLinked { joins: 4 }, Why::TooLinked { joins: 4 }),
 ];
 #[test]
 fn two_handles_on_one_subject_share_one_engine_watch() {

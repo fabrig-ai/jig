@@ -77,6 +77,7 @@ pub fn ended(value: &w::WatchEnd) -> c::WatchEnd {
         w::WatchEnd::SubjectEnded => c::WatchEnd::SubjectEnded,
         w::WatchEnd::SignedOut => c::WatchEnd::SignedOut,
         w::WatchEnd::Stopping => c::WatchEnd::Stopping,
+        w::WatchEnd::TooLinked(value) => c::WatchEnd::TooLinked { joins: value.joins() },
     }
 }
 

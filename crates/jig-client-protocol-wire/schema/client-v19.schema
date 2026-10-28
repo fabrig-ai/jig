@@ -915,7 +915,8 @@ record OwnerTaskCapacityCauseExemptions { limit: u32 }
 enum OwnerTaskCapacityCause { tasks: OwnerTaskCapacityCauseTasks, creation_flights: OwnerTaskCapacityCauseCreationFlights, resource_reports: OwnerTaskCapacityCauseResourceReports, project_tasks: OwnerTaskCapacityCauseProjectTasks, tree: OwnerTaskCapacityCauseTree, delegates: OwnerTaskCapacityCauseDelegates, inbox: OwnerTaskCapacityCauseInbox, holdings: OwnerTaskCapacityCauseHoldings, hold_waiters: OwnerTaskCapacityCauseHoldWaiters, proposals: OwnerTaskCapacityCauseProposals, references: OwnerTaskCapacityCauseReferences, subscriptions: OwnerTaskCapacityCauseSubscriptions, funders: OwnerTaskCapacityCauseFunders, writers: OwnerTaskCapacityCauseWriters, placed_holds: OwnerTaskCapacityCausePlacedHolds, project_placed_holds: OwnerTaskCapacityCauseProjectPlacedHolds, party_placed_holds: OwnerTaskCapacityCausePartyPlacedHolds, exemptions: OwnerTaskCapacityCauseExemptions }
 record OwnerTaskCapacityRequest { project: option u32 by: OwnerRequester action: OwnerTaskCapacityAction cause: OwnerTaskCapacityCause }
 record OwnerTaskCapacityRefusal { request: OwnerTaskCapacityRequest at: u64 }
-enum WatchEnd { not_served: NotServed, closed, unknown, not_allowed, busy, subject_ended, signed_out, stopping }
+record WatchTooLinked { joins: u32 }
+enum WatchEnd { not_served: NotServed, closed, unknown, not_allowed, busy, subject_ended, signed_out, stopping, too_linked: WatchTooLinked }
 enum WatchRefusal { unknown, not_allowed, busy, signed_out }
 record Open { stream: fixed 16 watch: u64 subject: Owned }
 record OpenAnswerRefused { why: WatchRefusal }

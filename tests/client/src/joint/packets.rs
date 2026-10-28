@@ -172,6 +172,7 @@ pub fn ended(transport: &mut Transport, watcher: Token, why: jig_domain_views::E
     let end = match why {
         jig_domain_views::End::Unwatched => client::WatchEnd::Closed,
         jig_domain_views::End::Gone => client::WatchEnd::SubjectEnded,
+        jig_domain_views::End::TooLinked { joins } => client::WatchEnd::TooLinked { joins },
         jig_domain_views::End::NotAllowed => client::WatchEnd::NotAllowed,
         jig_domain_views::End::SignedOut => client::WatchEnd::SignedOut,
         jig_domain_views::End::Stopping => client::WatchEnd::Stopping,
@@ -210,7 +211,7 @@ fn terminal(transport: &mut Transport, watcher: Token, end: client::WatchEnd) ->
                 client::WatchEnd::Closed => family::WatchEnd::Closed,
                 client::WatchEnd::Dropped => family::WatchEnd::Dropped,
                 client::WatchEnd::NotServed => family::WatchEnd::Unsupported,
-                client::WatchEnd::Unknown => family::WatchEnd::Unknown,
+                client::WatchEnd::Unknown | client::WatchEnd::TooLinked { .. } => family::WatchEnd::Unknown,
                 client::WatchEnd::NotAllowed => family::WatchEnd::NotAllowed,
                 client::WatchEnd::SignedOut => family::WatchEnd::SignedOut,
                 client::WatchEnd::SubjectEnded => family::WatchEnd::SubjectEnded,

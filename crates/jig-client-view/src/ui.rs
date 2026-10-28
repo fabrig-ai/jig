@@ -808,6 +808,9 @@ pub(crate) fn ended_handle(
     if why == jig_client::Why::Limit {
         crate::page::routing::refuse(domain, Limit::Watches);
     }
+    if let jig_client::Why::TooLinked { joins } = why {
+        crate::notices::kept::show(domain, crate::notices::kept::Kind::TooLinked { joins });
+    }
     let final_task = why == jig_client::Why::SubjectEnded || why == jig_client::Why::Unknown;
     if final_task
         && (held.owner == Owner::Page || held.owner == Owner::Sections)

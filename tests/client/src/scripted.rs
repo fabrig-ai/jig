@@ -753,7 +753,7 @@ impl Scripted {
                         WatchEnd::SignedOut => family::WatchEnd::SignedOut,
                         WatchEnd::Dropped => family::WatchEnd::Dropped,
                         WatchEnd::NotServed => family::WatchEnd::Unsupported,
-                        WatchEnd::Unknown => family::WatchEnd::Unknown,
+                        WatchEnd::Unknown | WatchEnd::TooLinked { .. } => family::WatchEnd::Unknown,
                         WatchEnd::NotAllowed => family::WatchEnd::NotAllowed,
                         WatchEnd::Busy => family::WatchEnd::Busy,
                         WatchEnd::SubjectEnded => family::WatchEnd::SubjectEnded,

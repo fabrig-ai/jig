@@ -145,7 +145,9 @@ pub(crate) mod infrastructure {
             Told::Ended { handle, why } => d::Event::Ended {
                 watch: Token::new(handle.number),
                 end: match why {
-                    jig_client::Why::Unknown | jig_client::Why::NotServed => d::WatchEnd::Unknown,
+                    jig_client::Why::Unknown | jig_client::Why::NotServed | jig_client::Why::TooLinked { .. } => {
+                        d::WatchEnd::Unknown
+                    }
                     jig_client::Why::NotAllowed => d::WatchEnd::NotAllowed,
                     jig_client::Why::SubjectEnded => d::WatchEnd::SubjectEnded,
                     jig_client::Why::SignedOut => d::WatchEnd::SignedOut,
@@ -272,7 +274,9 @@ pub(crate) mod observability {
             Told::Ended { handle, why } => d::Event::Ended {
                 watch: Token::new(handle.number),
                 end: match why {
-                    jig_client::Why::Unknown | jig_client::Why::NotServed => d::WatchEnd::Unknown,
+                    jig_client::Why::Unknown | jig_client::Why::NotServed | jig_client::Why::TooLinked { .. } => {
+                        d::WatchEnd::Unknown
+                    }
                     jig_client::Why::NotAllowed => d::WatchEnd::NotAllowed,
                     jig_client::Why::SubjectEnded => d::WatchEnd::SubjectEnded,
                     jig_client::Why::SignedOut => d::WatchEnd::SignedOut,

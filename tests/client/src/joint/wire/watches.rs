@@ -51,6 +51,7 @@ pub fn ended(value: views::End) -> client::WatchEnd {
     match value {
         views::End::Unwatched => client::WatchEnd::Closed,
         views::End::Gone => client::WatchEnd::SubjectEnded,
+        views::End::TooLinked { joins } => client::WatchEnd::TooLinked { joins },
         views::End::NotAllowed => client::WatchEnd::NotAllowed,
         views::End::SignedOut => client::WatchEnd::SignedOut,
         views::End::Stopping => client::WatchEnd::Stopping,

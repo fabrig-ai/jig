@@ -162,6 +162,8 @@ pub enum WatchEnd {
     Busy,
     /// The subject ended and left live state.
     SubjectEnded,
+    /// Its retained facts exceed the joins allowed in one read.
+    TooLinked { joins: u32 },
     /// The sign in ended.
     SignedOut,
     /// The engine is stopping.

@@ -63,7 +63,8 @@ fn from_store(
 ) -> Result<Document, views::End> {
     let (raw, next) = match result {
         Loaded::Page { rows, next } => (rows, next),
-        Loaded::TooLinked { .. } | Loaded::Busy | Loaded::Gone | Loaded::TurnProblem { .. } => {
+        Loaded::TooLinked { joins } => return Err(views::End::TooLinked { joins }),
+        Loaded::Busy | Loaded::Gone | Loaded::TurnProblem { .. } => {
             return Err(views::End::Gone);
         }
     };

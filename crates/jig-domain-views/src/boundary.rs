@@ -25,6 +25,8 @@ pub enum End {
     Unwatched,
     /// Its subject left the engine.
     Gone,
+    /// Its retained facts exceed the joins allowed in one read.
+    TooLinked { joins: u32 },
     /// Its party may no longer see the subject.
     NotAllowed,
     /// Its party signed out.
