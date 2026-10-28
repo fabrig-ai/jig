@@ -190,6 +190,7 @@ pub(crate) fn restored(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<R
         match record(domain, number).expect("restored name exists").escalation {
             crate::Escalation::Waiting { .. } => out.push(Request::EscalationNeeded {
                 context: crate::escalation::context(domain, number).expect("valid held person context"),
+                restored: true,
             }),
             crate::Escalation::Unheld { .. }
             | crate::Escalation::Routing { .. }
