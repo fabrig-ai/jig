@@ -255,3 +255,38 @@ fn the_service_fires_wall_expiry_before_the_original_elapsed_alarm() {
         "the timer removed the sign-in, rather than only closing its watch during Resume"
     );
 }
+
+#[test]
+fn a_stop_at_the_linked_sweep_drains_without_starting_the_accounts_driver() {
+    let mut service = fixtures::started(&fixtures::accounts_document());
+    let boundary = jig_domain_core::RestartStep::Sweep;
+    let mut reached = false;
+    for _ in 0_u32..64 {
+        fixtures::turn(&mut service);
+        if fixtures::engine(&mut service).domain.restart_step() == Some(boundary) {
+            reached = true;
+            break;
+        }
+    }
+    assert!(reached, "the fixture reaches its linked boundary");
+    assert!(!fixtures::engine(&mut service).store.component.mark_durable());
+    service.shutdown();
+    for _ in 0_u32..64 {
+        fixtures::turn(&mut service);
+        if service.end().is_some() {
+            break;
+        }
+    }
+    let engine = fixtures::engine(&mut service);
+    assert_eq!(
+        engine.end,
+        Some(End::Drained),
+        "linked stop: step {:?}, drain {:?}, accounts {:?}, marked {}",
+        engine.domain.restart_step(),
+        engine.drain,
+        engine.accounts.as_ref().expect("accounts fixture").startup(0),
+        engine.store.component.mark_durable()
+    );
+    assert!(engine.accounts.as_ref().expect("accounts fixture").is_empty());
+    assert!(!engine.store.component.mark_durable(), "an interrupted start writes no mark");
+}
