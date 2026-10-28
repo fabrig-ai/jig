@@ -738,6 +738,13 @@ refused as too large.
 - **Two bounds.** skein-kv bounds a page by encoded bytes, the asker by
   rows and decoded bytes. The component keeps the longest prefix that
   fits both.
+- **A restart's page holds any row a writer commits:** its byte bound
+  is the store's priced row capacity, at least the largest row a writer
+  can commit, never the on-demand read allowance (`core.load_bytes`),
+  which bounds a party's or a run's loads alone. So every record its
+  writers wrote restores (`../domain/engine.md`, section 6), and a
+  restart page that comes back empty without moving its cursor is a bug
+  and panics, never a loop.
 - **A row that does not decode** stops the engine, as a failed commit
   does: the store holds bytes it did not write, or that broke since.
 
