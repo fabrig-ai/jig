@@ -15,10 +15,11 @@ pub struct Routes {
     next: u64,
     commit: u64,
     limits: Option<root::Limits>,
+    restore_bytes: u64,
 }
 #[derive(Debug)]
 enum Flight {
-    Restart { step: core::RestartStep, census: Option<core::Census> },
+    Restart { step: core::RestartStep, census: Option<core::Census>, cursor: Option<store::Cursor> },
     Read(Token),
     Notes(Token),
     Historical(core::Now),
@@ -27,12 +28,13 @@ enum Flight {
 impl Routes {
     #[must_use]
     pub fn new(table: u32) -> Routes {
-        Routes { pending: Map::with_capacity(table), next: 0, commit: 0, limits: None }
+        Routes { pending: Map::with_capacity(table), next: 0, commit: 0, limits: None, restore_bytes: 0 }
     }
     /// Give the routing the configured decode and page bounds before use.
-    pub fn configure(&mut self, limits: &root::Limits) {
+    pub fn configure(&mut self, limits: &root::Limits, store: &skein_kv::Limits) {
         assert!(self.pending.is_empty(), "configure before routing requests");
         self.limits = Some(*limits);
+        self.restore_bytes = store::sizes::restore_bytes(store);
     }
     /// Whether every routed store request has terminated.
     #[must_use]
@@ -73,7 +75,7 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
         }
         StoreOut::Restart { step, census } => {
             if step == core::RestartStep::Switch {
-                let owner = routes.keep(Flight::Restart { step, census })?;
+                let owner = routes.keep(Flight::Restart { step, census, cursor: None })?;
                 return Some(Request::Switch { owner });
             }
             match &step {
@@ -87,7 +89,7 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
                 | core::RestartStep::SettleOutbox { .. }
                 | core::RestartStep::Open => return None,
             }
-            let owner = routes.keep(Flight::Restart { step, census })?;
+            let owner = routes.keep(Flight::Restart { step, census, cursor: None })?;
             restart(routes, owner, None)?
         }
         StoreOut::ReadLoad { load, range } => {
@@ -117,7 +119,7 @@ pub fn down(routes: &mut Routes, out: StoreOut) -> Option<Request> {
 }
 fn restart(routes: &Routes, owner: Token, after: Option<store::Cursor>) -> Option<Request> {
     let (step, census) = match routes.pending.get(&owner)? {
-        Flight::Restart { step, census } => (step, census),
+        Flight::Restart { step, census, .. } => (step, census),
         Flight::Read(_) | Flight::Notes(_) | Flight::Historical(_) | Flight::Window { .. } => return None,
     };
     let range = match step {
@@ -130,7 +132,7 @@ fn restart(routes: &Routes, owner: Token, after: Option<store::Cursor>) -> Optio
         | core::RestartStep::SettleOutbox { .. }
         | core::RestartStep::Open => return None,
     };
-    Some(Request::Restore { owner, range, after, rows: 2, bytes: routes.limits?.core.load_bytes })
+    Some(Request::Restore { owner, range, after, rows: 2, bytes: routes.restore_bytes })
 }
 fn transcript(routes: &Routes, owner: Token, after: Option<u64>) -> Option<Request> {
     let (task, attempt, turn) = match routes.pending.get(&owner)? {
@@ -305,9 +307,19 @@ fn loaded(routes: &mut Routes, owner: Token, rows: Box<[Row]>, next: Option<stor
     }
 }
 fn restored(routes: &mut Routes, owner: Token, rows: Box<[Row]>, next: Option<store::Cursor>, into: &mut Queue<Up>) {
-    let Some(Flight::Restart { step, .. }) = routes.pending.get(&owner) else {
+    let Some(Flight::Restart { step, cursor, .. }) = routes.pending.get_mut(&owner) else {
         return;
     };
+    if let Some(next) = &next {
+        let advanced = match &cursor {
+            Some(previous) => {
+                next.interval > previous.interval || next.interval == previous.interval && next.after > previous.after
+            }
+            None => next.interval > 0 || !next.after.is_empty(),
+        };
+        assert!(advanced, "store: restore range {step:?} did not advance cursor {next:?}");
+    }
+    *cursor = next.clone();
     let step = *step;
     let limits = routes.limits.expect("configured routing");
     for row in rows {
