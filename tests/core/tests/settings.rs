@@ -138,6 +138,7 @@ fn history_keeps_two_predecessors_after_three_releases() {
 #[test]
 fn a_stored_charter_with_an_unconfigured_model_refuses_the_start_naming_the_change() {
     let mut world = start(64);
+    world.skip_restart_oracle("this fixture deliberately retains a charter whose configured model was removed");
     let mut charter = configuration().0.core.defaults.charters[0].clone();
     charter.policy.model.name = Box::from(b"no-longer-configured".as_slice());
     world.seed(Box::new([record(settings::Record::Changed {
@@ -186,6 +187,7 @@ fn a_start_keeps_a_dropped_charters_version_and_its_task_runs_on_it() {
 #[test]
 fn changes_past_their_kinds_bound_refuse_before_the_overflow_value_is_retained() {
     let mut world = start(64);
+    world.skip_restart_oracle("this fixture deliberately stores more changed charters than the configured bound");
     let config = configuration().0;
     let bound = configuration().1.core.tasks.charters;
     let extra = bound.checked_add(1).expect("one past the charter count");
@@ -1371,6 +1373,7 @@ fn held_revisions_past_a_lowered_limit_refuse_the_start_naming_the_limit() {
     limits.core.settings.revisions = 2;
     peers::journal(&mut limits);
     let mut world = World::first_start_with_accounts(config, &limits);
+    world.skip_restart_oracle("this fixture deliberately lowers the bound below its retained revision set");
     world.client_peer = Some(ClientPeer::default());
     let signed = sign_in(&mut world);
     world.send(root::Event::Core(core::Event::Period { project: 1, period: 1, budget: 100, next: None }));
@@ -1435,6 +1438,7 @@ fn seed_restart_accounts(world: &mut World) {
 fn a_release_past_either_held_limit_refuses_without_committing() {
     for which in [core::HeldLimit::Revisions, core::HeldLimit::Versions] {
         let (mut world, _, _) = held_run();
+        world.skip_restart_oracle("this fixture deliberately lowers the held-settings bound to zero");
         seed_restart_accounts(&mut world);
         world.end(jig_domain_tasks::End::Parked, 0);
         let mut config = held_restart_configuration();
@@ -1475,15 +1479,15 @@ fn a_restored_run_must_have_a_charter_on_its_held_revision() {
         }),
     ]));
     let commits = world.store.applied;
-    world.restart_with(held_restart_configuration());
-    assert_eq!(
-        world.domain.restore_failure(),
-        Some(core::RestartRequest::Settings {
-            failure: settings::Failure { setting: settings::Setting::Charter(1), fault: settings::Fault::Reference },
-            changed: true,
-        })
+    world.skip_restart_oracle("this fixture deliberately removes the charter held by a live run");
+    let panic =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| world.restart_with(held_restart_configuration())))
+            .expect_err("the missing held charter is a writer assertion");
+    let message = panic.downcast_ref::<String>().expect("link panic text");
+    assert!(
+        message.contains("Live(") && message.contains("links to charter 1 at revision 1") && message.contains("absent"),
+        "{message}"
     );
-    assert!(world.stopped);
     assert_eq!(world.store.applied, commits);
 }
 
