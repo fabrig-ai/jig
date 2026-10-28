@@ -673,7 +673,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
             let result = match crate::escalation::project_contexts(domain, &env.limits, project) {
                 Ok(contexts) => {
                     for context in contexts {
-                        out.push(Request::EscalationNeeded { context: Box::new(context) });
+                        out.push(Request::EscalationNeeded { context: Box::new(context), restored: false });
                     }
                     Ok(())
                 }
@@ -1162,6 +1162,7 @@ pub(crate) fn publish(domain: &mut Domain, env: &Env<Limits>, number: u64, out: 
     if escalation {
         out.push(Request::EscalationNeeded {
             context: crate::escalation::context(domain, number).expect("new held person context"),
+            restored: false,
         });
     }
     match alarm {
