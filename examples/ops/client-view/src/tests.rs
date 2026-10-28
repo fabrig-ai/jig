@@ -71,7 +71,7 @@ fn limits() -> root::Limits {
 }
 
 fn drive(root: &mut Domain, event: Event) -> Vec<Request> {
-    let mut out = Queue::with_capacity(root::max_out(&limits()));
+    let mut out = Queue::uncapped();
     support::step(root, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits() }, event, &mut out);
     let mut rows = Vec::new();
     while let Some(r) = out.pop() {
@@ -866,7 +866,7 @@ fn moving_an_environment_end_names_the_end_revision_and_waits_for_the_final_enve
         .id;
     let action = crate::decode(&mut view, button, skein_ui::Act::Press).unwrap();
     assert!(drive(&mut root, Event::Act { action }).is_empty());
-    let mut out = Queue::with_capacity(root::max_out(&limits()));
+    let mut out = Queue::uncapped();
     support::take(&mut root, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits() }, &mut out);
     let Some(Request::Save { record: root::store::Record::Unlinked(_) }) = out.pop() else {
         panic!("save precedes send");
@@ -1018,7 +1018,7 @@ fn a_common_entrance_refusal_prints_supplied_budget_facts_without_claiming_gone(
         &mut root,
         Event::Act { action: root::Action::Infrastructure(infrastructure::Act::MoveEnd { object, revision }) },
     );
-    let mut out = Queue::with_capacity(root::max_out(&limits()));
+    let mut out = Queue::uncapped();
     support::take(&mut root, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits() }, &mut out);
     let mut attempt = None;
     while let Some(request) = out.pop() {
@@ -1191,7 +1191,7 @@ fn resource_slots_preserve_whole_opaque_segments_and_distinct_equal_concatenatio
         ] {
             let part = Part::Resource { connector, path };
             if connector == 1 {
-                let mut out = Queue::with_capacity(observability::max_out(&domain_limits.observability));
+                let mut out = Queue::uncapped();
                 observability::step(
                     &mut obs,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: domain_limits.observability },
@@ -1201,7 +1201,7 @@ fn resource_slots_preserve_whole_opaque_segments_and_distinct_equal_concatenatio
                 assert!(obs.contains(&part));
                 assert!(out.is_empty());
             } else {
-                let mut out = Queue::with_capacity(infrastructure::max_out(&domain_limits.infrastructure));
+                let mut out = Queue::uncapped();
                 infrastructure::step(
                     &mut infra,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: domain_limits.infrastructure },
@@ -1548,7 +1548,7 @@ fn native_effect_slots_load_infrastructure_without_loading_a_maker_effect_and_ke
             let mut bindings = crate::bindings::Bindings::new(0, 32, connector);
             if connector == 1 {
                 let mut side = observability::Side::new(&domain_limits.observability, 84);
-                let mut out = Queue::with_capacity(observability::max_out(&domain_limits.observability));
+                let mut out = Queue::uncapped();
                 observability::step(
                     &mut side,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: domain_limits.observability },
@@ -1560,7 +1560,7 @@ fn native_effect_slots_load_infrastructure_without_loading_a_maker_effect_and_ke
                 crate::observability::part(&mut builder, &side, &part, &obs_words, &mut bindings);
             } else {
                 let mut side = infrastructure::Side::new(&domain_limits.infrastructure, 85);
-                let mut out = Queue::with_capacity(infrastructure::max_out(&domain_limits.infrastructure));
+                let mut out = Queue::uncapped();
                 infrastructure::step(
                     &mut side,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: domain_limits.infrastructure },
@@ -1598,7 +1598,7 @@ fn native_effect_facts_have_distinct_proposal_and_state_labels() {
     let mut root = ready();
     let offline = support::offline(&root);
     drive(&mut root, offline);
-    let mut out = Queue::with_capacity(root::max_out(&limits));
+    let mut out = Queue::uncapped();
     support::reconnect(&mut root, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits }, &mut out);
     let rows = drive(
         &mut root,

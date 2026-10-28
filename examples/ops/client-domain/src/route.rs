@@ -11,7 +11,7 @@ fn infrastructure_env(env: &Env<Limits>) -> Env<infrastructure::Limits> {
     Env { now: env.now, wall: env.wall, limits: env.limits.infrastructure }
 }
 pub(crate) fn jig(root: &mut Domain, env: &Env<Limits>, event: jig_client_view::Event, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+    let mut child = Queue::uncapped();
     root.jig.step(env.now, env.wall, &root.client, event, &mut child);
     route_jig(root, env, &mut child, out);
 }
@@ -21,7 +21,7 @@ pub(crate) fn infrastructure(
     event: infrastructure::Event,
     out: &mut Queue<Request>,
 ) {
-    let mut child = Queue::with_capacity(infrastructure::max_out(&env.limits.infrastructure));
+    let mut child = Queue::uncapped();
     infrastructure::step(&mut root.infrastructure, &infrastructure_env(env), event, &mut child);
     route_infrastructure(root, env, &mut child, out);
 }
@@ -31,7 +31,7 @@ pub(crate) fn observability(
     event: observability::Event,
     out: &mut Queue<Request>,
 ) {
-    let mut child = Queue::with_capacity(observability::max_out(&env.limits.observability));
+    let mut child = Queue::uncapped();
     observability::step(
         &mut root.observability,
         &Env { now: env.now, wall: env.wall, limits: env.limits.observability },
@@ -73,7 +73,7 @@ pub(crate) fn event(root: &mut Domain, env: &Env<Limits>, event: Event, out: &mu
                     jig_client_view::address::Address::Inbox { project: None }
                 }
             };
-            let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+            let mut child = Queue::uncapped();
             root.jig.step(
                 env.now,
                 env.wall,
@@ -259,7 +259,7 @@ pub(crate) fn route_observability(
     }
 }
 pub(crate) fn client(root: &mut Domain, env: &Env<Limits>, event: jig_client::Event, out: &mut Queue<Request>) {
-    let mut child = Queue::with_capacity(jig_client::max_out(&env.limits.client));
+    let mut child = Queue::uncapped();
     root.client.step(env.now, env.wall, event, &mut child);
     route_client(root, env, &mut child, out);
 }
@@ -314,7 +314,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
     };
     match jig_client_view::Owner::of_asker(asker) {
         Some(jig_client_view::Owner::Jig) => {
-            let mut child = Queue::with_capacity(jig_client_view::max_out(&env.limits.jig));
+            let mut child = Queue::uncapped();
             root.jig.step(env.now, env.wall, &root.client, jig_client_view::Event::Client { told }, &mut child);
             route_jig(root, env, &mut child, out);
         }
@@ -336,7 +336,7 @@ pub(crate) fn told(root: &mut Domain, env: &Env<Limits>, told: jig_client::Told,
 }
 
 fn infrastructure_me(root: &mut Domain, env: &Env<Limits>, told: &jig_client::Told, out: &mut Queue<Request>) -> bool {
-    let mut child = Queue::with_capacity(infrastructure::max_out(&env.limits.infrastructure));
+    let mut child = Queue::uncapped();
     let consumed = infrastructure::me_told(
         &mut root.infrastructure,
         &Env { now: env.now, wall: env.wall, limits: env.limits.infrastructure },
@@ -349,7 +349,7 @@ fn infrastructure_me(root: &mut Domain, env: &Env<Limits>, told: &jig_client::To
 }
 
 fn observability_me(root: &mut Domain, env: &Env<Limits>, told: &jig_client::Told, out: &mut Queue<Request>) -> bool {
-    let mut child = Queue::with_capacity(observability::max_out(&env.limits.observability));
+    let mut child = Queue::uncapped();
     let consumed = observability::me_told(
         &mut root.observability,
         &Env { now: env.now, wall: env.wall, limits: env.limits.observability },

@@ -1,5 +1,5 @@
 //! Routing assertions on the root's client requests, without observations.
-use super::{contract, env, infrastructure, limits, load_environment, ready, until};
+use super::{contract, env, infrastructure, load_environment, ready, until};
 use crate::{Action, Event, Request};
 use jig_client::{Asker, Handle, Key};
 use skein_lib::Queue;
@@ -8,7 +8,7 @@ fn passes_the_client_s_transport_requests_out_in_order() {
     let mut root = ready(81);
     let key = Key { asker: Asker::JIG, number: 99 };
     let ask = jig_client::Ask::Jig(Box::new(contract::Ask::Stop { project: 1, task: 9 }));
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     crate::step(
         &mut root,
         &env(),
@@ -33,7 +33,7 @@ fn passes_the_client_s_transport_requests_out_in_order() {
 fn a_tell_under_an_asker_no_connector_names_reaches_no_child() {
     let mut root = ready(82);
     let handle = Handle { asker: Asker(17), number: 9 };
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     crate::step(
         &mut root,
         &env(),
@@ -70,7 +70,7 @@ fn routes_an_infrastructure_tell_to_its_side() {
     let mut root = ready(83);
     let object = load_environment(&mut root);
     until(&mut root, object.token());
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     crate::step(
         &mut root,
         &env(),

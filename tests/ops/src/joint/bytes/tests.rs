@@ -45,7 +45,7 @@ fn a_linked_ops_root_signs_in_through_the_byte_face() {
     joint.bind(ClientId(0), 1);
     let limits = super::super::fixture::limits();
     let mut root = d::new(&limits, 71);
-    let mut requests = Queue::with_capacity(d::max_out(&limits));
+    let mut requests = Queue::uncapped();
     let mut env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits };
     d::step(
         &mut root,

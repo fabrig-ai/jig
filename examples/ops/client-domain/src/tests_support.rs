@@ -67,13 +67,13 @@ pub fn step(root: &mut Domain, env: &Env<d::Limits>, event: d::Event, out: &mut 
     }
     let events = callbacks(event);
     for event in events {
-        let mut raw = Queue::with_capacity(d::max_out(&env.limits));
+        let mut raw = Queue::uncapped();
         d::step(&mut root.root, env, event, &mut raw);
         collect(root, &mut raw, out);
     }
 }
 pub fn take(root: &mut Domain, env: &Env<d::Limits>, out: &mut Queue<Request>) {
-    let mut raw = Queue::with_capacity(d::max_out(&env.limits));
+    let mut raw = Queue::uncapped();
     d::fire(&mut root.root, env, &mut raw);
     d::take(&mut root.root, env, &mut raw);
     collect(root, &mut raw, out);

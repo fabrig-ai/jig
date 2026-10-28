@@ -76,7 +76,7 @@ fn env() -> Env<Limits> {
     Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits() }
 }
 fn drive(root: &mut Domain, event: Event) -> Vec<Request> {
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     step(root, &env(), event, &mut out);
     out_iter(out)
 }
@@ -88,7 +88,7 @@ fn out_iter(mut out: Queue<Request>) -> Vec<Request> {
     rows
 }
 fn taken(root: &mut Domain) -> Vec<Request> {
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     take(root, &env(), &mut out);
     out_iter(out)
 }
@@ -301,7 +301,7 @@ fn an_end_move_names_current_revision_and_only_durable_answer_finishes_the_card(
     // A retry envelope did not deliver this body to the child.
     let mut future = env();
     future.now = Time::from_nanos(80);
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     take(&mut root, &future, &mut out);
     let attempt = out_iter(out)
         .iter()
@@ -835,7 +835,7 @@ fn an_entrance_refusal_finishes_only_its_original_child_and_survives_a_duplicate
     });
     let mut future = env();
     future.now = Time::from_nanos(80);
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     take(&mut root, &future, &mut out);
     let attempt = out_iter(out)
         .iter()
@@ -894,7 +894,7 @@ fn resource_parts_bound_allocated_segments_and_whole_segment_bytes_in_both_conne
             let part = contract::Part::Resource { connector, path };
             if connector == 1 {
                 let mut side = crate::observability::Side::new(&limits.observability, 61);
-                let mut out = Queue::with_capacity(crate::observability::max_out(&limits.observability));
+                let mut out = Queue::uncapped();
                 crate::observability::step(
                     &mut side,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.observability },
@@ -917,7 +917,7 @@ fn resource_parts_bound_allocated_segments_and_whole_segment_bytes_in_both_conne
                 }
             } else {
                 let mut side = infrastructure::Side::new(&limits.infrastructure, 62);
-                let mut out = Queue::with_capacity(infrastructure::max_out(&limits.infrastructure));
+                let mut out = Queue::uncapped();
                 infrastructure::step(
                     &mut side,
                     &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.infrastructure },
@@ -976,7 +976,7 @@ fn native_effect_parts_keep_connector_numbers_separate_from_maker_subjects() {
             assert_eq!(infrastructure::documents::subject(&native, infrastructure::Scope::Deployment), None);
             assert_eq!(obs::documents::subject(&native, obs::Scope::Deployment), None);
             let mut infra = infrastructure::Side::new(&limits.infrastructure, 82);
-            let mut infra_out = Queue::with_capacity(infrastructure::max_out(&limits.infrastructure));
+            let mut infra_out = Queue::uncapped();
             let infra_env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.infrastructure };
             infrastructure::step(
                 &mut infra,
@@ -991,7 +991,7 @@ fn native_effect_parts_keep_connector_numbers_separate_from_maker_subjects() {
             assert!(!infra.contains(&native));
             assert!(infra_out.is_empty());
             let mut side = obs::Side::new(&limits.observability, 83);
-            let mut out = Queue::with_capacity(obs::max_out(&limits.observability));
+            let mut out = Queue::uncapped();
             let side_env = Env { now: Time::ZERO, wall: Wall::EPOCH, limits: limits.observability };
             obs::step(
                 &mut side,
@@ -1149,7 +1149,7 @@ fn infrastructure_reopens_a_dropped_watch_after_the_link_goes_offline_and_live()
     let offline = support::offline(&root);
     drive(&mut root, offline);
     let id = root.infrastructure().page().unwrap();
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     support::reconnect(&mut root, &env(), &mut out);
     let rows = out_iter(out);
     let watch = family_watch(&rows);
@@ -1201,7 +1201,7 @@ fn observability_reopens_a_dropped_watch_after_the_link_goes_offline_and_live() 
     let offline = support::offline(&root);
     drive(&mut root, offline);
     let id = root.observability().page().unwrap();
-    let mut out = Queue::with_capacity(crate::max_out(&limits()));
+    let mut out = Queue::uncapped();
     support::reconnect(&mut root, &env(), &mut out);
     let rows = out_iter(out);
     let watch = rows
