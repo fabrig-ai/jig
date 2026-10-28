@@ -82,31 +82,28 @@ fn lifecycle(request: &Request) -> bool {
     }
 }
 
-fn refused_at_check(mut cold: Harness) {
-    refusal(&cold.send(Event::Check), Refusal::Restore);
-    assert!(!cold.domain.checked());
-    assert!(cold.send(Event::Restored).is_empty(), "failed checks never replay");
-}
-
 #[test]
-fn a_broken_task_link_refuses_at_check() {
+#[should_panic(expected = "tasks: Live(1) links to root 99, which is absent")]
+fn a_broken_task_link_panics_at_check() {
     let mut source = one_task();
     let Some(Stored::Live(row)) = source.stored.get_mut(&Key::Live(DUE)) else { panic!("live fixture") };
     row.root = UNNAMED;
-    refused_at_check(cold(&source));
+    let mut cold = cold(&source);
+    cold.send(Event::Check);
 }
 
 #[test]
-fn a_stub_named_by_no_live_task_refuses_at_check() {
+fn an_unreferenced_stub_is_loaded_without_rejudgment() {
     let mut cold = cold(&one_task());
     cold.send(Event::Restore {
         record: Stored::Stub(Stub { task: UNNAMED, phase: Status::Done, result: Token::new(UNNAMED) }),
     });
-    refused_at_check(cold);
+    assert!(cold.send(Event::Check).is_empty());
+    assert!(cold.domain.checked());
 }
 
 #[test]
-fn a_writer_without_a_holder_refuses_at_check() {
+fn an_effect_writer_is_loaded_before_connector_links() {
     let mut cold = cold(&one_task());
     cold.send(Event::Restore {
         record: Stored::Writer(WriterSlot {
@@ -116,11 +113,12 @@ fn a_writer_without_a_holder_refuses_at_check() {
             lost: false,
         }),
     });
-    refused_at_check(cold);
+    assert!(cold.send(Event::Check).is_empty());
+    assert!(cold.domain.checked());
 }
 
 #[test]
-fn unrepresentable_eventual_funding_refuses_at_check() {
+fn loaded_funding_keeps_the_committed_numbers() {
     let mut source = one_task();
     let Some(Stored::Live(row)) = source.stored.get_mut(&Key::Live(DUE)) else { panic!("live fixture") };
     row.numbers.spent = 1;
@@ -129,7 +127,9 @@ fn unrepresentable_eventual_funding_refuses_at_check() {
     row.numbers.budget = u64::MAX;
     row.numbers.reserved = 0;
     row.numbers.spent_below = u64::MAX;
-    refused_at_check(cold(&source));
+    let mut cold = cold(&source);
+    assert!(cold.send(Event::Check).is_empty());
+    assert!(cold.domain.checked());
 }
 
 #[test]

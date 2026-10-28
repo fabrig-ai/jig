@@ -146,24 +146,29 @@ impl World {
 
     fn oracle_child_views(&self, stored: &std::collections::BTreeMap<root::Key, root::Record>) {
         use jig_domain_people::Stored as People;
-        use jig_domain_tasks::Stored as Tasks;
         let core = self.domain.core();
         for (key, row) in stored {
             match row {
-                root::Record::Core(core::Record::Tasks(Tasks::Live(row))) => {
-                    assert_eq!(core.tasks.task(row.number), Some(row.as_ref()), "tasks stored view {key:?}");
+                root::Record::Core(core::Record::Tasks(row)) if row.key().live() => {
+                    assert_eq!(core.tasks.stored_record(&row.key()), Some(row.clone()), "tasks stored view {key:?}");
                 }
-                root::Record::Core(core::Record::Tasks(Tasks::Ledger(row))) => {
-                    assert_eq!(core.tasks.funding_records().get(&row.funder), Some(row), "ledger stored view {key:?}");
+                root::Record::Core(core::Record::People(row))
+                    if !matches!(row, People::Policy { .. } | People::EndedRead { .. }) =>
+                {
+                    assert_eq!(core.people.stored_record(&row.key()), Some(row.clone()), "people stored view {key:?}");
                 }
-                root::Record::Core(core::Record::People(People::Person { number, identity })) => {
-                    assert_eq!(core.people.identity(*number), Some(identity), "people stored view {key:?}");
+                root::Record::Core(core::Record::Accounts(row)) => {
+                    let env = skein_lib::Env {
+                        now: self.env().now,
+                        wall: self.env().wall,
+                        limits: self.limits.core.accounts,
+                    };
+                    assert_eq!(
+                        core.accounts.stored_record(row.key(), &env),
+                        Some(row.clone()),
+                        "accounts stored view {key:?}"
+                    );
                 }
-                root::Record::Core(core::Record::People(People::Roles { project, holdings })) => assert_eq!(
-                    core.people.project_members(*project),
-                    Some(holdings.as_ref()),
-                    "roles stored view {key:?}"
-                ),
                 root::Record::Core(core::Record::Core(core::CoreRecord::RunProof(row))) => {
                     assert_eq!(core.proofs.get(&row.task), Some(row), "proof stored view {key:?}");
                 }

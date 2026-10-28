@@ -823,7 +823,7 @@ fn completed_key_replays_until_its_deadline_then_can_be_reused() {
 }
 
 #[test]
-fn expired_completed_key_is_erased_from_a_restore_page_and_frees_its_slot() {
+fn expired_completed_key_waits_for_the_post_link_sweep() {
     let limits = Limits { requests: 1, ..LIMITS };
     let mut test = Test::new(limits);
     test.d = Domain::new(&limits, Box::new([]), 2, Box::new([]));
@@ -839,7 +839,8 @@ fn expired_completed_key_is_erased_from_a_restore_page_and_frees_its_slot() {
             at: Wall::EPOCH,
         },
     });
-    assert_eq!(erased, [Request::Erase { key: Key::Answer(key) }]);
+    assert!(erased.is_empty());
+    assert!(test.d.stored_record(&Key::Answer(key)).is_some());
     test.send(Event::Restore { record: Stored::Person { number: 1, identity: identity(0, 1) } });
     test.send(Event::Restore {
         record: Stored::Roles { project: 1, holdings: Box::new([Holding { person: 1, role: Role::Member }]) },
@@ -853,6 +854,10 @@ fn expired_completed_key_is_erased_from_a_restore_page_and_frees_its_slot() {
     });
     test.send(Event::Restored);
     assert!(test.d.ready());
+    let mut out = Queue::with_capacity(max_out(&limits));
+    fire(&mut test.d, &test.env, &mut out);
+    assert_eq!(out.pop(), Some(Request::Erase { key: Key::Answer(key) }));
+    assert_eq!(test.d.stored_record(&Key::Answer(key)), None);
     let _routed = route(&test.request(10, 1, ask(1)));
 }
 
@@ -918,11 +923,11 @@ fn restore_order_is_independent_and_bad_or_oversized_records_refuse_start() {
     assert!(test.d.ready());
     test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
     test.send(Event::Restore { record: Stored::SignIn { number: 10, person: 99, expires: Wall::EPOCH } });
-    assert_eq!(
-        test.send(Event::Restored),
-        [Request::RestoreRefused { key: Key::SignIn(10), refusal: Refusal::Unknown }]
-    );
-    assert!(!test.d.ready());
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| test.send(Event::Restored)));
+    let panic = panic.expect_err("missing sign-in owner panics at its link");
+    let message =
+        panic.downcast_ref::<String>().map(String::as_str).or_else(|| panic.downcast_ref::<&str>().copied()).unwrap();
+    assert!(message.contains("people: SignIn(10) links to person 99, which is absent"));
     test.env.limits.people = 0;
     test.d = Domain::new(&test.env.limits, Box::new([]), 2, Box::new([]));
     assert_eq!(
@@ -991,9 +996,25 @@ fn role_success_restores_before_identities_and_replays_after_roster_changes() {
     );
 }
 
+fn restored_answer_is_kept(ask: Ask, outcome: Outcome) {
+    let mut test = Test::new(LIMITS);
+    test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
+    let row = Stored::Answer {
+        key: RequestKey { person: 1, key: [7; 16] },
+        models: Box::new([]),
+        ask: Box::new(ask),
+        outcome,
+        at: Wall::EPOCH,
+    };
+    assert!(test.send_bounded(Event::Restore { record: row.clone() }).is_empty());
+    test.send_bounded(Event::Restore { record: Stored::Person { number: 1, identity: identity(0, 1) } });
+    assert!(test.send_bounded(Event::Restored).is_empty());
+    assert!(test.d.ready());
+    assert_eq!(test.d.stored_record(&row.key()), Some(row));
+}
+
 #[test]
-fn restored_role_success_requires_matching_ask_kind_and_project() {
-    let key = RequestKey { person: 1, key: [7; 16] };
+fn loaded_role_answers_keep_their_original_request_and_outcome() {
     for (ask, outcome) in [
         (Ask::SetRoles { project: 1, holdings: Box::new([]) }, Outcome::RolesSet { project: 2 }),
         (ask(1), Outcome::RolesSet { project: 1 }),
@@ -1013,75 +1034,27 @@ fn restored_role_success_requires_matching_ask_kind_and_project() {
             },
         ),
     ] {
-        let mut test = Test::new(LIMITS);
-        test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-        assert_eq!(
-            test.send_bounded(Event::Restore {
-                record: Stored::Answer { models: Box::new([]), key, ask: Box::new(ask), outcome, at: Wall::EPOCH }
-            })
-            .as_slice(),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }]
-        );
-        assert!(test.send_bounded(Event::Restored).is_empty());
-        assert!(!test.d.ready());
+        restored_answer_is_kept(ask, outcome);
     }
 }
 
 #[test]
-fn restored_successful_role_rosters_require_positive_unique_people() {
-    let key = RequestKey { person: 1, key: [7; 16] };
+fn loaded_role_answers_do_not_rejudge_the_historical_roster() {
     for holdings in [
         Box::from([Holding { person: 0, role: Role::Member }]),
         Box::from([Holding { person: 2, role: Role::Owner }, Holding { person: 2, role: Role::Member }]),
     ] {
-        let mut test = Test::new(LIMITS);
-        test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-        assert_eq!(
-            test.send_bounded(Event::Restore {
-                record: Stored::Answer {
-                    models: Box::new([]),
-                    key,
-                    ask: Box::new(Ask::SetRoles { project: 1, holdings }),
-                    outcome: Outcome::RolesSet { project: 1 },
-                    at: Wall::EPOCH,
-                }
-            })
-            .as_slice(),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }]
-        );
-        assert!(test.send_bounded(Event::Restored).is_empty());
-        assert!(!test.d.ready());
+        restored_answer_is_kept(Ask::SetRoles { project: 1, holdings }, Outcome::RolesSet { project: 1 });
     }
 }
 
 #[test]
-fn restored_role_success_checks_historical_people_and_project_after_all_rows_arrive() {
-    let key = RequestKey { person: 1, key: [7; 16] };
+fn loaded_role_answers_do_not_link_their_historical_targets() {
     for (project, person) in [(1, 99), (2, 1)] {
-        let mut test = Test::new(LIMITS);
-        test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-        assert!(
-            test.send_bounded(Event::Restore {
-                record: Stored::Answer {
-                    models: Box::new([]),
-                    key,
-                    ask: Box::new(Ask::SetRoles {
-                        project,
-                        holdings: Box::new([Holding { person, role: Role::Member }])
-                    }),
-                    outcome: Outcome::RolesSet { project },
-                    at: Wall::EPOCH,
-                }
-            })
-            .is_empty()
+        restored_answer_is_kept(
+            Ask::SetRoles { project, holdings: Box::new([Holding { person, role: Role::Member }]) },
+            Outcome::RolesSet { project },
         );
-        test.send_bounded(Event::Restore { record: Stored::Person { number: 1, identity: identity(0, 1) } });
-        test.send_bounded(Event::Restore { record: Stored::Roles { project: 1, holdings: Box::new([]) } });
-        assert_eq!(
-            test.send_bounded(Event::Restored).as_slice(),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Unknown }]
-        );
-        assert!(!test.d.ready());
     }
 }
 
@@ -1358,6 +1331,7 @@ fn calls_before_restore_and_after_failed_restore_are_answered_not_ready() {
     test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
     assert_eq!(reply(&test.signin(1, 10, identity(0, 1))), Reply::Again(Again::NotReady));
     assert_eq!(reply(&test.request(10, 1, ask(1))), Reply::Again(Again::NotReady));
+    test.env.limits.requests = 0;
     test.send(Event::Restore {
         record: Stored::Answer {
             models: Box::new([]),
@@ -1520,18 +1494,9 @@ fn every_final_refusal_keeps_its_facts_under_the_key_when_roles_and_time_change(
 }
 
 #[test]
-fn retry_and_signed_out_answers_cannot_restore_as_completed_keys() {
+fn loaded_answers_do_not_rejudge_the_outcome_family() {
     for outcome in [Outcome::Again(Again::Busy), Outcome::Again(Again::NotReady), Outcome::SignedOut] {
-        let mut test = Test::new(LIMITS);
-        test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-        let key = RequestKey { person: 1, key: [1; 16] };
-        assert_eq!(
-            test.send(Event::Restore {
-                record: Stored::Answer { models: Box::new([]), key, ask: Box::new(ask(1)), outcome, at: Wall::EPOCH }
-            }),
-            [Request::RestoreRefused { key: Key::Answer(key), refusal: Refusal::Limit { which: LimitKind::Restore } }],
-        );
-        assert!(!test.d.ready());
+        restored_answer_is_kept(ask(1), outcome);
     }
 }
 
@@ -1614,29 +1579,13 @@ fn application_admission_shares_capacity_and_retention_and_requires_a_live_sign_
 }
 
 #[test]
-fn restored_application_tokens_must_name_their_connector_and_a_positive_outcome() {
+fn loaded_application_answers_keep_their_original_tokens() {
     for outcome in [
         Outcome::Applied { connector: 3, token: Token::new(42) },
         Outcome::Applied { connector: 2, token: Token::new(0) },
         Outcome::Created { first: 42, last: 42, given: None },
     ] {
-        let mut test = Test::new(LIMITS);
-        test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-        let rows = test.send(Event::Restore {
-            record: Stored::Answer {
-                models: Box::new([]),
-                key: RequestKey { person: 1, key: [1; 16] },
-                ask: Box::new(application(1)),
-                outcome,
-                at: Wall::EPOCH,
-            },
-        });
-        match rows.as_slice() {
-            [Request::RestoreRefused { .. }] => {}
-            _ => panic!("invalid restored application outcome is refused"),
-        }
-        test.send(Event::Restored);
-        assert!(!test.d.ready());
+        restored_answer_is_kept(application(1), outcome);
     }
 }
 
