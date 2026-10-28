@@ -17,7 +17,7 @@ pub struct Worker {
     /// Positive interval between local source-login observations.
     pub check_interval: Duration,
     pub limits: Limits,
-    pub memory: u64,
+    pub memory: Option<u64>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Graces {
@@ -99,9 +99,9 @@ pub fn worker(document: &Document, at: u32, directories: &Directories) -> Result
     if let Some(at) = object.required(document, b"agent", &path, &mut problems) {
         agent = parse_agent(document, at, &path.member(b"agent"), directories, &mut problems);
     }
-    let memory = check::integer(&mut object, document, b"memory_bytes", &path, &mut problems);
+    let memory = check::optional_integer(&mut object, document, b"memory_bytes", &path, &mut problems);
     object.finish(document, &path, &mut problems);
-    let bound = check::worker(&limits, graces, memory, &mut problems);
+    let bound = check::worker(&limits, graces, &mut problems);
     if !problems.is_empty() {
         return Err(problems);
     }
@@ -115,7 +115,7 @@ pub fn worker(document: &Document, at: u32, directories: &Directories) -> Result
         agent: agent.expect("required member checked"),
         check_interval: check_interval.expect("required member checked"),
         limits,
-        memory: memory.expect("required member checked"),
+        memory,
     })
 }
 fn parse_graces(document: &Document, at: u32, path: &Path, problems: &mut Problems) -> Option<Graces> {

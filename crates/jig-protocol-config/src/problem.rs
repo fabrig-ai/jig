@@ -79,9 +79,6 @@ pub enum What {
     Message,
     Silence,
     StopBound,
-    Memory {
-        over: u64,
-    },
     /// Policy bytes exceed the effective people codec envelope (configuration.md, 6).
     PolicyEnvelope {
         value: u64,
@@ -181,7 +178,6 @@ impl Problem {
             | What::Message
             | What::Silence
             | What::StopBound
-            | What::Memory { .. }
             | What::Override
             | What::Unreadable
             | What::Relative => return None,
