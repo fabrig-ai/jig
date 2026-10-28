@@ -1454,7 +1454,7 @@ fn manifest_bounds_accept_the_count_and_name_ceilings() {
     let sets = crate::PatchSets {
         sets: &[crate::PatchSet { families: &[MANIFEST_FAMILY; MANIFEST_FAMILIES], ..MANIFEST_SET }],
     };
-    assert!(crate::patching::plan::bounds(&sets).is_ok());
+    crate::patching::plan::bounds(&sets).expect("manifest family count and name ceilings fit");
 }
 
 #[test]
