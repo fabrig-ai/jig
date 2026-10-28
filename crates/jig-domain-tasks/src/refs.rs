@@ -73,13 +73,22 @@ pub(crate) fn introduce(
 }
 
 pub(crate) fn end(domain: &mut Domain, env: &Env<Limits>, ended: u64, out: &mut Queue<Request>) {
+    let outgoing = record(domain, ended).expect("ending task still indexed").questions.clone();
+    for credit in outgoing {
+        match credit.asked {
+            Party::Task(asked) => {
+                crate::questions::forget_received(domain, env, asked, credit.number, out);
+            }
+            Party::Person(_) | Party::Deployment { .. } => {}
+        }
+    }
     let mut peers = List::with_capacity(env.limits.tasks);
     for (number, _) in &domain.names {
         if *number != ended {
             let row = record(domain, *number).expect("indexed task");
             let mut owed = false;
             for credit in &row.questions {
-                if credit.answerer == ended {
+                if credit.asked == Party::Task(ended) {
                     owed = true;
                 }
             }
@@ -90,13 +99,19 @@ pub(crate) fn end(domain: &mut Domain, env: &Env<Limits>, ended: u64, out: &mut 
     }
     for number in peers.into_boxed() {
         let row = task_mut(domain, number).expect("live peer");
+        let mut ended_questions = List::with_capacity(env.limits.inbox_messages);
         let mut credits = List::with_capacity(env.limits.inbox_messages);
         for credit in &row.record.questions {
-            if credit.answerer != ended {
-                credits.push(*credit).expect("credit subset bounded");
+            if credit.asked == Party::Task(ended) {
+                ended_questions.push(credit.number).expect("credit subset");
+            } else {
+                credits.push(credit.clone()).expect("credit subset bounded");
             }
         }
         row.record.questions = credits.into_boxed();
-        publish(domain, env, number, out);
+        for question in ended_questions.into_boxed() {
+            crate::questions::owe(domain, env, number, question);
+        }
+        crate::questions::changed(domain, number);
     }
 }

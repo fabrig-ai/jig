@@ -14,6 +14,21 @@ use alloc::boxed::Box;
 use skein_lib::{Env, Id, List, Map, Queue, Token, Wall};
 
 impl Domain {
+    /// The person who must answer this received question (domain/people.md, 6).
+    #[must_use]
+    pub fn question_person(&self, task: u64, question: u64) -> Option<u64> {
+        let needs = self.needs.get(&task)?;
+        for need in needs {
+            if need.kind == (EntryKind::Question { message: question }) {
+                match need.whom {
+                    Whom::Person(person) => return Some(person),
+                    Whom::Role { .. } => {}
+                }
+            }
+        }
+        None
+    }
+
     /// Last explicitly accepted results position for a known party, zero before any mark.
     #[must_use]
     pub fn results_seen(&self, person: u64) -> Option<u64> {

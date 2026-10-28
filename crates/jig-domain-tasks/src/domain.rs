@@ -43,6 +43,8 @@ pub struct Domain {
     pub(crate) circle_changes: crate::waits::CircleChanges,
     pub(crate) tasks: Slab<Task>,
     pub(crate) names: Map<u64, Id<Task>>,
+    pub(crate) question_changes: List<u64>,
+    pub(crate) question_ends: Map<u64, List<u64>>,
     pub(crate) live_agents: u32,
     pub(crate) newest: u32,
     pub(crate) holders: Map<u32, u32>,
@@ -225,6 +227,8 @@ impl Domain {
             circle_changes: crate::waits::CircleChanges::new(limits),
             tasks: Slab::with_capacity(limits.tasks),
             names: Map::with_capacity(limits.tasks),
+            question_changes: List::with_capacity(limits.tasks),
+            question_ends: Map::with_capacity(limits.tasks),
             live_agents: 0,
             newest,
             holders: Map::with_capacity(limits.revisions.checked_add(1).expect("revision bound")),
@@ -526,7 +530,7 @@ impl Domain {
 }
 
 pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
-    limits
+    let lifecycle = limits
         .tasks
         .checked_mul(28)?
         // Compound admission lets each live task's placed hold change only once.
@@ -544,11 +548,17 @@ pub(crate) fn output_bound(limits: &Limits) -> Option<u32> {
         .checked_add(crate::limits::stub_capacity(limits)?)?
         .checked_add(limits.tasks.checked_mul(limits.holdings)?.checked_mul(3)?)?
         .checked_add(crate::activity::lines_per_decision(limits)?)?
+        // Question moves/retirement dirty each affected row once and emit one
+        // continuation per asker. They share the 28-per-task lifecycle room
+        // above; no output is emitted per carried credit. A numbered-notice
+        // callback emits at most inbox_messages activity rows, one live row and
+        // one wake (priced as a separate event case below).
         // Each party proposal terminal uses four outputs: pending erase, update
         // index, terminal row and notification, within this eight-per-row room.
         .checked_add(limits.tasks.checked_mul(8)?)?
         .checked_add(limits.revisions.checked_add(1)?)?
-        .checked_add(8)
+        .checked_add(8)?;
+    Some(lifecycle.max(limits.inbox_messages.checked_add(8)?))
 }
 
 /// Required free `Request` slots for one `step` or `fire` under validated `limits`, including
@@ -779,6 +789,13 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         Event::EffectsSettled { task } => crate::closing::effects_settled(domain, env, task, out),
         Event::Retained { task, root, holding } => crate::holds::retained(domain, env, task, root, &holding, out),
         Event::Settled { task } => crate::closing::settled(domain, env, task, out),
+        event @ Event::PersonQuestionAnswer { .. } => crate::questions::person_answer(domain, env, event, out),
+        Event::QuestionEndedNotice { task, notices } => {
+            crate::questions::ended(domain, env, task, &notices, out);
+        }
+        Event::CancelQuestion { reply_to, task, question } => {
+            crate::questions::cancel(domain, env, reply_to, task, question, out);
+        }
         Event::PersonStallNotice { task, message } => crate::person::stalled(domain, env, task, message, out),
         Event::MetNotice { task, dependency, removed, by, message } => {
             crate::wake::met(domain, env, task, dependency, removed, by, message, out);
@@ -800,6 +817,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event, out: &mut Queu
         crate::holds::expire(domain, env, out);
         crate::closing::progress(domain, env, out);
     }
+    crate::questions::flush(domain, env, out);
     crate::settings::released(domain, held, out);
 }
 
@@ -853,6 +871,7 @@ pub fn fire(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>) {
         }
     }
     crate::closing::progress(domain, env, out);
+    crate::questions::flush(domain, env, out);
     crate::settings::released(domain, held, out);
 }
 

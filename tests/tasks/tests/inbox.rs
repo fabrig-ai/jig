@@ -131,15 +131,16 @@ fn a_question_keeps_room_for_its_answer_while_words_fill_the_inbox() {
     let mut world = World::new(83, limits);
     world.make(Party::Person(9), vec![task(1, &[])]);
     world.make(Party::Task(1), vec![task(2, &[])]);
-    assert!(matches!(task_words(&mut world, 2, 1, 1, MessageKind::Question), Reply::Done));
-    assert_eq!(world.record(2).questions.len(), 1);
-    assert!(matches!(task_words(&mut world, 1, 2, 2, MessageKind::Words), Reply::Done));
+    world.make(Party::Task(2), vec![task(3, &[])]);
+    assert!(matches!(task_words(&mut world, 3, 2, 1, MessageKind::Question), Reply::Done));
+    assert_eq!(world.record(3).questions.len(), 1);
+    assert!(matches!(task_words(&mut world, 2, 3, 2, MessageKind::Words), Reply::Done));
     assert!(
-        matches!(task_words(&mut world, 1, 2, 3, MessageKind::Words), Reply::Refused(problem) if problem.why == Refusal::Busy)
+        matches!(task_words(&mut world, 2, 3, 3, MessageKind::Words), Reply::Refused(problem) if problem.why == Refusal::Busy)
     );
-    assert!(matches!(task_words(&mut world, 1, 2, 4, MessageKind::Answer { question: 1 }), Reply::Done));
-    assert!(world.record(2).questions.is_empty());
-    assert_eq!(world.record(2).inbox.len(), 2);
+    assert!(matches!(task_words(&mut world, 2, 3, 4, MessageKind::Answer { question: 1 }), Reply::Done));
+    assert!(world.record(3).questions.is_empty());
+    assert_eq!(world.record(3).inbox.len(), 2);
     world.restart();
 }
 
@@ -152,10 +153,13 @@ fn a_person_answers_one_numbered_question_in_their_active_task() {
     assert!(matches!(task_words(&mut world, 2, 1, 1, MessageKind::Question), Reply::Done));
     let reply_to = world.to();
     let key = reply_to.into_token().raw();
-    world.send(Event::Message {
+    world.send(Event::PersonQuestionAnswer {
         reply_to: ReplyTo::new(Token::new(key)),
         project: 1,
-        task: 1,
+        asked: 1,
+        person: 9,
+        question: 1,
+        notice: 3,
         word: Word {
             number: 2,
             from: Party::Person(9),
@@ -168,14 +172,19 @@ fn a_person_answers_one_numbered_question_in_their_active_task() {
     });
     assert_eq!(world.replies[&key], Reply::Done);
     assert_eq!(world.record(1).inbox.len(), 2);
+    assert_eq!(world.record(2).inbox[0].words.as_ref(), b"yes");
+    assert!(world.record(2).questions.is_empty());
     let reply_to = world.to();
     let key = reply_to.into_token().raw();
-    world.send(Event::Message {
+    world.send(Event::PersonQuestionAnswer {
         reply_to: ReplyTo::new(Token::new(key)),
         project: 1,
-        task: 1,
+        asked: 1,
+        person: 9,
+        question: 1,
+        notice: 5,
         word: Word {
-            number: 3,
+            number: 4,
             from: Party::Person(9),
             kind: MessageKind::Answer { question: 1 },
             words: Box::from(&b"twice"[..]),

@@ -93,10 +93,17 @@ pub(crate) fn answer(
     if !addressed || !active(&row.phase) {
         return refused(to, Some(number), Refusal::State, out);
     }
-    if crate::run::ends::kept(domain, number).refuses_done() {
+    let failed = match &result {
+        TaskResult::Failure { .. } => true,
+        TaskResult::Approved { .. }
+        | TaskResult::Report { .. }
+        | TaskResult::Verdict { .. }
+        | TaskResult::Change { .. } => false,
+    };
+    if !failed && crate::run::ends::kept(domain, number).refuses_done() {
         return out.push(Request::Refused {
             reply_to: to,
-            problem: crate::Problem::naming(Some(number), Refusal::Kept, &row.waiting_on),
+            problem: domain.waiting_effect_problem(number).expect("kept task names its reason"),
         });
     }
     if !row.delegates.is_empty() {

@@ -214,30 +214,6 @@ fn read_holdings(source: List<wire::Holding>, limits: &wire::Limits) -> Result<B
     Ok(members.into_boxed())
 }
 
-fn questions(
-    source: &[domain::QuestionCredit],
-    limits: &wire::Limits,
-) -> Result<List<wire::QuestionCredit>, wire::Problem> {
-    let mut members = List::with_capacity(limits.task_interests_questions);
-    for member in source {
-        let member = state::question_credit(member, limits)?;
-        if members.push(member).is_err() {
-            return Err(problem(wire::Path::TaskInterestsQuestions));
-        }
-    }
-    Ok(members)
-}
-fn read_questions(
-    source: List<wire::QuestionCredit>,
-    limits: &wire::Limits,
-) -> Result<Box<[domain::QuestionCredit]>, wire::Problem> {
-    let mut members = List::with_capacity(source.len());
-    for member in source.into_boxed() {
-        members.push(state::read_question_credit(member, limits)?).expect("same number of members");
-    }
-    Ok(members.into_boxed())
-}
-
 fn subscriptions(
     source: &[domain::Subscription],
     limits: &wire::Limits,
@@ -262,24 +238,45 @@ fn read_subscriptions(
     Ok(members.into_boxed())
 }
 
-fn inbox(source: &[domain::Word], limits: &wire::Limits) -> Result<List<wire::Word>, wire::Problem> {
+// Answer credits and waiting words share the same admitted inbox slots.
+fn inbox(
+    source: &[domain::Word],
+    credits: &[domain::QuestionCredit],
+    limits: &wire::Limits,
+) -> Result<List<wire::InboxItem>, wire::Problem> {
     let mut members = List::with_capacity(limits.task_interests_inbox);
-    for member in source {
-        let member = activity::word(member, limits)?;
-        if members.push(member).is_err() {
+    for credit in credits {
+        if members.push(wire::InboxItem::Credit(state::question_credit(credit, limits)?)).is_err() {
+            return Err(problem(wire::Path::TaskInterestsInbox));
+        }
+    }
+    for word in source {
+        if members.push(wire::InboxItem::Word(activity::word(word, limits)?)).is_err() {
             return Err(problem(wire::Path::TaskInterestsInbox));
         }
     }
     Ok(members)
 }
-fn read_inbox(source: List<wire::Word>, limits: &wire::Limits) -> Result<Box<[domain::Word]>, wire::Problem> {
-    let mut members = List::with_capacity(source.len());
-    for member in source.into_boxed() {
-        members.push(activity::read_word(member, limits)?).expect("same number of members");
-    }
-    Ok(members.into_boxed())
+struct Inbox {
+    words: Box<[domain::Word]>,
+    credits: Box<[domain::QuestionCredit]>,
 }
 
+fn read_inbox(source: List<wire::InboxItem>, limits: &wire::Limits) -> Result<Inbox, wire::Problem> {
+    let mut words = List::with_capacity(source.len());
+    let mut credits = List::with_capacity(source.len());
+    for member in source.into_boxed() {
+        match member {
+            wire::InboxItem::Word(word) => {
+                words.push(activity::read_word(word, limits)?).expect("same number of items");
+            }
+            wire::InboxItem::Credit(credit) => {
+                credits.push(state::read_question_credit(credit, limits)?).expect("same number of items");
+            }
+        }
+    }
+    Ok(Inbox { words: words.into_boxed(), credits: credits.into_boxed() })
+}
 fn saved(source: &[domain::SavedResource], limits: &wire::Limits) -> Result<List<wire::SavedResource>, wire::Problem> {
     let mut members = List::with_capacity(limits.task_interests_saved);
     for member in source {
@@ -418,12 +415,11 @@ fn task_interests(source: &domain::TaskRecord, limits: &wire::Limits) -> Result<
             delegates: delegates(&source.delegates, limits)?,
             result_followups: result_followups(&source.result_followups, limits)?,
             references: references(&source.references, limits)?,
-            questions: questions(&source.questions, limits)?,
             subscriptions: subscriptions(&source.subscriptions, limits)?,
             wake: phase::wake(&source.wake, limits)?,
             turn: source.turn,
             last_message: source.last_message,
-            inbox: inbox(&source.inbox, limits)?,
+            inbox: inbox(&source.inbox, &source.questions, limits)?,
             saved: saved(&source.saved, limits)?,
             ever_turned: wire::TranscriptState::new(
                 limits,
@@ -455,6 +451,7 @@ pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Resu
     let definition = definition.into_parts();
     let interests = interests.into_parts();
     let outcome = outcome.into_parts();
+    let Inbox { words: inbox, credits: questions } = read_inbox(interests.inbox, limits)?;
     Ok(domain::TaskRecord {
         label: definition.label,
         flags: phase::read_flags(definition.flags),
@@ -516,12 +513,12 @@ pub fn read_task_record(source: wire::TaskRecord, limits: &wire::Limits) -> Resu
         delegates: phase::read_references(interests.delegates),
         result_followups: phase::read_references(interests.result_followups),
         references: phase::read_references(interests.references),
-        questions: read_questions(interests.questions, limits)?,
+        questions,
         subscriptions: read_subscriptions(interests.subscriptions, limits)?,
         wake: phase::read_wake(interests.wake, limits)?,
         turn: interests.turn,
         last_message: interests.last_message,
-        inbox: read_inbox(interests.inbox, limits)?,
+        inbox,
         saved: read_saved(interests.saved, limits)?,
         ever_turned: interests.ever_turned.into_parts().ever_turned,
         made: interests.made,

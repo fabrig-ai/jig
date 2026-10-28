@@ -204,6 +204,8 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(
             u64::from(limits.inbox_messages).checked_mul(u64::try_from(size_of::<crate::ProposalRow>()).ok()?)?,
         )?
+        // Each outgoing credit keeps typed parties and its original activity
+        // position. Words remain in history and add no retained credit payload.
         .checked_add(
             u64::from(limits.inbox_messages).checked_mul(u64::try_from(size_of::<crate::QuestionCredit>()).ok()?)?,
         )?
@@ -299,6 +301,11 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
             .checked_add(u64::from(limits.hold_bytes))?,
     )?;
     Slab::<Task>::worst_case(limits.tasks)?
+        // One dirty-row set (plus drain scratch), and one bounded terminal-ID
+        // batch per asker. IDs move into continuations, never duplicate text.
+        .checked_add(List::<u64>::worst_case(limits.tasks)?.checked_mul(2)?)?
+        .checked_add(Map::<u64, List<u64>>::worst_case(limits.tasks)?)?
+        .checked_add(u64::from(limits.tasks).checked_mul(u64::from(limits.inbox_messages).checked_mul(8)?)?)?
         .checked_add(crate::placed::worst_case(limits)?)?
         .checked_add(crate::waits::worst_case(limits)?)?
         .checked_add(Map::<u64, crate::PersonProposal>::worst_case(limits.tasks)?)?

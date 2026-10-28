@@ -1418,10 +1418,13 @@ fn documents_question_words_are_bounded_and_answered_questions_end() {
     send_task(
         &mut core,
         &limits,
-        tasks::Event::Message {
+        tasks::Event::PersonQuestionAnswer {
             reply_to: ReplyTo::new(Token::new(61)),
             project: 1,
-            task: 1,
+            asked: 1,
+            person: 1,
+            question: 60,
+            notice: 62,
             word: tasks::Word {
                 number: 61,
                 from: tasks::Party::Person(1),

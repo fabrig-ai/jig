@@ -277,16 +277,29 @@ pub fn question_credit(
     source: &domain::QuestionCredit,
     limits: &wire::Limits,
 ) -> Result<wire::QuestionCredit, wire::Problem> {
-    let domain::QuestionCredit { number, answerer } = source;
-    wire::QuestionCredit::new(limits, wire::QuestionCreditParts { number: *number, answerer: *answerer })
+    let domain::QuestionCredit { number, answerer, asked, line } = source;
+    wire::QuestionCredit::new(
+        limits,
+        wire::QuestionCreditParts {
+            number: *number,
+            answerer: super::value::party(answerer, limits)?,
+            asked: super::value::party(asked, limits)?,
+            line: *line,
+        },
+    )
 }
 /// Read `QuestionCredit` from its durable record.
 pub fn read_question_credit(
     source: wire::QuestionCredit,
     _limits: &wire::Limits,
 ) -> Result<domain::QuestionCredit, wire::Problem> {
-    let wire::QuestionCreditParts { number, answerer } = source.into_parts();
-    Ok(domain::QuestionCredit { number, answerer })
+    let wire::QuestionCreditParts { number, answerer, asked, line } = source.into_parts();
+    Ok(domain::QuestionCredit {
+        number,
+        answerer: super::value::read_party(answerer),
+        asked: super::value::read_party(asked),
+        line,
+    })
 }
 
 /// Translate `SubscriptionKind` to its durable value.

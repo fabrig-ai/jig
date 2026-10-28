@@ -465,7 +465,12 @@ pub(crate) fn activation(
     crate::activity::append(&mut task.record, env.wall, crate::Line::RunEnded { attempt, end: end_kind, spent }, out);
     if parked {
         let pending = task.record.waiting_on.clone();
-        crate::activity::append(&mut task.record, env.wall, crate::Line::Kept { attempt, pending }, out);
+        crate::activity::append(
+            &mut task.record,
+            env.wall,
+            crate::Line::Kept { attempt, pending, question: kept.question },
+            out,
+        );
     }
     if let Some(tags) = saved {
         task.record.saved = tags;

@@ -47,7 +47,7 @@ pub(crate) fn check_finish(
     let cancel = match old.phase {
         Phase::Waiting | Phase::Held { .. } => true,
         Phase::Active(_) => {
-            !crate::run::ends::pending(old.waiting_on, old.flags.ended_by).finishes_alone()
+            !crate::run::ends::pending(old.waiting_on, old.flags.ended_by).with_question(old.question).finishes_alone()
                 && crate::run::run_attempt(&old.phase).is_none()
         }
         Phase::Closing(_) | Phase::Ended(_) => return Err(Refusal::State),

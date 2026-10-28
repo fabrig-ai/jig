@@ -617,6 +617,8 @@ fn core_ask(
                                 | tasks::MessageKind::FinishRequested { .. }
                                 | tasks::MessageKind::Amendment { .. }
                                 | tasks::MessageKind::Question
+                                | tasks::MessageKind::QuestionAnswered { .. }
+                                | tasks::MessageKind::QuestionEnded { .. }
                                 | tasks::MessageKind::Answer { .. }
                                 | tasks::MessageKind::Notice { .. }
                                 | tasks::MessageKind::Timer { .. }

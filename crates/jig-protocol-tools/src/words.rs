@@ -19,6 +19,10 @@ pub fn words(word: &tasks::Word) -> Box<[u8]> {
         tasks::MessageKind::ProposalDecision { proposal, accepted } => {
             (if accepted { b"Proposal accepted ".as_slice() } else { b"Proposal rejected ".as_slice() }, proposal)
         }
+        tasks::MessageKind::QuestionAnswered { question } => {
+            (b"Your person answered question in their inbox ".as_slice(), question)
+        }
+        tasks::MessageKind::QuestionEnded { question } => (b"Question ended unanswered ".as_slice(), question),
         tasks::MessageKind::PersonStalled { task } => (b"Person task past its waiting deadline ".as_slice(), task),
         tasks::MessageKind::EffectNotMade { entry } => (b"Effect not made ".as_slice(), entry),
         tasks::MessageKind::Escalation { task, revision } => {

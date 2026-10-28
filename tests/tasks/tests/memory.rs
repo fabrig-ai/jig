@@ -662,6 +662,16 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
     const SETTINGS_MOVES_BYTES: u64 = 16 * 8;
     // Placed table and payloads, per-task placed identity, and bounded compound/walk scratch.
     const PLACED_HOLDS_BYTES: u64 = 16_032;
+    // Eight credits per task keep 48 inline bytes instead of 16: number,
+    // two Parties and the original activity position; no copied time or words.
+    // Three retained/scratch copies per live task, four per compound member
+    // and one shared copy preserve the existing row-copy accounting.
+    const QUESTION_RAILS_BYTES: u64 = 8 * (48 - 16) * (16 * 3 + 16 * 4 + 1);
+    // One dirty set and its draining copy, one per-task continuation map,
+    // and eight retired question identifiers per task.
+    let question_batches = 2 * skein_lib::List::<u64>::worst_case(16).expect("bounded dirty set")
+        + skein_lib::Map::<u64, skein_lib::List<u64>>::worst_case(16).expect("bounded notice map")
+        + 16 * 8 * 8;
     assert_eq!(
         tasks::worst_case(&LIMITS),
         Some(
@@ -678,6 +688,8 @@ fn the_wait_index_and_walk_have_an_explicit_memory_delta() {
                 + SETTINGS_REVISIONS_BYTES
                 + SETTINGS_MOVES_BYTES
                 + PLACED_HOLDS_BYTES
+                + QUESTION_RAILS_BYTES
+                + question_batches
         )
     );
 }

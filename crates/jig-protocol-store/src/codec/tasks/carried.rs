@@ -306,6 +306,14 @@ pub(super) fn encode_refusal(value: &tasks::Refusal, limits: &Limits) -> Result<
             limits,
             wire::RefusalDependencyEndedParts { how: super::state::status(*how) },
         )?),
+        tasks::Refusal::KeptQuestion { question } => wire::Refusal::KeptQuestion(wire::AnswerMessage::new(
+            limits,
+            wire::AnswerMessageParts { question: *question },
+        )?),
+        tasks::Refusal::PersonAnswers { question } => wire::Refusal::PersonAnswers(wire::AnswerMessage::new(
+            limits,
+            wire::AnswerMessageParts { question: *question },
+        )?),
         tasks::Refusal::Kept => wire::Refusal::Kept,
         tasks::Refusal::Executor => wire::Refusal::Executor,
         tasks::Refusal::Spec => wire::Refusal::Spec,
@@ -363,6 +371,8 @@ pub(super) fn decode_refusal(value: wire::Refusal, _limits: &Limits) -> tasks::R
         wire::Refusal::DependencyEnded(value) => {
             tasks::Refusal::DependencyEnded { how: super::state::read_status(value.into_parts().how) }
         }
+        wire::Refusal::KeptQuestion(source) => tasks::Refusal::KeptQuestion { question: source.question() },
+        wire::Refusal::PersonAnswers(source) => tasks::Refusal::PersonAnswers { question: source.question() },
         wire::Refusal::Kept => tasks::Refusal::Kept,
         wire::Refusal::Executor => tasks::Refusal::Executor,
         wire::Refusal::Spec => tasks::Refusal::Spec,

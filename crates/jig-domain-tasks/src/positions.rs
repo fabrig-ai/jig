@@ -29,21 +29,7 @@ pub struct ProposalRow {
 
 pub(crate) fn message(task: &mut TaskRecord, word: &Word, bound: u32) {
     if word.kind == MessageKind::Question {
-        let mut kept = List::with_capacity(bound);
-        kept.push(QuestionLine { message: word.number, line: task.activity, answer: None }).expect("one question fits");
-        for answered in [false, true] {
-            for line in &task.question_lines {
-                if line.answer.is_some() != answered {
-                    continue;
-                }
-                if kept.room() == 0 {
-                    assert!(answered, "unanswered question admitted within its bound");
-                    break;
-                }
-                kept.push(*line).expect("bounded question positions");
-            }
-        }
-        task.question_lines = kept.into_boxed();
+        question(task, word.number, task.activity, bound);
     }
     match word.kind {
         MessageKind::Answer { question } => match word.from {
@@ -62,12 +48,34 @@ pub(crate) fn message(task: &mut TaskRecord, word: &Word, bound: u32) {
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionEnded { .. }
         | MessageKind::Notice { .. }
         | MessageKind::Timer { .. }
         | MessageKind::News { .. }
         | MessageKind::PersonStalled { .. }
         | MessageKind::Result(_) => {}
     }
+}
+
+/// Retain a question's existing history position, including when Move carries it.
+pub(crate) fn question(task: &mut TaskRecord, message: u64, position: u64, bound: u32) {
+    let mut kept = List::with_capacity(bound);
+    kept.push(QuestionLine { message, line: position, answer: None }).expect("one question fits");
+    for answered in [false, true] {
+        for line in &task.question_lines {
+            if line.answer.is_some() != answered {
+                continue;
+            }
+            if kept.room() == 0 {
+                assert!(answered, "unanswered question admitted within its bound");
+                break;
+            }
+            kept.push(*line).expect("bounded question positions");
+        }
+    }
+    task.question_lines = kept.into_boxed();
+    order_questions(task);
 }
 
 pub(crate) fn proposal(task: &mut TaskRecord, number: u64, bound: u32) {

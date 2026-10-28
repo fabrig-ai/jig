@@ -207,6 +207,8 @@ fn answers_question(answer: &OwnerActivityLine, message: u64) -> bool {
             | OwnerMessageKind::Words
             | OwnerMessageKind::EffectNotMade { .. }
             | OwnerMessageKind::Met { .. }
+            | OwnerMessageKind::QuestionAnswered { .. }
+            | OwnerMessageKind::QuestionEnded { .. }
             | OwnerMessageKind::Amendment { .. }
             | OwnerMessageKind::Question
             | OwnerMessageKind::Notice { .. }

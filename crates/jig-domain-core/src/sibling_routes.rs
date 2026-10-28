@@ -77,12 +77,24 @@ impl Core {
             Some(number) => tasks::MessageKind::Answer { question: number },
             None => tasks::MessageKind::Words,
         };
-        assert!(self.saying.insert(request, (task, question)) == Ok(None), "one person message flight");
+        let destination = match question {
+            Some(question) => self.tasks.question_asker(task, person, question).ok_or(people::Refusal::Unknown)?,
+            None => task,
+        };
+        let notice = match question {
+            Some(_) => fresh(&mut self.counters, Family::Message)
+                .ok_or(people::Refusal::Limit { which: people::LimitKind::Arithmetic })?,
+            None => 0,
+        };
+        assert!(self.saying.insert(request, (destination, question)) == Ok(None), "one person message flight");
         let event = match question {
-            Some(_) => tasks::Event::Message {
+            Some(question) => tasks::Event::PersonQuestionAnswer {
                 reply_to: skein_lib::ReplyTo::new(request),
                 project,
-                task,
+                asked: task,
+                person,
+                question,
+                notice,
                 word: tasks::Word {
                     number: message,
                     from: tasks::Party::Person(person),
@@ -513,7 +525,11 @@ impl Core {
                 let outcome = match route {
                     Some((named, None)) if named == task => people::Outcome::Said { task, message: word.number },
                     Some((named, Some(question))) if named == task => {
-                        people::Outcome::QuestionAnswered { task, question, message: word.number }
+                        let asked = match self.people.pending_ask(request) {
+                            Some(people::Ask::AnswerQuestion { task, .. }) => *task,
+                            Some(_) | None => task,
+                        };
+                        people::Outcome::QuestionAnswered { task: asked, question, message: word.number }
                     }
                     Some(_) | None => unreachable!("matching pending person message flight"),
                 };

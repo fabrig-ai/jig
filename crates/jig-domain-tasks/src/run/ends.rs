@@ -7,6 +7,8 @@ use crate::{Active, End, Executor, Phase, TaskResult, Was};
 pub(crate) struct Kept {
     /// A dependency an amendment added is pending.
     pub(crate) dependencies: bool,
+    /// Its own unanswered question to its requester, oldest first.
+    pub(crate) question: Option<u64>,
     /// Its requester ends it: no run's result may (5.8).
     pub(crate) open: bool,
 }
@@ -14,12 +16,17 @@ pub(crate) struct Kept {
 impl Domain {
     /// A waiting effect reads the task's current kept state (domain/tasks.md, 5.7).
     #[must_use]
+    #[expect(clippy::manual_map, reason = "step code has no closures (programming-model.md, section 10)")]
     pub fn waiting_effect_problem(&self, task: u64) -> Option<crate::Problem> {
         let row = record(self, task)?;
-        if for_record(row).dependencies {
+        let kept = for_record(row);
+        if kept.dependencies {
             Some(crate::Problem::naming(Some(task), crate::Refusal::Kept, &row.waiting_on))
         } else {
-            None
+            match kept.question {
+                Some(question) => Some(crate::Problem::new(Some(task), crate::Refusal::KeptQuestion { question })),
+                None => None,
+            }
         }
     }
 }
@@ -34,7 +41,9 @@ pub(crate) fn kept(domain: &Domain, task: u64) -> Kept {
 /// Publication borrows its row mutably; closing keeps cancellation's partial result.
 pub(crate) fn for_record(row: &crate::TaskRecord) -> Kept {
     match row.phase {
-        Phase::Active(_) | Phase::Held { was: Was::Active(_), .. } => pending(&row.waiting_on, row.flags.ended_by),
+        Phase::Active(_) | Phase::Held { was: Was::Active(_), .. } => {
+            pending(&row.waiting_on, row.flags.ended_by).with_question(question(&row.questions, row.requester))
+        }
         Phase::Waiting
         | Phase::Closing(_)
         | Phase::Held { was: Was::Waiting | Was::Closing(_), .. }
@@ -44,24 +53,41 @@ pub(crate) fn for_record(row: &crate::TaskRecord) -> Kept {
 
 /// The same facts for a compound request's projected dependency list.
 pub(crate) fn pending(dependencies: &[u64], ended_by: crate::EndedBy) -> Kept {
-    Kept { dependencies: !dependencies.is_empty(), open: ended_by == crate::EndedBy::Requester }
+    Kept { dependencies: !dependencies.is_empty(), question: None, open: ended_by == crate::EndedBy::Requester }
+}
+
+pub(crate) fn question(credits: &[crate::QuestionCredit], requester: crate::Party) -> Option<u64> {
+    let mut first = None;
+    for credit in credits {
+        if credit.asked == requester {
+            first = Some(match first {
+                Some(old) => core::cmp::min(old, credit.number),
+                None => credit.number,
+            });
+        }
+    }
+    first
 }
 
 /// Each caller asks its own question; a new reason to keep a task answers every one.
 impl Kept {
+    pub(crate) fn with_question(mut self, question: Option<u64>) -> Self {
+        self.question = question;
+        self
+    }
     /// The task starts no run: an agent is never prepared, claimed or Due (5.7).
     pub(crate) fn blocks_claims(self) -> bool {
-        self.dependencies
+        self.dependencies || self.question.is_some()
     }
 
     /// A done end waits until every dependency is met: a person's answer is refused, a run's parks.
     pub(crate) fn refuses_done(self) -> bool {
-        self.dependencies
+        self.blocks_claims()
     }
 
     /// No run of it may end it, so a finish grace without a live run cancels it at once.
     pub(crate) fn finishes_alone(self) -> bool {
-        !self.dependencies && !self.open
+        !self.blocks_claims() && !self.open
     }
 
     /// Whether a wake may make this executor Due; a person or a procedure is never kept from its step.
@@ -100,7 +126,7 @@ impl Kept {
 
     /// A judged done end waits until every dependency is met; a failure still ends (5.7).
     pub(crate) fn parks(self, end: &End) -> bool {
-        self.dependencies
+        self.blocks_claims()
             && match end {
                 End::Finished { result, .. } | End::FinishedWithFollowups { result, .. } => done(result),
                 End::Exceeded(_) | End::Parked | End::Failed(_) | End::Refused | End::Recheck => false,

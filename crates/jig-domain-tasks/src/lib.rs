@@ -89,6 +89,7 @@ mod hold_origin;
 mod holds;
 mod inbox;
 mod index;
+mod questions;
 pub use index::{Edge, EndedByParty, EndedByProject, Endings, Newest, ResultRow, Update, UpdateObject};
 mod limits;
 mod llm;
@@ -129,10 +130,10 @@ pub use boundary::{
     Ending, Event, Exceeded, Executor, FieldRule, Hold, HoldKind, HoldSource, Holding, InvalidResult, Key, Kind,
     MessageKind, Name, New, NewsClass, NoticeState, Parameter, Party, PersonAddress, PersonAnswer, PersonStallNotice,
     PersonWait, Phase, PoolSlots, Problem, ProcedureAmendment, ProcedureCancel, ProcedureDecision, ProcedureEnd,
-    ProcedureMessage, QuestionCredit, RecurringOverlap, RecurringState, RecurringTemplate, Refusal, ReplyHint, Request,
-    ResourceAccess, ResultField, ResultFollowups, ResultKind, ResultsWake, Revisions, RunContext, SavedResource,
-    SettingsRevision, Spec, Stage, Status, Stored, Stub, Subscription, SubscriptionKind, Taken, TaskRecord, TaskResult,
-    Verdict, WakePolicy, WakeRule, Was, Word, Writer, WriterSlot,
+    ProcedureMessage, QuestionCredit, QuestionNotice, RecurringOverlap, RecurringState, RecurringTemplate, Refusal,
+    ReplyHint, Request, ResourceAccess, ResultField, ResultFollowups, ResultKind, ResultsWake, Revisions, RunContext,
+    SavedResource, SettingsRevision, Spec, Stage, Status, Stored, Stub, Subscription, SubscriptionKind, Taken,
+    TaskRecord, TaskResult, Verdict, WakePolicy, WakeRule, Was, Word, Writer, WriterSlot,
 };
 pub use capacity::{Capacity, CapacityAction, CapacityCause, CapacityRefusal};
 

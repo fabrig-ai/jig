@@ -195,7 +195,7 @@ record TimerMessage { subscription: u64 }
 record NewsMessage { subscription: u64 class: NewsClass }
 record ResultMessage { kind: ResultKind }
 record MetMessage { dependency: u64 removed: bool }
-enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage, settings_decision: SettingsDecisionMessage }
+enum MessageKind { escalation: EscalationMessage, proposal: ProposalMessage, person_stalled: StalledMessage, proposal_decision: DecisionMessage, words, effect_not_made: EffectMessage, amendment: AmendmentMessage, question, answer: AnswerMessage, notice: NoticeMessage, timer: TimerMessage, news: NewsMessage, result: ResultMessage, met: MetMessage, finish_requested: AmendmentMessage, settings_decision: SettingsDecisionMessage, question_answered: AnswerMessage, question_ended: AnswerMessage }
 record Word { number: u64 from: Party kind: MessageKind words: bytes 65536 at: u64 hits: u32 eligible: bool }
 record FailedEnd { class: Class }
 enum EndKind { parked, finished, cancelled, failed: FailedEnd, refused }
@@ -207,7 +207,7 @@ record EndedLine { attempt: u64 end: EndKind spent: u64 }
 record TurnLine { reply: u64 attempt: u64 turn: u32 read: option u64 }
 record DecidedLine { revision: u64 }
 record MilestoneLine { position: u64 }
-record KeptLine { attempt: u64 pending: list 64 Number }
+record KeptLine { attempt: u64 pending: list 64 Number question: option u64 }
 enum Line { words: ActivityWords, heard: HeardMessage, notified: NotifiedMessage, run_began: BeganLine, run_ended: EndedLine, turn: TurnLine, decided: DecidedLine, milestone: MilestoneLine, kept: KeptLine }
 record ActivityLine { task: u64 position: u64 at: u64 line: Line }
 enum Status { done, failed, cancelled }
@@ -227,7 +227,7 @@ record PersonAnswer { by: u64 at: u64 }
 record PersonStallNotice { message: u64 at: u64 activity: u64 }
 record PersonWait { since: u64 stall: duration deadline: u64 notice: option PersonStallNotice }
 record RecurringState { template: RecurringTemplate last_batch: list 4 Number last_period: u64 pending_period: option u64 }
-record QuestionCredit { number: u64 answerer: u64 }
+record QuestionCredit { number: u64 answerer: Party asked: Party line: u64 }
 record TaskInterest { target: u64 held: bool result: bool }
 record TimerInterest { at: u64 period: option duration }
 record TopicInterest { connector: u16 topic: u64 }
@@ -304,6 +304,7 @@ record TaskDefinition {
     waiting_on: list 64 Number
     added: list 64 Added
 }
+enum InboxItem { word: Word, credit: QuestionCredit }
 record TaskInterests {
     holdings: list 64 Holding
     holds_taken: bool
@@ -312,12 +313,11 @@ record TaskInterests {
     delegates: list 64 Number
     result_followups: list 4 Number
     references: list 64 Number
-    questions: list 64 QuestionCredit
     subscriptions: list 64 Subscription
     wake: WakePolicy
     turn: u32
     last_message: u64
-    inbox: list 64 Word
+    inbox: list 64 InboxItem
     saved: list 64 SavedResource
     ever_turned: TranscriptState
     made: u32
@@ -382,7 +382,7 @@ record RefusalDependencyEnded { how: Status }
 record RefusalPlaced { hold: u64 }
 record RefusalHoldOwner { hold: u64 }
 record RefusalHoldRevision { revision: u64 }
-enum Refusal { goals, grace, unproposable, person_revision: RefusalPersonRevision, resource_unavailable, not_ready, unknown, busy, duplicate, empty, batch, live, project, tree, depth, delegates, reference, subscription, dependencies, circle: RefusalCircle, executor, spec, contract, authority_shape, inputs, state, attempt, live_delegates, restore, read, turn, funding, hold_kind, hold_taken, holds, llm: RefusalLlm, account: RefusalAccount, dependency_ended: RefusalDependencyEnded, kept, placed: RefusalPlaced, hold_owner: RefusalHoldOwner, hold_revision: RefusalHoldRevision }
+enum Refusal { goals, grace, unproposable, person_revision: RefusalPersonRevision, resource_unavailable, not_ready, unknown, busy, duplicate, empty, batch, live, project, tree, depth, delegates, reference, subscription, dependencies, circle: RefusalCircle, executor, spec, contract, authority_shape, inputs, state, attempt, live_delegates, restore, read, turn, funding, hold_kind, hold_taken, holds, llm: RefusalLlm, account: RefusalAccount, dependency_ended: RefusalDependencyEnded, kept, placed: RefusalPlaced, hold_owner: RefusalHoldOwner, hold_revision: RefusalHoldRevision, kept_question: AnswerMessage, person_answers: AnswerMessage }
 versioned record TaskProblem { task: option u64 why: Refusal blocked_by: option list 8192 Number capacity: option Capacity }
 record ResultFollowupsDelegates { value: list 4 Creation }
 record ResultFollowupsProposal { value: Proposal }

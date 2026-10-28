@@ -73,7 +73,7 @@ fn parked(world: &mut World, task: u64, dependency: u64) {
         }
     }
     let ended = ended.expect("parked run activity");
-    assert!(matches!(lines.get(ended + 1), Some(Line::Kept { attempt: run, pending })
+    assert!(matches!(lines.get(ended + 1), Some(Line::Kept { attempt: run, pending, question: None })
         if *run == attempt && pending.as_ref() == [dependency]));
 }
 

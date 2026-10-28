@@ -262,6 +262,12 @@ fn finding_text(finding: &authority::Finding) -> &'static [u8] {
     }
 }
 
+fn person_answers(question: u64) -> Rendered {
+    text(&[b"Refused: your person answers question ", Decimal::of(question).as_bytes(), b" in their inbox"], true)
+}
+fn kept_question(question: u64) -> Rendered {
+    text(&[b"Refused: kept until question ", Decimal::of(question).as_bytes(), b" is answered"], true)
+}
 fn task_problem(problem: &jig_domain_tasks::Problem) -> Rendered {
     let why: &[u8] = match problem.why {
         jig_domain_tasks::Refusal::Placed { .. } => b"held by a placed hold",
@@ -310,6 +316,8 @@ fn task_problem(problem: &jig_domain_tasks::Problem) -> Rendered {
                 jig_domain_tasks::Status::Done => text(&[b"Refused: T", task.as_bytes(), b" is done"], true),
             };
         }
+        jig_domain_tasks::Refusal::PersonAnswers { question } => return person_answers(question),
+        jig_domain_tasks::Refusal::KeptQuestion { question } => return kept_question(question),
         jig_domain_tasks::Refusal::Kept => {
             return dependency_list(
                 problem,
@@ -782,6 +790,25 @@ mod tests {
     #[test]
     fn a_kept_task_names_each_pending_dependency() {
         refusal(Refusal::Kept, KEPT, b"Refused: kept until T4 is done, kept until T6 is done");
+    }
+
+    #[test]
+    fn a_task_is_told_its_person_answers_the_named_question() {
+        const QUESTION: u64 = 12;
+        let part = CallPart::MessageRefused(Problem::new(None, Refusal::PersonAnswers { question: QUESTION }));
+        assert_eq!(
+            render(&part),
+            Rendered {
+                error: true,
+                text: b"Refused: your person answers question 12 in their inbox".as_slice().into(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_kept_task_names_its_unanswered_question() {
+        const QUESTION: u64 = 12;
+        refusal(Refusal::KeptQuestion { question: QUESTION }, &[], b"Refused: kept until question 12 is answered");
     }
 
     #[test]

@@ -92,7 +92,7 @@ pub fn task_record() -> jig_domain_tasks::TaskRecord {
         delegates: Box::new([101]),
         result_followups: Box::new([103]),
         references: Box::new([107]),
-        questions: Box::new([task::QuestionCredit { number: 5, answerer: 19 }]),
+        questions: Box::new([task_credit()]),
         subscriptions: Box::new([task::Subscription {
             number: 109,
             kind: task::SubscriptionKind::Topic { connector: 2, topic: 113 },
@@ -138,4 +138,9 @@ fn task_question_lines() -> Box<[jig_domain_tasks::QuestionLine]> {
         line: 7,
         answer: Some(jig_domain_tasks::AnswerLine { task: 19, position: 11 }),
     }])
+}
+
+fn task_credit() -> jig_domain_tasks::QuestionCredit {
+    use jig_domain_tasks::{Party, QuestionCredit};
+    QuestionCredit { number: 5, answerer: Party::Task(19), asked: Party::Task(19), line: 7 }
 }

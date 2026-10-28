@@ -32,6 +32,7 @@ pub struct CompoundTask<'a> {
     pub llm: &'a Option<crate::LlmChoice>,
     pub kept_account: Option<u32>,
     pub grace: Option<Grace>,
+    pub question: Option<u64>,
 }
 
 impl Deref for CompoundTask<'_> {
@@ -87,6 +88,8 @@ impl CompoundTask<'_> {
                 | crate::MessageKind::FinishRequested { .. }
                 | crate::MessageKind::Amendment { .. }
                 | crate::MessageKind::Met { .. }
+                | crate::MessageKind::QuestionAnswered { .. }
+                | crate::MessageKind::QuestionEnded { .. }
                 | crate::MessageKind::SettingsDecision { .. }
                 | crate::MessageKind::ProposalDecision { .. }
                 | crate::MessageKind::PersonStalled { .. }
@@ -96,7 +99,9 @@ impl CompoundTask<'_> {
                 | crate::MessageKind::News { .. } => true,
             },
         };
-        let blocked = !crate::run::ends::pending(self.waiting_on, self.flags.ended_by).may_be_due(self.executor);
+        let blocked = !crate::run::ends::pending(self.waiting_on, self.flags.ended_by)
+            .with_question(self.question)
+            .may_be_due(self.executor);
         if wakes && !blocked && self.phase == Phase::Active(Active::Idle) {
             self.phase = Phase::Active(Active::Due);
         }
@@ -176,6 +181,13 @@ impl Staged {
                     }
                     if plan.number == number {
                         row.requester = Party::Person(plan.person);
+                        row.question = None;
+                        for credit in &row.base.questions {
+                            row.question = Some(match row.question {
+                                Some(old) => old.min(credit.number),
+                                None => credit.number,
+                            });
+                        }
                         if plan.source != plan.destination {
                             row.funder = plan.destination;
                             row.numbers =
@@ -191,6 +203,7 @@ impl Staged {
                 }
                 Plan::Release(plan) if plan.number == number => {
                     row.phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by)
+                        .with_question(row.question)
                         .amended(row.executor, plan.next.clone());
                     if let Some(hold) = row.placed {
                         row.phase = Phase::Held {
@@ -285,6 +298,7 @@ impl Staged {
             Plan::Release(plan) => {
                 let row = self.record(domain, plan.number).expect("admitted release");
                 let phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by)
+                    .with_question(row.question)
                     .amended(row.executor, plan.next.clone());
                 returned_circle(
                     plan.number,
@@ -469,15 +483,18 @@ fn project_amend<'a>(row: &mut CompoundTask<'a>, plan: &'a crate::control::Amend
     row.revision = row.revision.checked_add(1).expect("admission checked");
     row.revisions.spec = row.revisions.spec.checked_add(u64::from(plan.changed)).expect("admission checked");
     row.revisions.person = row.revisions.person.checked_add(u64::from(plan.person_changed)).expect("admission checked");
-    row.phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by).amended(row.executor, row.phase.clone());
+    row.phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by)
+        .with_question(row.question)
+        .amended(row.executor, row.phase.clone());
     row.last_message = plan.message;
     row.inbox = &plan.prepared.inbox;
     if plan.attempt.is_none() {
         row.wake(&plan.prepared.word);
     }
     if let Some(release) = &plan.release {
-        row.phase =
-            crate::run::ends::pending(row.waiting_on, row.flags.ended_by).amended(row.executor, release.next.clone());
+        row.phase = crate::run::ends::pending(row.waiting_on, row.flags.ended_by)
+            .with_question(row.question)
+            .amended(row.executor, release.next.clone());
         row.revision = row.revision.checked_add(1).expect("admission checked");
     }
 }
@@ -529,6 +546,7 @@ fn borrowed(base: &TaskRecord) -> CompoundTask<'_> {
         llm: &base.llm,
         kept_account: base.kept_account,
         grace: base.grace.clone(),
+        question: crate::run::ends::question(&base.questions, base.requester),
     }
 }
 

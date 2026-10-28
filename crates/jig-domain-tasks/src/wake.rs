@@ -28,6 +28,8 @@ fn category(kind: &MessageKind) -> u8 {
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::Proposal { .. }
@@ -52,6 +54,8 @@ fn rule(domain: &Domain, number: u64, word: &Word) -> WakeRule {
         | MessageKind::FinishRequested { .. }
         | MessageKind::Amendment { .. }
         | MessageKind::Met { .. }
+        | MessageKind::QuestionAnswered { .. }
+        | MessageKind::QuestionEnded { .. }
         | MessageKind::SettingsDecision { .. }
         | MessageKind::ProposalDecision { .. }
         | MessageKind::Proposal { .. }
@@ -65,7 +69,7 @@ fn rule(domain: &Domain, number: u64, word: &Word) -> WakeRule {
             }
         }
         MessageKind::Answer { .. } => {
-            if task.wake.answers {
+            if task.wake.answers || word.eligible {
                 WakeRule::Immediate
             } else {
                 WakeRule::Never
@@ -176,6 +180,8 @@ pub(crate) fn after_message(
             | MessageKind::FinishRequested { .. }
             | MessageKind::Amendment { .. }
             | MessageKind::Met { .. }
+            | MessageKind::QuestionAnswered { .. }
+            | MessageKind::QuestionEnded { .. }
             | MessageKind::SettingsDecision { .. }
             | MessageKind::ProposalDecision { .. }
             | MessageKind::Proposal { .. }
