@@ -368,6 +368,102 @@ impl Store {
             self.patches.push((self.durable.len(), self.sets));
         }
     }
+    /// Read complete child rows and framed turns through their real store read doors.
+    pub fn readback_rows(&mut self) -> BTreeMap<root::Key, root::Record> {
+        use jig_domain_core as core;
+        let expected = self.rows.clone();
+        let mut actual = BTreeMap::new();
+        let mut transcripts = std::collections::BTreeSet::new();
+        for key in expected.keys() {
+            let get = match key {
+                root::Key::Core(core::Key::Core(core::CoreKey::Turn { task, .. })) => {
+                    transcripts.insert(*task);
+                    continue;
+                }
+                root::Key::Core(key) => protocol::Get::Jig(key.clone()),
+                root::Key::Connector { number, key } => {
+                    protocol::Get::Application(jig_test_store::keys::encode(*number, key))
+                }
+            };
+            let events = self.readback_request(Request::Get { owner: Token::new(0), key: get });
+            let [Event::Got { row, .. }] = events.as_slice() else {
+                panic!("one stored row answer for {key:?}: {events:?}")
+            };
+            let row = match row.as_ref().unwrap_or_else(|| panic!("stored row {key:?} is absent")) {
+                protocol::Row::Jig(row) => root::Record::Core(row.clone()),
+                protocol::Row::Application { key, value } => {
+                    let (number, key) =
+                        jig_test_store::keys::decode(key, &self.limits.connector).expect("stored connector key");
+                    let record =
+                        jig_test_store::records::decode(value, &self.limits.connector).expect("stored connector row");
+                    assert_eq!(record.key(), key, "stored connector key/value link");
+                    root::Record::Connector { number, record }
+                }
+            };
+            assert_eq!(row.key(), *key, "decoded stored row retains its key");
+            actual.insert(row.key(), row);
+        }
+        // Turns live in framed files, not the map's Get key space (store.md 8).
+        let turn_bound =
+            protocol::codec::limits(&self.limits.core).expect("admitted codec").core.turn_record_transcript;
+        let bytes = u64::from(protocol::sizes::frame(&self.limits.core, turn_bound).expect("admitted frame"));
+        for task in transcripts {
+            let mut after = None;
+            loop {
+                let events = self.readback_request(Request::Transcript {
+                    owner: Token::new(0),
+                    read: protocol::TranscriptRead::Page { task, backwards: false, after },
+                    rows: 1,
+                    bytes,
+                });
+                let mut events = events.into_iter();
+                let Some(Event::Turns { turns, next, .. }) = events.next() else {
+                    panic!("framed turns answer for {task}")
+                };
+                assert!(events.next().is_none(), "one framed page answer");
+                for turn in turns {
+                    let row = root::Record::Core(core::Record::Core(core::CoreRecord::Turn(turn)));
+                    assert!(actual.insert(row.key(), row).is_none(), "one copy of every framed turn");
+                }
+                if next.is_none() {
+                    break;
+                }
+                assert_ne!(after, next, "framed readback advances for task {task}");
+                after = next;
+            }
+        }
+        assert_eq!(actual, expected, "complete decoded rows match what the writers committed");
+        actual
+    }
+
+    fn readback_request(&mut self, request: Request) -> Vec<Event> {
+        let mut above = Queue::with_capacity(protocol::MAX_OUT_DOWN);
+        let mut below = Below {
+            store: Queue::with_capacity(skein_kv::MAX_OUT.below),
+            secrets: Queue::with_capacity(skein_kv::MAX_OUT.below),
+            transcripts: Queue::with_capacity(skein_kv::MAX_OUT.below),
+        };
+        let env = self.env();
+        protocol::down(self.component.as_mut().expect("component exists"), &env, request, &mut above, &mut below);
+        loop {
+            let io = if let Some(request) = below.transcripts.pop() {
+                Io::Transcripts(self.file(2, request))
+            } else if let Some(request) = below.store.pop() {
+                Io::Store(self.file(0, request))
+            } else if let Some(request) = below.secrets.pop() {
+                Io::Secrets(self.file(1, request))
+            } else {
+                break;
+            };
+            protocol::up(self.component.as_mut().expect("component exists"), &env, io, &mut above, &mut below);
+        }
+        let mut events = Vec::new();
+        while let Some(event) = above.pop() {
+            events.push(event);
+        }
+        events
+    }
+
     /// Read back the rows patching can change, including the seal's header.
     fn refresh_patched_rows(&mut self) {
         use jig_domain_core::{CoreKey, Key};
