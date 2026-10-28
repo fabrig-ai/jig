@@ -168,15 +168,3 @@ pub(crate) fn dismiss_first(domain: &mut Ui) {
 pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.notices.checked_mul(2).is_some()
 }
-
-/// Visible and retired notices and their maximum durable answer payloads.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let slots = limits.notices.checked_mul(2)?;
-    Slab::<Notice>::worst_case(slots)?
-        .checked_add(Map::<Id<Notice>, ()>::worst_case(limits.notices)?)?
-        .checked_add(u64::from(slots).checked_mul(limits.document_bytes)?)
-}

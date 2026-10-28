@@ -232,10 +232,3 @@ fn number(state: Words) -> Option<u64> {
         Words::Sent { message } | Words::Read { message } => Some(message),
     }
 }
-/// Local word snapshots may coexist with the committed activity copy while it slides.
-#[must_use]
-pub fn worst_case(limits: &super::Limits) -> Option<u64> {
-    List::<Sent>::worst_case(limits.lines)?
-        .checked_mul(2)?
-        .checked_add(u64::from(limits.lines).checked_mul(limits.bytes)?.checked_mul(2)?)
-}

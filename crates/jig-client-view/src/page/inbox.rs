@@ -436,18 +436,6 @@ pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.rows.checked_mul(4).is_some()
 }
 
-/// Whole Inbox storage, projections and merge scratch including independent windows.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let rows = limits.rows.checked_mul(4)?;
-    List::<InboxRow>::worst_case(rows)?
-        .checked_mul(3)?
-        .checked_add(u64::from(rows).checked_mul(limits.document_bytes)?.checked_mul(3)?)?
-        .checked_add(limits.document_bytes.checked_mul(3)?)
-}
 /// The known address behind an entry; a party maker supplies no task address.
 #[must_use]
 pub const fn address(key: ObjectKey) -> Option<Address> {

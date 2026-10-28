@@ -462,20 +462,6 @@ pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.objects.checked_mul(2).is_some()
 }
 
-/// The working set containers, source sets and document payloads, retired room included.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let slots = limits.objects.checked_mul(2)?;
-    let payload = Set::<Source>::worst_case(limits.sources)?.checked_add(limits.document_bytes.checked_mul(5)?)?;
-    Slab::<Object>::worst_case(slots)?
-        .checked_add(Map::<ObjectKey, Id<Object>>::worst_case(limits.objects)?)?
-        .checked_add(List::<ObjectKey>::worst_case(limits.objects)?)?
-        .checked_add(u64::from(slots).checked_mul(payload)?)
-}
-
 /// Whether this answer ends the waiting object rather than steering a live task.
 #[must_use]
 pub fn stops_waiting(key: ObjectKey, outcome: &Outcome) -> bool {

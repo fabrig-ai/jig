@@ -403,7 +403,3 @@ pub(crate) fn budget(b: &mut Builder, doc: &Task, words: &Words, bindings: &mut 
         Executor::Party { .. } | Executor::Role { .. } => {}
     }
 }
-
-pub(crate) fn scratch(rows: u32) -> Option<u64> {
-    plan::scratch(rows)
-}

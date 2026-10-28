@@ -1,4 +1,4 @@
-use jig_client_world::{App, Settings, Test, Until, stories, test};
+use jig_client_world::{Settings, Until, stories, test};
 use skein_fake_person::{Find, Step};
 use skein_lib::Duration;
 use skein_world::domain::Verdict;
@@ -6,13 +6,8 @@ use stories::client_construction as fixture;
 
 #[test]
 fn supplied_client_bounds_and_constructor_survive_tabs_reload_and_default_neighbours() {
-    // Compare the composed envelopes rather than their common practical cap.
-    let settings = Settings { seed: 8530, heap_bytes_per_client: u64::MAX, ..Settings::default() };
-    let cap = settings.heap_bytes_per_client;
-    let custom_bound = Test::worst_case(&fixture::limits()).min(cap);
-    let default_bound = Test::worst_case(&test::limits()).min(cap);
+    let settings = Settings { seed: 8530, ..Settings::default() };
     assert!(fixture::NAME.len() > usize::try_from(test::limits().jig.text).expect("default text bound fits"));
-    assert!(custom_bound > default_bound);
     let mut world = fixture::world(settings);
     let custom = world.client_with(7, stories::chat(), fixture::limits(), fixture::client);
     let default = world.client(8, stories::chat());
@@ -33,7 +28,6 @@ fn supplied_client_bounds_and_constructor_survive_tabs_reload_and_default_neighb
     let outcome = world.run(Until::Done);
     assert_eq!(outcome.verdict, Verdict::Passed);
     assert!(outcome.judged.0 > 0);
-    assert_eq!(outcome.heap_bound, 2 * custom_bound + 2 * default_bound);
     for client in [custom, custom_tab, default, default_tab] {
         world.reload(client);
     }
@@ -53,7 +47,6 @@ fn supplied_client_bounds_and_constructor_survive_tabs_reload_and_default_neighb
     let outcome = world.run(Until::Done);
     assert_eq!(outcome.verdict, Verdict::Passed);
     assert!(outcome.judged.0 > 0);
-    assert_eq!(outcome.heap_bound, 3 * custom_bound + 2 * default_bound);
 }
 
 #[test]

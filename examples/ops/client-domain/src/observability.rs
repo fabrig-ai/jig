@@ -556,32 +556,14 @@ pub fn reclaim(side: &mut Side) {
     side.reads.reclaim();
     side.watches.reclaim();
 }
+
+/// Whether the connector's receiving limits and derived capacities are usable.
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.retry == skein_lib::Duration::ZERO || limits.document_bytes == 0 {
-        return None;
-    }
-    let path = List::<Box<[u8]>>::worst_case(limits.segments)?
-        .checked_add(u64::from(limits.segments).checked_mul(u64::from(limits.text))?)?;
-    let mut total = List::<Held>::worst_case(limits.parts)?
-        .checked_mul(2)?
-        .checked_add(u64::from(limits.parts).checked_mul(path)?.checked_mul(2)?)?;
-    total = total.checked_add(Slab::<Object>::worst_case(limits.objects.checked_mul(2)?)?)?.checked_add(Map::<
-        Subject,
-        Id<Object>,
-    >::worst_case(
-        limits.objects,
-    )?)?;
-    let payload = limits.document_bytes;
-    total = total.checked_add(u64::from(limits.objects.checked_mul(2)?).checked_mul(payload)?)?;
-    total = total
-        .checked_add(Slab::<Reading>::worst_case(limits.reads)?)?
-        .checked_add(Slab::<Watching>::worst_case(limits.watches)?)?
-        .checked_add(Map::<Id<Watching>, ()>::worst_case(limits.watches)?)?;
-    total = total
-        .checked_add(List::<Subject>::worst_case(limits.objects)?)?
-        .checked_add(List::<Id<Watching>>::worst_case(limits.watches)?)?;
-    total.checked_add(List::<jig_client::contract::ObjectKey>::worst_case(limits.rows.checked_add(1)?)?)
+pub fn valid(limits: &Limits) -> bool {
+    limits.retry != skein_lib::Duration::ZERO
+        && limits.document_bytes != 0
+        && limits.objects.checked_mul(2).is_some()
+        && limits.rows.checked_add(1).is_some()
 }
 
 fn read_result(side: &mut Side, env: &Env<Limits>, read: Token, result: ReadResult, out: &mut Queue<Request>) {

@@ -141,12 +141,8 @@ fn a_full_table_and_the_stream_s_name_start() {
 fn valid_refuses_each_unrepresentable_limit() {
     let base = fixtures::limits();
     assert!(crate::store::valid(&base));
-    for limits in [
-        Limits { exchanges: u32::MAX, ..base },
-        Limits { wire: w::Limits { owned_record: u32::MAX, ..base.wire }, ..base },
-    ] {
-        assert!(!crate::store::valid(&limits));
-    }
+    let invalid = Limits { wire: w::Limits { owned_record: u32::MAX, ..base.wire }, ..base };
+    assert!(!crate::store::valid(&invalid));
 }
 
 /// O4: a completed write releases its admitted exchanges in arrival order.

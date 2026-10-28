@@ -273,12 +273,3 @@ pub fn decode(view: &mut JigBindings, token: Token, act: Act) -> Option<crate::a
     }
     None
 }
-
-/// Owned heap for the last tree's jig meanings, separately from tree storage.
-/// Amendment controls own both source values and selected replacements, each
-/// under the bounded document/text envelope. Action text and part paths also fit.
-#[must_use]
-pub fn jig_bindings_worst_case(capacity: u32, client: &crate::Limits) -> Option<u64> {
-    let payload = client.document_bytes.checked_mul(4)?.checked_add(u64::from(client.text).checked_mul(8)?)?;
-    skein_lib::List::<Entry>::worst_case(capacity)?.checked_add(u64::from(capacity).checked_mul(payload)?)
-}

@@ -556,10 +556,3 @@ fn current_project(domain: &Ui, lent: &jig_client::Client) -> Option<u32> {
     }
     domain.shown_inbox().or(domain.shown_conversations()).flatten()
 }
-
-pub(crate) fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    List::<ObjectKey>::worst_case(limits.objects)?
-        .checked_add(List::<Part>::worst_case(limits.parts)?)?
-        .checked_add(u64::from(limits.parts).checked_mul(u64::from(limits.text))?)?
-        .checked_add(List::<u64>::worst_case(limits.rows)?)
-}

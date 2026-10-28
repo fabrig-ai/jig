@@ -50,7 +50,6 @@ struct Profile {
     jig: jig_client_view::words::Words,
     obs: view::words::Words,
     infra: view::words::Words,
-    heap: u64,
 }
 fn profile() -> &'static Profile {
     static PROFILE: std::sync::OnceLock<Profile> = std::sync::OnceLock::new();
@@ -87,10 +86,7 @@ fn profile() -> &'static Profile {
             },
         };
 
-        let heap = client::worst_case(&limits).expect("whole joint root bound")
-            + 2 * view::worst_case(&bounds, &limits, &jig, &obs, &infra)
-                .expect("full joint view, bindings and books bound");
-        Profile { bounds, jig, obs, infra, heap }
+        Profile { bounds, jig, obs, infra }
     })
 }
 #[must_use]
@@ -255,10 +251,6 @@ impl jig_client_world::harness::App for Client {
     }
     fn patch_limit(view: &Self::View) -> u32 {
         Ops::patch_limit(view)
-    }
-    fn worst_case(supplied: &Self::Limits) -> u64 {
-        assert_eq!(*supplied, limits(), "constructor and receiving bounds match");
-        profile().heap
     }
     fn seen(tree: &skein_ui::Tree) -> Vec<jig_client_world::harness::Seen> {
         Ops::seen(tree)

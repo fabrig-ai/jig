@@ -1,4 +1,4 @@
-//! jig's view limits and page scratch (client/domain/view.md, section 10).
+//! jig's view limits (client/domain/view.md, section 10).
 
 use skein_ui::Limits;
 
@@ -111,12 +111,6 @@ pub fn envelope(
         scene_marks: 0,
         scene_bytes: 0,
     })
-}
-
-/// Heap for the UI containers and jig's page-building scratch.
-#[must_use]
-pub fn jig_worst_case(limits: &Limits) -> Option<u64> {
-    skein_ui::worst_case(limits)?.checked_add(crate::pages::scratch(limits)?)
 }
 
 pub mod ui;

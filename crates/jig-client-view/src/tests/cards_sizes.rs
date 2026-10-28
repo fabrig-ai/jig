@@ -503,8 +503,7 @@ pub(super) fn scenario(words: &crate::words::Words) {
     let default = crate::limits::of(&CLIENT, &crate::page::Arrangement::none()).unwrap();
     let localized = crate::limits::of_words(&CLIENT, words).unwrap();
     assert!(default.text_per_node >= localized.text_per_node);
-    assert!(crate::limits::jig_worst_case(&localized).is_some());
-    assert!(crate::jig_bindings_worst_case(localized.bindings, &CLIENT).is_some());
+
     let mut excessive = CLIENT;
     excessive.rows = u32::MAX;
     assert!(crate::card_nodes(&excessive).is_none());

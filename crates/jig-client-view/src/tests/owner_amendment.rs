@@ -142,7 +142,7 @@ fn build(value: &OwnerAmendmentState, words: &Words) -> Tree {
         scene_marks: 0,
         scene_bytes: 0,
     };
-    assert!(crate::limits::jig_worst_case(&limits).is_some());
+
     let mut builder = Builder::new(&limits);
     view::render(&mut builder, value, words, client_limits().text, client_limits().rows);
     let tree = builder.finish();

@@ -436,22 +436,6 @@ pub(crate) fn valid(limits: &crate::Limits) -> bool {
     limits.rows.checked_mul(3).is_some()
 }
 
-/// Heap for inbox lineage and whole reply-line context, cursors and the chat form.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    limits.rows.checked_mul(3)?;
-    List::<contract::InboxEntry>::worst_case(limits.rows)?
-        .checked_mul(7)?
-        .checked_add(u64::from(limits.rows).checked_mul(limits.document_bytes)?.checked_mul(6)?)?
-        .checked_add(List::<ObjectKey>::worst_case(limits.rows.checked_mul(3)?)?)?
-        .checked_add(List::<crate::objects::Context>::worst_case(limits.rows.checked_mul(3)?)?)?
-        .checked_add(u64::from(limits.text).checked_mul(4)?)?
-        .checked_add(limits.document_bytes)
-}
-
 /// Receives the live snapshot at its reached end, preserving retained ended rows.
 pub(crate) fn delivered(
     domain: &mut Ui,

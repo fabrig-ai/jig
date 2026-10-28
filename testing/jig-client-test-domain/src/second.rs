@@ -1,5 +1,4 @@
 //! The second connector owns resource/kind words and the shared link only.
-use alloc::boxed::Box;
 use jig_client::Link;
 use jig_client::contract::Part;
 use skein_lib::List;
@@ -87,12 +86,6 @@ impl Side {
         }
         false
     }
-}
-#[must_use]
-pub fn worst_case(parts: u32, segments: u32, text: u32) -> Option<u64> {
-    List::<Held>::worst_case(parts)?.checked_mul(2)?.checked_add(u64::from(parts).checked_mul(
-        List::<Box<[u8]>>::worst_case(segments)?.checked_add(u64::from(segments).checked_mul(u64::from(text))?)?,
-    )?)
 }
 impl Side {
     /// Read this connector's own `me` document; no sibling supplies its party.

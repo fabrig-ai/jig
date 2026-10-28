@@ -411,9 +411,6 @@ impl Host for NativeClient {
     fn is_empty(&self) -> bool {
         self.closing && self.shell.is_empty() && self.terminal.as_ref().is_none_or(skein_ui_text::Terminal::closed)
     }
-    fn worst_case(&self) -> u64 {
-        self.shell.worst_case() + Test::worst_case(&self.env.limits) + 8 * 1024 * 1024
-    }
     fn operations(&self) -> u32 {
         self.shell.operations() + if self.terminal.is_some() { 10 } else { 0 }
     }

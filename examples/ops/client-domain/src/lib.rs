@@ -23,6 +23,6 @@ pub use boundary::{Action, Answered, Ask, Event, Fact, Request};
 pub use domain::{
     Domain, configure_arrangement, configure_navigation, fire, new, next_deadline, shown, step, take, unlinked,
 };
-pub use limits::{Limits, worst_case};
+pub use limits::{Limits, valid};
 #[cfg(test)]
 mod tests;

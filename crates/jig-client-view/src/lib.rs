@@ -47,7 +47,7 @@ mod sizes;
 pub use owner::Owner;
 pub mod words;
 
-pub use binding::{JigBindings, JigMeaning, decode, jig_bindings_worst_case};
+pub use binding::{JigBindings, JigMeaning, decode};
 pub use pages::{after_page, jig};
 pub use sizes::{
     arranged_nodes, banner_nodes, card_nodes, chip_nodes, confirmation_nodes, conversation_nodes, conversations_nodes,
@@ -126,5 +126,5 @@ pub mod store;
 pub mod ui;
 pub mod windows;
 pub use boundary::{Event, How, Refused, Request};
-pub use limits::ui::{Limits, valid, worst_case};
+pub use limits::ui::{Limits, valid};
 pub use ui::{Borrowed, Ui, fire, next_deadline, reclaim, step};

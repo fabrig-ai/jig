@@ -89,13 +89,6 @@ impl Drafts {
         }
     }
 }
-/// The draft index and its bounded whole words, independent of field and record copies.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    List::<Draft>::worst_case(limits.drafts)?
-        .checked_mul(2)?
-        .checked_add(u64::from(limits.drafts).checked_mul(u64::from(limits.text))?)
-}
 fn erase(domain: &mut Ui, task: u64, out: &mut Queue<Request>) {
     domain.drafts.remove(task);
     if domain.drafts.active == Some(task) {

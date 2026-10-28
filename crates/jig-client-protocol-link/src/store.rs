@@ -24,17 +24,9 @@ impl Store {
 /// is finite and every capacity they derive fits (programming-model.md, 6.3).
 #[must_use]
 pub(crate) fn valid(limits: &Limits) -> bool {
-    limits.exchanges.checked_add(1).is_some() && w::Keyed::worst_case_bytes(&limits.wire).is_some()
+    w::Keyed::worst_case_bytes(&limits.wire).is_some()
 }
 
-pub(super) fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let capacity = limits.exchanges.checked_add(1)?;
-    let body = w::Keyed::worst_case_bytes(&limits.wire)?;
-    Queue::<Held>::worst_case(capacity)?.checked_add(body.checked_add(40)?.checked_mul(u64::from(capacity))?)
-}
 pub(super) fn key(record: &Saved) -> Box<[u8]> {
     bytes::copy_of(&record.record.key)
 }

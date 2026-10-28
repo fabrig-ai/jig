@@ -112,9 +112,3 @@ impl Fields {
         }
     }
 }
-/// Purpose entries and all their bounded words.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    Map::<Purpose, Field>::worst_case(limits.fields)?
-        .checked_add(u64::from(limits.fields).checked_mul(u64::from(limits.text))?)
-}

@@ -102,7 +102,3 @@ pub fn decode(bindings: &Bindings, token: Token, act: Act) -> Option<first::Act>
     }
     None
 }
-#[must_use]
-pub fn worst_case(capacity: u32) -> Option<u64> {
-    List::<Entry>::worst_case(capacity)
-}

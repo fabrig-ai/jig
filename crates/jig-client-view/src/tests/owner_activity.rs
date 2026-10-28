@@ -92,7 +92,7 @@ fn tree_limits(f: view::ActivityFragment) -> Limits {
 fn build(value: &OwnerActivityLine, words: &Words) -> Tree {
     let f = view::required(value, &client_limits(), words).unwrap();
     let limits = tree_limits(f);
-    assert!(crate::limits::jig_worst_case(&limits).is_some());
+
     let mut b = Builder::new(&limits);
     view::render(&mut b, value, words);
     let tree = b.finish();

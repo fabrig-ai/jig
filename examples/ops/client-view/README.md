@@ -8,9 +8,9 @@ keyed send; the view changes no domain state.
 
 `Limits::of` checks the sum of jig's page and both fragment passes, nested
 family rows, forms, readable drawing fallback, phrase capacities and owner
-binding tables. `worst_case` includes render/diff/splice/patch storage and
-loaded phrasebooks. Input time is epoch seconds converted to a checked Wall
-value; owner observation time and desired-end time are separate facts.
+binding tables. `valid` checks the composed phrase capacities. Input time
+is epoch seconds converted to a checked Wall value; owner observation time
+and desired-end time are separate facts.
 
 Observability shows supplied incident identities, qualified service names,
 severity, health and retained timeline points. A missing lead says that no

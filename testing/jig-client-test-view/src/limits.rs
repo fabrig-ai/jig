@@ -1,5 +1,5 @@
 //! Checked composition includes both slot passes (view.md, section 10).
-use crate::{bindings, drawing, family, words};
+use crate::{drawing, family, words};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     pub tree: skein_ui::Limits,
@@ -129,23 +129,4 @@ pub fn valid(
 ) -> bool {
     jig.book().capacity(jig_client_view::phrases::jig::JigPhrase::LoadingPart.id()).is_some()
         && first.capacity().is_some()
-}
-
-#[must_use]
-pub fn worst_case(
-    limits: &Limits,
-    domain: &jig_client_test_domain::Limits,
-    jig: &jig_client_view::words::Words,
-    first: &words::Words,
-) -> Option<u64> {
-    if !valid(limits, domain, jig, first) {
-        return None;
-    }
-    jig_client_view::limits::jig_worst_case(&limits.tree)?
-        .checked_add(jig_client_view::jig_bindings_worst_case(limits.tree.bindings, &domain.jig)?)?
-        .checked_add(bindings::worst_case(limits.tree.bindings)?)?
-        .checked_add(skein_ui::phrases::worst_case(jig.book().limits())?)?
-        .checked_add(skein_ui::phrases::worst_case(first.book.limits())?)?
-        .checked_add(u64::from(jig.book().capacity(jig_client_view::phrases::jig::JigPhrase::LoadingPart.id())?))?
-        .checked_add(u64::from(first.capacity()?))
 }

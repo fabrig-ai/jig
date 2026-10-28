@@ -119,20 +119,16 @@ fn view_bounds(
     bounds.tree.slots = 128;
     bounds.tree.patches = 5 * bounds.tree.nodes;
     bounds.tree.text_bytes = bounds.tree.nodes.checked_mul(bounds.tree.text_per_node).expect("world text fits");
-    view::worst_case(&bounds, limits, jig, obs, infra).expect("world profile fits");
     bounds
 }
 // The ordinary world uses one immutable limits/English profile. Keep all
-// composition and heap checks in its initializer before admitting clients.
-fn fixture_profile() -> (view::Limits, u64) {
-    static PROFILE: OnceLock<(view::Limits, u64)> = OnceLock::new();
+// composition checks in its initializer before admitting clients.
+fn fixture_profile() -> view::Limits {
+    static PROFILE: OnceLock<view::Limits> = OnceLock::new();
     *PROFILE.get_or_init(|| {
         let limits = limits();
         let (jig, obs, infra) = phrasebooks(&limits);
-        let bounds = view_bounds(&limits, &jig, &obs, &infra);
-        let heap = domain::worst_case(&limits).expect("root bound")
-            + 2 * view::worst_case(&bounds, &limits, &jig, &obs, &infra).expect("shell model projection bound");
-        (bounds, heap)
+        view_bounds(&limits, &jig, &obs, &infra)
     })
 }
 impl App for Ops {
@@ -150,7 +146,7 @@ impl App for Ops {
     fn new(seed: u64) -> (Self::Root, Self::View) {
         let limits = limits();
         let (jig, obs, infra) = phrasebooks(&limits);
-        let bounds = fixture_profile().0;
+        let bounds = fixture_profile();
         let mut root = domain::unlinked(&limits, seed);
         domain::configure_arrangement(&mut root, view::arrangement()).expect("ops arrangement before start");
         (root, view::View::new(&bounds, &limits, jig, obs, infra, 1))
@@ -265,15 +261,6 @@ impl App for Ops {
     }
     fn patch_limit(view: &Self::View) -> u32 {
         view.limits().tree.patches
-    }
-    fn worst_case(limits: &Self::Limits) -> u64 {
-        if *limits == self::limits() {
-            return fixture_profile().1;
-        }
-        let (jig, obs, infra) = phrasebooks(limits);
-        let bounds = view_bounds(limits, &jig, &obs, &infra);
-        domain::worst_case(limits).expect("root bound")
-            + 2 * view::worst_case(&bounds, limits, &jig, &obs, &infra).expect("shell model projection bound")
     }
     fn window_changed(event: &Event) -> bool {
         match event {

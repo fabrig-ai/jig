@@ -541,8 +541,7 @@ fn connector_values_view_the_capacity_envelope_covers_full_rows_paths_and_escape
     );
     assert_eq!(tree.len(), render::document_nodes(&limits()).unwrap() + 1, "full panel reaches every counted node");
     let bound = render::requirements(&limits(), &words).unwrap();
-    assert!(jig_client_view::limits::jig_worst_case(&bound).is_some());
-    assert!(render::worst_case(&limits(), &words).is_some());
+
     let mut overflow = limits();
     overflow.rows = u32::MAX;
     assert!(render::document_nodes(&overflow).is_none());

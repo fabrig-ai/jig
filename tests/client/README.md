@@ -8,7 +8,7 @@ its shell, independent model tree, fake people and referee.
 `App` adapts the root's own events, requests, records and addresses. Its
 `duty` is the shell boundary: save/erase, wire, show, sign-in or fact. A failed
 store calls `unsent` for that step's sends. `record_key` identifies records;
-`patch_limit` and `worst_case` provide the owner's bounds. `seen`,
+`patch_limit` bounds the view’s patches; the scenario supplies its heap ceiling. `seen`,
 `sent`, `received` and `card` translate public trees, wire requests and
 callback values into the referee's vocabulary, without reading root state.
 

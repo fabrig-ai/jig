@@ -1,6 +1,6 @@
 //! Keep: checked child sums and both slot passes (view.md, 10).
 //! Replace: application family and connector node bounds.
-use crate::{bindings, drawing, words::Words};
+use crate::{drawing, words::Words};
 /// Every task section is visible together (examples.md, 8).
 #[must_use]
 pub fn arrangement() -> jig_client_view::page::Arrangement {
@@ -70,31 +70,22 @@ impl Limits {
         tree.text_per_node = tree.text_per_node.max(text);
         tree.drawing_bytes = drawing::BYTES;
         let limits = Self { tree };
-        worst_case(&limits, domain, jig, observability, infrastructure)?;
+        if !valid(&limits, domain, jig, observability, infrastructure) {
+            return None;
+        }
         Some(limits)
     }
 }
+/// Whether the composed phrase capacities are representable.
 #[must_use]
-pub fn worst_case(
-    limits: &Limits,
-    domain: &jig_ops_client_domain::Limits,
+pub fn valid(
+    _limits: &Limits,
+    _domain: &jig_ops_client_domain::Limits,
     jig: &jig_client_view::words::Words,
     observability: &Words,
     infrastructure: &Words,
-) -> Option<u64> {
-    jig_client_view::limits::jig_worst_case(&limits.tree)?
-        .checked_add(jig_client_view::jig_bindings_worst_case(limits.tree.bindings, &domain.jig)?)?
-        .checked_add(
-            bindings::worst_case(limits.tree.bindings, domain.infrastructure.text.max(domain.observability.text))?
-                .checked_mul(2)?,
-        )?
-        .checked_add(skein_ui::phrases::worst_case(jig.book().limits())?)?
-        .checked_add(skein_ui::phrases::worst_case(observability.book.limits())?)?
-        .checked_add(skein_ui::phrases::worst_case(infrastructure.book.limits())?)?
-        .checked_add(u64::from(
-            observability
-                .capacity()?
-                .max(infrastructure.capacity()?)
-                .max(jig.book().capacity(jig_client_view::phrases::jig::JigPhrase::LoadingPart.id())?),
-        ))
+) -> bool {
+    jig.book().capacity(jig_client_view::phrases::jig::JigPhrase::LoadingPart.id()).is_some()
+        && observability.capacity().is_some()
+        && infrastructure.capacity().is_some()
 }

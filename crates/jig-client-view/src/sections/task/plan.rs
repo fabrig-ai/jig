@@ -168,13 +168,6 @@ fn item(
     }
 }
 
-/// Temporary visits and membership while emitting a retained tree.
-pub(super) fn scratch(rows: u32) -> Option<u64> {
-    Stack::<Visit>::worst_case(rows.checked_mul(2)?)?
-        .checked_add(Set::<u64>::worst_case(rows)?)?
-        .checked_add(crate::owner_tree::scratch(rows)?)
-}
-
 fn owner_ended(b: &mut Builder, client: &Borrowed<'_>, words: &Words, bindings: &mut JigBindings) {
     if let Some(page) = &client.task_page().owner_ended {
         crate::historical_pages::ended_render(b, client, page, words, bindings);

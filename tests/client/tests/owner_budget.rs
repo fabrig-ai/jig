@@ -68,7 +68,7 @@ fn ledger_parent_state_and_period_options_survive_whole_value_pricing() {
     }
 }
 #[test]
-fn maximal_budget_and_ledger_fragments_fit_tree_and_checked_words_heap_bounds() {
+fn maximal_budget_and_ledger_fragments_fit_the_tree_envelope() {
     use jig_client_view::owner_budget as view;
     use jig_client_view::owner_budget_words::{self as data, OwnerBudgetWords};
     use skein_ui::Builder;
@@ -83,10 +83,9 @@ fn maximal_budget_and_ledger_fragments_fit_tree_and_checked_words_heap_bounds() 
         text_bytes: 8192,
         hole_bytes: 256,
     };
-    let word_meter = Meter::new();
     let words = OwnerBudgetWords::load(Box::new([data::standalone_language()]), &language_limits, 0, 0)
         .expect("whole checked budget and shared Funder sayings");
-    assert!(word_meter.held() <= data::worst_case(&language_limits).expect("word envelope"));
+
     let budget = OwnerBudget {
         numbers: numbers(),
         left: u64::MAX - 4,
@@ -130,7 +129,7 @@ fn maximal_budget_and_ledger_fragments_fit_tree_and_checked_words_heap_bounds() 
             scene_marks: 0,
             scene_bytes: 0,
         };
-        let meter = Meter::new();
+
         let mut builder = Builder::new(&limits);
         if is_ledger {
             view::ledger(&mut builder, &ledger, words.words());
@@ -151,6 +150,5 @@ fn maximal_budget_and_ledger_fragments_fit_tree_and_checked_words_heap_bounds() 
                 "all owner accounting values retain their full width in both fragments"
             );
         }
-        assert!(meter.held() <= jig_client_view::limits::jig_worst_case(&limits).expect("tree heap envelope"));
     }
 }

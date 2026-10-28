@@ -350,12 +350,3 @@ pub fn requirements(limits: &ConnectorLimits, words: &Words) -> Option<skein_ui:
         scene_bytes: 0,
     })
 }
-
-/// Full view storage, checked language data and the largest temporary literal
-/// segment escape. Caller composition adds its other owners' retained state.
-#[must_use]
-pub fn worst_case(limits: &ConnectorLimits, words: &Words) -> Option<u64> {
-    jig_client_view::limits::jig_worst_case(&requirements(limits, words)?)?
-        .checked_add(skein_ui::phrases::worst_case(words.book().limits())?)?
-        .checked_add(u64::from(jig_client_view::literal_segment::max_bytes(limits.segment_bytes)?))
-}

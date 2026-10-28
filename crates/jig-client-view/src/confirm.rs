@@ -95,13 +95,6 @@ pub struct Confirmation {
     /// The card to restore if the confirmation closes before sending.
     pub previous: Card,
 }
-/// The one confirmation's bounded choices, prior refusal and amendment payloads.
-#[must_use]
-pub fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    List::<jig_client::shapes::Delegate>::worst_case(limits.delegates)?
-        .checked_add(limits.document_bytes.checked_mul(2)?)?
-        .checked_add(List::<u16>::worst_case(limits.rows)?)
-}
 fn clear_fields(domain: &mut Ui) {
     for purpose in [
         Purpose::Reason,

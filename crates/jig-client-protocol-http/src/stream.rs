@@ -143,19 +143,6 @@ pub fn valid(limits: &Limits) -> bool {
     bounds(*limits).is_some()
 }
 
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let (decoded, framing) = bounds(*limits)?;
-    sse::worst_case(&framing)?
-        .checked_add(u64::from(framing.chunk))?
-        .checked_add(u64::from(decoded).checked_mul(2)?)?
-        .checked_add(Queue::<sse::Event>::worst_case(2)?)?
-        .checked_add(Queue::<Down>::worst_case(2)?)
-}
-
 fn line_piece(bytes: &[u8], chunk: u32) -> &[u8] {
     let maximum = core::cmp::min(bytes.len(), usize::try_from(chunk).expect("u32 fits usize"));
     let piece = bytes.get(..maximum).expect("bounded scan");
