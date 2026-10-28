@@ -88,6 +88,7 @@ pub(super) fn route_core(
                 | core::Held::TaskTerminalAcknowledged { .. }
                 | core::Held::TaskTurnKept { .. }
                 | core::Held::AcknowledgeTurn { .. }
+                | core::Held::Restart(_)
                 | core::Held::Drained
                 | core::Held::Grant { .. }
                 | core::Held::Cancel { .. }

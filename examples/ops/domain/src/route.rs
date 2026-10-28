@@ -74,13 +74,8 @@ pub(crate) fn work(
         }
         Work::Restart(request) => crate::restart::route(domain, env, decision, request, work),
         Work::SwitchChecked => {
-            if domain.core.restart_checked() {
-                work.push(Work::Core(core::Event::SettingsCommit {
-                    room: core::room_max(&env.limits.core).expect("validated core room").writes,
-                }));
-                work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
-                held(decision, Output::Switch);
-            }
+            let requests = domain.core.restart_sweep(&Env { now: env.now, wall: env.wall, limits: env.limits.core });
+            core_out(domain, env, decision, requests, work);
         }
         Work::AdoptClaims => {
             // Tasks's restoration terminal produces the claims. Feed it first,
@@ -266,6 +261,7 @@ fn core_held(
     work: &mut Queue<Work>,
 ) {
     match value {
+        core::Held::Restart(stage) => child(decision, crate::Released::Restart(stage)),
         core::Held::Load(load) => held(decision, Output::CoreLoad(*load)),
         core::Held::ApplicationDelivery { .. } => unreachable!("document assembly owns this synchronous output"),
         core::Held::ApplicationWatchEnded { watcher, connector, subject, why } => {

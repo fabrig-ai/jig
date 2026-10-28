@@ -71,6 +71,8 @@ pub enum RestartStep {
     RestoreConnector {
         connector: u16,
     },
+    /// Drain bounded retention batches only after every child's links exist.
+    Sweep,
     /// Make the store active, then commit the start’s wires (domain/engine.md, 6).
     Switch,
     AdoptRuns,
@@ -126,10 +128,10 @@ pub(crate) enum Restart {
 }
 
 impl Core {
-    /// At the switch step, after the children's checks were stepped:
-    /// false refuses the start at `Switch`, before anything switches.
+    /// At the sweep step, after the children's links were stepped:
+    /// false refuses the start before any retention or switch.
     pub fn restart_checked(&mut self) -> bool {
-        if self.restart != Restart::Waiting(RestartStep::Switch) {
+        if self.restart != Restart::Waiting(RestartStep::Sweep) {
             let _request = self.restart_refuse();
             return false;
         }
@@ -141,6 +143,7 @@ impl Core {
         }
         self.accounts.link_restored();
         self.link_tasks();
+        self.settings_proposals_consistent();
         for ((party, task), _) in self.people.read_conversations() {
             assert!(
                 self.tasks.task(*task).is_some(),
@@ -158,6 +161,36 @@ impl Core {
             );
         }
         true
+    }
+
+    /// One bounded post-link batch. Its continuation follows durability; no
+    /// ordinary decision opens and no timer runs while records are loading.
+    pub fn restart_sweep(&mut self, env: &skein_lib::Env<crate::Limits>) -> crate::Requests {
+        assert!(self.restart == Restart::Waiting(RestartStep::Sweep), "core: sweep follows every restored link");
+        if !self.restart_checked() {
+            return crate::Requests::Out(skein_lib::Queue::with_capacity(0));
+        }
+        let mut expired = skein_lib::Queue::with_capacity(jig_domain_people::max_out(&env.limits.people));
+        jig_domain_people::fire(
+            &mut self.people,
+            &skein_lib::Env { now: env.now, wall: env.wall, limits: env.limits.people },
+            &mut expired,
+        );
+        let mut out = skein_lib::Queue::with_capacity(2);
+        let mut changed = false;
+        while let Some(request) = expired.pop() {
+            let jig_domain_people::Request::Erase { key } = request else {
+                unreachable!("people expiry only erases one retained row");
+            };
+            out.push(crate::Request::Write(crate::Write::Erase(crate::Key::People(key))));
+            changed = true;
+        }
+        let next = if changed { RestartStep::Sweep } else { RestartStep::Switch };
+        if !changed {
+            let _request = self.restart_done(RestartStep::Sweep);
+        }
+        out.push(crate::Request::Held(alloc::boxed::Box::new(crate::Held::Restart(next))));
+        crate::Requests::Out(out)
     }
 
     /// Check all loaded claims together before the fleet can settle any of
@@ -272,13 +305,14 @@ impl Core {
                 self.census_progress = skein_lib::Map::with_capacity(self.census_progress.capacity());
                 match self.connectors.first() {
                     Some(&connector) => RestartStep::RestoreConnector { connector },
-                    None => RestartStep::Switch,
+                    None => RestartStep::Sweep,
                 }
             }
             RestartStep::RestoreConnector { connector } => match self.restart_next_connector(connector) {
                 Some(connector) => RestartStep::RestoreConnector { connector },
-                None => RestartStep::Switch,
+                None => RestartStep::Sweep,
             },
+            RestartStep::Sweep => RestartStep::Switch,
             RestartStep::Switch => RestartStep::AdoptRuns,
             RestartStep::AdoptRuns => {
                 if !self.adopted.is_empty() {

@@ -782,9 +782,15 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                     domain.stopped_reported = false;
                 }
                 core::RestartRequest::Step(step) => match step {
-                    core::RestartStep::Switch => {
+                    core::RestartStep::Sweep => {
                         work.push(Work::Core(core::Event::Tasks(tasks::Event::Check)));
                         work.push(Work::SwitchChecked);
+                    }
+                    core::RestartStep::Switch => {
+                        let room = core::room_max(&env.limits.core).expect("validated core room").writes;
+                        work.push(Work::Core(core::Event::SettingsCommit { room }));
+                        work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
+                        hold(&mut decision, Delivery::Restart(step));
                     }
                     core::RestartStep::AdoptRuns => {
                         work.push(Work::Core(core::Event::Tasks(tasks::Event::Restored)));
@@ -808,12 +814,9 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 },
             },
             Work::SwitchChecked => {
-                if domain.core.restart_checked() {
-                    let room = core::room_max(&env.limits.core).expect("validated core room").writes;
-                    work.push(Work::Core(core::Event::SettingsCommit { room }));
-                    work.push(Work::Core(core::Event::Account(jig_domain_accounts::Event::Want)));
-                    hold(&mut decision, Delivery::Restart(core::RestartStep::Switch));
-                }
+                let requests =
+                    domain.core.restart_sweep(&Env { now: env.now, wall: env.wall, limits: env.limits.core });
+                route_core(domain, env, &mut decision, requests, &mut work);
             }
             Work::AdoptRestored => {
                 if domain.core.restart_admit_claims() {
@@ -968,6 +971,9 @@ pub fn release(domain: &mut Domain, env: &Env<Limits>, out: &mut Queue<Request>)
     for _ in 0..ready.len() {
         let delivery = ready.pop().expect("release count");
         match delivery {
+            Delivery::Core(core::Held::Restart(stage)) => {
+                decide(domain, env, Work::Restart(core::RestartRequest::Step(stage)));
+            }
             Delivery::Core(core::Held::MakeEffect { connector, entry }) => {
                 step(domain, env, Event::Connector { number: connector, event: connector::Event::Make { entry } });
             }
@@ -1107,6 +1113,7 @@ fn resume_restart_outbox(domain: &mut Domain, env: &Env<Limits>) -> bool {
             core::RestartStep::LoadCore
             | core::RestartStep::LoadInbox
             | core::RestartStep::RestoreConnector { .. }
+            | core::RestartStep::Sweep
             | core::RestartStep::Switch
             | core::RestartStep::AdoptRuns
             | core::RestartStep::ReadAfresh { .. }
