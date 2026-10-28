@@ -148,7 +148,8 @@ pub fn document(
             | reads::Past::PersonTask { .. }
             | reads::Past::Reply(_) => w::ReadValue::Historical(Box::new(historical(value, models, limits)?)),
         },
-        reads::Answer::Setting(_)
+        reads::Answer::Holds(_)
+        | reads::Answer::Setting(_)
         | reads::Answer::Revision(_)
         | reads::Answer::Revisions(_)
         | reads::Answer::Tasks(_)

@@ -32,7 +32,8 @@ pub fn page(
         reads::Read::Notes { .. } | reads::Read::ScopedNotes { .. } => {
             documents::notes(models, page, before, after, limits)?
         }
-        reads::Read::Tasks { .. }
+        reads::Read::Holds { .. }
+        | reads::Read::Tasks { .. }
         | reads::Read::Application { .. }
         | reads::Read::Frame
         | reads::Read::Task { .. }
@@ -71,7 +72,8 @@ fn check_edges(read: &reads::Read, page: &reads::Page) -> Result<(), w::Problem>
                     reads::Read::ScopedNotes { scope, description, .. } => {
                         reads::Scope::ScopedNotes { scope: scope.clone(), description: description.clone() }
                     }
-                    reads::Read::Application { .. }
+                    reads::Read::Holds { .. }
+                    | reads::Read::Application { .. }
                     | reads::Read::Frame
                     | reads::Read::Task { .. }
                     | reads::Read::Proposal { .. }
@@ -145,4 +147,16 @@ fn task_pieces(
         pieces.push(writer.finish()).expect("same line count");
     }
     super::pieces(&pieces, bound, path)
+}
+
+pub(super) fn holds(page: &jig_domain_core::documents::ProjectHolds, limits: &w::Limits) -> Result<w::ReadValue, w::Problem> {
+    let mut rows = skein_lib::List::with_capacity(u32::try_from(page.rows.len()).expect("bounded rows"));
+    for row in &page.rows {
+        let mut exempt = skein_lib::List::with_capacity(u32::try_from(row.exempt.len()).expect("bounded exemptions"));
+        for task in &row.exempt {
+            exempt.push(*task).expect("same exemptions");
+        }
+        rows.push(w::HoldRow::new(limits, w::HoldRowParts { hold: super::chips::placed(&row.hold, limits)?, held: row.held, exempt })?).expect("same rows");
+    }
+    Ok(w::ReadValue::Holds(w::ProjectHolds::new(limits, w::ProjectHoldsParts { project: page.project, rows, after: match &page.after { Some(value) => Some(wire_cursor(value, limits)?), None => None } })?))
 }

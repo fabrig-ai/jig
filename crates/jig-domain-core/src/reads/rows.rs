@@ -22,7 +22,7 @@ pub(super) fn scope_allowed(core: &Core, party: u64, scope: &Scope) -> bool {
     match scope {
         Scope::SettingsHistory { .. } => core.people.role(party, jig_domain_people::DEPLOYMENT).is_some(),
         Scope::Tasks { query } => documents::task_query::admission(core, party, query).is_ok(),
-        Scope::Notes { project } | Scope::Spend { project } => core.people.role(party, *project).is_some(),
+        Scope::Holds { project } | Scope::Notes { project } | Scope::Spend { project } => core.people.role(party, *project).is_some(),
         Scope::ScopedNotes { scope, .. } => core.people.role(party, note_project(scope)).is_some(),
         Scope::Inbox { filter, .. } => match filter.project {
             Some(project) => core.people.role(party, project).is_some(),
@@ -122,6 +122,7 @@ pub(super) fn needs_store(read: &Read, document: &Document) -> bool {
             | Read::Project { .. }
             | Read::Notes { .. }
             | Read::ScopedNotes { .. }
+            | Read::Holds { .. }
             | Read::Spend { .. }
             | Read::Settings
             | Read::Setting { .. }
@@ -173,7 +174,8 @@ pub(super) fn live_page(core: &Core, limits: &Limits, party: u64, read: &Read, d
                 | Read::Project { .. }
                 | Read::Notes { .. }
                 | Read::ScopedNotes { .. }
-                | Read::Spend { .. }
+                | Read::Holds { .. }
+            | Read::Spend { .. }
                 | Read::Settings
                 | Read::Setting { .. }
                 | Read::Revision { .. }
@@ -325,6 +327,7 @@ fn is_page(scope: &Scope) -> bool {
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
         | Scope::SettingsHistory { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => true,
         Scope::Task { .. }
         | Scope::Proposal { .. }
@@ -389,6 +392,7 @@ pub(super) fn from_store(
         | Scope::Inbox { .. }
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => owner_rows(core, limits, range, raw, next, wall),
     }
 }
@@ -583,6 +587,7 @@ fn object(
                 | Scope::Notes { .. }
                 | Scope::ScopedNotes { .. }
                 | Scope::SettingsHistory { .. }
+                | Scope::Holds { .. }
                 | Scope::Spend { .. } => unreachable!("task object scope"),
             };
             Ok(Some(answer))
@@ -833,6 +838,7 @@ fn object(
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
         | Scope::SettingsHistory { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => Ok(None),
     }
 }
@@ -923,6 +929,7 @@ fn page_row(core: &Core, limits: &Limits, range: &Range, row: Row) -> Result<Opt
             }
             Ok(Some(PageRow::Note(documents::note_from_entry(core, limits, range.party, value)?)))
         }
+        Scope::Holds { .. } => Ok(None),
         Scope::Spend { project } => {
             let Some(value) = ledger(&row.value) else {
                 return Ok(None);
@@ -967,6 +974,7 @@ fn inbox_contexts(scope: &Scope, rows: u32) -> Option<List<documents::InboxSelec
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
         | Scope::SettingsHistory { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => None,
     }
 }
@@ -1468,6 +1476,7 @@ pub(super) fn position_allowed(scope: &Scope, position: &Position) -> bool {
             | Scope::Notes { .. }
             | Scope::ScopedNotes { .. }
             | Scope::SettingsHistory { .. }
+            | Scope::Holds { .. }
             | Scope::Spend { .. } => false,
         },
         Position::Owner(key) => {
@@ -1512,7 +1521,7 @@ pub(super) fn position_allowed(scope: &Scope, position: &Position) -> bool {
                     | Key::People(_)
                     | Key::Accounts(_) => false,
                 },
-                Scope::SettingsHistory { .. } => false,
+                Scope::Holds { .. } | Scope::SettingsHistory { .. } => false,
                 Scope::Spend { project } => kind == KeyKind::Ledger(*project),
                 Scope::Inbox { group, .. } => group.updates() && super::indexed::is_update(key),
             }
@@ -1766,4 +1775,37 @@ fn linked_limit(limits: &Limits) -> Option<u32> {
         .checked_add(limits.tasks.references)?
         .checked_add(limits.tasks.delegates)?
         .checked_add(limits.tasks.batch)
+}
+
+/// Fresh live pages need neither a store range nor a subscription.
+pub(super) fn holds(core: &Core, limits: &Limits, party: u64, project: u32, from: Option<&Cursor>) -> Answer {
+    if core.people.role(party, project).is_none() {
+        return Answer::None(Why::Unknown);
+    }
+    let scope = Scope::Holds { project };
+    let mut last = match from {
+        None => 0,
+        Some(Cursor::Live { scope: owner, after: documents::Cursor::Number { number }, store_after: None }) if *owner == scope => *number,
+        Some(Cursor::Live { .. } | Cursor::Store { .. }) => return Answer::None(Why::Unknown),
+    };
+    let window = documents::Window { rows: limits.documents.rows, after: Some(documents::Cursor::Number { number: last }) };
+    let mut rows = List::with_capacity(window.rows);
+    let mut after = None;
+    let mut last_row = last;
+    while let Some(hold) = core.tasks.next_placed_hold(last) {
+        if hold.project == project {
+            if rows.len() == window.rows {
+                after = Some(Cursor::Live { scope, after: documents::Cursor::Number { number: last_row }, store_after: None });
+                break;
+            }
+            let line = match documents::task_tree::placed_line(core, limits, party, hold) {
+                Ok(line) => line,
+                Err(Missing::TooLarge | Missing::Unknown | Missing::Ended | Missing::NotAllowed) => return Answer::None(Why::Busy),
+            };
+            rows.push(documents::HoldRow { hold: line, held: core.tasks.placed_held(hold.number), exempt: hold.exempt.clone() }).expect("bounded holds page");
+            last_row = hold.number;
+        }
+        last = hold.number;
+    }
+    Answer::Holds(Box::new(documents::ProjectHolds { project, rows: rows.into_boxed(), after }))
 }

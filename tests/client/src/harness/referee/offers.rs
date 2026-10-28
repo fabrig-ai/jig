@@ -73,6 +73,7 @@ impl Offers {
             | ReadValue::Turn(_)
             | ReadValue::Inbox(_)
             | ReadValue::OwnerInbox(_)
+            | ReadValue::Holds(_)
             | ReadValue::Spend(_)
             | ReadValue::OwnerSpend(_)
             | ReadValue::Notes(_)

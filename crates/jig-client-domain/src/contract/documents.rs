@@ -1045,3 +1045,17 @@ pub struct SpendPeriod {
     pub pools: List<Pool>,
     pub tasks: List<TaskSpend>,
 }
+
+/// A project's retained placed holds (`contract.md`, 5.6).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ProjectHolds {
+    pub project: u32,
+    pub rows: Box<[HoldRow]>,
+    pub after: Option<super::Cursor>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HoldRow {
+    pub hold: super::PlacedHold,
+    pub held: u32,
+    pub exempt: Box<[u64]>,
+}

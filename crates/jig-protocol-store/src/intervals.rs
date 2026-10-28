@@ -150,6 +150,7 @@ pub fn scope(party: u64, scope: &core::reads::Scope) -> Option<Box<[Range]>> {
         }
         Scope::EndedDelegates { task } => Box::new([numbered_prefix(&[keys::JIG, 1, 17], *task)]),
         Scope::Tasks { query } => ended_tasks(query),
+        Scope::Holds { .. } => Box::new([]),
         Scope::Spend { project } => Box::new([
             numbered_prefix(&[keys::JIG, 1, 2, 3], u64::from(*project)),
             numbered_prefix(&[keys::JIG, 1, 7, 3], u64::from(*project)),

@@ -20,6 +20,7 @@ fn subtree(scope: &Scope) -> bool {
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
         | Scope::SettingsHistory { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => false,
     }
 }

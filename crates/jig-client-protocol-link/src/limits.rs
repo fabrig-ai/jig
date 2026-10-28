@@ -39,6 +39,8 @@ fn wire(client: &jig_client_domain::Limits) -> Option<w::Limits> {
     wire.owned_record = u32::try_from(client.document_bytes).ok()?;
     wire.document_text_bytes = client.text;
     wire.placed_line_reason = client.text;
+    wire.project_holds_rows = client.rows;
+    wire.hold_row_exempt = u32::try_from(client.document_bytes / 8).ok()?.min(w::CEILINGS.hold_row_exempt);
     wire.me_providers = wire.owned_record;
     wire.owner_accounts_readiness = wire.owned_record;
     wire.owner_deployment_providers = wire.owned_record;

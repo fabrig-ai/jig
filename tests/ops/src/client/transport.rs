@@ -554,6 +554,7 @@ fn change_facts(change: &engine::Change, commit: u64, out: &mut Vec<Observed>) {
                 | ReadValue::OwnerProposal(_)
                 | ReadValue::OwnerPersonTask(_)
                 | ReadValue::OwnerEscalation(_)
+                | ReadValue::Holds(_)
                 | ReadValue::Spend(_)
                 | ReadValue::OwnerSpend(_)
                 | ReadValue::Project(_)
@@ -592,6 +593,7 @@ fn change_facts(change: &engine::Change, commit: u64, out: &mut Vec<Observed>) {
                 | ReadValue::OwnerProposal(_)
                 | ReadValue::OwnerPersonTask(_)
                 | ReadValue::OwnerEscalation(_)
+                | ReadValue::Holds(_)
                 | ReadValue::Spend(_)
                 | ReadValue::OwnerSpend(_)
                 | ReadValue::Project(_)
@@ -640,6 +642,7 @@ impl Scripted {
             | Read::Activity { .. }
             | Read::Turn { .. }
             | Read::Inbox { .. }
+            | Read::Holds { .. }
             | Read::Spend { .. }
             | Read::Project { .. }
             | Read::Notes { .. }

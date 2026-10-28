@@ -64,6 +64,17 @@ impl Domain {
         }
         self.placed.get(&next?)
     }
+    /// Count live tasks still held by this placed hold, without a snapshot.
+    #[must_use]
+    pub fn placed_held(&self, hold: u64) -> u32 {
+        let mut count = 0;
+        for (_, id) in &self.names {
+            if self.tasks.get(*id).expect("live task name").record.placed == Some(hold) {
+                count += 1;
+            }
+        }
+        count
+    }
     /// Borrow the placed hold currently holding this task, even under a cause of 5.5.
     #[must_use]
     pub fn placed_on(&self, task: u64) -> Option<&PlacedHold> {

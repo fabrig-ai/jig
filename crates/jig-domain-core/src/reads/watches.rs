@@ -105,7 +105,7 @@ fn from_store(
         Answer::Setting(_)
         | Answer::Revision(_)
         | Answer::Revisions(_)
-        | Answer::Tasks(_)
+        | Answer::Holds(_) | Answer::Tasks(_)
         | Answer::Document(_)
         | Answer::Page(_)
         | Answer::None(_) => Err(views::End::Gone),

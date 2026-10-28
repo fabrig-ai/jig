@@ -631,10 +631,14 @@ pub(super) fn hold_for(
 
 pub(super) fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Result<Option<PlacedLine>, Missing> {
     let Some(hold) = core.tasks.placed_on(task) else { return Ok(None) };
+    Ok(Some(placed_line(core, limits, party, hold)?))
+}
+
+pub(crate) fn placed_line(core: &Core, limits: &Limits, party: u64, hold: &tasks::PlacedHold) -> Result<PlacedLine, Missing> {
     if hold.reason.len() > usize::try_from(limits.documents.text_bytes).expect("text bound fits") {
         return Err(Missing::TooLarge);
     }
-    Ok(Some(PlacedLine {
+    Ok(PlacedLine {
         number: hold.number,
         owner: crate::roles::hold_owner(hold.owner),
         mode: hold.mode,
@@ -644,7 +648,7 @@ pub(super) fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Res
         revision: hold.revision,
         lifted: hold.lifted,
         may_lift: core.party_hold_admit(party, hold).is_ok(),
-    }))
+    })
 }
 
 pub(super) fn budget(row: &tasks::TaskRecord) -> BudgetLine {

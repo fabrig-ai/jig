@@ -89,7 +89,7 @@ pub(super) fn answer(destination: super::Destination, value: Answer) -> Requests
         Answer::Revisions(value) => SettingsAnswer::Revisions(*value),
         Answer::None(Why::Busy) => return refused(to, key, crate::CallPart::Unavailable),
         Answer::None(_) => SettingsAnswer::Unknown,
-        Answer::Tasks(_) | Answer::Historical(_) | Answer::Page(_) => {
+        Answer::Holds(_) | Answer::Tasks(_) | Answer::Historical(_) | Answer::Page(_) => {
             unreachable!("settings reads answer settings documents")
         }
     };
@@ -438,6 +438,7 @@ fn selected(scope: &Scope) -> (u32, u32, u32, bool) {
         | Scope::Inbox { .. }
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => unreachable!("settings range dispatched by its scope"),
     }
 }

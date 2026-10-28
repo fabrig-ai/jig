@@ -731,3 +731,115 @@ fn a_hold_rejects_a_zero_task_and_a_task_named_in_another_project() {
     ));
     assert_eq!(holds_count(&s), 0);
 }
+
+fn read_story(seed: u64, rows: u32) -> Story {
+    let (config, mut limits) = configuration(seed);
+    limits.core.documents.rows = rows;
+    limits.core.tasks.placed_holds = 4;
+    limits.core.tasks.project_placed_holds = 4;
+    limits.core.tasks.party_placed_holds = 4;
+    jig_core_world::peers::journal(&mut limits);
+    let mut s = configured_story(seed, config, &limits);
+    s.world.reads = Some(jig_core_world::reads::Parties::new(s.world.store.applied));
+    s
+}
+fn read_holds(s: &mut Story, sign_in: u64, from: Option<core::reads::Cursor>) -> core::reads::Answer {
+    s.world.sign_in = Some(sign_in);
+    jig_core_world::reads::ask(&mut s.world, 92, core::reads::Read::Holds { project: 1, from });
+    jig_core_world::reads::latest(&s.world).clone()
+}
+fn holds_page(answer: core::reads::Answer) -> Box<core::documents::ProjectHolds> {
+    let core::reads::Answer::Holds(page) = answer else { panic!("holds page: {answer:?}") };
+    assert_eq!(page.project, 1);
+    page
+}
+
+#[test]
+fn a_projects_holds_read_lists_each_hold_with_its_tasks_and_exemptions() {
+    let mut s = read_story(983, 4);
+    let sign_in = s.owner_sign_in;
+    let scope = people::HoldScope::Subtree { task: s.child };
+    let first = placed_number(&hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, b"inspect delegate"));
+    let second = placed_number(&hold(&mut s, sign_in, 72, people::HoldMode::Stop, people::HoldScope::Project, b"inspect project"));
+    let revision = live_row(&s.world, s.goal).revisions.hold;
+    ask_as(&mut s.world, sign_in, 73, people::Ask::Release { project: 1, task: s.goal, revision, again: None });
+    let page = holds_page(read_holds(&mut s, sign_in, None));
+    assert_eq!(page.rows.len(), 2);
+    for (row, number, held) in [(&page.rows[0], first, 1), (&page.rows[1], second, 0)] {
+        let source = placed_hold(&s, number);
+        assert_eq!(row.hold.number, number);
+        assert_eq!(row.hold.owner, people::HoldOwner::Party { person: s.owner });
+        assert_eq!(row.hold.mode, source.mode);
+        assert_eq!(row.hold.scope, source.scope);
+        assert_eq!(row.hold.reason, source.reason);
+        assert_eq!(row.hold.placed_at.as_nanos(), source.placed_at * 1_000_000);
+        assert_eq!(row.hold.revision, source.revision);
+        assert!(!row.hold.lifted);
+        assert!(row.hold.may_lift);
+        assert_eq!(row.held, held);
+        assert_eq!(row.exempt, source.exempt);
+    }
+    assert_eq!(page.rows[1].exempt.as_ref(), &[s.goal]);
+    assert!(page.after.is_none());
+}
+#[test]
+fn a_holds_read_says_which_holds_the_reader_may_lift() {
+    let mut s = read_story(984, 4);
+    let sign_in = s.owner_sign_in;
+    let maintainer = second_party(&mut s.world, b"maintainer", people::Role::Maintainer);
+    stop(&mut s, sign_in);
+    assert!(holds_page(read_holds(&mut s, sign_in, None)).rows[0].hold.may_lift);
+    assert!(!holds_page(read_holds(&mut s, maintainer, None)).rows[0].hold.may_lift);
+    s.world.send(root::Event::Core(core::Event::People(people::Event::Roles { project: 1, holdings: Box::new([
+        people::Holding { person: s.owner, role: people::Role::Owner },
+        people::Holding { person: 2, role: people::Role::Observer },
+    ]) })));
+    assert!(!holds_page(read_holds(&mut s, maintainer, None)).rows[0].hold.may_lift);
+}
+#[test]
+fn a_lifted_hold_is_read_while_it_holds_a_task() {
+    let mut s = read_story(985, 4);
+    let sign_in = s.owner_sign_in;
+    let number = stop(&mut s, sign_in);
+    ask_as(&mut s.world, sign_in, 72, people::Ask::Lift { hold: number, revision: 1, with_tasks: false });
+    let page = holds_page(read_holds(&mut s, sign_in, None));
+    assert_eq!(page.rows[0].held, 2);
+    assert!(page.rows[0].hold.lifted);
+    release(&mut s, sign_in, 73);
+    assert_eq!(holds_page(read_holds(&mut s, sign_in, None)).rows[0].held, 1);
+    let revision = live_row(&s.world, s.child).revisions.hold;
+    ask_as(&mut s.world, sign_in, 74, people::Ask::Release { project: 1, task: s.child, revision, again: None });
+    assert!(holds_page(read_holds(&mut s, sign_in, None)).rows.is_empty());
+}
+#[test]
+fn a_holds_read_pages_past_its_row_bound() {
+    let mut s = read_story(986, 1);
+    let sign_in = s.owner_sign_in;
+    let mut numbers = Vec::new();
+    for key in 71..74 {
+        numbers.push(placed_number(&hold(&mut s, sign_in, key, people::HoldMode::Stop, people::HoldScope::Project, b"paged project hold")));
+    }
+    let mut from = None;
+    let mut seen = Vec::new();
+    loop {
+        let page = holds_page(read_holds(&mut s, sign_in, from));
+        assert_eq!(page.rows.len(), 1);
+        seen.push(page.rows[0].hold.number);
+        if let Some(core::reads::Cursor::Live { after: core::documents::Cursor::Number { number }, .. }) = &page.after {
+            assert_eq!(*number, page.rows[0].hold.number);
+        }
+        from = page.after;
+        if from.is_none() { break; }
+    }
+    assert_eq!(seen, numbers);
+    let wrong = core::reads::Cursor::Live { scope: core::reads::Scope::Holds { project: 2 }, after: core::documents::Cursor::Number { number: 1 }, store_after: None };
+    assert_eq!(read_holds(&mut s, sign_in, Some(wrong)), core::reads::Answer::None(core::reads::Why::Unknown));
+}
+#[test]
+fn a_holds_read_of_a_project_without_a_role_is_unknown() {
+    let mut s = read_story(987, 4);
+    let sign_in = s.owner_sign_in;
+    stop(&mut s, sign_in);
+    s.world.send(root::Event::Core(core::Event::People(people::Event::Roles { project: 1, holdings: Box::new([]) })));
+    assert_eq!(read_holds(&mut s, sign_in, None), core::reads::Answer::None(core::reads::Why::Unknown));
+}

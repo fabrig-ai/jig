@@ -49,6 +49,7 @@ pub fn read(value: &client::Read, cursor_bytes: u32) -> Result<reads::Read, Inva
             filter: reads::Filter { project: *project, goal: *goal },
             from: cursor(after.as_ref(), cursor_bytes)?,
         },
+        client::Read::Holds { project, after } => reads::Read::Holds { project: *project, from: cursor(after.as_ref(), cursor_bytes)? },
         client::Read::Spend { project, after } => {
             reads::Read::Spend { project: *project, from: cursor(after.as_ref(), cursor_bytes)? }
         }

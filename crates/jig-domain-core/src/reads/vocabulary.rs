@@ -96,6 +96,8 @@ pub enum Scope {
     ScopedNotes { scope: notes::Scope, description: Option<Box<[u8]>> },
     /// Historical project period ledgers.
     Spend { project: u32 },
+    /// Retained project holds, read live on every page.
+    Holds { project: u32 },
 }
 
 /// Owner key in this query's store order. Inbox indices preserve exact identity
@@ -225,6 +227,8 @@ pub enum Read {
         description: Option<Box<[u8]>>,
         from: Option<Cursor>,
     },
+    /// Retained project holds.
+    Holds { project: u32, from: Option<Cursor> },
     /// Historical period spending.
     Spend {
         project: u32,
@@ -417,6 +421,7 @@ pub enum Answer {
     Tasks(Box<TaskPage>),
     /// A current document.
     Document(Box<Document>),
+    Holds(Box<documents::ProjectHolds>),
     /// An ended or decided object, with kept actor and wall time.
     Historical(Box<Historical>),
     /// A bounded list page.

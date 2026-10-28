@@ -59,6 +59,7 @@ pub(crate) fn read(store: &mut Store, owner: Token, range: Range, above: &mut Qu
             return answer(store, owner, result, above);
         }
         Scope::History { task, subtree: false } => paged::history(store, &range, task, &mut spent),
+        Scope::Holds { .. } => Err(Failure::Corrupt),
         Scope::Spend { .. } => paged::spend(store, &range, &mut spent),
         Scope::Notes { .. } => paged::notes(store, &range, &mut spent),
         Scope::ScopedNotes { .. } => paged::scoped_notes(store, &range, &mut spent),

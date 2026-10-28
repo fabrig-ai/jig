@@ -446,6 +446,7 @@ impl Checks {
             | ReadValue::Inbox(_)
             | ReadValue::OwnerInbox(_)
             | ReadValue::Notes(_)
+            | ReadValue::Holds(_)
             | ReadValue::Spend(_)
             | ReadValue::OwnerEnded(_)
             | ReadValue::OwnerSpend(_)

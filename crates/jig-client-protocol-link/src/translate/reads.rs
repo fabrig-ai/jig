@@ -65,6 +65,7 @@ pub fn read(read: &c::Read, limits: &w::Limits) -> Result<w::Read, w::Problem> {
                 after: cursor(after.as_ref(), limits)?,
             },
         )?),
+        c::Read::Holds { project, after } => w::Read::Holds(w::ReadHolds::new(limits, w::ReadHoldsParts { project: *project, after: cursor(after.as_ref(), limits)? })?),
         c::Read::Spend { project, after } => w::Read::Spend(w::ReadSpend::new(
             limits,
             w::ReadSpendParts { project: *project, after: cursor(after.as_ref(), limits)? },
@@ -216,6 +217,7 @@ pub fn value(bytes: &[u8], limits: &Limits) -> Result<c::ReadValue, Undecodable>
         w::ReadValue::OwnerInbox(record) => {
             c::ReadValue::OwnerInbox(Box::new(pages::owner_inbox_page(record, limits)?))
         }
+        w::ReadValue::Holds(record) => c::ReadValue::Holds(Box::new(pages::holds(record, limits)?)),
         w::ReadValue::Spend(record) => c::ReadValue::Spend(Box::new(pages::spend_page(record, limits)?)),
         w::ReadValue::OwnerSpend(record) => {
             c::ReadValue::OwnerSpend(Box::new(pages::owner_spend_page(record, limits)?))

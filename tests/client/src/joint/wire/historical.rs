@@ -38,6 +38,7 @@ fn key(query: &client::Read) -> Result<client::ObjectKey, Invalid> {
         | client::Read::Inbox { .. }
         | client::Read::History { .. }
         | client::Read::Ended { .. }
+        | client::Read::Holds { .. }
         | client::Read::Spend { .. }
         | client::Read::Project { .. }
         | client::Read::Settings

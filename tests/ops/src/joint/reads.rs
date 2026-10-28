@@ -170,6 +170,7 @@ fn candidate(store: &Store, range: &reads::Range, value: &core::Record) -> Optio
             ..
         }
         | reads::Scope::SettingsHistory { .. }
+        | reads::Scope::Holds { .. }
         | reads::Scope::Spend { .. }
         | reads::Scope::Tasks { .. } => None,
     }
@@ -225,6 +226,7 @@ fn point(store: &Store, scope: &reads::Scope) -> Option<reads::Row> {
         | reads::Scope::Notes { .. }
         | reads::Scope::ScopedNotes { .. }
         | reads::Scope::SettingsHistory { .. }
+        | reads::Scope::Holds { .. }
         | reads::Scope::Spend { .. } => return None,
     };
     Some(joined_row(store, get(store, key)?, owner(store, number)?, related.and_then(|key| get(store, key)).cloned()))
@@ -373,6 +375,7 @@ fn index_bounds(range: &reads::Range) -> Option<(root::Key, root::Key)> {
         | reads::Scope::Notes { .. }
         | reads::Scope::ScopedNotes { .. }
         | reads::Scope::SettingsHistory { .. }
+        | reads::Scope::Holds { .. }
         | reads::Scope::Spend { .. }
         | reads::Scope::Tasks { .. } => None,
     }

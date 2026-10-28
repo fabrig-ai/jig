@@ -26,6 +26,8 @@ fn text(value: &[u8], limits: &Limits) -> Result<c::Text, w::Problem> {
 
 pub(crate) fn receiving(limits: &Limits) -> Result<Limits, Undecodable> {
     let mut checked = super::documents::receiving(limits)?;
+    checked.wire.project_holds_rows = limits.client.rows;
+    checked.wire.hold_row_exempt = match u32::try_from(limits.client.document_bytes / 8) { Ok(value) => value, Err(_) => return Err(Undecodable::TooLarge) };
     receiving_part0(&mut checked, limits);
     receiving_part1(&mut checked, limits);
     receiving_part2(&mut checked, limits);
@@ -388,4 +390,20 @@ fn task_page_fields(value: &w::TaskPage, limits: &Limits) -> Result<c::TaskPage,
         },
     };
     Ok(c::TaskPage { live, live_after, ended })
+}
+
+pub fn holds(record: w::ProjectHolds, limits: &Limits) -> Result<c::ProjectHolds, Undecodable> {
+    if crate::limits::worst_case(limits).is_none() || u64::from(record.measure()) > limits.client.document_bytes {
+        return Err(Undecodable::TooLarge);
+    }
+    let limits = receiving(limits)?;
+    let record = w::ProjectHolds::new(&limits.wire, record.into_parts()).map_err(classify)?;
+    let mut rows = List::with_capacity(record.rows().len());
+    for row in record.rows() {
+        let hold = super::answers::placed(Some(row.hold()), &limits).map_err(classify)?.expect("supplied hold");
+        let mut exempt = List::with_capacity(row.exempt().len());
+        for task in row.exempt() { exempt.push(*task).expect("same exemptions"); }
+        rows.push(c::HoldRow { hold, held: row.held(), exempt: exempt.into_boxed() }).expect("same rows");
+    }
+    Ok(c::ProjectHolds { project: record.project(), rows: rows.into_boxed(), after: match record.after() { Some(value) => Some(cursor_fields(value, &limits).map_err(classify)?), None => None } })
 }

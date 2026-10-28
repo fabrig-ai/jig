@@ -115,6 +115,8 @@ pub enum Read {
         project: u32,
         after: Option<Cursor>,
     },
+    /// Placed holds retained by a project, in hold number order.
+    Holds { project: u32, after: Option<Cursor> },
     /// One project.
     Project {
         project: u32,
@@ -228,6 +230,7 @@ pub enum ReadValue {
     OwnerInbox(Box<super::OwnerInboxPage>),
     /// Project spend periods.
     Spend(Box<SpendPage>),
+    Holds(Box<super::ProjectHolds>),
     /// Retained whole funding records without inferred ledger facts.
     OwnerSpend(Box<super::OwnerSpendPage>),
     /// A project.

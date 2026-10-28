@@ -247,7 +247,7 @@ pub fn held(value: &d::HoldLine, limits: &w::Limits) -> Result<w::OwnerChipHold,
         },
     )
 }
-fn placed(value: &d::PlacedLine, limits: &w::Limits) -> Result<w::PlacedLine, w::Problem> {
+pub(super) fn placed(value: &d::PlacedLine, limits: &w::Limits) -> Result<w::PlacedLine, w::Problem> {
     w::PlacedLine::new(
         limits,
         w::PlacedLineParts {

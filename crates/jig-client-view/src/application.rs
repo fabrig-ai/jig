@@ -195,6 +195,7 @@ pub(crate) fn read_result(
                 | ReadValue::Turn(_)
                 | ReadValue::Inbox(_)
                 | ReadValue::OwnerInbox(_)
+                | ReadValue::Holds(_)
                 | ReadValue::Spend(_)
                 | ReadValue::OwnerEnded(_)
                 | ReadValue::OwnerSpend(_)
@@ -229,6 +230,7 @@ fn key(what: &Read) -> Option<ObjectKey> {
         | Read::Activity { .. }
         | Read::Turn { .. }
         | Read::Inbox { .. }
+        | Read::Holds { .. }
         | Read::Spend { .. }
         | Read::Project { .. }
         | Read::Notes { .. }

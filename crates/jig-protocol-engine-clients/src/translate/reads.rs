@@ -82,6 +82,10 @@ pub(crate) fn read(value: w::Read) -> Option<reads::Read> {
             };
             reads::Read::Inbox { group, filter: reads::Filter { project: parts.project, goal: parts.goal }, from }
         }
+        w::Read::Holds(value) => {
+            let parts = value.into_parts();
+            reads::Read::Holds { project: parts.project, from: decode_cursor(parts.after)? }
+        }
         w::Read::Spend(value) => {
             let parts = value.into_parts();
             let from = match parts.after {
@@ -171,6 +175,7 @@ pub(crate) fn answer(
             w::ReadRevisionAnswerParts { value: super::settings::revision(value, models, limits)? },
         )?),
         reads::Answer::Revisions(value) => w::ReadValue::Revisions(super::settings::revisions(value, limits)?),
+        reads::Answer::Holds(page) => pages::holds(page, limits)?,
         reads::Answer::Tasks(page) => pages::tasks(page, limits)?,
         reads::Answer::Page(page) => pages::page(models, read, page, limits)?,
         reads::Answer::Document(_) | reads::Answer::Historical(_) => objects::document(answer, models, limits)?,

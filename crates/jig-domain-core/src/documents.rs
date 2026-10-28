@@ -504,7 +504,7 @@ pub fn document_worst_case(limits: &DocumentLimits) -> Option<u64> {
 /// Bound of a document including the inbox's requester selection context.
 #[must_use]
 pub fn document_with_context_worst_case(limits: &Limits) -> Option<u64> {
-    document_worst_case(&limits.documents)?
+    document_worst_case(&limits.documents)?.max(project_holds_worst_case(limits)?)
         .checked_add(settings::worst_case(limits)?)?
         .checked_add(settings_review::worst_case(limits)?)?
         .checked_add(inbox_selection_worst_case(limits.documents.rows, limits.tasks.depth)?)?
@@ -552,4 +552,28 @@ pub fn budget_from_row(row: &tasks::TaskRecord) -> BudgetLine {
 /// Complete bounded authority facts used when judging draft controls.
 pub(crate) fn act_authority(limits: &Limits, value: &tasks::Authority) -> Result<AuthorityLine, Missing> {
     task_tree::authority(limits, value)
+}
+
+/// A fresh bounded project-holds page (`client/domain/contract.md`, 5.6).
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ProjectHolds {
+    pub project: u32,
+    pub rows: Box<[HoldRow]>,
+    pub after: Option<crate::reads::Cursor>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct HoldRow {
+    pub hold: PlacedLine,
+    pub held: u32,
+    pub exempt: Box<[u64]>,
+}
+
+/// Owned rows, whole reasons and exemptions; no retained index or scratch table.
+#[must_use]
+pub fn project_holds_worst_case(limits: &Limits) -> Option<u64> {
+    u64::try_from(size_of::<ProjectHolds>()).ok()?
+        .checked_add(List::<HoldRow>::worst_case(limits.documents.rows)?)?
+        .checked_add(u64::from(limits.documents.rows).checked_mul(
+            u64::from(limits.documents.text_bytes).checked_add(u64::from(limits.tasks.exemptions).checked_mul(8)?)?
+        )?)
 }

@@ -338,6 +338,10 @@ fn put_scope(w: &mut Writer, value: &reads::Scope) -> Option<()> {
             w.byte(16)?;
             w.u32(*project)?;
         }
+        reads::Scope::Holds { project } => {
+            w.byte(18)?;
+            w.u32(*project)?;
+        }
     }
     Some(())
 }
@@ -357,6 +361,7 @@ fn take_scope(r: &mut Reader<'_>) -> Option<reads::Scope> {
         11 => reads::Scope::Inbox { group: take_group(r)?, filter: take_filter(r)? },
         14 => reads::Scope::Notes { project: r.u32()? },
         15 => reads::Scope::ScopedNotes { scope: take_note_scope(r)?, description: take_option(r, take_blob)? },
+        18 => reads::Scope::Holds { project: r.u32()? },
         16 => reads::Scope::Spend { project: r.u32()? },
         17 => reads::Scope::Tasks { query: take_query(r)? },
         _ => return None,

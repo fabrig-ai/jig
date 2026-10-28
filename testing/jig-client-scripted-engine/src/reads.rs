@@ -17,6 +17,7 @@ pub enum Rows {
     Activity(Vec<ActivityLine>),
     Inbox(Vec<InboxEntry>),
     Spend(Vec<SpendPeriod>),
+    Holds { project: u32, rows: Vec<jig_client_domain::contract::HoldRow> },
     Notes(Vec<Note>),
 }
 /// A party's page source. The read has no cursor and supplies its exact filters.
@@ -69,6 +70,7 @@ impl Rows {
             Self::History(rows) => rows.iter().all(|row| payload::fits(row, bounds)),
             Self::Activity(rows) => rows.iter().all(|row| payload::fits(row, bounds)),
             Self::Inbox(rows) => rows.iter().all(|row| payload::fits(row, bounds)),
+            Self::Holds { rows, .. } => rows.iter().all(|row| payload::fits(row, bounds)),
             Self::Spend(rows) => rows.iter().all(|row| payload::fits(row, bounds)),
             Self::Notes(rows) => rows.iter().all(|row| payload::fits(row, bounds)),
         };
@@ -83,6 +85,7 @@ impl Rows {
                 | (Self::Activity(_), Read::Activity { .. })
                 | (Self::Inbox(_), Read::Inbox { .. })
                 | (Self::Spend(_), Read::Spend { .. })
+                | (Self::Holds { .. }, Read::Holds { .. })
                 | (Self::Notes(_), Read::Notes { .. })
         )
     }
@@ -94,6 +97,7 @@ impl Rows {
             Self::Activity(rows) => rows.len(),
             Self::Inbox(rows) => rows.len(),
             Self::Spend(rows) => rows.len(),
+            Self::Holds { rows, .. } => rows.len(),
             Self::Notes(rows) => rows.len(),
         }
     }
@@ -116,6 +120,7 @@ impl Rows {
             Self::Inbox(rows) => {
                 ReadValue::Inbox(Box::new(InboxPage { cut: false, rows: list(&rows[start..end]), before, after }))
             }
+            Self::Holds { project, rows } => ReadValue::Holds(Box::new(jig_client_domain::contract::ProjectHolds { project: *project, rows: rows[start..end].to_vec().into_boxed_slice(), after })),
             Self::Spend(rows) => {
                 ReadValue::Spend(Box::new(SpendPage { cut: false, rows: list(&rows[start..end]), before, after }))
             }
@@ -146,6 +151,7 @@ pub(crate) fn plain(mut read: Read) -> (Read, Option<Cursor>) {
         Read::Ended { after, .. }
         | Read::History { after, .. }
         | Read::Inbox { after, .. }
+        | Read::Holds { after, .. }
         | Read::Spend { after, .. }
         | Read::Notes { after, .. } => after.take(),
         Read::Tasks { live, ended, .. } => ended.take().or_else(|| live.take()),
@@ -252,6 +258,7 @@ impl<A: crate::Application> Engine<A> {
             | Read::History { .. }
             | Read::Activity { .. }
             | Read::Inbox { .. }
+            | Read::Holds { .. }
             | Read::Spend { .. }
             | Read::Notes { .. } => None,
         };
@@ -367,7 +374,7 @@ impl<A: crate::Application> Engine<A> {
                 match query {
                     Read::Inbox { group, project, kind, goal, .. } => *group == InboxReadGroup::of(row.group) && project.is_none_or(|p| p == row.project) && kind.is_none_or(|k| k == row.group) && goal.is_none_or(|g| row.goal == Some(g)),
                     Read::Tasks { .. } | Read::Me | Read::Task { .. } | Read::Proposal { .. } | Read::Escalation { .. } | Read::Question { .. }
-                    | Read::Turn { .. } | Read::PersonTask { .. } | Read::Result { .. } | Read::Ended { .. } | Read::History { .. } | Read::Activity { .. } | Read::Spend { .. } | Read::Project { .. } | Read::Notes { .. } | Read::Settings | Read::Setting(_) | Read::Revision(_) | Read::Revisions(_) | Read::Deployment => false,
+                    | Read::Turn { .. } | Read::PersonTask { .. } | Read::Result { .. } | Read::Ended { .. } | Read::History { .. } | Read::Activity { .. } | Read::Holds { .. } | Read::Spend { .. } | Read::Project { .. } | Read::Notes { .. } | Read::Settings | Read::Setting(_) | Read::Revision(_) | Read::Revisions(_) | Read::Deployment => false,
                 }
             }).collect();
                 rows.sort_by(|a, b| {
@@ -379,6 +386,7 @@ impl<A: crate::Application> Engine<A> {
             Rows::Notes(rows) => Rows::Notes(rows.into_iter().filter(|row| {
                 matches!(query, Read::Notes { scope, description, .. } if *scope == row.scope && description.as_ref().is_none_or(|needle| needle.bytes().is_empty() || row.description.bytes().windows(needle.bytes().len()).any(|window| window == needle.bytes())))
             }).collect()),
+            Rows::Holds { project, rows } => Rows::Holds { project, rows },
             Rows::Tasks(rows) => Rows::Tasks(rows),
             Rows::Ended(rows) => Rows::Ended(rows), Rows::History(rows) => Rows::History(rows),
             Rows::Activity(rows) => Rows::Activity(rows), Rows::Spend(rows) => Rows::Spend(rows),
@@ -400,7 +408,7 @@ impl<A: crate::Application> Engine<A> {
             Read::Question { task, message } => Some(ObjectKey::Question { task: *task, message: *message }),
             Read::PersonTask { task } => Some(ObjectKey::PersonTask(*task)),
             Read::Result { task } => Some(ObjectKey::Result(*task)),
-            Read::Project { project } | Read::Spend { project, .. } => {
+            Read::Holds { project, .. } | Read::Project { project } | Read::Spend { project, .. } => {
                 return self.truth.visible(party, *project);
             }
             Read::Inbox { project, .. } => {
@@ -437,6 +445,7 @@ fn empty(read: &Read) -> Rows {
         Read::Activity { .. } => Rows::Activity(vec![]),
         Read::Inbox { .. } => Rows::Inbox(vec![]),
         Read::Spend { .. } => Rows::Spend(vec![]),
+        Read::Holds { project, .. } => Rows::Holds { project: *project, rows: vec![] },
         Read::Notes { .. } => Rows::Notes(vec![]),
         Read::Me
         | Read::Turn { .. }

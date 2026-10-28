@@ -71,6 +71,7 @@ pub fn admits(party: u64, scope: &Scope, key: &crate::Key) -> bool {
             Key::Tasks(TaskKey::EndedDelegate { requester, .. }) => requester == task,
             Key::Tasks(_) | Key::Core(_) | Key::People(_) | Key::Notes(_) | Key::Accounts(_) => false,
         },
+        Scope::Holds { .. } => false,
         Scope::Spend { project } => match key {
             Key::Tasks(
                 TaskKey::Ledger(Funder::Period { project: owner, .. })
@@ -163,6 +164,7 @@ pub(crate) fn scope(read: &Read) -> Option<Scope> {
         Read::ScopedNotes { scope, description, .. } => {
             Some(Scope::ScopedNotes { scope: scope.clone(), description: description.clone() })
         }
+        Read::Holds { project, .. } => Some(Scope::Holds { project: *project }),
         Read::Spend { project, .. } => Some(Scope::Spend { project: *project }),
         Read::Frame
         | Read::Project { .. }
@@ -183,6 +185,7 @@ fn cursor(read: &Read) -> Option<&Cursor> {
         | Read::Tasks { ended: from, .. }
         | Read::Notes { from, .. }
         | Read::ScopedNotes { from, .. }
+        | Read::Holds { from, .. }
         | Read::Spend { from, .. } => from.as_ref(),
         Read::Activity { before, .. } => before.as_ref(),
         Read::Frame
@@ -227,6 +230,7 @@ fn subject(read: &Read, party: u64) -> Option<Subject> {
         | Read::Activity { .. }
         | Read::Notes { .. }
         | Read::ScopedNotes { .. }
+        | Read::Holds { .. }
         | Read::Spend { .. }
         | Read::Reply { .. }
         | Read::Turn { .. } => None,
@@ -253,6 +257,7 @@ fn backwards(scope: &Scope) -> bool {
         | Scope::Tasks { .. }
         | Scope::Notes { .. }
         | Scope::ScopedNotes { .. }
+        | Scope::Holds { .. }
         | Scope::Spend { .. } => false,
     }
 }
@@ -282,6 +287,7 @@ fn refused_application(reply: ReplyTo, read: &Read, why: Why) -> Requests {
         | Read::Tasks { .. }
         | Read::Notes { .. }
         | Read::ScopedNotes { .. }
+        | Read::Holds { .. }
         | Read::Spend { .. }
         | Read::Project { .. }
         | Read::Settings
@@ -329,6 +335,7 @@ pub(crate) fn start(core: &mut Core, env: &Env<Limits>, reply: ReplyTo, sign_in:
         | Read::Tasks { .. }
         | Read::Notes { .. }
         | Read::ScopedNotes { .. }
+        | Read::Holds { .. }
         | Read::Spend { .. }
         | Read::Project { .. }
         | Read::Settings
@@ -343,6 +350,7 @@ pub(crate) fn start(core: &mut Core, env: &Env<Limits>, reply: ReplyTo, sign_in:
             Some(_) => terminal(reply, Answer::None(Why::Malformed)),
             None => settings::setting(core, reply, party, setting, revision),
         },
+        Read::Holds { project, from } => terminal(reply, rows::holds(core, &env.limits, party, project, from.as_ref())),
         Read::Revision { number } => settings::revision(core, env, reply, sign_in, party, number),
         Read::Revisions { before } => settings::revisions(core, env, reply, sign_in, party, before),
         read @ (Read::Settings
@@ -396,6 +404,7 @@ fn bounded_query(read: &Read, limits: &Limits) -> bool {
         | Read::Tasks { .. }
         | Read::Project { .. }
         | Read::Notes { .. }
+        | Read::Holds { .. }
         | Read::Spend { .. }
         | Read::Settings
         | Read::Setting { .. }

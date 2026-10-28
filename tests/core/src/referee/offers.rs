@@ -324,6 +324,7 @@ fn read_subject(read: &core::reads::Read) -> Option<Subject> {
         | core::reads::Read::Setting { .. }
         | core::reads::Read::Revision { .. }
         | core::reads::Read::Revisions { .. }
+        | core::reads::Read::Holds { .. }
         | core::reads::Read::Spend { .. } => None,
     }
 }
