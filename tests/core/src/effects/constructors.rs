@@ -280,6 +280,7 @@ impl World {
         Self::empty_with_sets(configuration, limits, jig_protocol_store::PatchSets::NONE)
     }
 
+    #[expect(clippy::too_many_lines, reason = "one constructor initializes every independently scripted world field")]
     fn empty_with_sets(
         configuration: root::Config,
         limits: &root::Limits,

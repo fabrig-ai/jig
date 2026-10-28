@@ -356,18 +356,17 @@ impl Core {
         }
         for view in self.tasks.view_tasks() {
             let row = self.tasks.task(view.number).expect("live task view");
-            if let Some(proposal) = &row.proposal {
-                if let tasks::ProposalAction::Settings { .. } = &proposal.action {
-                    let number =
-                        u32::try_from(proposal.number).expect("stored settings proposal number fits its codec");
-                    assert!(
-                        self.settings_proposals
-                            .contains_key(&(jig_domain_people::Proposer::Task(proposal.proposer), number)),
-                        "core: Live({}) links to settings set ({}, {number}), which is absent",
-                        row.number,
-                        proposal.proposer
-                    );
-                }
+            if let Some(proposal) = &row.proposal
+                && let tasks::ProposalAction::Settings { .. } = &proposal.action
+            {
+                let number = u32::try_from(proposal.number).expect("stored settings proposal number fits its codec");
+                assert!(
+                    self.settings_proposals
+                        .contains_key(&(jig_domain_people::Proposer::Task(proposal.proposer), number)),
+                    "core: Live({}) links to settings set ({}, {number}), which is absent",
+                    row.number,
+                    proposal.proposer
+                );
             }
         }
         true
