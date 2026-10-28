@@ -94,7 +94,7 @@ impl Store {
     ) -> Self {
         let room = root::max_out(application).checked_mul(2).expect("store route room");
         let mut routes = route::Routes::new(room);
-        routes.configure(application);
+        routes.configure(application, &limits.store);
         let mut drivers = [driver(limits, room), driver(limits, room), driver(limits, room)];
         let [store, secrets, transcripts] = &mut drivers;
         let seeded = protocol::seed([&mut store.io, &mut secrets.io, &mut transcripts.io], seed);
