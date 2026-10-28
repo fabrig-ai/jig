@@ -16,8 +16,8 @@ use crate::{
 /// The live object this deployment owns after an effect settles.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct Made {
-    resources: Box<[Path]>,
-    state: u64,
+    pub(crate) resources: Box<[Path]>,
+    pub(crate) state: u64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -34,7 +34,7 @@ pub(crate) struct Outbox {
     pub(crate) proposals: Map<u64, (u32, u64, Effect)>,
     pub(crate) entries: Map<u64, OutboxEntry>,
     runtime: Map<u64, Runtime>,
-    made: Map<Key, Made>,
+    pub(crate) made: Map<Key, Made>,
 }
 
 impl Outbox {
