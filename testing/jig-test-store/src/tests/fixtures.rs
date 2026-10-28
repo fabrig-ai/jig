@@ -140,9 +140,8 @@ pub struct Component {
 pub fn root_limits() -> jig_test_domain::Limits {
     jig_core_world::world::limits()
 }
-pub fn component() -> Component {
-    let root = root_limits();
-    let kv = skein_kv::Limits {
+pub fn store_limits() -> skein_kv::Limits {
+    skein_kv::Limits {
         key: 1024,
         value: 16_777_216,
         ops: 8192,
@@ -155,7 +154,11 @@ pub fn component() -> Component {
         chunk: 16_778_260,
         page: skein_kv::Page { rows: 2, bytes: 16_778_240 },
         deadline: skein_lib::Duration::from_secs(1),
-    };
+    }
+}
+pub fn component() -> Component {
+    let root = root_limits();
+    let kv = store_limits();
     let limits = jig_protocol_store::Limits {
         core: root.core,
         store: kv,
@@ -187,7 +190,7 @@ fn matches_opened(above: &mut skein_lib::Queue<jig_protocol_store::Event>) -> bo
 }
 pub fn routes() -> crate::route::Routes {
     let mut routes = crate::route::Routes::new(8);
-    routes.configure(&root_limits());
+    routes.configure(&root_limits(), &store_limits());
     routes
 }
 fn send(
