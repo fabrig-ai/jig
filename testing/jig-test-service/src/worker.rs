@@ -18,6 +18,10 @@ const KERNEL_HANDOFF_ENTRIES: u32 = 2_106;
 /// no admission reads it, until the per-process sums go (skein's draft 7.6).
 const PAYLOAD_PRICING_ENTRIES: u32 = 1_506;
 
+/// Complete the worker's back-and-forth hand-offs across payload translation
+/// before the next entrance (hosts.md, 6.8; service.md, 6).
+const PAYLOAD_HAND_OFF_ROUNDS: u32 = 4;
+
 /// Shell-prepared directories, one descriptor for each worker in document order.
 #[derive(Debug)]
 pub struct WorkerRuntime {
@@ -364,45 +368,50 @@ impl Worker {
     pub(super) fn step(&mut self, event: root::Event) {
         self.root_steps = self.root_steps.wrapping_add(1);
         root::step(&mut self.root, &self.env, event, &mut self.out);
-        while let Some(request) = self.out.pop() {
-            match request {
-                root::Request::Source { owner, name, operation, deadline } => {
-                    let io_owner = Token::new(self.prefix.checked_add(self.next).expect("source owner range"));
-                    self.next = self.next.checked_add(1).expect("source owner sequence");
-                    assert!(self.next < (1_u64 << 48_u32), "worker owner range");
-                    self.sources.start(
-                        owner,
-                        io_owner,
-                        name,
-                        operation,
-                        self.directory.expect("worker root"),
-                        deadline,
-                        &mut self.source_events,
-                        &mut self.io,
-                    );
-                }
-                root::Request::SourceFault => self.link_down(self.env.now, link::Event::SourceFault),
-                root::Request::Hello(hello) => self.link_down(self.env.now, link::Event::Hello { hello }),
-                root::Request::Link(up) => self.link_down(self.env.now, link::Event::Up { up, parts: Box::default() }),
-                root::Request::CancelRelay { run, attempt, call } => {
-                    self.link_down(self.env.now, link::Event::CancelRelay { run, attempt, call });
-                }
-                root::Request::Stop => self.link_down(self.env.now, link::Event::Stop),
-                root::Request::Process(request) => self.process(*request),
-                root::Request::Decode { agent, run, start } => {
-                    let start = worker_route::decode(run, *start, &self.agent);
-                    self.root_steps = self.root_steps.wrapping_add(1);
-                    root::step(&mut self.root, &self.env, root::Event::Decoded { agent, start }, &mut self.out);
-                }
-                root::Request::Encode { owner, value } => {
-                    let encoded = worker_route::encode(value, &self.agent.limits, &self.agent.endpoints);
-                    self.root_steps = self.root_steps.wrapping_add(1);
-                    root::step(&mut self.root, &self.env, root::Event::Encoded { owner, encoded }, &mut self.out);
-                }
-                root::Request::Fact { owner, body } => {
-                    let activity = worker_route::activity(&body, &self.agent.limits);
-                    self.root_steps = self.root_steps.wrapping_add(1);
-                    root::step(&mut self.root, &self.env, root::Event::Activity { owner, activity }, &mut self.out);
+        for _ in 0..PAYLOAD_HAND_OFF_ROUNDS {
+            for _ in 0..self.out.len() {
+                let request = self.out.pop().expect("worker output count");
+                match request {
+                    root::Request::Source { owner, name, operation, deadline } => {
+                        let io_owner = Token::new(self.prefix.checked_add(self.next).expect("source owner range"));
+                        self.next = self.next.checked_add(1).expect("source owner sequence");
+                        assert!(self.next < (1_u64 << 48_u32), "worker owner range");
+                        self.sources.start(
+                            owner,
+                            io_owner,
+                            name,
+                            operation,
+                            self.directory.expect("worker root"),
+                            deadline,
+                            &mut self.source_events,
+                            &mut self.io,
+                        );
+                    }
+                    root::Request::SourceFault => self.link_down(self.env.now, link::Event::SourceFault),
+                    root::Request::Hello(hello) => self.link_down(self.env.now, link::Event::Hello { hello }),
+                    root::Request::Link(up) => {
+                        self.link_down(self.env.now, link::Event::Up { up, parts: Box::default() })
+                    }
+                    root::Request::CancelRelay { run, attempt, call } => {
+                        self.link_down(self.env.now, link::Event::CancelRelay { run, attempt, call });
+                    }
+                    root::Request::Stop => self.link_down(self.env.now, link::Event::Stop),
+                    root::Request::Process(request) => self.process(*request),
+                    root::Request::Decode { agent, run, start } => {
+                        let start = worker_route::decode(run, *start, &self.agent);
+                        self.root_steps = self.root_steps.wrapping_add(1);
+                        root::step(&mut self.root, &self.env, root::Event::Decoded { agent, start }, &mut self.out);
+                    }
+                    root::Request::Encode { owner, value } => {
+                        let encoded = worker_route::encode(value, &self.agent.limits, &self.agent.endpoints);
+                        self.root_steps = self.root_steps.wrapping_add(1);
+                        root::step(&mut self.root, &self.env, root::Event::Encoded { owner, encoded }, &mut self.out);
+                    }
+                    root::Request::Fact { owner, body } => {
+                        let activity = worker_route::activity(&body, &self.agent.limits);
+                        self.root_steps = self.root_steps.wrapping_add(1);
+                        root::step(&mut self.root, &self.env, root::Event::Activity { owner, activity }, &mut self.out);
+                    }
                 }
             }
         }
