@@ -272,7 +272,7 @@ fn a_hold_changes_revision_for_a_new_hold_or_reason_but_not_a_pass() {
     assert_eq!(test.revisions(1), first);
     let out = test.send(Event::Hold { task: 1, why: Hold::Budget });
     assert!(out.iter().any(|request| match request {
-        Request::EscalationNeeded { context } if context.escalation.revision() == 2 => true,
+        Request::EscalationNeeded { context, .. } if context.escalation.revision() == 2 => true,
         _ => false,
     }));
     assert_eq!(test.revisions(1), Revisions { hold: 2, ..first });
