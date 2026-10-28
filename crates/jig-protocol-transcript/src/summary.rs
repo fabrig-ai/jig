@@ -64,6 +64,8 @@ fn validate_returned(limits: &smith::Limits, returned: &smith::Returned) -> Resu
             | smith::Outcome::ReadOnly(_)
             | smith::Outcome::TooLong
             | smith::Outcome::NotFound(_)
+            | smith::Outcome::Removed
+            | smith::Outcome::NotEmpty
             | smith::Outcome::NotFile
             | smith::Outcome::Linked
             | smith::Outcome::Protected
@@ -201,6 +203,11 @@ impl Builder {
                     self.put(b"; search timed out");
                 }
             }
+            smith::Outcome::Removed => {
+                self.failed = false;
+                self.put(b"Removed");
+            }
+            smith::Outcome::NotEmpty => self.put(b"Tool refused: directory not empty"),
             smith::Outcome::Written(written) => {
                 self.failed = false;
                 if written.created() {

@@ -165,7 +165,7 @@ fn whole_turn_preserves_blocks_and_joins_results_to_calls() {
 #[test]
 #[expect(clippy::too_many_lines, reason = "one table holds every tool outcome's summary")]
 fn outcomes_summarize_successes_command_endings_and_tool_refusals() {
-    let cases: [(smith::Outcome, &[u8], bool); 32] = [
+    let cases: [(smith::Outcome, &[u8], bool); 34] = [
         (
             smith::Outcome::Listed(
                 smith::Listed::new(&CEILINGS, smith::ListedParts { entries: List::with_capacity(0), more: 4 }).unwrap(),
@@ -214,6 +214,8 @@ fn outcomes_summarize_successes_command_endings_and_tool_refusals() {
             true,
         ),
         (exited(smith::Exit::TimedOut), b"Command ended: timed out; output bytes 2; dropped 9", true),
+        (smith::Outcome::Removed, b"Removed", false),
+        (smith::Outcome::NotEmpty, b"Tool refused: directory not empty", true),
         (smith::Outcome::NotGranted, b"Tool refused: not granted", true),
         (smith::Outcome::Outside(resolved()), b"Tool refused: outside workspace", true),
         (smith::Outcome::ReadOnly(resolved()), b"Tool refused: read only", true),
