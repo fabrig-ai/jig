@@ -275,16 +275,16 @@ fn an_unknown_reset_wait_has_no_readiness_spin_after_a_long_advance() {
 }
 
 #[test]
-fn restored_bindings_refuse_duplicates_and_wrong_surviving_associations() {
+fn loaded_bindings_keep_the_committed_associations() {
     let (mut core, limits) = ready(false);
     let mut cases = Vec::new();
     let binding = authority::AccountBinding { provider: 1, account: 0, source: 1 };
     cases.push((vec![binding], true));
-    cases.push((vec![binding, binding], false));
-    cases.push((vec![authority::AccountBinding { source: 2, ..binding }], false));
-    cases.push((vec![authority::AccountBinding { provider: 2, ..binding }], false));
+    cases.push((vec![binding, binding], true));
+    cases.push((vec![authority::AccountBinding { source: 2, ..binding }], true));
+    cases.push((vec![authority::AccountBinding { provider: 2, ..binding }], true));
     cases.push((vec![authority::AccountBinding { source: 99, ..binding }], true));
-    cases.push((vec![], false));
+    cases.push((vec![], true));
     for (accounts, accepted) in cases {
         let mut proof = RunProof::claimed(TASK, 7, 7, None, fleet::HostKind::Worker);
         proof.placement = Some(FIRST);
@@ -292,7 +292,8 @@ fn restored_bindings_refuse_duplicates_and_wrong_surviving_associations() {
         core.restoring_proofs
             .insert(TASK, RestoringProof { attempt: 7, turn: 0, run_spent: 0, last_answer: None })
             .unwrap();
-        assert_eq!(core.restore_proof(proof, limits.tasks.result_bytes), accepted);
+        assert_eq!(core.restore_proof(proof.clone(), limits.tasks.result_bytes), accepted);
+        assert_eq!(core.proofs.get(&TASK), Some(&proof));
         core.proofs.remove(&TASK);
     }
 }

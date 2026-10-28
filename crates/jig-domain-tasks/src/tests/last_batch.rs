@@ -77,7 +77,7 @@ fn the_complete_last_batch_survives_skips_endings_restart_and_rejected_replaceme
 }
 
 #[test]
-fn cold_restore_rejects_partial_duplicate_zero_self_and_oversized_last_batches() {
+fn loaded_last_batches_keep_the_committed_numbers() {
     let test = accepted();
     let original = test.domain.task(100).unwrap();
     let invalid: [Box<[u64]>; 5] = [
@@ -92,14 +92,9 @@ fn cold_restore_rejects_partial_duplicate_zero_self_and_oversized_last_batches()
         row.recurring.as_mut().unwrap().last_batch = numbers;
         let mut domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
         let mut out = Queue::with_capacity(max_out(&LIMITS));
-        step(&mut domain, &test.env, Event::Restore { record: Stored::Live(Box::new(row)) }, &mut out);
-        let mut refused = false;
-        while let Some(request) = out.pop() {
-            if let Request::RestoreRefused { .. } = request {
-                refused = true;
-            }
-        }
-        assert!(refused);
+        step(&mut domain, &test.env, Event::Restore { record: Stored::Live(Box::new(row.clone())) }, &mut out);
+        assert!(out.is_empty());
+        assert_eq!(domain.task(row.number), Some(&row));
     }
 }
 

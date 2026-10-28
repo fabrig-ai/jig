@@ -14,13 +14,18 @@ fn fixture() -> (Core, Limits) {
     limits.people.requests = 4;
     limits.people.inbox_entries = 16;
     limits.documents.rows = 16;
+    let ledgers: Vec<_> = core.tasks.funding_records().iter().map(|(_, row)| *row).collect();
     core.tasks = fixtures::fresh_tasks(&core, &limits);
+    for row in ledgers {
+        send_task(&mut core, &limits, tasks::Event::Restore { record: tasks::Stored::Ledger(row) });
+    }
     for (number, requester) in [
         (1, tasks::Party::Person(1)),
         (2, tasks::Party::Task(1)),
         (3, tasks::Party::Task(2)),
         (4, tasks::Party::Deployment { project: 1 }),
         (5, tasks::Party::Task(99)),
+        (99, tasks::Party::Person(2)),
     ] {
         let mut row = template.clone();
         row.number = number;

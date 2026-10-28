@@ -70,7 +70,7 @@ fn hold_origin_survives_restart_terminal_and_release_in_exact_milestones() {
 }
 
 #[test]
-fn hold_origin_shape_is_checked_on_admission_and_cold_restore() {
+fn hold_origin_is_judged_at_admission_and_loaded_unchanged() {
     let mut h = Harness::new();
     h.make([task(1, &[])].into());
     let before = h.domain.task(1).unwrap().clone();
@@ -93,12 +93,9 @@ fn hold_origin_shape_is_checked_on_admission_and_cold_restore() {
         };
         let mut cold = Harness::new();
         cold.domain = Domain::new(&LIMITS, 91, 1, crate::tests::charters(), Box::new([0]));
-        let mut refused = false;
-        for request in cold.send(Event::Restore { record: Stored::Live(Box::new(broken)) }) {
-            let Request::RestoreRefused { .. } = request else { continue };
-            refused = true;
-        }
-        assert!(refused);
+        let out = cold.send(Event::Restore { record: Stored::Live(Box::new(broken.clone())) });
+        assert!(out.is_empty());
+        assert_eq!(cold.domain.task(broken.number), Some(&broken));
     }
     h.send(Event::HoldFrom {
         task: 1,
