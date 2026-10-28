@@ -547,14 +547,18 @@ impl Application for Testing {
             }
             root::Delivery::Restart(step) => {
                 let position = match step {
-                    core::RestartStep::LoadCore | core::RestartStep::LoadInbox | core::RestartStep::Switch => 0,
+                    core::RestartStep::LoadCore
+                    | core::RestartStep::LoadInbox
+                    | core::RestartStep::Sweep
+                    | core::RestartStep::Switch => 0,
                     core::RestartStep::RestoreConnector { connector } => u32::from(connector),
                     core::RestartStep::ReadAfresh { connector } => 2 + u32::from(connector),
                     core::RestartStep::AdoptRuns | core::RestartStep::SettleOutbox { .. } | core::RestartStep::Open => {
                         panic!("root performs internal restart phases")
                     }
                 };
-                if !matches!(step, core::RestartStep::LoadInbox | core::RestartStep::Switch) {
+                if !matches!(step, core::RestartStep::LoadInbox | core::RestartStep::Sweep | core::RestartStep::Switch)
+                {
                     peers.routes.push(jig_conformance::referee::Observed::RestartStage { position });
                 }
                 peers.restart(store, step, None)
