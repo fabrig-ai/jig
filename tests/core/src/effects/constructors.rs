@@ -36,6 +36,15 @@ pub fn fixture(seed: u64, requirement: bool) -> (root::Config, root::Limits) {
         value.requests = authority::Requests(0);
         value.decides = authority::Proposals(0);
         value.period_spend = 0;
+        value.authority = authority::Authority {
+            tools: authority::Tools(0),
+            models: authority::Models::NONE,
+            grants: Box::new([]),
+            delegation: authority::Delegation { kinds: Box::new([]), tasks: 0, depth: 0 },
+            budget: authority::Budget { spend: 0, deadline: None },
+            notes: authority::Scopes(0),
+            note_resources: Box::new([]),
+        };
         roles.push(value);
     }
     policy.roles = roles.into_boxed_slice();
@@ -381,6 +390,7 @@ impl World {
             hold_restart_reads: false,
             hold_restore_pages: false,
             hold_switch: false,
+            hold_sweep: false,
             store_delay: 0,
             fill: 0,
             stopped: false,

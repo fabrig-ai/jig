@@ -8,6 +8,8 @@ impl World {
             core::RestartStep::LoadCore | core::RestartStep::LoadInbox | core::RestartStep::RestoreConnector { .. } => {
                 self.load_restart(step);
             }
+            core::RestartStep::Sweep if self.hold_sweep => {}
+            core::RestartStep::Sweep => self.events.push_back(root::Event::RestartDone(step)),
             core::RestartStep::Switch if self.hold_switch => {}
             core::RestartStep::Switch => {
                 if self.store.generation_pending {
@@ -31,10 +33,17 @@ impl World {
                     event: connector::Event::Restart(connector::RestartStep::SettleOutbox),
                 });
             }
-            core::RestartStep::Sweep | core::RestartStep::AdoptRuns | core::RestartStep::Open => {
+            core::RestartStep::AdoptRuns | core::RestartStep::Open => {
                 panic!("root performs its synchronous step")
             }
         }
+    }
+
+    /// Resume retention after inspecting the fully linked children.
+    pub fn finish_sweep(&mut self) {
+        self.hold_sweep = false;
+        self.events.push_back(root::Event::RestartDone(core::RestartStep::Sweep));
+        self.drain();
     }
 
     /// Serve a previously captured Switch after inspecting the restored copy.
