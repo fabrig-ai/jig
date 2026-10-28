@@ -1,5 +1,4 @@
 //! The application's listener and HTTP connections (service.md, 2).
-use alloc::boxed::Box;
 use core::net::SocketAddr;
 use skein_http::server as http;
 use skein_io as io;
@@ -367,26 +366,4 @@ fn end(connection: &mut Connection, drain: bool, out: &mut Queue<Routed>) {
             io::Request::Abort { entity: connection.socket }
         }));
     }
-}
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if limits.connections == 0 || limits.stall == Duration::ZERO {
-        return None;
-    }
-    // One bounded bundle (16 MiB, 128 names of 1024 bytes), shared by replies.
-    Map::<Token, Connection>::worst_case(limits.connections)?
-        .checked_add(16 << 20)?
-        .checked_add(Map::<Box<[u8]>, File>::worst_case(128)?)?
-        .checked_add(128 * 1024 + 34)?
-        .checked_add(
-            skein_http::server::worst_case(&limits.http)?
-                .checked_add(Queue::<http::Event>::worst_case(8)?)?
-                .checked_add(Queue::<http::Request>::worst_case(8)?)?
-                .checked_add(Queue::<Down>::worst_case(8)?)?
-                .checked_add(u64::from(limits.http.read))?
-                .checked_add(u64::from(limits.http.head))?
-                .checked_add(u64::from(limits.http.send))?
-                .checked_add(u64::from(limits.http.response))?
-                .checked_mul(u64::from(limits.connections))?,
-        )
 }

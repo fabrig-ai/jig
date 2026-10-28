@@ -153,10 +153,10 @@ pub fn journal(limits: &jig_test_domain::Limits) -> skein_lib::JournalLimits {
 pub fn started(document: &[u8]) -> Service {
     let mut parsed = crate::startup::parse(document).expect("fixture parsed");
     parsed.limits.root.journal = journal(&parsed.limits.root);
-    let (mut engine, io, bytes) =
+    let (mut engine, io) =
         crate::startup::engine_startup(parsed, &files(document), None, &seeds(), None, false).expect("fixture startup");
     memory_store(&mut engine);
-    Service::new(Some(engine), List::with_capacity(0), io, bytes, engine_queue())
+    Service::new(Some(engine), List::with_capacity(0), io, engine_queue())
 }
 fn engine_queue() -> u32 {
     jig_test_domain::max_out(&crate::limits::profile_limits(jig_protocol_config::Profile::Small).root)

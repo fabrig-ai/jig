@@ -12,7 +12,6 @@ use smith_protocol_program::Programs;
 const PATH_BYTES: usize = 1024;
 const ENVIRONMENT_ENTRIES: u32 = 64;
 const ENVIRONMENT_BYTES: u64 = 4096;
-const RESOURCE_PATH_BYTES: u64 = 2 * 1024;
 
 #[derive(Debug)]
 pub struct Resources {
@@ -197,14 +196,4 @@ fn failed(
         sources::Operation::SignOut => sources::Answer::SignedOut(jig::SignOutResult::Failed { reason, detail }),
     };
     jig::Event::SourceAnswered { owner, answer }
-}
-#[must_use]
-pub fn worst_case(detail: u32) -> Option<u64> {
-    // One serialized command, its resource bundle and one terminal. The
-    // worker prices its I/O/output queues separately at their step peaks.
-    smith_host_protocol::program_source_worst_case(detail)?
-        .checked_add(skein_lib::List::<Box<[u8]>>::worst_case(ENVIRONMENT_ENTRIES)?)?
-        .checked_add(ENVIRONMENT_BYTES)?
-        .checked_add(RESOURCE_PATH_BYTES)?
-        .checked_add(u64::from(detail))
 }

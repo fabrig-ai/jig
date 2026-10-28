@@ -564,20 +564,6 @@ pub(super) fn answer(engine: &mut crate::Engine) {
         }
     }
 }
-pub(super) fn worst_case(limits: &protocol::Limits, room: u32) -> Option<u64> {
-    let room = room.checked_mul(2)?;
-    protocol::worst_case(limits)?
-        .checked_add(u64::try_from(size_of::<Store>()).ok()?)?
-        .checked_add(FileIo::worst_case(handles(limits), max_read(limits), 32, max_whole(limits))?.checked_mul(3)?)?
-        .checked_add(Queue::<file::Request>::worst_case(room)?.checked_mul(3)?)?
-        .checked_add(Queue::<file::Event>::worst_case(room)?.checked_mul(3)?)?
-        .checked_add(Queue::<protocol::Event>::worst_case(room)?.checked_mul(3)?)?
-        .checked_add(Queue::<Up>::worst_case(room)?)?
-        .checked_add(Queue::<Submit>::worst_case(room)?)?
-        .checked_add(Map::<Token, ()>::worst_case(handles(limits))?.checked_mul(3)?)?
-        .checked_add(Map::<Token, jig_domain_core::Now>::worst_case(room)?)?
-        .checked_add(u64::from(max_read(limits)).checked_mul(u64::from(room))?.checked_mul(6)?)
-}
 
 fn empty_handles(drivers: &[Driver; 3]) -> bool {
     for driver in drivers {

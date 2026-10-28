@@ -337,13 +337,7 @@ fn prepared(clients: bool) -> crate::Service {
     let children = engine::Children { accounts: None, workers: None, clients };
     let mut engine = crate::Engine::new(root, &limits.root, systems, children, values, store);
     f::memory_store(&mut engine);
-    crate::Service::new(
-        Some(engine),
-        skein_lib::List::with_capacity(0),
-        limits.io,
-        crate::limits::worst_case(&limits).expect("test service pricing"),
-        512,
-    )
+    crate::Service::new(Some(engine), skein_lib::List::with_capacity(0), limits.io, 512)
 }
 
 fn before_restart_is_not_ready(engine: &mut crate::Engine) {

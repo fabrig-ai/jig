@@ -114,14 +114,3 @@ impl System {
         ApplyResult::Made { state: effect.target }
     }
 }
-
-#[must_use]
-pub fn worst_case(limits: &jig_test_connector::Limits) -> Option<u64> {
-    Map::<Path, Value>::worst_case(limits.resources)?
-        .checked_add(Map::<Key, u64>::worst_case(limits.made)?)?
-        .checked_add(
-            u64::from(limits.resources)
-                .checked_mul(u64::from(limits.path_segments))?
-                .checked_mul(u64::from(limits.segment_bytes).checked_add(16)?)?,
-        )
-}

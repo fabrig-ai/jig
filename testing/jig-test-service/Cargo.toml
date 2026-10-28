@@ -19,7 +19,6 @@ skein-kv.workspace = true
 skein-lib.workspace = true
 skein-io.workspace = true
 skein-json.workspace = true
-skein-tls.workspace = true
 smith-channel.workspace = true
 jig-domain-core.workspace = true
 jig-domain-people.workspace = true

@@ -1275,32 +1275,6 @@ pub(super) fn untag(mut event: io::Event) -> io::Event {
     }
     event
 }
-/// Bounded source records, restored identities, key flights and queues beside the driver.
-pub(super) fn worst_case(limits: &driver::Limits, io: &io::Limits, room: u32, page_rows: u32) -> Option<u64> {
-    let record = u64::from(limits.client.document.record_bytes);
-    Queue::<io::Request>::worst_case(room)?
-        .checked_add(Queue::<driver::Event>::worst_case(room)?)?
-        .checked_add(Queue::<driver::FileLower>::worst_case(room)?)?
-        .checked_add(Queue::<domain::Request>::worst_case(room)?)?
-        .checked_add(records::worst_case(limits.accounts, &limits.client.document)?)?
-        .checked_add(moves::worst_case(limits.accounts, &limits.client.document)?)?
-        .checked_add(Map::<u32, u32>::worst_case(limits.accounts)?)?
-        .checked_add(Queue::<moves::Next>::worst_case(room)?)?
-        .checked_add(finishes::worst_case(limits.accounts)?)?
-        .checked_add(Queue::<finishes::Next>::worst_case(room)?)?
-        .checked_add(u64::from(room).checked_mul(u64::from(limits.client.uri_bytes))?)?
-        .checked_add(keys::worst_case(limits.accounts, limits.client.document.token_bytes)?)?
-        .checked_add(restart::worst_case(limits.accounts, page_rows)?)?
-        .checked_add(Queue::<keys::Next>::worst_case(room)?)?
-        .checked_add(Queue::<domain::FromComponent>::worst_case(room)?)?
-        .checked_add(Queue::<u32>::worst_case(room)?)?
-        .checked_add(Map::<u32, Box<[u8]>>::worst_case(limits.accounts)?)?
-        .checked_add(Map::<u32, Erasing>::worst_case(limits.accounts)?)?
-        .checked_add(u64::from(limits.accounts).checked_mul(u64::from(limits.client.scope_bytes))?)?
-        .checked_add(u64::from(room).checked_mul(record.checked_add(4096)?)?)?
-        .checked_add(Map::<Token, (Token, Option<Token>)>::worst_case(io::operations(io)?.checked_add(2)?)?)?
-        .checked_add(Map::<Token, Token>::worst_case(io::operations(io)?.checked_add(2)?)?)
-}
 
 fn copy_endpoint(endpoint: &driver::Endpoint) -> driver::Endpoint {
     driver::Endpoint {
@@ -1350,15 +1324,6 @@ fn event_account(event: &driver::Event) -> Option<u32> {
         | driver::Event::Unlock { account } => Some(*account),
         driver::Event::Closed => None,
     }
-}
-
-/// The public account sign-in templates retained beside the driver. Two
-/// one-account driver bounds include their origins and the temporary startup copy.
-pub(super) fn configured_bytes(config: &config::Engine) -> Option<u64> {
-    let count = u32::try_from(config.llm.providers.len()).ok()?;
-    let limits = driver::Limits { accounts: 1, exchanges: 1, listeners: 1, ..config.limits.driver };
-    Map::<u32, driver::Account>::worst_case(count)?
-        .checked_add(driver::worst_case(&limits)?.checked_mul(u64::from(count))?.checked_mul(2)?)
 }
 
 #[cfg(test)]

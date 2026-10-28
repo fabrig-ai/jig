@@ -384,11 +384,6 @@ const fn title(kind: jig_domain_brief::Core) -> &'static [u8] {
     }
 }
 
-pub(super) fn worst_case(limits: &core::Limits) -> Option<u64> {
-    Map::<core::CallKey, (Box<[u8]>, Box<[u8]>)>::worst_case(limits.call_records)?
-        .checked_add(u64::from(limits.call_records).checked_mul(u64::from(limits.call_answer_bytes))?)
-}
-
 fn family(name: &[u8]) -> u64 {
     let jig = core::ToolFamilies::JIG;
     match name {

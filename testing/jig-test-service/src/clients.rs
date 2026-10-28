@@ -461,37 +461,6 @@ pub(super) fn untag(mut event: io::Event) -> io::Event {
     event
 }
 
-pub(super) fn worst_case(
-    limits: &kit::Limits,
-    transport: &crate::server::Limits,
-    mapping: &http::Limits,
-    room: u32,
-    journal: &skein_lib::JournalLimits,
-) -> Option<u64> {
-    kit::worst_case(limits)?
-        .checked_add(http::worst_case(mapping)?)?
-        .checked_add(Map::<Token, ()>::worst_case(transport.connections)?)?
-        .checked_add(u64::try_from(size_of::<Map<Token, ()>>()).ok()?)?
-        // This mount owns one bound listener's textual address.
-        .checked_add(List::<Box<[u8]>>::worst_case(1)?.checked_add(u64::from(HOST_BYTES))?)?
-        .checked_add(Queue::<http::Request>::worst_case(room)?)?
-        .checked_add(Queue::<kit::Request>::worst_case(room)?)?
-        .checked_add(Queue::<io::Request>::worst_case(room)?)?
-        .checked_add(Queue::<root::Event>::worst_case(room)?)?
-        .checked_add(u64::from(limits.message_bytes).checked_mul(64)?.checked_mul(u64::from(room).checked_mul(2)?)?)?
-        .checked_add(u64::from(transport.http.send).checked_mul(u64::from(room))?)?
-        .checked_add(Queue::<Box<[u8]>>::worst_case(room)?)?
-        .checked_add(u64::from(room).checked_mul(512)?)?
-        .checked_add(Queue::<kit::SecretsRequest>::worst_case(room)?)?
-        .checked_add(Map::<Token, Asked>::worst_case(room)?)?
-        // Each queued Keep owns its 32-byte credential digest; row encoding is the store's.
-        .checked_add(u64::from(room).checked_mul(32)?)?
-        // A carried value waits here on its way to the store.
-        .checked_add(u64::from(room).checked_mul(u64::from(limits.wire.keyed_value_some))?)?
-        .checked_add(Map::<u64, Endings>::worst_case(journal.commits)?)?
-        .checked_add(List::<u64>::worst_case(journal.writes)?.checked_mul(u64::from(journal.commits))?)
-}
-
 impl Clients {
     pub fn root_event(&mut self, value: &root::Event) -> Option<Token> {
         match value {

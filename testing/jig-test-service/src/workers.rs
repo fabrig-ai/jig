@@ -309,13 +309,3 @@ fn delivery(now: Time, channel: Token, down: host::LinkDown, values: &Values) ->
     };
     kit::Event::Down { channel, down, parts: Box::default(), values: grants }
 }
-
-// The endpoint names come from the whole checked document, rather than a profile count.
-pub(super) fn configured_bytes(config: &config::Engine) -> Option<u64> {
-    let count = u32::try_from(config.llm.endpoints.len()).ok()?;
-    let mut bytes = List::<jig_protocol_charter::EndpointName>::worst_case(count)?;
-    for endpoint in &config.llm.endpoints {
-        bytes = bytes.checked_add(u64::try_from(endpoint.name.len()).ok()?)?;
-    }
-    Some(bytes)
-}

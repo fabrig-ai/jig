@@ -66,7 +66,6 @@ pub struct Service {
     signals: Option<Token>,
     signals_closing: bool,
     shutdowns: u8,
-    bytes: u64,
     links: Queue<Box<[u8]>>,
 }
 /// Read-only startup evidence for the service's worlds; no private value is exposed.
@@ -96,7 +95,7 @@ impl Service {
         })
     }
 
-    fn new(engine: Option<Engine>, workers: List<Worker>, limits: io::Limits, bytes: u64, queue: u32) -> Self {
+    fn new(engine: Option<Engine>, workers: List<Worker>, limits: io::Limits, queue: u32) -> Self {
         Self {
             started: false,
             bundle_directory: None,
@@ -120,7 +119,6 @@ impl Service {
             signals: None,
             signals_closing: false,
             shutdowns: 0,
-            bytes,
             links: Queue::with_capacity(queue),
         }
     }
@@ -215,10 +213,6 @@ impl Service {
             Some(engine) => engine.end.as_ref(),
             None => self.ended.as_ref(),
         }
-    }
-    #[must_use]
-    pub const fn worst_case(&self) -> u64 {
-        self.bytes
     }
     #[must_use]
     pub fn operations(&self) -> u32 {

@@ -56,11 +56,10 @@ fn started() -> Service {
     core.documents.rows = 2;
     parsed.limits = crate::limits::for_profile(jig_protocol_config::Profile::Small, &parsed.engine.limits);
     parsed.limits.root.journal = f::journal(&parsed.limits.root);
-    let (mut engine, io, bytes) =
-        crate::startup::engine_startup(parsed, &f::files(&document), None, &f::seeds(), None, false)
-            .expect("fixture startup");
+    let (mut engine, io) = crate::startup::engine_startup(parsed, &f::files(&document), None, &f::seeds(), None, false)
+        .expect("fixture startup");
     f::memory_store(&mut engine);
-    Service::new(Some(engine), skein_lib::List::with_capacity(0), io, bytes, 512)
+    Service::new(Some(engine), skein_lib::List::with_capacity(0), io, 512)
 }
 fn settle(service: &mut Service) {
     for _ in 0_u32..64 {

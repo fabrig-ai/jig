@@ -1,9 +1,8 @@
-//! The application's limits, priced with jig's in one sum (configuration.md, 6).
-use alloc::boxed::Box;
+//! The application's limits and channel edges (configuration.md, 6).
 use jig_protocol_config::{Profile, profile};
 use jig_test_connector as connector;
 use jig_test_domain as root;
-use skein_lib::{Duration, Queue};
+use skein_lib::Duration;
 
 pub const SMALL: connector::Limits = connector::Limits {
     tasks: 8,
@@ -96,81 +95,6 @@ pub fn for_profile(name: Profile, jig: &jig_protocol_config::Limits) -> Limits {
     }
 }
 #[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    let root = root::worst_case(&limits.root)?;
-    let queue = root::max_out(&limits.root).checked_mul(2)?;
-    let payload = jig_domain_core::worst_case(&limits.root.core)?
-        .checked_add(connector::worst_case(&limits.root.connector)?.checked_mul(2)?)?;
-    root.checked_add(skein_lib::List::<(u32, u64)>::worst_case(limits.root.core.authority.projects)?)?
-        .checked_add(crate::store::worst_case(&limits.store, root::max_out(&limits.root))?)?
-        .checked_add(skein_oauth_accounts::worst_case(&limits.accounts)?)?
-        .checked_add(jig_protocol_engine_workers::worst_case(&limits.workers)?.checked_mul(2)?)?
-        .checked_add(jig_protocol_accounts::table::worst_case(
-            limits.accounts.accounts,
-            limits.accounts.client.document.token_bytes,
-        )?)?
-        .checked_add(skein_lib::Map::<(u32, u64), skein_lib::Secret>::worst_case(
-            limits.root.core.accounts.credentials.checked_mul(2)?,
-        )?)?
-        .checked_add(
-            u64::from(limits.root.connector.value_bytes)
-                .checked_mul(u64::from(limits.root.core.accounts.credentials).checked_mul(2)?)?,
-        )?
-        .checked_add(crate::accounts::worst_case(
-            &limits.accounts,
-            &limits.io,
-            queue.checked_mul(3)?,
-            limits.store.secrets.page.rows,
-        )?)?
-        .checked_add(crate::tools::worst_case(&limits.root.core)?)?
-        .checked_add(Queue::<Box<root::Event>>::worst_case(
-            queue.checked_mul(jig_protocol_engine_workers::MAX_OUT_DOWN)?,
-        )?)?
-        .checked_add(
-            payload.checked_mul(u64::from(queue).checked_mul(u64::from(jig_protocol_engine_workers::MAX_OUT_DOWN))?)?,
-        )?
-        .checked_add(Queue::<skein_io::Request>::worst_case(
-            queue.checked_mul(jig_protocol_engine_workers::MAX_OUT_DOWN)?,
-        )?)?
-        .checked_add(skein_lib::Map::<skein_lib::Token, skein_lib::Token>::worst_case(
-            limits.workers.workers.checked_add(limits.workers.opening)?,
-        )?)?
-        .checked_add(skein_lib::List::<(skein_lib::Token, Option<skein_lib::Token>)>::worst_case(limits.io.sockets)?)?
-        .checked_add(Queue::<jig_protocol_engine_workers::Request>::worst_case(
-            jig_protocol_engine_workers::MAX_OUT_DOWN,
-        )?)?
-        .checked_add(crate::server::worst_case(&limits.server)?)?
-        .checked_add(Queue::<crate::server::Routed>::worst_case(
-            queue.checked_mul(jig_protocol_engine_clients::MAX_OUT_DOWN)?,
-        )?)?
-        .checked_add(crate::clients::worst_case(
-            &limits.clients,
-            &limits.server,
-            &limits.clients_http,
-            queue.checked_mul(jig_protocol_engine_clients::MAX_OUT_DOWN)?,
-            &limits.root.journal,
-        )?)?
-        .checked_add(Queue::<Box<[u8]>>::worst_case(queue)?)?
-        .checked_add(u64::from(queue).checked_mul(512)?)?
-        .checked_add(skein_io::worst_case(&limits.io)?)?
-        .checked_add(Queue::<crate::PartyOutput>::worst_case(queue)?)?
-        .checked_add(Queue::<jig_domain_core::Event>::worst_case(queue)?)?
-        .checked_add(Queue::<root::Event>::worst_case(queue.checked_mul(jig_protocol_engine_workers::MAX_OUT_DOWN)?)?)?
-        .checked_add(Queue::<root::Request>::worst_case(root::max_out(&limits.root))?)?
-        .checked_add(
-            payload.checked_mul(
-                u64::from(queue)
-                    .checked_mul(u64::from(jig_protocol_engine_workers::MAX_OUT_DOWN).checked_add(5)?)?
-                    .checked_add(1)?,
-            )?,
-        )?
-        .checked_add(crate::system::worst_case(&limits.root.connector)?.checked_mul(2)?)?
-        .checked_add(Queue::<skein_io::kernel::Complete>::worst_case(queue)?)?
-        .checked_add(Queue::<skein_io::kernel::Submit>::worst_case(queue)?.checked_mul(2)?)?
-        .checked_add(Queue::<skein_io::Event>::worst_case(queue)?)?
-        .checked_add(4096)
-}
-#[must_use]
 pub fn profile_limits(name: Profile) -> Limits {
     for_profile(name, &profile(name))
 }
@@ -245,22 +169,6 @@ pub(super) fn worker_link(worker: &jig_protocol_config::Worker) -> jig_protocol_
         grace: worker.graces.grace,
         busy: profile.busy,
     }
-}
-
-pub(super) fn shared_worker_bytes(io: &skein_io::Limits, queue: u32, workers: u32) -> Option<u64> {
-    let operations = skein_io::operations(io)?.checked_add(2)?.checked_add(workers)?;
-    skein_io::worst_case(io)?
-        .checked_add(Queue::<skein_io::kernel::Complete>::worst_case(queue)?)?
-        .checked_add(Queue::<skein_io::kernel::Submit>::worst_case(queue)?.checked_mul(2)?)?
-        .checked_add(Queue::<skein_io::Event>::worst_case(queue)?)?
-        .checked_add(u64::from(io.intake).checked_mul(u64::from(queue))?)?
-        .checked_add(
-            skein_lib::Map::<skein_lib::Token, (bool, skein_lib::Token, Option<skein_lib::Token>)>::worst_case(
-                operations,
-            )?,
-        )?
-        .checked_add(skein_lib::Map::<(bool, skein_lib::Token), skein_lib::Token>::worst_case(operations)?)?
-        .checked_add(skein_lib::List::<crate::Worker>::worst_case(workers)?)
 }
 
 #[cfg(test)]
