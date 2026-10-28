@@ -761,3 +761,69 @@ fn settings_refusal_valid(why: &jig_domain_people::Refusal) -> bool {
     }
     false
 }
+
+impl Core {
+    /// Copy a retained core row; revision items and archive bodies stay in the store (engine.md, 5.4, 17.8).
+    #[must_use]
+    pub fn stored_record(&self, key: &CoreKey) -> Option<CoreRecord> {
+        Some(match *key {
+            CoreKey::Deployment => CoreRecord::Deployment(self.counters.deployment()),
+            CoreKey::RunProof(task) => CoreRecord::RunProof(self.proofs.get(&task)?.clone()),
+            CoreKey::Call(key) => CoreRecord::Call(CallRecord {
+                key,
+                part: self.call_parts.get(&key)?.clone(),
+                settled: self.call_settled.get(&key).cloned(),
+            }),
+            CoreKey::Settings(key) => CoreRecord::Settings(match key {
+                crate::settings::Key::Default(setting) => {
+                    crate::settings::Record::Default { setting, default: self.current.defaults.get(&setting)?.clone() }
+                }
+                crate::settings::Key::Changed(setting) => {
+                    crate::settings::Record::Changed { setting, changed: self.current.changes.get(&setting)?.clone() }
+                }
+                crate::settings::Key::Held(number) => {
+                    let head = if self.current.newest() == number {
+                        self.current.newest_head()
+                    } else {
+                        self.held.heads.get(&number)?
+                    };
+                    crate::settings::Record::Revision {
+                        history: false,
+                        revision: crate::settings::Revision { head: head.clone(), items: Box::new([]) },
+                    }
+                }
+                crate::settings::Key::Extent => crate::settings::Record::Extent { oldest: self.current.oldest() },
+                crate::settings::Key::Charter { charter, revision } => crate::settings::Record::Charter {
+                    charter,
+                    revision,
+                    value: self.held.versions.get(&crate::settings::VersionKey { charter, revision })?.clone(),
+                },
+                crate::settings::Key::Proposal { proposer, proposal } => crate::settings::Record::Proposal {
+                    proposer,
+                    proposal,
+                    value: self.settings_proposals.get(&(proposer, proposal))?.clone(),
+                },
+                crate::settings::Key::History(_) => return None,
+            }),
+            CoreKey::Projection(key) => CoreRecord::Projection(self.stored_projection(key)?),
+            CoreKey::Turn { .. }
+            | CoreKey::Terminal { .. }
+            | CoreKey::ProposalDecision { .. }
+            | CoreKey::EscalationDecision { .. } => return None,
+        })
+    }
+
+    /// The complete current project row from authority, name and connector mappings.
+    #[must_use]
+    pub fn stored_project(&self, project: u32) -> Option<jig_domain_people::Stored> {
+        Some(jig_domain_people::Stored::Policy {
+            project,
+            name: self.names.get(&project)?.clone(),
+            value: crate::policy::snapshot(
+                self.authority.policy(project)?,
+                self.permission_roles.get(&project)?,
+                self.template_overrides.get(&project)?,
+            )?,
+        })
+    }
+}

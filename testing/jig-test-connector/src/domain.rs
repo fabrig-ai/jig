@@ -33,6 +33,8 @@ pub struct Domain {
     closing: Map<u64, ()>,
 }
 
+mod records;
+
 impl Domain {
     /// The connector's existing topic interests for one task.
     #[must_use]

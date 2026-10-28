@@ -169,10 +169,36 @@ impl World {
                         "accounts stored view {key:?}"
                     );
                 }
-                root::Record::Core(core::Record::Core(core::CoreRecord::RunProof(row))) => {
-                    assert_eq!(core.proofs.get(&row.task), Some(row), "proof stored view {key:?}");
+                root::Record::Core(core::Record::People(row @ People::Policy { project, .. })) => {
+                    assert_eq!(core.stored_project(*project), Some(row.clone()), "policy stored view {key:?}");
                 }
-                root::Record::Core(_) | root::Record::Connector { .. } => {}
+                root::Record::Core(core::Record::Core(core::CoreRecord::Settings(
+                    core::settings::Record::Revision { history: false, revision },
+                ))) => {
+                    let Some(core::CoreRecord::Settings(core::settings::Record::Revision { revision: view, .. })) =
+                        core.stored_record(&core::CoreKey::Settings(core::settings::Key::Held(revision.head.number)))
+                    else {
+                        panic!("held revision view {key:?}")
+                    };
+                    // engine.md 17.8: only the head is held; items remain an on-demand store row.
+                    assert_eq!(view.head, revision.head, "settings head stored view {key:?}");
+                }
+                root::Record::Core(core::Record::Core(row))
+                    if (row.key().live()
+                        || matches!(row, core::CoreRecord::Settings(_) | core::CoreRecord::Deployment(_)))
+                        && !matches!(row.key(), core::CoreKey::Settings(core::settings::Key::History(_))) =>
+                {
+                    assert_eq!(core.stored_record(&row.key()), Some(row.clone()), "core stored view {key:?}");
+                }
+                root::Record::Connector { number, record } => {
+                    let view = self.domain.connector_record(*number, &record.key()).expect("retained connector row");
+                    assert_eq!(
+                        connector_durable(view),
+                        connector_durable(record.clone()),
+                        "connector stored view {key:?}"
+                    );
+                }
+                root::Record::Core(_) => {}
             }
         }
     }
@@ -211,6 +237,17 @@ impl World {
         }
         answers
     }
+}
+
+// connectors.md 4.3: a sent attempt whose reply is lost becomes uncertain.
+// Its key, payload, numbered attempt and absolute deadline remain durable.
+fn connector_durable(mut row: jig_test_connector::Record) -> jig_test_connector::Record {
+    if let jig_test_connector::Record::Outbox(entry) = &mut row
+        && entry.phase == jig_test_connector::EffectPhase::Sent
+    {
+        entry.phase = jig_test_connector::EffectPhase::Uncertain;
+    }
+    row
 }
 
 fn copy_hello(hello: &fleet::Hello) -> fleet::Hello {
