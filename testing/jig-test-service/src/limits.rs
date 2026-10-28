@@ -65,7 +65,13 @@ pub fn for_profile(name: Profile, jig: &jig_protocol_config::Limits) -> Limits {
     };
     let accounts = jig.driver;
     Limits {
-        root: root::Limits { core: jig.core, connector, journal: jig.journal, routes: jig.routes },
+        root: root::Limits {
+            core: jig.core,
+            connector,
+            journal: jig.journal,
+            watermark: jig.journal.commits,
+            routes: jig.routes,
+        },
         store: jig_protocol_store::Limits { core: jig.core, journal: jig.journal, ..jig.store },
         io: jig.io,
         accounts,

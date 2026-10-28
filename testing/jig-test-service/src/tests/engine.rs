@@ -30,25 +30,39 @@ fn period(driven: &mut fixtures::Driven, number: u64) {
     driven.party(core::Event::Period { project: 1, period: number, budget: 100, next: None });
 }
 
-#[test]
-fn a_store_answer_is_taken_with_the_journal_full() {
-    let mut driven = fixtures::Driven::started(&fixtures::engine_document());
-    for number in 2..=4 {
-        period(&mut driven, number);
+// Offer real work with commit answers withheld until admission returns the
+// probe. One writing period contributes at least one backlog entry.
+fn fill_to_watermark(driven: &mut fixtures::Driven) -> u64 {
+    let watermark = fixtures::engine(&mut driven.service).env.limits.watermark;
+    let first_period = 2; // Driven::started has already committed period 1.
+    let last_probe = u64::from(watermark).checked_add(first_period).expect("fixture periods fit");
+    for number in first_period..=last_probe {
+        period(driven, number);
+        if let Some(event) = driven.busy.pop() {
+            let jig_test_domain::Event::Core(core::Event::Period { period, .. }) = *event else {
+                panic!("the period probe is returned at the watermark");
+            };
+            return period;
+        }
     }
+    panic!("admission returns a probe at the watermark");
+}
+
+#[test]
+fn a_store_answer_is_taken_at_the_watermark() {
+    let mut driven = fixtures::Driven::started(&fixtures::engine_document());
+    let next_period = fill_to_watermark(&mut driven);
     let first = driven.commit_asked();
     driven.commit(first);
     assert_eq!(fixtures::engine(&mut driven.service).store.above.len(), 0);
-    period(&mut driven, 5);
+    period(&mut driven, next_period);
     assert_eq!(driven.commits.len(), 3);
 }
 
 #[test]
-fn a_party_request_is_returned_busy_with_the_journal_full() {
+fn a_party_request_is_returned_busy_at_the_watermark() {
     let mut driven = fixtures::Driven::started(&fixtures::engine_document());
-    for number in 2..=4 {
-        period(&mut driven, number);
-    }
+    let _next_period = fill_to_watermark(&mut driven);
     driven.chat(101, b"retained");
     let event = driven.busy.pop().expect("unadmitted party input");
     let jig_test_domain::Event::Core(core::Event::People(jig_domain_people::Event::Ask { ask, .. })) = *event else {

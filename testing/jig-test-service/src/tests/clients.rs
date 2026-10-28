@@ -303,6 +303,7 @@ fn prepared(clients: bool) -> crate::Service {
     config.limits.routes = 16;
     let mut limits = crate::limits::for_profile(jig_protocol_config::Profile::Small, &config.limits);
     limits.root.journal = f::journal(&limits.root);
+    limits.root.watermark = limits.root.journal.commits;
     config.limits.journal = limits.root.journal;
     assert!(root::worst_case(&limits.root).is_some(), "test root pricing: {:?}", limits.root);
     let seeds = f::seeds();

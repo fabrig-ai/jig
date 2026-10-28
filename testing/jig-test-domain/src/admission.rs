@@ -1,8 +1,8 @@
-//! Admission at the service boundary; store terminals keep their reserved rights (service.md, 4).
+//! Admission at the service boundary by backlog watermark (skein's draft `dynamic-memory.md`, 4).
 use crate::{Domain, Event, Limits, step};
 use alloc::boxed::Box;
 use jig_domain_core as core;
-use skein_lib::{Env, JournalRoom};
+use skein_lib::Env;
 
 /// Return an unadmitted input to its owner; a store terminal always enters its root-owned queue.
 #[expect(clippy::result_large_err, reason = "the service admission boundary returns the original event by value")]
@@ -49,8 +49,7 @@ pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<
         | Event::Text { .. }
         | Event::Turn { .. }
         | Event::Answer { .. }) => {
-            let room = room(env, &event);
-            if !domain.journal.takes(&room) {
+            if !admits(domain, &env.limits) {
                 return Err(event);
             }
             step(domain, env, event);
@@ -59,51 +58,33 @@ pub fn try_step(domain: &mut Domain, env: &Env<Limits>, event: Event) -> Result<
     }
 }
 
-fn room(env: &Env<Limits>, event: &Event) -> JournalRoom {
-    let core = match event {
-        Event::Core(event) => core::room(&env.limits.core, event),
-        Event::Link { .. }
-        | Event::ResultRead { .. }
-        | Event::Stop
-        | Event::Application { .. }
-        | Event::ConnectorTimer { .. }
-        | Event::WriterRead { .. }
-        | Event::Switched
-        | Event::RestartBegin { .. }
-        | Event::RestartDone(_)
-        | Event::TranscriptLoaded { .. }
-        | Event::Committed { .. }
-        | Event::Failed { .. }
-        | Event::ProjectionEffect { .. }
-        | Event::TopicCall { .. }
-        | Event::EffectCall { .. }
-        | Event::Timer(_)
-        | Event::Credential { .. }
-        | Event::WatchApplication { .. }
-        | Event::ReadApplication { .. }
-        | Event::CallAnswered { .. }
-        | Event::Connector { .. }
-        | Event::Text { .. }
-        | Event::Turn { .. }
-        | Event::Answer { .. } => core::room_max(&env.limits.core),
-    }
-    .expect("validated core room");
-    let connectors = jig_test_connector::MAX_OUT.checked_mul(2).expect("two connectors");
-    JournalRoom {
-        writes: core.writes.checked_add(connectors).expect("root writes"),
-        held: core.held.checked_add(connectors).expect("root deliveries"),
-    }
+/// What the root holds of admitted work, in entries (the draft's 4.1):
+/// the journal's backlog, the queued store answers, and its own `now`
+/// and `busy` outputs not yet released.
+pub(crate) fn backlog(domain: &Domain) -> u64 {
+    domain
+        .journal
+        .backlog()
+        .checked_add(u64::from(domain.store_answers.len()))
+        .expect("four u32 counts fit in u64")
+        .checked_add(u64::from(domain.now.len()))
+        .expect("five u32 counts fit in u64")
+        .checked_add(u64::from(domain.busy.len()))
+        .expect("six u32 counts fit in u64")
+}
+
+/// New external work enters only while the journal runs and the backlog
+/// is under the watermark (the draft's 4.2).
+pub(crate) fn admits(domain: &Domain, limits: &Limits) -> bool {
+    !domain.journal.stopped() && backlog(domain) < u64::from(limits.watermark)
 }
 
 pub(super) fn resume(domain: &mut Domain, env: &Env<Limits>) {
     for _ in 0..domain.store_answers.len() {
-        let Some(event) = domain.store_answers.iter().next() else {
-            break;
-        };
-        if !domain.journal.takes(&room(env, event)) {
+        if domain.journal.stopped() {
             break;
         }
-        let event = domain.store_answers.pop().expect("reserved store terminal");
+        let event = domain.store_answers.pop().expect("queued store terminal");
         step(domain, env, *event);
     }
 }
@@ -114,13 +95,13 @@ mod tests {
     use crate::{Event, tests::fixtures};
     use jig_domain_core as core;
     use jig_domain_people as people;
-    use skein_lib::{JournalRoom, ReplyTo, Token};
+    use skein_lib::{ReplyTo, Token};
 
     #[test]
-    fn a_full_journal_returns_its_input_and_takes_its_commit_answer() {
+    fn new_work_waits_at_the_watermark_and_its_commit_answer_is_taken() {
         let env = fixtures::env();
         let mut domain = fixtures::domain();
-        fixtures::fill_journal(&mut domain, &env);
+        fixtures::fill_to_watermark(&mut domain, &env);
         let event = Event::Core(core::Event::People(people::Event::Ask {
             models: Box::new([]),
             reply_to: ReplyTo::new(Token::new(7)),
@@ -128,8 +109,8 @@ mod tests {
             key: [1; 16],
             ask: people::Ask::Say { project: 1, task: 1, words: b"kept".as_slice().into() },
         }));
-        let Err(Event::Core(core::Event::People(people::Event::Ask { ask, .. }))) = try_step(&mut domain, &env, event)
-        else {
+        let event = try_step(&mut domain, &env, event).expect_err("new work waits at the watermark");
+        let Event::Core(core::Event::People(people::Event::Ask { ask, .. })) = &event else {
             panic!("unadmitted input returns to its owner");
         };
         let people::Ask::Say { words, .. } = ask else {
@@ -137,7 +118,7 @@ mod tests {
         };
         assert_eq!(words.as_ref(), b"kept");
         try_step(&mut domain, &env, Event::Committed { number: 1, fill: 0 }).expect("commit answers are taken");
-        assert!(domain.journal.takes(&JournalRoom { writes: 1, held: 0 }), "commit answer frees the journal");
+        try_step(&mut domain, &env, event).expect("the same input enters below the watermark");
     }
 }
 
@@ -180,7 +161,7 @@ mod expiry_tests {
         );
         let elapsed = domain.core.people.next_deadline();
         assert!(domain.core.people.ready());
-        fixtures::fill_journal(&mut domain, &env);
+        fixtures::fill_to_watermark(&mut domain, &env);
         for _ in 0..env.limits.journal.commits {
             domain.core.counters.next_commit();
         }

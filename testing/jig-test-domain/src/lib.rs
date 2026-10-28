@@ -18,9 +18,7 @@ use jig_domain_core as core;
 use jig_domain_fleet as fleet;
 use jig_domain_tasks as tasks;
 use jig_test_connector as connector;
-use skein_lib::{
-    Decision, Env, Journal, JournalLimits, JournalRoom, List, Map, Queue, ReplyTo, Set, Time, Token, Wall,
-};
+use skein_lib::{Decision, Env, Journal, JournalLimits, List, Map, Queue, ReplyTo, Set, Time, Token, Wall};
 
 /// A store address owned by the core or one numbered connector.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -306,15 +304,19 @@ pub enum Event {
     },
 }
 
-/// Finite room reserved before either child changes state.
+/// Child bounds, synchronous route capacity and admission pacing for the test root.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     /// The core's bounded state and route buffers.
     pub core: core::Limits,
     /// Each test connector's bounded state and output.
     pub connector: connector::Limits,
-    /// The application's journal capacities.
+    /// Journal release pacing and capacities used for conservative pricing.
     pub journal: JournalLimits,
+    /// New external work waits while the backlog is at or past this many
+    /// entries (skein's draft `dynamic-memory.md`, 4.4); a pacing limit,
+    /// not a memory one.
+    pub watermark: u32,
     /// At most this many synchronous child continuations per decision.
     pub routes: u32,
 }
@@ -467,23 +469,15 @@ impl Domain {
     /// Build the testing application without issuing a store request.
     #[must_use]
     pub fn new(config: Config, limits: &Limits) -> Domain {
-        assert!(limits.routes > 0 && limits.journal.writes > 0 && limits.journal.held > 0, "finite route room");
-        let core_room = core::room_max(&limits.core).expect("valid core room");
-        let connector_room = connector::MAX_OUT.checked_mul(2).expect("two connector outputs");
-        let writes = core_room.writes.checked_add(connector_room).expect("combined route writes fit");
-        let held = core_room.held.checked_add(connector_room).expect("combined route deliveries fit");
-        assert!(
-            writes <= limits.journal.writes && held <= limits.journal.held,
-            "journal admits the whole core and connector route before stepping"
-        );
+        assert!(limits.routes > 0, "synchronous route capacity is positive");
         Domain {
             pieces_dropped: 0,
             core: core::Core::new(config.core, &limits.core).expect("fixture core configuration"),
             first: connector::Domain::new(config.first, &limits.connector),
             second: connector::Domain::new(config.second, &limits.connector),
-            journal: Journal::new(&limits.journal),
+            journal: Journal::uncapped(limits.journal.release, 0),
             now: Queue::with_capacity(limits.journal.now),
-            store_answers: Queue::with_capacity(limits.routes),
+            store_answers: Queue::uncapped(),
             links: Set::with_capacity(limits.core.fleet.workers),
             busy: Queue::with_capacity(limits.routes),
             assignments: Map::with_capacity(limits.core.tasks.tasks),
@@ -662,38 +656,11 @@ fn transcript_loaded(domain: &mut Domain, env: &Env<Limits>, task: u64, rows: Bo
 
 #[expect(clippy::too_many_lines, reason = "one bounded decision routes the complete root work vocabulary")]
 fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
-    let core_room = match &first {
-        Work::Core(event) => core::room(&env.limits.core, event),
-        Work::WatchApplication { .. }
-        | Work::Link { .. }
-        | Work::ReadApplication { .. }
-        | Work::Application { .. }
-        | Work::Switched
-        | Work::Restart(_)
-        | Work::SwitchChecked
-        | Work::AdoptRestored
-        | Work::AdoptDone
-        | Work::Timer(_)
-        | Work::WriterRead { .. }
-        | Work::Finish
-        | Work::ResumeFleet
-        | Work::Connector { .. }
-        | Work::ConnectorResume { .. }
-        | Work::ConnectorFire { .. }
-        | Work::ProjectionEffect { .. }
-        | Work::TopicCall { .. }
-        | Work::EffectCall { .. }
-        | Work::Turn { .. }
-        | Work::Answer { .. }
-        | Work::CallAnswered { .. } => core::room_max(&env.limits.core),
+    // A stopped journal takes no decision, so neither child may move.
+    if domain.journal.stopped() {
+        return;
     }
-    .expect("validated core room");
-    let connector_room = connector::MAX_OUT.checked_mul(2).expect("two connector outputs");
-    let room = JournalRoom {
-        writes: core_room.writes.checked_add(connector_room).expect("combined route writes"),
-        held: core_room.held.checked_add(connector_room).expect("combined route deliveries"),
-    };
-    let Some(mut decision) = domain.journal.decision(&room) else { return };
+    let mut decision = domain.journal.decide();
     domain.decision_wrote = false;
     let mut finish_only = false;
     let mut work = Queue::with_capacity(env.limits.routes);
@@ -1120,11 +1087,11 @@ fn resume_restart_outbox(domain: &mut Domain, env: &Env<Limits>) -> bool {
 
 fn write(domain: &mut Domain, decision: &mut Decision<Write, Delivery>, value: Write) {
     domain.decision_wrote = true;
-    assert!(decision.write(value).is_ok(), "reserved write room");
+    decision.push_write(value);
 }
 
 fn hold(decision: &mut Decision<Write, Delivery>, value: Delivery) {
-    assert!(decision.hold(value).is_ok(), "reserved delivery room");
+    decision.push_held(value);
 }
 
 // The translations below are deliberately exhaustive: a new boundary variant
@@ -1176,7 +1143,7 @@ pub fn restore_record(domain: &mut Domain, env: &Env<Limits>, record: Record) ->
     match record {
         Record::Core(core::Record::Core(row)) => match domain.core.restore_core(row, &env.limits.core) {
             core::Restored::Deployment { commits } => {
-                domain.journal = Journal::from_durable(&env.limits.journal, commits);
+                domain.journal = Journal::uncapped(env.limits.journal.release, commits);
                 true
             }
             core::Restored::Live | core::Restored::Archive => true,

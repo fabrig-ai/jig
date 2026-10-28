@@ -4,7 +4,7 @@ use jig_domain_core as core;
 use jig_domain_fleet as fleet;
 use jig_domain_host as host;
 use jig_domain_tasks as tasks;
-use skein_lib::{Duration, JournalRoom, Queue, Token};
+use skein_lib::{Duration, Queue, Token};
 
 #[test]
 fn a_worker_s_hello_reaches_the_fleet_with_its_bounds() {
@@ -59,8 +59,7 @@ fn an_assignment_for_a_channel_leaves_as_the_hub_s_record() {
     let mut domain = fixtures::domain();
     let env = fixtures::env();
     domain.assignments.insert(fixtures::RUN.raw(), fixtures::assignment()).expect("one prepared run");
-    let room = JournalRoom { writes: 0, held: 1 };
-    let mut decision = domain.journal.decision(&room).expect("assignment room");
+    let mut decision = domain.journal.decide();
     let mut out = Queue::with_capacity(1);
     out.push(core::Request::Held(Box::new(core::Held::Assign {
         channel: fixtures::CHANNEL,
@@ -258,7 +257,7 @@ fn prepare_brief_assignment(
 fn an_assignment_carries_its_brief_s_sections_in_order() {
     let mut domain = fixtures::domain();
     let env = fixtures::env();
-    let mut decision = domain.journal.decision(&JournalRoom { writes: 0, held: 1 }).expect("assignment room");
+    let mut decision = domain.journal.decide();
     let mut work = fixtures::work();
     gather_brief(&mut domain, &env, &mut decision, &mut work);
     prepare_brief_assignment(&mut domain, &env, &mut decision, &mut work);
@@ -353,8 +352,7 @@ fn stopping_continues_a_projection_deferred_watch_without_another_commit() {
     let goal = core::fresh(&mut domain.core.counters, core::Family::Task).expect("admitted fixture state");
     // Queue a real goal creation and Stop in one admitted decision, with
     // exactly one projection pass before acceptance.
-    let room = JournalRoom { writes: env.limits.journal.writes, held: env.limits.journal.held };
-    let mut decision = domain.journal.decision(&room).expect("admitted fixture state");
+    let mut decision = domain.journal.decide();
     let core_env = Env { now: env.now, wall: env.wall, limits: env.limits.core };
     let mut work = fixtures::work();
     for event in [

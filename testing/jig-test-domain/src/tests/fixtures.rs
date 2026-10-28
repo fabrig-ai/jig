@@ -84,6 +84,7 @@ pub fn env() -> Env<Limits> {
             core,
             connector: jig_test_connector_world::LIMITS,
             routes: 512,
+            watermark: 2,
             journal: JournalLimits { commits: 2, writes, held, now: held, release: held },
         },
     }
@@ -346,12 +347,10 @@ fn held_records() -> [(core::Held, host::LinkDown); 4] {
     ]
 }
 
-pub fn fill_journal(domain: &mut Domain, env: &Env<Limits>) {
-    for _ in 0..env.limits.journal.commits {
-        let mut decision = domain.journal.decision(&skein_lib::JournalRoom { writes: 1, held: 0 }).expect("one write");
-        decision
-            .write(crate::Write::Erase(crate::Key::Core(core::Key::Tasks(tasks::Key::Ended(1)))))
-            .expect("reserved write");
+pub fn fill_to_watermark(domain: &mut Domain, env: &Env<Limits>) {
+    while crate::admission::backlog(domain) < u64::from(env.limits.watermark) {
+        let mut decision = domain.journal.decide();
+        decision.push_write(crate::Write::Erase(crate::Key::Core(core::Key::Tasks(tasks::Key::Ended(1)))));
         domain.journal.accept(decision);
         let _commit = domain.journal.commit().expect("commit in flight");
     }

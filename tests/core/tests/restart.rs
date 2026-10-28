@@ -481,6 +481,7 @@ fn census_world(seed: u64) -> World {
     let room = core::room_max(&limits.core).expect("census world room");
     let connectors = connector::MAX_OUT * 2;
     limits.journal.commits = 2;
+    limits.watermark = 2;
     limits.journal.writes = room.writes + connectors;
     limits.journal.held = (room.held + connectors) * 2;
     let mut world = World::configured(seed, false, configuration, limits);
