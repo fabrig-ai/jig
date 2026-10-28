@@ -76,7 +76,7 @@ pub(crate) fn withdraw(
     };
     // A release withdraws restored settings before task adoption (engine.md, 17.7).
     let restoring_settings = to.is_none()
-        && domain.startup == crate::domain::Startup::Restoring
+        && domain.startup == crate::domain::Startup::Checked
         && match domain.person_proposals.get(&number) {
             Some(row) => row.action.is_settings(),
             None => false,
