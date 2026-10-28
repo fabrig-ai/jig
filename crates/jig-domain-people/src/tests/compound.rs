@@ -1,7 +1,5 @@
 use super::*;
 
-const RESTORED_KEY: RequestKey = RequestKey { person: 1, key: [1; 16] };
-
 fn compound(count: u32) -> Ask {
     let mut operations = List::with_capacity(count);
     for task in 1..=count {
@@ -46,26 +44,8 @@ fn a_compound_sent_twice_under_one_key_is_routed_once() {
 }
 
 #[test]
-fn a_made_compound_with_a_zero_first_message_cannot_restore() {
-    let mut test = Test::new(LIMITS);
-    test.d = Domain::new(&LIMITS, Box::new([]), 2, Box::new([]));
-    let outcome = Outcome::Compound { project: 1, operations: 2, first_message: 0 };
-    assert_eq!(
-        test.send(Event::Restore {
-            record: Stored::Answer {
-                models: Box::new([]),
-                key: RESTORED_KEY,
-                ask: Box::new(compound(2)),
-                outcome,
-                at: Wall::EPOCH
-            }
-        }),
-        [Request::RestoreRefused {
-            key: Key::Answer(RESTORED_KEY),
-            refusal: Refusal::Limit { which: LimitKind::Restore }
-        }],
-    );
-    assert!(!test.d.ready());
+fn a_loaded_compound_answer_keeps_its_original_first_message() {
+    super::restored_answer_is_kept(compound(2), Outcome::Compound { project: 1, operations: 2, first_message: 0 });
 }
 
 const INVALID: &[(u64, &[u8], Refusal)] = &[

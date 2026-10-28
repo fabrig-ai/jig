@@ -97,21 +97,11 @@ fn restore_person_proposal(
     row: crate::PersonProposal,
     out: &mut Queue<Request>,
 ) {
-    match row.state {
-        crate::PersonProposalState::Pending { .. } => {
-            if domain.person_proposals.len() >= env.limits.tasks || domain.person_proposals.contains_key(&row.number) {
-                return failed(domain, None, Refusal::Restore, out);
-            }
-            let inserted = domain.person_proposals.insert(row.number, row);
-            assert!(inserted == Ok(None), "restored person proposal admitted");
-        }
-        crate::PersonProposalState::Accepted { .. }
-        | crate::PersonProposalState::SettingsAccepted { .. }
-        | crate::PersonProposalState::Rejected { .. }
-        | crate::PersonProposalState::Withdrawn { .. } => {
-            failed(domain, None, Refusal::Restore, out);
-        }
+    if domain.person_proposals.len() >= env.limits.tasks || domain.person_proposals.contains_key(&row.number) {
+        return failed(domain, None, Refusal::Restore, out);
     }
+    let inserted = domain.person_proposals.insert(row.number, row);
+    assert!(inserted == Ok(None), "restored person proposal admitted");
 }
 
 fn failed(domain: &mut Domain, task: Option<u64>, why: Refusal, out: &mut Queue<Request>) {
@@ -279,4 +269,52 @@ pub(crate) fn valid_amendment(limits: &Limits, amendment: &crate::Amendment) -> 
             Some(wake) => crate::wake::valid(wake),
             None => true,
         }
+}
+
+impl Domain {
+    /// Copy one live stored row without projecting lifecycle observations (tasks.md, 2).
+    #[must_use]
+    pub fn stored_record(&self, key: &crate::Key) -> Option<Stored> {
+        Some(match *key {
+            crate::Key::Live(number) => Stored::Live(alloc::boxed::Box::new(self.task(number)?.clone())),
+            crate::Key::Stub(number) => Stored::Stub(*self.stubs.get(&number)?),
+            crate::Key::Ledger(funder) => Stored::Ledger(*self.funding.get(&funder)?),
+            crate::Key::PlacedHold(number) => {
+                Stored::PlacedHold(alloc::boxed::Box::new(self.placed.get(&number)?.clone()))
+            }
+            crate::Key::PersonProposal(number) => {
+                Stored::PersonProposal(alloc::boxed::Box::new(self.person_proposals.get(&number)?.clone()))
+            }
+            crate::Key::Writer(number) => {
+                let mut found = None;
+                for (_, row) in &self.writers {
+                    if row.number == number {
+                        found = Some(row.clone());
+                    }
+                }
+                Stored::Writer(found?)
+            }
+            crate::Key::Pool(number) => {
+                let mut found = None;
+                for (_, row) in &self.pools {
+                    if row.number == number {
+                        found = Some(row.clone());
+                    }
+                }
+                Stored::Pool(found?)
+            }
+            crate::Key::Ended(_)
+            | crate::Key::ClosedLedger(_)
+            | crate::Key::DecidedProposal(_)
+            | crate::Key::History { .. }
+            | crate::Key::Milestone { .. }
+            | crate::Key::Activity { .. }
+            | crate::Key::Update { .. }
+            | crate::Key::Result { .. }
+            | crate::Key::EndedDelegate { .. }
+            | crate::Key::Delegate { .. }
+            | crate::Key::EndedByParty { .. }
+            | crate::Key::EndedByProject { .. } => return None,
+        })
+    }
 }

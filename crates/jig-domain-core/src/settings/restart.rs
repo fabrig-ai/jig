@@ -41,7 +41,7 @@ impl Core {
         match record {
             Record::Default { setting, default } => self.restore_default(setting, default, limits),
             Record::Changed { setting, changed } => {
-                if changed.revision == 0 || self.current.changes.get(&setting).is_some() {
+                if self.current.changes.get(&setting).is_some() {
                     return false;
                 }
                 if let Err(failure) = super::check::admits_change(&self.current, setting, limits) {
@@ -69,17 +69,7 @@ impl Core {
             }
             Record::Charter { charter, revision, value } => self.restore_charter(charter, revision, value, limits),
             Record::Proposal { proposer, proposal, value } => {
-                let person = match proposer {
-                    jig_domain_people::Proposer::Party(person) => person,
-                    jig_domain_people::Proposer::Task(task) => task,
-                };
-                if proposal == 0
-                    || person == 0
-                    || value.against == 0
-                    || value.items.is_empty()
-                    || value.items.len() > usize::try_from(tasks::SETTINGS_ITEMS).expect("item bound")
-                    || super::change_shape(&value.items, limits).is_err()
-                {
+                if value.items.len() > usize::try_from(tasks::SETTINGS_ITEMS).expect("item bound") {
                     return false;
                 }
                 if self.settings_proposals.contains_key(&(proposer, proposal)) {
@@ -90,7 +80,7 @@ impl Core {
         }
     }
     fn restore_default(&mut self, setting: Setting, default: Default, limits: &Limits) -> bool {
-        if default.revision == 0 || self.settings_restore.defaults.contains_key(&setting) {
+        if self.settings_restore.defaults.contains_key(&setting) {
             return false;
         }
         match self.current.defaults.get_mut(&setting) {
@@ -128,17 +118,8 @@ impl Core {
     }
 
     fn restore_head(&mut self, history: bool, revision: Revision, limits: &Limits) -> bool {
-        if history || revision.head.number == 0 || revision.head.against >= revision.head.number {
+        if history {
             return false;
-        }
-        if let Some((proposer, number)) = revision.head.proposal {
-            let valid = match proposer {
-                jig_domain_people::Proposer::Party(person) => person > 0,
-                jig_domain_people::Proposer::Task(task) => task > 0,
-            };
-            if !valid || number == 0 {
-                return false;
-            }
         }
         let number = revision.head.number;
         if self.settings_restore.held {
@@ -166,23 +147,13 @@ impl Core {
 
     fn restore_charter(&mut self, charter: u32, revision: u32, value: CharterVersion, limits: &Limits) -> bool {
         let key = VersionKey { charter, revision };
-        if charter == 0 || revision == 0 || self.held.versions.contains_key(&key) {
+        if self.held.versions.contains_key(&key) {
             return false;
         }
         let held = self.held.versions.len().checked_add(1).expect("version row count");
         if held > limits.settings.versions {
             self.refuse_held(HeldLimit::Versions, held, limits.settings.versions);
             return false;
-        }
-        if let Some(value) = &value.charter {
-            if value.number != charter {
-                return false;
-            }
-            let stored = super::Value::Charter(value.clone());
-            if let Err(failure) = super::check::shape(Setting::Charter(charter), &stored, limits) {
-                let _refused = self.refuse_settings(failure);
-                return false;
-            }
         }
         self.held.versions.insert(key, value).is_ok()
     }
@@ -201,43 +172,13 @@ impl Core {
         if !self.settings_restore.held
             || !self.settings_restore.extent
             || !self.settings_restore.defaults.contains_key(&Setting::Rules)
-            || self.current.oldest >= self.current.newest() && self.current.oldest != 0
         {
             let _request = self.refuse_settings(Failure { setting: Setting::Rules, fault: Fault::Shape });
             return false;
         }
-        for (&setting, default) in &self.current.defaults {
+        for (&setting, _) in &self.current.defaults {
             if !self.settings_restore.defaults.contains_key(&setting) {
                 assert!(self.settings_restore.pending.insert(setting, true).is_ok(), "bounded added default");
-            }
-            if default.revision > self.current.newest() {
-                return false;
-            }
-        }
-        for (_, changed) in &self.current.changes {
-            if changed.revision > self.current.newest() {
-                return false;
-            }
-        }
-        for (_, default) in &self.settings_restore.defaults {
-            if default.revision > self.current.newest() {
-                return false;
-            }
-        }
-        for (&key, _) in &self.held.versions {
-            if key.revision > self.current.newest() {
-                return false;
-            }
-            let setting = Setting::Charter(key.charter);
-            let origin = match self.current.changes.get(&setting) {
-                Some(change) => change.revision,
-                None => match self.settings_restore.defaults.get(&setting) {
-                    Some(default) => default.revision,
-                    None => 0,
-                },
-            };
-            if origin == key.revision {
-                return false;
             }
         }
         if let Err(failure) = super::check(&self.current, &self.settings, &self.connectors, &env.limits) {
@@ -370,20 +311,6 @@ impl Core {
             }
         }
         true
-    }
-
-    /// Project template overrides describe new work. Check them against the
-    /// supplied defaults even while live tasks restore against the stored ones.
-    pub(crate) fn restored_templates_valid(&mut self, overrides: &[jig_domain_people::TemplateOverride]) -> bool {
-        let staged = self.settings_restore.ready && !self.settings_restore.defaults.is_empty();
-        if staged {
-            core::mem::swap(&mut self.current.defaults, &mut self.settings_restore.defaults);
-        }
-        let valid = crate::templates::valid(&self.current, &self.settings, overrides);
-        if staged {
-            core::mem::swap(&mut self.current.defaults, &mut self.settings_restore.defaults);
-        }
-        valid
     }
 
     fn restored_items(&self) -> List<Item> {
