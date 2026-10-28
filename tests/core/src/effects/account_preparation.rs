@@ -68,6 +68,9 @@ impl World {
                 return;
             }
             accounts::Signing::Refresh { source } => {
+                if self.hold_accounts {
+                    return;
+                }
                 return self.grant_move(source);
             }
             accounts::Signing::Open { source, .. } => {
