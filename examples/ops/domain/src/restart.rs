@@ -43,9 +43,16 @@ pub(crate) fn route(
                 };
                 held(decision, Output::Load { step, range });
             }
-            core::RestartStep::Switch => {
+            core::RestartStep::Sweep => {
                 work.push(Work::Core(core::Event::Tasks(tasks::Event::Check)));
                 work.push(Work::SwitchChecked);
+            }
+            core::RestartStep::Switch => {
+                work.push(Work::Core(core::Event::SettingsCommit {
+                    room: core::room_max(&env.limits.core).expect("validated core room").writes,
+                }));
+                work.push(Work::Core(core::Event::Account(accounts::Event::Want)));
+                held(decision, Output::Switch);
             }
             core::RestartStep::AdoptRuns => {
                 work.push(Work::Core(core::Event::Tasks(tasks::Event::Restored)));

@@ -844,7 +844,7 @@ fn a_runs_settings_proposal_refused_at_the_entrance_keeps_nothing() {
     assert_eq!(settings_rows(&world), before);
     let first = run_charter(&world, b"First pending");
     proposed(&propose(&mut world, signed, 104, 1, Box::new([first])));
-    let (_, member) = party(&mut world, b"another proposer", Some((1, people::Role::Member)));
+    let (_, member) = party(&mut world, b"another proposer", Some((1, people::Role::Owner)));
     let second = run_charter(&world, b"Second pending");
     proposed(&propose(&mut world, member, 105, 1, Box::new([second])));
     let before = settings_rows(&world);
