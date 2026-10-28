@@ -572,6 +572,7 @@ pub fn step(domain: &mut Domain, env: &Env<Limits>, event: Event) {
                 | core::RestartRequest::Refused { .. } => {}
             }
         }
+        Event::RestartDone(core::RestartStep::Sweep) => decide(domain, env, Work::Sweep),
         Event::RestartDone(step) => {
             if step == core::RestartStep::LoadCore {
                 decide(domain, env, Work::Core(core::Event::People(jig_domain_people::Event::Restored)));
@@ -676,6 +677,7 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
         | Work::Switched
         | Work::Restart(_)
         | Work::SwitchChecked
+        | Work::Sweep
         | Work::AdoptRestored
         | Work::AdoptDone
         | Work::Timer(_)
@@ -814,6 +816,11 @@ fn decide(domain: &mut Domain, env: &Env<Limits>, first: Work) {
                 },
             },
             Work::SwitchChecked => {
+                if domain.core.restart_checked() {
+                    hold(&mut decision, Delivery::Restart(core::RestartStep::Sweep));
+                }
+            }
+            Work::Sweep => {
                 let requests =
                     domain.core.restart_sweep(&Env { now: env.now, wall: env.wall, limits: env.limits.core });
                 route_core(domain, env, &mut decision, requests, &mut work);

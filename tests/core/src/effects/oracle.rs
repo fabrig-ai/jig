@@ -17,6 +17,7 @@ impl World {
         self.store.pause_pages(false);
         self.hold_restart_reads = false;
         self.hold_switch = false;
+        self.hold_sweep = false;
         self.release_commits();
         let transients = Transients::from_core(self.domain.core(), configuration.core.workers_in_process);
         let stored = self.store.readback_rows();
@@ -110,10 +111,12 @@ impl World {
         self.hold_accounts = true;
         self.supplied_wall = Some(self.env().wall);
         self.hold_switch = true;
+        self.hold_sweep = true;
         self.restart_with(configuration);
-        assert_eq!(self.domain.restart_step(), Some(core::RestartStep::Switch), "the cold restart makes every link");
+        assert_eq!(self.domain.restart_step(), Some(core::RestartStep::Sweep), "the cold restart makes every link");
         assert_eq!(self.store.readback_rows(), stored, "loading preserves complete stored child views");
         self.oracle_child_views(&stored);
+        self.finish_sweep();
         self.finish_switch();
         assert!(self.domain.ready(), "cold restart finishes before readback");
         // The account component is outside the engine's process. Its surviving
