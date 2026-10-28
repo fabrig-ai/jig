@@ -21,7 +21,7 @@ mod planned;
 pub use limits::Limits;
 pub use orchestrated::{
     Domain as GatherDomain, Event as GatherEvent, Missing as GatherMissing, Placed as GatherPlaced,
-    Request as GatherRequest, fire as gather_fire, max_out as gather_max_out, step as gather_step,
+    Request as GatherRequest, fire as gather_fire, max_out as gather_max_out, step as gather_step, valid,
     worst_case as gather_worst_case,
 };
 pub use planned::{ConnectorAction, Core, Placement, Plan, Planned, plan};

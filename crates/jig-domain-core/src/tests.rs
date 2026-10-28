@@ -3474,13 +3474,13 @@ mod account_admission;
 fn outcomes_reserve_one_more_than_configured_workers() {
     let mut limits = limits();
     limits.people.program_hosts = limits.fleet.configured_workers;
-    assert_eq!(worst_case(&limits), None);
+    assert!(!valid(&limits));
 }
 #[test]
 fn outcome_names_cover_the_configured_name_bound() {
     let mut limits = limits();
     limits.people.program_host_name_bytes = limits.fleet.worker_name_bytes - 1;
-    assert_eq!(worst_case(&limits), None);
+    assert!(!valid(&limits));
 }
 
 #[test]
@@ -3803,3 +3803,22 @@ mod funding;
 mod retained_lineage;
 
 mod route_orders;
+
+#[test]
+fn validity_keeps_document_settings_and_route_refusals() {
+    let mut original = limits();
+    original.people.operations = original.tasks.tasks;
+    assert!(valid(&original));
+    let mut selected = original;
+    selected.tasks.depth = u32::MAX;
+    assert!(!valid(&selected), "inbox requester depth must leave room for self");
+    selected = original;
+    selected.policy_bytes = u64::MAX;
+    assert!(!valid(&selected), "a settings record must be representable");
+    selected = original;
+    selected.call_records = 0;
+    assert!(!valid(&selected), "calls retain their positive limit");
+    selected = original;
+    selected.people.program_hosts = selected.fleet.configured_workers;
+    assert!(!valid(&selected), "engine outcomes need a host beyond the workers");
+}

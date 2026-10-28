@@ -92,9 +92,6 @@ impl Domain {
     #[must_use]
     pub fn new(rules: Rules, limits: Limits) -> Option<Domain> {
         max_out(&limits)?;
-        if !crate::valid(&limits) {
-            return None;
-        }
         if !valid_rules(&rules, &limits) {
             return None;
         }

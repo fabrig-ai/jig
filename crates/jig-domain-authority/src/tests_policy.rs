@@ -1128,7 +1128,6 @@ fn check_full_policy_memory() {
         accounts: u32::MAX,
         writes: u32::MAX,
     };
-    assert!(crate::valid(&enormous), "heap prices do not decide validity");
     assert_eq!(max_out(&enormous), None, "overflowing queue bounds are never wrapped");
 }
 

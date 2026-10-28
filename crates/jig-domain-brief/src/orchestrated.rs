@@ -120,6 +120,12 @@ pub fn max_out(limits: &Limits) -> u32 {
     limits.sections.saturating_add(1)
 }
 
+/// Representability of the child limits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.briefs > 0 && limits.sections > 0 && limits.read_bytes > 0 && limits.brief_bytes > 0
+}
+
 /// The active inventory and its core text, including a whole input
 /// inventory temporarily held during admission.
 #[must_use]

@@ -630,7 +630,7 @@ pub fn answer_worst_case(limits: &Limits) -> Option<u64> {
 }
 
 // Resource pattern segments and literal bytes, plus one description query.
-fn query_worst_case(limits: &Limits) -> Option<u64> {
+pub(crate) fn query_worst_case(limits: &Limits) -> Option<u64> {
     u64::from(limits.notes.pattern_bytes)
         .checked_mul(u64::try_from(size_of::<Box<[u8]>>()).ok()?.checked_add(1)?)?
         .checked_add(u64::from(limits.notes.description_bytes))

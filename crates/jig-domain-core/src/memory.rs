@@ -160,13 +160,13 @@ pub(crate) fn problems(names: Box<[Box<[u8]>]>, limits: &Limits) -> Result<fleet
     fleet::Membership::new(names, limits.fleet.configured_workers, limits.fleet.worker_name_bytes)
 }
 
-/// Pure checked heap ceiling for the core's eight children, its retained
-/// route state, loads and the largest synchronous decision. Invalid child
-/// limits or unrepresentable arithmetic return `None`; a root adds its own
-/// journal and connectors when pricing the whole application.
+/// Whether the core's limits and edge bounds are representable (programming-model.md, 6.3).
 #[must_use]
-#[expect(clippy::too_many_lines, reason = "one checked sum names each retained and in-flight owner")]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
+pub fn valid(limits: &Limits) -> bool {
+    checked_valid(limits).is_some()
+}
+
+fn checked_valid(limits: &Limits) -> Option<()> {
     if limits.tasks.circle > people::NAMED_TASKS {
         return None;
     }
@@ -191,6 +191,39 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
         || limits.authority.accounts < limits.accounts.credentials.max(limits.accounts.accounts.min(tasks::MODELS))
         || limits.notes.scopes < 3_u32.checked_add(limits.authority.grants)?
     {
+        return None;
+    }
+    if !tasks::valid(&crate::settings::task_limits(limits))
+        || !people::valid(&limits.people)
+        || !fleet::valid(&crate::settings::fleet_limits(limits))
+        || !brief::valid(&limits.brief)
+        || !accounts::valid(&limits.accounts)
+        || !notes::valid(&limits.notes)
+        || !views::valid(&limits.views)
+        || limits.load_bytes == 0
+        || limits.load_slots == 0
+    {
+        return None;
+    }
+    crate::routing::route_bound(limits)?;
+    crate::documents::document_with_context_worst_case(limits)?;
+    crate::settings::set_worst_case(limits)?;
+    crate::settings::revision_worst_case(limits)?;
+    crate::reads::query_worst_case(limits)?;
+    crate::reads::answer_worst_case(limits)?;
+    task_carrier(limits)?;
+    context_carrier(limits)?;
+    Some(())
+}
+
+/// Pure checked heap ceiling for the core's eight children, its retained
+/// route state, loads and the largest synchronous decision. Invalid child
+/// limits or unrepresentable arithmetic return `None`; a root adds its own
+/// journal and connectors when pricing the whole application.
+#[must_use]
+#[expect(clippy::too_many_lines, reason = "one checked sum names each retained and in-flight owner")]
+pub fn worst_case(limits: &Limits) -> Option<u64> {
+    if !valid(limits) {
         return None;
     }
     let pending = bytes(

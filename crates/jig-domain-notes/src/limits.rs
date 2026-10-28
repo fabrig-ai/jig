@@ -32,6 +32,16 @@ pub struct Limits {
     pub recalled: u32,
 }
 
+/// Representability of the child limits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.scopes > 0
+        && limits.entries_per_scope > 0
+        && limits.load_rows > 0
+        && limits.recalled > 0
+        && limits.scopes.checked_mul(limits.entries_per_scope).is_some()
+}
+
 /// The maximum heap the pending call and incoming page can hold, or `None`
 /// when a bound cannot be represented. Outputs move to the parent.
 #[must_use]

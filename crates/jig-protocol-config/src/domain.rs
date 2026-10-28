@@ -223,10 +223,10 @@ pub(crate) fn whole(engine: &crate::Engine, problems: &mut Problems) {
     if let Err(problem) = check_effective_limits(limits) {
         problems.push(problem.path, problem.what);
     }
-    if jig_domain_core::worst_case(limits).is_none() {
+    if !jig_domain_core::valid(limits) {
         problems.push(Path::root().member(b"limits"), What::Bound);
     }
-    if jig_domain_host::worst_case(&engine.limits.hub).is_none() {
+    if !jig_domain_host::valid(&engine.limits.hub) {
         problems.push(Path::root().member(b"limits"), What::Bound);
     }
 }

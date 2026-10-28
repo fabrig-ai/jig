@@ -752,7 +752,7 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
     match name.get(..dot) {
         Some(b"hub") => {
             if fits.hub.is_none() {
-                fits.hub = Some(jig_domain_host::worst_case(&limits.hub).is_some());
+                fits.hub = Some(jig_domain_host::valid(&limits.hub));
             }
             fits.hub.expect("hub fit checked")
         }
@@ -762,7 +762,7 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
             | b"documents",
         ) => {
             if fits.core.is_none() {
-                fits.core = Some(jig_domain_core::worst_case(&limits.core).is_some());
+                fits.core = Some(jig_domain_core::valid(&limits.core));
             }
             fits.core.expect("core fit checked")
         }

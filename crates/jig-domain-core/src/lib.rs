@@ -49,7 +49,7 @@ mod indexes;
 mod llm;
 mod memory;
 
-pub use memory::{Problem, policy_owned_bytes, worst_case};
+pub use memory::{Problem, policy_owned_bytes, valid, worst_case};
 mod model_names;
 mod numbers;
 mod person_task;

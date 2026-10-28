@@ -250,7 +250,7 @@ pub(crate) fn worker(
     if graces.is_some() && bound.is_none() {
         problems.push(path.member(b"graces"), What::StopBound);
     }
-    if jig_domain_host::worst_case(&limits.hub).is_none() {
+    if !jig_domain_host::valid(&limits.hub) {
         problems.push(path.member(b"limits"), What::Bound);
     }
     bound

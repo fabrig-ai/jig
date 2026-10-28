@@ -25,6 +25,17 @@ pub(crate) fn slots(limits: &Limits) -> Option<u32> {
     limits.watchers.checked_mul(2)
 }
 
+/// Representability of the child limits (programming-model.md, 6.3).
+#[must_use]
+pub fn valid(limits: &Limits) -> bool {
+    limits.runs > 0
+        && limits.watchers > 0
+        && limits.watchers_per_party > 0
+        && limits.subjects_per_change > 0
+        && limits.text_bytes > 0
+        && slots(limits).is_some()
+}
+
 /// Maximum pacing memory, including one bounded change event and scan in hand.
 #[must_use]
 pub fn worst_case(limits: &Limits) -> Option<u64> {

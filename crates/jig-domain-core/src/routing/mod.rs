@@ -319,8 +319,9 @@ impl Core {
 /// admits by its watermark, `domain/root.md` 3).
 #[must_use]
 pub fn route_bound(limits: &Limits) -> Option<u32> {
-    accounts::worst_case(&limits.accounts)?;
-    tasks::worst_case(&crate::settings::task_limits(limits))?;
+    if !accounts::valid(&limits.accounts) || !tasks::valid(&crate::settings::task_limits(limits)) {
+        return None;
+    }
     let tasks = crate::settings::task_route_room(limits).checked_mul(16)?;
     let people = people::max_out(&limits.people).checked_mul(8)?;
     let fleet = fleet::max_out(&limits.fleet).checked_mul(8)?;
