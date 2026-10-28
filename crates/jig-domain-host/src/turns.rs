@@ -101,8 +101,13 @@ impl Turns {
         limits: &Limits,
         out: &mut skein_lib::Queue<crate::Request>,
     ) {
+        let (limited, acknowledge) = match mode {
+            Mode::Live => (true, true),
+            Mode::Stopping => (false, true),
+            Mode::Parking => (false, false),
+        };
         for _ in 0..limits.turns {
-            if matches!(mode, Mode::Live) && !self.credit(run, attempt, limits) {
+            if limited && !self.credit(run, attempt, limits) {
                 break;
             }
             let mut next = None;
@@ -118,7 +123,7 @@ impl Turns {
             let pending = self.pending.get_mut(&name).expect("staged turn exists");
             pending.admitted = true;
             out.push(crate::Request::Up(crate::LinkUp::Turn { run, attempt, turn: copy(&pending.turn) }));
-            if !matches!(mode, Mode::Parking) {
+            if acknowledge {
                 out.push(crate::Request::AcknowledgeAgentTurn { agent: pending.agent, turn: name.turn });
             }
         }

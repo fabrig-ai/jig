@@ -1372,7 +1372,17 @@ pub(crate) fn turned(
         turn.refused = entry.refusals.take();
         domain.turns.retain(agent, run, attempt, turn);
         let parking = entry.parking;
-        let stopping = matches!(entry.state, State::Stopping { .. });
+        let stopping = match entry.state {
+            State::Stopping { .. } => true,
+            State::Preparing { .. }
+            | State::Cancelling { .. }
+            | State::Starting { .. }
+            | State::Unwanted { .. }
+            | State::Active { .. }
+            | State::Waiting { .. }
+            | State::Saving { .. }
+            | State::Closed => false,
+        };
         if parking && !stopping {
             stop(domain, env, id, Reason::Engine, out);
         }
