@@ -583,10 +583,9 @@ fn policy_refusal(reason: authority::PolicyRefusal, project_cut: bool) -> people
                 edit: ceiling.edit,
             })
         }
-        authority::PolicyRefusal::InvalidRole => people::Lack::Shape,
-        authority::PolicyRefusal::Oversized | authority::PolicyRefusal::Full => {
-            return people::Refusal::Limit { which: people::LimitKind::Policy };
-        }
+        authority::PolicyRefusal::Oversized
+        | authority::PolicyRefusal::InvalidRole
+        | authority::PolicyRefusal::Full => people::Lack::Shape,
     };
     people::Refusal::Authority { lacking, proposable: None }
 }
