@@ -1598,7 +1598,7 @@ fn the_patch_check_leaves_ended_read_links_to_the_restart() {
     let mut disk = Harness::new(&fixture_with_record(record));
     let mut store = fixture_store(&disk, 8, fixtures::store_limits().store.commit, levels(2, 2));
     let events = disk.open(&mut store);
-    assert!(matches!(events.last(), Some(Event::Opened { .. })), "{events:?}");
+    let Some(Event::Opened { .. }) = events.last() else { panic!("opened store: {events:?}") };
 }
 
 #[test]

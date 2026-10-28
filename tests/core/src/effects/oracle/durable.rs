@@ -124,7 +124,12 @@ impl Transients {
                 Some((reservation, true))
             }
             d::PhaseLine::Active(tasks::Active::BackingOff { .. }) => Some((reservation, false)),
-            _ => None,
+            d::PhaseLine::Waiting { .. }
+            | d::PhaseLine::Active(_)
+            | d::PhaseLine::Person { .. }
+            | d::PhaseLine::Closing(_)
+            | d::PhaseLine::Held { .. }
+            | d::PhaseLine::Ended => None,
         }
     }
     fn chip(&self, chip: &mut d::Chip) {
