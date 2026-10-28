@@ -46,8 +46,20 @@ pub fn apply(limits: &mut Limits, name: &[u8], value: u64) -> Result<(), What> {
                 return Err(What::Override);
             }
             match field {
+                b"streams" => limits.clients.streams = count,
                 b"provider_codes" => limits.clients.provider_codes = count,
                 b"provider_tokens" => limits.clients.provider_tokens = count,
+                _ => return Err(What::Override),
+            }
+            Ok(())
+        }
+        b"clients_http" => {
+            let count = count(value)?;
+            if count == 0 {
+                return Err(What::Override);
+            }
+            match field {
+                b"streams" => limits.clients_http.streams = count,
                 _ => return Err(What::Override),
             }
             Ok(())
@@ -757,6 +769,8 @@ fn valid(limits: &Limits, name: &[u8], fits: &mut Fits) -> bool {
             fits.hub.expect("hub fit checked")
         }
         Some(b"link") => true,
+        Some(b"clients") => jig_protocol_engine_clients::worst_case(&limits.clients).is_some(),
+        Some(b"clients_http") => jig_protocol_engine_clients_http::worst_case(&limits.clients_http).is_some(),
         Some(
             b"core" | b"tasks" | b"people" | b"fleet" | b"authority" | b"brief" | b"accounts" | b"notes" | b"views"
             | b"documents",

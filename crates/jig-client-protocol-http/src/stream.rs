@@ -1,16 +1,21 @@
 //! Incremental SSE and canonical base64 framing (protocol/client.md, 4 and 7).
 use crate::Limits;
 use jig_client_protocol_link::{Heard, Streamed};
+use jig_client_protocol_wire::v19 as w;
 use skein_http::sse;
 use skein_lib::base64::{Alphabet, Decoder};
 use skein_lib::stream::{Down, Read, Up};
 use skein_lib::{Env, Queue, Time, Wall, bytes};
+
+// StreamBound is one tag byte, followed by the four-byte size.
+const FULL_BYTES: u32 = 5;
 
 #[derive(Debug)]
 pub struct Stream {
     reader: sse::Reader,
     decoder: Decoder,
     active: bool,
+    refusal: Option<skein_lib::Writer>,
     env: Env<sse::Limits>,
     above: Queue<sse::Event>,
     below: Queue<Down>,
@@ -26,6 +31,7 @@ impl Stream {
             reader: sse::Reader::new(&framing),
             decoder: Decoder::new(Alphabet::Standard, decoded),
             active: true,
+            refusal: None,
             env: Env { now: Time::ZERO, wall: Wall::EPOCH, limits: framing },
             above: Queue::with_capacity(2),
             below: Queue::with_capacity(2),
@@ -36,11 +42,13 @@ impl Stream {
         stream.demand(sse::Request::Next);
         stream
     }
-    /// A 401 is the stream refused signed out; any other status but 200 ends it.
+    /// A 409 carries a bounded stream-full record; 401 refuses signed out.
     pub fn opened(&mut self, status: u16, out: &mut Queue<Heard>) {
         if status == 401 && self.active {
             self.active = false;
             out.push(Heard::Streamed { message: Streamed::SignedOut });
+        } else if status == 409 && self.active {
+            self.refusal = Some(skein_lib::Writer::new(usize::try_from(FULL_BYTES).expect("u32 fits")));
         } else if status != 200 {
             self.ended(out);
         }
@@ -48,6 +56,24 @@ impl Stream {
     pub fn ended(&mut self, out: &mut Queue<Heard>) {
         if self.active {
             self.active = false;
+            if let Some(writer) = self.refusal.take()
+                && writer.room() == 0
+            {
+                let bytes = writer.finish();
+                let mut reader = skein_lib::Reader::new(&bytes);
+                if let Ok(full) = w::StreamFull::decode(&w::CEILINGS, &mut reader)
+                    && reader.remaining() == 0
+                {
+                    let bound = match full.bound() {
+                        w::StreamBound::Component => jig_client_domain::StreamBound::Component,
+                        w::StreamBound::Transport => jig_client_domain::StreamBound::Transport,
+                    };
+                    out.push(Heard::Streamed {
+                        message: Streamed::Full(jig_client_domain::StreamFull { bound, size: full.size() }),
+                    });
+                    return;
+                }
+            }
             out.push(Heard::StreamGone);
         }
     }
@@ -57,6 +83,13 @@ impl Stream {
         }
         if piece.len() > usize::try_from(self.env.limits.chunk).expect("u32 fits") {
             self.ended(out);
+            return;
+        }
+        if let Some(writer) = &mut self.refusal {
+            if writer.put(piece).is_err() {
+                self.refusal = None;
+                self.ended(out);
+            }
             return;
         }
         let mut at = 0_usize;
@@ -143,6 +176,7 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
     sse::worst_case(&framing)?
         .checked_add(u64::from(framing.chunk))?
         .checked_add(u64::from(decoded).checked_mul(2)?)?
+        .checked_add(u64::from(FULL_BYTES))?
         .checked_add(Queue::<sse::Event>::worst_case(2)?)?
         .checked_add(Queue::<Down>::worst_case(2)?)
 }

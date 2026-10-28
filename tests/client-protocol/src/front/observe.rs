@@ -20,9 +20,8 @@ pub(super) fn callback(event: &jig_client::Event) -> Option<Callback> {
             Some(Callback::Record(bytes.clone()))
         }
         jig_client::Event::Streamed { message: jig_client::Streamed::Heartbeat } => Some(Callback::Heartbeat),
-        jig_client::Event::Streamed { message: jig_client::Streamed::SignedOut } | jig_client::Event::StreamGone => {
-            Some(Callback::Gone)
-        }
+        jig_client::Event::Streamed { message: jig_client::Streamed::SignedOut | jig_client::Streamed::Full(_) }
+        | jig_client::Event::StreamGone => Some(Callback::Gone),
         jig_client::Event::Start { .. }
         | jig_client::Event::StartUnlinked { .. }
         | jig_client::Event::SignIn { .. }

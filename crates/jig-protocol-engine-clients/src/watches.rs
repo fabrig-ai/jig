@@ -132,7 +132,15 @@ impl Component {
     }
     fn stream_open(&mut self, env: &Env<Limits>, owner: Token, sign_in: u64) {
         if self.streams.len() == self.streams.capacity() {
-            self.connections.get_mut(&owner).expect("stream owner").respond(crate::Reply::Conflict, &env.limits);
+            let full = w::StreamFull::new(
+                &env.limits.wire,
+                w::StreamFullParts { bound: w::StreamBound::Component, size: self.streams.capacity() },
+            )
+            .expect("fixed stream refusal");
+            self.connections
+                .get_mut(&owner)
+                .expect("stream owner")
+                .respond(crate::Reply::StreamFull(full), &env.limits);
             return;
         }
         let mut name = [0; 16];

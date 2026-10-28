@@ -114,7 +114,20 @@ impl Mount {
                     value.respond(413, Box::new([]), &env.limits);
                 } else if value.route == dispatch::Route::Stream && streams >= env.limits.streams {
                     value.route = dispatch::Route::Missing;
-                    value.respond(409, Box::new([]), &env.limits);
+                    value.respond(
+                        409,
+                        full_record(
+                            jig_client_protocol_wire::v19::StreamFull::new(
+                                &jig_client_protocol_wire::v19::CEILINGS,
+                                jig_client_protocol_wire::v19::StreamFullParts {
+                                    bound: jig_client_protocol_wire::v19::StreamBound::Transport,
+                                    size: env.limits.streams,
+                                },
+                            )
+                            .expect("fixed stream refusal"),
+                        ),
+                        &env.limits,
+                    );
                 } else {
                     value.read(&env.limits);
                 }
@@ -166,6 +179,7 @@ impl Mount {
                     kit::Reply::Record(body) => (200, body),
                     kit::Reply::NotARecord => (400, Box::new([])),
                     kit::Reply::Conflict => (409, Box::new([])),
+                    kit::Reply::StreamFull(full) => (409, full_record(full)),
                 };
                 let (body, cookie) =
                     if status == 200 { dispatch::reply(&self.settings, call, env.wall, body) } else { (body, None) };
@@ -252,4 +266,10 @@ pub fn worst_case(limits: &Limits) -> Option<u64> {
 #[must_use]
 pub fn link_page() -> skein_http::Header {
     skein_http::Header { name: Box::from(b"referrer-policy".as_slice()), value: Box::from(b"no-referrer".as_slice()) }
+}
+
+fn full_record(full: jig_client_protocol_wire::v19::StreamFull) -> Box<[u8]> {
+    let mut writer = skein_lib::Writer::new(usize::try_from(full.measure()).expect("fixed record"));
+    full.encode(&mut writer).expect("measured refusal");
+    writer.finish()
 }

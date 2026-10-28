@@ -141,6 +141,7 @@ pub enum Fact {
     UndecodableEvent,
     StreamDropped,
     UndecodableStore,
+    StreamFull { full: jig_client_domain::StreamFull },
 }
 
 /// Authentication held by the link (client/domain/client.md, 12).
@@ -191,6 +192,7 @@ pub enum Streamed {
     Heartbeat,
     /// The stream refused, its opening answered signed out.
     SignedOut,
+    Full(jig_client_domain::StreamFull),
 }
 
 /// Authorization's terminal answer (protocol/client.md, 18).

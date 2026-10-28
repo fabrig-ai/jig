@@ -86,3 +86,32 @@ fn a_read_whose_exchange_is_lost_is_answered_unreachable() {
     assert_eq!(*handle, TASK);
     assert_eq!(*page, Readout::Jig(contract::ReadResult::None(contract::ReadNone::Unreachable)));
 }
+
+#[test]
+fn a_stream_full_refusal_reaches_the_caller_through_retries_until_hello() {
+    use skein_lib::{Secret, Time};
+    for bound in [StreamBound::Component, StreamBound::Transport] {
+        let mut c = Client::new();
+        c.step(Event::SignIn { with: With::Held(Secret::new(Box::new([7; 40]))) });
+        let full = StreamFull { bound, size: 2 };
+        for retry in 1..=3 {
+            c.step(Event::Streamed { message: Streamed::Full(full) });
+            assert_eq!(c.machine.link().stream_full, Some(full));
+            c.fire(Time::from_nanos(retry * 1_000_000_000));
+            let mut opening = false;
+            for request in c.requests() {
+                if let Request::OpenStream { .. } = request {
+                    opening = true;
+                }
+            }
+            assert!(opening, "retry {retry}");
+            assert_eq!(c.machine.link().stream_full, Some(full));
+        }
+        // A failure without a new full record also retains the last named refusal.
+        c.step(Event::StreamGone);
+        assert_eq!(c.machine.link().stream_full, Some(full));
+        c.fire(Time::from_nanos(4_000_000_000));
+        c.stream(fixtures::hello(jig_client_protocol_wire::VERSION));
+        assert_eq!(c.machine.link().stream_full, None);
+    }
+}

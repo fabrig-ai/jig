@@ -264,6 +264,7 @@ pub enum Reply {
     Record(Box<[u8]>),
     NotARecord,
     Conflict,
+    StreamFull(jig_client_protocol_wire::v19::StreamFull),
 }
 #[derive(Debug)]
 pub enum Streamed {

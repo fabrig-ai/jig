@@ -410,7 +410,9 @@ dependencies = [
 name = "jig-client-protocol-http"
 version = "0.0.0"
 dependencies = [
+ "jig-client-domain",
  "jig-client-protocol-link",
+ "jig-client-protocol-wire",
  "skein-http",
  "skein-lib",
 ]

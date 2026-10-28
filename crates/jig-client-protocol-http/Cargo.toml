@@ -10,5 +10,7 @@ publish.workspace = true
 skein-lib.workspace = true
 skein-http.workspace = true
 jig-client-protocol-link.workspace = true
+jig-client-protocol-wire.workspace = true
+jig-client-domain.workspace = true
 [lints]
 workspace = true

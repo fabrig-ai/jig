@@ -311,3 +311,18 @@ fn an_accounts_document_is_watched_but_never_read() {
         Err(w::Problem { path: w::Path::ReadValueTag, reason: skein_codec::Reason::Tag })
     );
 }
+
+#[test]
+fn a_third_stream_is_refused_full_naming_the_component_bound_of_two() {
+    let mut world = fixtures::Exchange::new();
+    for _ in 0_u32..2 {
+        world.open_stream();
+    }
+    let third = world.stream_open();
+    world.authenticate();
+    let connection = world.component.connections.get(&third).expect("refused opening");
+    let Some(crate::Reply::StreamFull(full)) = &connection.response else { panic!("full refusal") };
+    assert_eq!(full.bound(), &w::StreamBound::Component);
+    assert_eq!(full.size(), 2);
+    assert_eq!(world.component.streams.len(), 2);
+}

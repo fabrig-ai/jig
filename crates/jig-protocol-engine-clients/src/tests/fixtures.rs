@@ -215,7 +215,7 @@ impl Exchange {
         match connection.response.as_ref() {
             Some(crate::Reply::Record(body)) => (200, body),
             Some(crate::Reply::NotARecord) => (400, &[]),
-            Some(crate::Reply::Conflict) => (409, &[]),
+            Some(crate::Reply::Conflict | crate::Reply::StreamFull(_)) => (409, &[]),
             None => match connection.ended {
                 Some(crate::Ended::SignedOut) => (401, &[]),
                 Some(crate::Ended::Busy | crate::Ended::Stopping) => (409, &[]),

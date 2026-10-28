@@ -607,3 +607,38 @@ fn placed_hold_overrides_reject_zero_and_exemptions_past_the_live_set() {
         What::Override,
     );
 }
+
+#[test]
+fn stream_overrides_are_independent_and_keep_the_small_profile_unchanged() {
+    for (name, input, zero, past) in [
+        (
+            b"clients.streams".as_slice(),
+            br#"{"profile":"small","overrides":{"clients.streams":3}}"#.as_slice(),
+            br#"{"profile":"small","overrides":{"clients.streams":0}}"#.as_slice(),
+            br#"{"profile":"small","overrides":{"clients.streams":4294967296}}"#.as_slice(),
+        ),
+        (
+            b"clients_http.streams".as_slice(),
+            br#"{"profile":"small","overrides":{"clients_http.streams":3}}"#.as_slice(),
+            br#"{"profile":"small","overrides":{"clients_http.streams":0}}"#.as_slice(),
+            br#"{"profile":"small","overrides":{"clients_http.streams":4294967296}}"#.as_slice(),
+        ),
+    ] {
+        let mut expected = small();
+        overrides::apply(&mut expected, name, 3).unwrap();
+        assert_eq!(parse(input), Ok(expected));
+        assert_eq!(small().clients.streams, 2);
+        assert_eq!(small().clients_http.streams, 2);
+        for input in [zero, past] {
+            problem(input, &[b"limits", b"overrides", name], What::Override);
+        }
+    }
+}
+#[test]
+fn http_streams_past_the_call_bound_are_refused_naming_the_override() {
+    problem(
+        br#"{"profile":"small","overrides":{"clients_http.streams":5}}"#,
+        &[b"limits", b"overrides", b"clients_http.streams"],
+        What::Override,
+    );
+}
