@@ -146,6 +146,8 @@ pub struct Domain {
     room_refusals_lost: u64,
 }
 
+mod records;
+
 impl Domain {
     pub(super) fn party_pending(&self, id: Id<Pending>) -> Option<&PartyPending> {
         self.pending.get(id)?.party()
@@ -1825,9 +1827,8 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
                 && !domain.roles.contains_key(project)
         }
         Stored::Policy { .. } | Stored::EndedRead { .. } => false,
-        Stored::Answer { key, ask, models, .. } => {
-            crate::valid_model_context(ask, models)
-                && !domain.answers.contains_key(key)
+        Stored::Answer { key, .. } => {
+            !domain.answers.contains_key(key)
                 && domain.answers.len().saturating_add(domain.acted.len()) < env.limits.requests
         }
     };

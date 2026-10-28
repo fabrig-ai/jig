@@ -3772,15 +3772,15 @@ fn configured_policies_are_retained_by_the_core() {
 }
 
 #[test]
-fn a_restored_policy_cannot_pass_the_deployments_projects_mark() {
+fn loading_a_policy_does_not_rejudge_the_projects_mark() {
     let limits = limits();
     let config = config(41);
     let value = policy::snapshot(&config.seed_projects[0].policy.policy, &[], &[]).expect("bounded policy");
     let mut core = Core::new(config, &limits).expect("restoring core");
     core.counters.deployment.projects = 0;
-    assert!(!core.restore_policy(&limits, 1, Box::from("Project 1"), value.clone()));
-    core.counters.deployment.projects = 1;
     assert!(core.restore_policy(&limits, 1, Box::from("Project 1"), value));
+    assert_eq!(core.counters.deployment().projects, 0);
+    assert!(core.authority.policy(1).is_some());
 }
 
 mod ended_watches;
