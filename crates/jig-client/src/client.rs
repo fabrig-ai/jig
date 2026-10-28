@@ -75,6 +75,7 @@ pub struct LinkView<'a> {
     pub sign_out_lost: bool,
     pub not_signed_in: Option<NotSignedIn>,
     pub credential: Option<&'a Secret>,
+    pub stream_full: Option<crate::StreamFull>,
 }
 #[derive(Debug)]
 pub(crate) struct DeferredRead {
@@ -182,6 +183,7 @@ impl Client {
                 self.domain_step(&env, domain::Event::Carry { key, name, request, value });
             }
             Event::SignIn { with } => {
+                self.domain.stream_refused(None, &mut self.domain_out);
                 self.signing_link = match &with {
                     With::Link { .. } => true,
                     With::Service(_) | With::Held(_) | With::Transport => false,
@@ -280,6 +282,7 @@ impl Client {
             not_served: self.domain.not_served(),
             sign_out_lost: self.sign_out_lost,
             not_signed_in: self.not_signed_in,
+            stream_full: self.domain.stream_full(),
             credential: match &self.link {
                 Some(link) => link.credential(),
                 None => None,
@@ -549,6 +552,7 @@ impl Client {
             link::Request::Ended { watch, end } => self.up(env, Up::WatchEnded { watch, end }),
             link::Request::Read { read, result } => self.up(env, Up::ReadDone { read, result }),
             link::Request::Hello { family: None, versions } => {
+                self.domain.stream_refused(None, &mut self.domain_out);
                 let served = match versions {
                     Some(range) => link::serves(range),
                     None => false,
@@ -568,6 +572,9 @@ impl Client {
             link::Request::Dropped => out.push(Request::Told { told: Told::Dropped { count: 1 } }),
             link::Request::ServiceCredential { party, credential } => {
                 out.push(Request::ServiceCredential { party, credential });
+            }
+            link::Request::Fact { fact: link::Fact::StreamFull { full } } => {
+                self.domain.stream_refused(Some(full), &mut self.domain_out);
             }
             link::Request::Fact { .. } => {}
         }

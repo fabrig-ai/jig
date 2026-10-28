@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use jig_client_protocol_link::{Heard, Streamed};
 use skein_lib::Queue;
 const CUTS: [usize; 2] = [fixtures::WHOLE_STREAM.len(), 1];
-const STATUSES: [u16; 3] = [201, 409, 503];
+const STATUSES: [u16; 2] = [201, 503];
 #[test]
 fn the_body_cut_at_each_byte_gives_the_same_records() {
     for cut in 0..=fixtures::WHOLE_STREAM.len() {
@@ -84,4 +84,41 @@ fn a_piece_after_the_end_is_dropped() {
 #[test]
 fn the_stream_limits_have_a_finite_worst_case() {
     assert!(worst_case(&fixtures::stream_limits()).is_some());
+}
+
+#[test]
+fn a_409_preserves_full_across_every_body_cut() {
+    for bound in [jig_client_domain::StreamBound::Component, jig_client_domain::StreamBound::Transport] {
+        let tag = match bound {
+            jig_client_domain::StreamBound::Component => 0,
+            jig_client_domain::StreamBound::Transport => 1,
+        };
+        let body = [tag, 0, 0, 0, 2];
+        for cut in 0..=body.len() {
+            let (mut stream, mut out) = fixtures::reader();
+            stream.opened(409, &mut out);
+            assert!(out.is_empty());
+            stream.body(&body[..cut], &mut out);
+            stream.body(&body[cut..], &mut out);
+            stream.ended(&mut out);
+            assert_eq!(
+                out.pop(),
+                Some(Heard::Streamed { message: Streamed::Full(jig_client_domain::StreamFull { bound, size: 2 }) })
+            );
+            stream.ended(&mut out);
+            assert!(out.is_empty());
+        }
+    }
+}
+#[test]
+fn a_malformed_409_drops_once_without_claiming_full() {
+    for body in [&[][..], &[0, 0, 0, 0][..], &[2, 0, 0, 0, 2][..], &[0, 0, 0, 0, 2, 0][..]] {
+        let (mut stream, mut out) = fixtures::reader();
+        stream.opened(409, &mut out);
+        stream.body(body, &mut out);
+        stream.ended(&mut out);
+        stream.ended(&mut out);
+        assert_eq!(out.pop(), Some(Heard::StreamGone));
+        assert!(out.is_empty());
+    }
 }

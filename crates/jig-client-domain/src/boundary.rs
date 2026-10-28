@@ -200,3 +200,15 @@ pub enum Link {
     Offline,
     OutOfDate,
 }
+
+/// The engine-wide bound which refused a stream opening (protocol/client.md, 4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamBound {
+    Component,
+    Transport,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StreamFull {
+    pub bound: StreamBound,
+    pub size: u32,
+}

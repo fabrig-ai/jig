@@ -46,6 +46,7 @@ pub struct Link {
     pub(super) credential: Option<Secret>,
     pub(super) generation: u64,
     stream: Option<crate::silence::Silence>,
+    stream_full: Option<jig_client_domain::StreamFull>,
     pub(super) predecessor: Option<[u8; 16]>,
     retiring: Option<Token>,
     watches: crate::watches::Watches,
@@ -62,6 +63,7 @@ impl Link {
             credential: None,
             generation: 0,
             stream: None,
+            stream_full: None,
             predecessor: None,
             retiring: None,
             watches: crate::watches::Watches::new(limits),
@@ -86,6 +88,11 @@ impl Link {
     pub fn in_flight(&self) -> u32 {
         self.attempts.len()
     }
+    /// Last full refusal, kept while a subsequent opening is pending.
+    #[must_use]
+    pub fn stream_full(&self) -> Option<jig_client_domain::StreamFull> {
+        self.stream_full
+    }
     pub fn reclaim(&mut self) {}
     #[must_use]
     pub fn worst_case(limits: &Limits) -> Option<u64> {
@@ -102,7 +109,10 @@ impl Link {
             return;
         }
         match event {
-            Event::SignIn { with } => self.sign_in(now, with, out),
+            Event::SignIn { with } => {
+                self.stream_full = None;
+                self.sign_in(now, with, out);
+            }
             Event::SignOut => self.sign_out(now, out),
             Event::Authorize { query } => self.authorize(query, out),
             Event::Start { kept } => self.start_store(kept, out),
@@ -666,6 +676,12 @@ impl Link {
                 out.push(Request::Signing { signing: crate::Signing::SignedOut });
                 return;
             }
+            Streamed::Full(full) => {
+                self.stream_full = Some(full);
+                out.push(Request::Fact { fact: Fact::StreamFull { full } });
+                self.drop_stream(now, out);
+                return;
+            }
             Streamed::Record(record) => match translate::pages::receiving(&self.limits) {
                 Ok(receiving) => {
                     let mut reader = Reader::new(&record);
@@ -692,6 +708,7 @@ impl Link {
         match record {
             w::StreamEvent::Hello(hello) => {
                 stream.hello(&hello)?;
+                self.stream_full = None;
                 for served in hello.served() {
                     if served.first() > served.last() {
                         return Err(crate::Undecodable::Malformed);

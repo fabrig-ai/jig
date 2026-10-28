@@ -14,7 +14,8 @@ pub use client::{Admission, Client, Event, LinkView, NotSignedIn, Request};
 pub use jig_client_domain::Limits as DomainLimits;
 pub use jig_client_domain::{
     AccountCounts, Answered, Ask, Asker, Backoff, Document, Down, Family, Handle, Held, Key, Latest, Link, Outcome,
-    Pending, Progress, Readable, Readout, Retry, Spoken, State, Told, Up, Watchable, Why, contract,
+    Pending, Progress, Readable, Readout, Retry, Spoken, State, StreamBound, StreamFull, Told, Up, Watchable, Why,
+    contract,
 };
 pub use jig_client_protocol_link::{AuthorizeWhy, Authorized, Message, Record, STREAM_KEY, Streamed, With};
 pub use limits::{Limits, Unusable, max_out, worst_case};

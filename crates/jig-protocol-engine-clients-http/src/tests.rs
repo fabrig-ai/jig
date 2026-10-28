@@ -630,3 +630,48 @@ fn authorize_maps_under_the_prefix_and_uses_record_error_statuses() {
     }
     assert_eq!(fixtures::answered(&mut mount, &mut out, call).0, 415);
 }
+
+#[test]
+fn a_third_stream_is_409_with_the_transport_bound_and_its_size() {
+    let mut mount = fixtures::mount();
+    let mut out = Queue::with_capacity(32);
+    for name in [fixtures::EXCHANGE, fixtures::OTHER] {
+        fixtures::call_named(&mut mount, &mut out, name, Method::Get, b"/jig/v1/stream", &[], b"");
+        fixtures::component(&mut out);
+        mount.down(
+            &fixtures::env(),
+            Event::Component(kit::ToTransport::Streamed { stream: name, message: kit::Streamed::Heartbeat }),
+            &mut out,
+        );
+    }
+    // Both accepted streams have response heads queued; their bodies stay held.
+    fixtures::pump(&mut mount, &mut out);
+    out = Queue::with_capacity(32);
+    let third = Token::new(13);
+    fixtures::call_named(&mut mount, &mut out, third, Method::Get, b"/jig/v1/stream", &[], b"");
+    let (status, body, _) = fixtures::answered(&mut mount, &mut out, third);
+    assert_eq!(status, 409);
+    assert_eq!(body.as_ref(), &[1, 0, 0, 0, 2]);
+    let full = w::StreamFull::decode(&w::CEILINGS, &mut skein_lib::Reader::new(&body)).expect("full record");
+    assert_eq!(full.bound(), &w::StreamBound::Transport);
+    assert_eq!(full.size(), 2);
+}
+#[test]
+fn a_component_full_refusal_is_preserved_in_the_409_body() {
+    let mut mount = fixtures::mount();
+    let mut out = Queue::with_capacity(16);
+    let call = fixtures::call(&mut mount, &mut out, Method::Get, b"/jig/v1/stream", &[], b"");
+    fixtures::component(&mut out);
+    fixtures::reply(
+        &mut mount,
+        &mut out,
+        call,
+        kit::Reply::StreamFull(
+            w::StreamFull::new(&w::CEILINGS, w::StreamFullParts { bound: w::StreamBound::Component, size: 2 })
+                .expect("full"),
+        ),
+    );
+    let (status, body, _) = fixtures::answered(&mut mount, &mut out, call);
+    assert_eq!(status, 409);
+    assert_eq!(body.as_ref(), &[0, 0, 0, 0, 2]);
+}

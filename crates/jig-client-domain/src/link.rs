@@ -2,6 +2,18 @@
 use crate::{Domain, Link, Request, Told, Watchable, contract, domain::tell};
 use skein_lib::Queue;
 impl Domain {
+    /// The last refused stream opening, retained across retries until a hello or sign-in change.
+    #[must_use]
+    pub fn stream_full(&self) -> Option<crate::StreamFull> {
+        self.stream_full
+    }
+    pub fn stream_refused(&mut self, full: Option<crate::StreamFull>, out: &mut Queue<Request>) {
+        if self.stream_full != full {
+            self.stream_full = full;
+            tell(out, Told::Link { link: self.link });
+        }
+    }
+
     #[must_use]
     pub fn link(&self) -> Link {
         self.link
@@ -24,6 +36,7 @@ impl Domain {
         }
     }
     pub(crate) fn signed_out(&mut self, out: &mut Queue<Request>) {
+        self.stream_refused(None, out);
         self.scratch.clear();
         for (handle, held) in &self.handles {
             if held.state != crate::State::Ended {

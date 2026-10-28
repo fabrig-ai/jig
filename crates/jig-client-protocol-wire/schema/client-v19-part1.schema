@@ -87,3 +87,7 @@ record OriginRevision { revision: u32 }
 enum SettingOrigin { default: OriginRevision, change: OriginRevision, not_offered }
 enum ReviewValue { value: SettingSet, too_large: Size, none }
 record ReviewItem { setting: Setting edit: RevisionItemEdit now: ReviewValue origin: SettingOrigin would_be: ReviewValue }
+
+# A refused stream opening, carried by HTTP 409 (protocol/client.md, 4 and 17.2).
+enum StreamBound { component, transport }
+record StreamFull { bound: StreamBound, size: u32 }
