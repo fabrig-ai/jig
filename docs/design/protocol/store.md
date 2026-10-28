@@ -1695,7 +1695,11 @@ Event::Switched { owner: Token }   // or `OpenRefused`, or `Failed` with the ren
   (section 16). In memory: one map at a time (`A`'s closed before the
   copy's opens) and one machine per kept family (10.3), each
   `Patcher::worst_case_heap` of its capacity. Section 13's worst case
-  counts the larger of patching's peak and serving's, never both.
+  counts the larger of patching's peak and serving's, never both. A
+  cold restart's page workspace (7.1) is priced the same way, once,
+  where the restart holds it: the larger of the restart's and the
+  serving workspaces it precedes, never inside a message's or a
+  retained answer's worst case, since no message carries it.
 - **The domain sees** the copy as any restart's store, pending until it
   asks for the switch (step 7), with the windows a fresh mark closed and
   the claims it crossed (step 4).
