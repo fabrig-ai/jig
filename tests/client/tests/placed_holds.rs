@@ -173,14 +173,28 @@ impl Party {
         }).expect("decoded final answer")
     }
 
-    fn holds(&mut self, world: &mut World, after: Option<c::Cursor>) -> Box<c::ProjectHolds> {
+    fn holds(&mut self, world: &mut World, after: Option<c::Cursor>) -> c::ProjectHolds {
         let requests = self.step(client::Event::Read {
             handle: client::Handle { asker: client::Asker::JIG, number: 10 },
             read: client::Readable::Jig(c::Read::Holds { project: 1, after }),
         });
-        self.exchange(world, requests).into_iter().find_map(|request| {
-            if let client::Request::Told { told: client::Told::Page { page: client::Readout::Jig(c::ReadResult::Value(c::ReadValue::Holds(page))), .. } } = request { Some(page) } else { None }
-        }).expect("decoded project holds")
+        self.exchange(world, requests)
+            .into_iter()
+            .find_map(|request| {
+                if let client::Request::Told {
+                    told:
+                        client::Told::Page {
+                            page: client::Readout::Jig(c::ReadResult::Value(c::ReadValue::Holds(page))),
+                            ..
+                        },
+                } = request
+                {
+                    Some(*page)
+                } else {
+                    None
+                }
+            })
+            .expect("decoded project holds")
     }
 
     fn task(&mut self, world: &mut World, task: u64) -> Box<c::Task> {
@@ -344,7 +358,17 @@ fn a_client_reads_a_projects_holds_and_pages_them() {
     let mut party = Party::new(&mut world, sign_in, owner);
     let mut numbers = Vec::new();
     for reason in [b"first project stop".as_slice(), b"second project stop"] {
-        let c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::Placed { hold, .. })) = party.ask(&mut world, c::Ask::Hold { project: 1, mode: c::HoldMode::Stop, scope: c::HoldScope::Project, reason: c::Text::new(reason.into(), 4096).expect("reason") }) else { panic!("placed") };
+        let c::Answer::Done(c::Outcome::Owner(c::OwnerOutcome::Placed { hold, .. })) = party.ask(
+            &mut world,
+            c::Ask::Hold {
+                project: 1,
+                mode: c::HoldMode::Stop,
+                scope: c::HoldScope::Project,
+                reason: c::Text::new(reason.into(), 4096).expect("reason"),
+            },
+        ) else {
+            panic!("placed")
+        };
         numbers.push(hold);
     }
     let first = party.holds(&mut world, None);

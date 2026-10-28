@@ -120,7 +120,11 @@ impl Rows {
             Self::Inbox(rows) => {
                 ReadValue::Inbox(Box::new(InboxPage { cut: false, rows: list(&rows[start..end]), before, after }))
             }
-            Self::Holds { project, rows } => ReadValue::Holds(Box::new(jig_client_domain::contract::ProjectHolds { project: *project, rows: rows[start..end].to_vec().into_boxed_slice(), after })),
+            Self::Holds { project, rows } => ReadValue::Holds(Box::new(jig_client_domain::contract::ProjectHolds {
+                project: *project,
+                rows: rows[start..end].to_vec().into_boxed_slice(),
+                after,
+            })),
             Self::Spend(rows) => {
                 ReadValue::Spend(Box::new(SpendPage { cut: false, rows: list(&rows[start..end]), before, after }))
             }

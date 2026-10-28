@@ -240,10 +240,13 @@ fn a_projects_holds_page_crosses_the_native_boundary() {
     for full in [false, true] {
         let mut peer = Peer::with_limits(&fixtures::settings(), boundary_limits);
         let bearer = fixtures::signed_in(&mut peer);
-        let request = w::Read::Holds(w::ReadHolds::new(&limits, w::ReadHoldsParts { project: u32::MAX, after: None }).expect("holds read"));
+        let request = w::Read::Holds(
+            w::ReadHolds::new(&limits, w::ReadHoldsParts { project: u32::MAX, after: None }).expect("holds read"),
+        );
         let mut bytes = Writer::new(request.measure() as usize);
         request.encode(&mut bytes).expect("read bytes");
-        let owned = w::Owned::new(&limits, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() }).expect("owned read");
+        let owned = w::Owned::new(&limits, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() })
+            .expect("owned read");
         let mut bytes = Writer::new(owned.measure() as usize);
         owned.encode(&mut bytes).expect("envelope");
         let socket = peer.post(b"/jig/v1/read", bytes.finish(), Some(&bearer));
@@ -251,13 +254,35 @@ fn a_projects_holds_page_crosses_the_native_boundary() {
         assert_eq!(read, core::reads::Read::Holds { project: u32::MAX, from: None });
         let reason: Box<[u8]> = vec![b'x'; if full { limits.placed_line_reason as usize } else { 0 }].into();
         let exempt: Box<[u64]> = if full { (1..=u64::from(limits.hold_row_exempt)).collect() } else { Box::new([]) };
-        let hold = d::PlacedLine { number: 7, owner: p::HoldOwner::Party { person: 3 }, mode: t::Mode::Stop, scope: t::Scope::Project, reason: reason.clone(), placed_at: Wall::from_nanos(1_000_000), revision: 2, lifted: full, may_lift: true };
-        let after = core::reads::Cursor::Live { scope: core::reads::Scope::Holds { project: u32::MAX }, after: d::Cursor::Number { number: 7 }, store_after: None };
-        let source = d::ProjectHolds { project: u32::MAX, rows: Box::new([d::HoldRow { hold, held: 2, exempt: exempt.clone() }]), after: Some(after.clone()) };
-        let value = jig_protocol_engine_clients::translate::pages::holds(&read, &source, &limits).expect("native page translation");
+        let hold = d::PlacedLine {
+            number: 7,
+            owner: p::HoldOwner::Party { person: 3 },
+            mode: t::Mode::Stop,
+            scope: t::Scope::Project,
+            reason: reason.clone(),
+            placed_at: Wall::from_nanos(1_000_000),
+            revision: 2,
+            lifted: full,
+            may_lift: true,
+        };
+        let after = core::reads::Cursor::Live {
+            scope: core::reads::Scope::Holds { project: u32::MAX },
+            after: d::Cursor::Number { number: 7 },
+            store_after: None,
+        };
+        let source = d::ProjectHolds {
+            project: u32::MAX,
+            rows: Box::new([d::HoldRow { hold, held: 2, exempt: exempt.clone() }]),
+            after: Some(after.clone()),
+        };
+        let value = jig_protocol_engine_clients::translate::pages::holds(&read, &source, &limits)
+            .expect("native page translation");
         let mut bytes = Writer::new(value.measure() as usize);
         value.encode(&mut bytes).expect("native page bytes");
-        let w::ReadValue::Holds(page) = w::ReadValue::decode(&limits, &mut Reader::new(&bytes.finish())).expect("page") else { panic!("holds") };
+        let w::ReadValue::Holds(page) = w::ReadValue::decode(&limits, &mut Reader::new(&bytes.finish())).expect("page")
+        else {
+            panic!("holds")
+        };
         // The native record is whole independently of HTTP chunking. The small
         // page additionally traverses this world's tiny HTTP pump.
         if full {
@@ -274,12 +299,16 @@ fn a_projects_holds_page_crosses_the_native_boundary() {
         assert_eq!(row.hold().revision(), 2);
         assert_eq!(row.hold().lifted(), full);
         assert!(row.hold().may_lift());
-        assert_eq!(row.held(), 2);
+        assert_eq!(row.held_tasks(), 2);
         assert_eq!(row.exempt().as_slice(), exempt.as_ref());
-        let request = w::Read::Holds(w::ReadHolds::new(&limits, w::ReadHoldsParts { project: u32::MAX, after: page.after().clone() }).expect("continued read"));
+        let request = w::Read::Holds(
+            w::ReadHolds::new(&limits, w::ReadHoldsParts { project: u32::MAX, after: page.after().clone() })
+                .expect("continued read"),
+        );
         let mut bytes = Writer::new(request.measure() as usize);
         request.encode(&mut bytes).expect("continuation bytes");
-        let owned = w::Owned::new(&limits, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() }).expect("owned read");
+        let owned = w::Owned::new(&limits, w::OwnedParts { owner: w::Owner::Jig, version: 19, record: bytes.finish() })
+            .expect("owned read");
         let mut bytes = Writer::new(owned.measure() as usize);
         owned.encode(&mut bytes).expect("envelope");
         peer.post(b"/jig/v1/read", bytes.finish(), Some(&bearer));

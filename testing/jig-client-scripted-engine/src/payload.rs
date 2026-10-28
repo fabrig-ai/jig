@@ -973,7 +973,9 @@ impl Payload for Read {
             Self::Inbox { group: _, project, kind, goal, after } => {
                 sum(&[project.heap(bounds), kind.heap(bounds), goal.heap(bounds), after.heap(bounds)])
             }
-            Self::Holds { project, after } | Self::Spend { project, after } => sum(&[project.heap(bounds), after.heap(bounds)]),
+            Self::Holds { project, after } | Self::Spend { project, after } => {
+                sum(&[project.heap(bounds), after.heap(bounds)])
+            }
             Self::Project { project } => sum(&[project.heap(bounds)]),
             Self::Notes { scope, description, after } => {
                 sum(&[scope.heap(bounds), description.heap(bounds), after.heap(bounds)])
@@ -1471,9 +1473,14 @@ impl Payload for jig_client_domain::contract::HoldRow {
 }
 impl Payload for jig_client_domain::contract::ProjectHolds {
     fn heap(&self, bounds: &Bounds) -> Option<u64> {
-        if self.rows.len() > bounds.rows as usize { return None; }
-        let mut total = u64::try_from(core::mem::size_of_val(self.rows.as_ref())).ok()?.checked_add(self.after.heap(bounds)?)?;
-        for row in &self.rows { total = total.checked_add(row.heap(bounds)?)?; }
+        if self.rows.len() > bounds.rows as usize {
+            return None;
+        }
+        let mut total =
+            u64::try_from(core::mem::size_of_val(self.rows.as_ref())).ok()?.checked_add(self.after.heap(bounds)?)?;
+        for row in &self.rows {
+            total = total.checked_add(row.heap(bounds)?)?;
+        }
         Some(total)
     }
 }

@@ -116,7 +116,10 @@ pub enum Read {
         after: Option<Cursor>,
     },
     /// Placed holds retained by a project, in hold number order.
-    Holds { project: u32, after: Option<Cursor> },
+    Holds {
+        project: u32,
+        after: Option<Cursor>,
+    },
     /// One project.
     Project {
         project: u32,

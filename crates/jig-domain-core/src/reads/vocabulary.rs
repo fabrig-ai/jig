@@ -228,7 +228,10 @@ pub enum Read {
         from: Option<Cursor>,
     },
     /// Retained project holds.
-    Holds { project: u32, from: Option<Cursor> },
+    Holds {
+        project: u32,
+        from: Option<Cursor>,
+    },
     /// Historical period spending.
     Spend {
         project: u32,

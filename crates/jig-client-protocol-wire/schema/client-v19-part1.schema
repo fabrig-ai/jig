@@ -69,7 +69,7 @@ record Done { outcome: Outcome }
 record Refused { refusal: Refusal at: option u32 }
 enum Final { done: Done, refused: Refused }
 record ReadHolds { project: u32 after: option Cursor }
-record HoldRow { hold: PlacedLine held: u32 exempt: list 65536 u64 }
+record HoldRow { hold: PlacedLine held_tasks: u32 exempt: list 65536 u64 }
 record ProjectHolds { project: u32 rows: list 4096 HoldRow after: option Cursor }
 enum Read { tasks: ReadTasks, me, task: ReadTask, proposal: ReadProposal, escalation: ReadEscalation, question: ReadQuestion, person_task: ReadPersonTask, result: ReadResult, ended: ReadEnded, history: ReadHistory, activity: ReadActivity, inbox: ReadInbox, spend: ReadSpend, project: ReadProject, notes: ReadNotes, deployment, turn: ReadTurn, settings, setting: ReadSetting, revision: ReadRevision, revisions: ReadRevisions, holds: ReadHolds }
 record BeyondRefused { value: Refusal }

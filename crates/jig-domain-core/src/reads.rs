@@ -71,7 +71,6 @@ pub fn admits(party: u64, scope: &Scope, key: &crate::Key) -> bool {
             Key::Tasks(TaskKey::EndedDelegate { requester, .. }) => requester == task,
             Key::Tasks(_) | Key::Core(_) | Key::People(_) | Key::Notes(_) | Key::Accounts(_) => false,
         },
-        Scope::Holds { .. } => false,
         Scope::Spend { project } => match key {
             Key::Tasks(
                 TaskKey::Ledger(Funder::Period { project: owner, .. })
@@ -96,7 +95,8 @@ pub fn admits(party: u64, scope: &Scope, key: &crate::Key) -> bool {
             Key::Tasks(TaskKey::Update { party: owner, .. }) => *owner == party,
             Key::Tasks(_) | Key::Core(_) | Key::People(_) | Key::Notes(_) | Key::Accounts(_) => false,
         },
-        Scope::Tasks { .. }
+        Scope::Holds { .. }
+        | Scope::Tasks { .. }
         | Scope::Proposal { proposer: Proposer::Task(_), .. }
         | Scope::Escalation { .. }
         | Scope::Question { .. }

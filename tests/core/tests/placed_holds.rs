@@ -760,7 +760,14 @@ fn a_projects_holds_read_lists_each_hold_with_its_tasks_and_exemptions() {
     let sign_in = s.owner_sign_in;
     let scope = people::HoldScope::Subtree { task: s.child };
     let first = placed_number(&hold(&mut s, sign_in, 71, people::HoldMode::Stop, scope, b"inspect delegate"));
-    let second = placed_number(&hold(&mut s, sign_in, 72, people::HoldMode::Stop, people::HoldScope::Project, b"inspect project"));
+    let second = placed_number(&hold(
+        &mut s,
+        sign_in,
+        72,
+        people::HoldMode::Stop,
+        people::HoldScope::Project,
+        b"inspect project",
+    ));
     let revision = live_row(&s.world, s.goal).revisions.hold;
     ask_as(&mut s.world, sign_in, 73, people::Ask::Release { project: 1, task: s.goal, revision, again: None });
     let page = holds_page(read_holds(&mut s, sign_in, None));
@@ -790,10 +797,13 @@ fn a_holds_read_says_which_holds_the_reader_may_lift() {
     stop(&mut s, sign_in);
     assert!(holds_page(read_holds(&mut s, sign_in, None)).rows[0].hold.may_lift);
     assert!(!holds_page(read_holds(&mut s, maintainer, None)).rows[0].hold.may_lift);
-    s.world.send(root::Event::Core(core::Event::People(people::Event::Roles { project: 1, holdings: Box::new([
-        people::Holding { person: s.owner, role: people::Role::Owner },
-        people::Holding { person: 2, role: people::Role::Observer },
-    ]) })));
+    s.world.send(root::Event::Core(core::Event::People(people::Event::Roles {
+        project: 1,
+        holdings: Box::new([
+            people::Holding { person: s.owner, role: people::Role::Owner },
+            people::Holding { person: 2, role: people::Role::Observer },
+        ]),
+    })));
     assert!(!holds_page(read_holds(&mut s, maintainer, None)).rows[0].hold.may_lift);
 }
 #[test]
@@ -817,7 +827,14 @@ fn a_holds_read_pages_past_its_row_bound() {
     let sign_in = s.owner_sign_in;
     let mut numbers = Vec::new();
     for key in 71..74 {
-        numbers.push(placed_number(&hold(&mut s, sign_in, key, people::HoldMode::Stop, people::HoldScope::Project, b"paged project hold")));
+        numbers.push(placed_number(&hold(
+            &mut s,
+            sign_in,
+            key,
+            people::HoldMode::Stop,
+            people::HoldScope::Project,
+            b"paged project hold",
+        )));
     }
     let mut from = None;
     let mut seen = Vec::new();
@@ -829,10 +846,16 @@ fn a_holds_read_pages_past_its_row_bound() {
             assert_eq!(*number, page.rows[0].hold.number);
         }
         from = page.after;
-        if from.is_none() { break; }
+        if from.is_none() {
+            break;
+        }
     }
     assert_eq!(seen, numbers);
-    let wrong = core::reads::Cursor::Live { scope: core::reads::Scope::Holds { project: 2 }, after: core::documents::Cursor::Number { number: 1 }, store_after: None };
+    let wrong = core::reads::Cursor::Live {
+        scope: core::reads::Scope::Holds { project: 2 },
+        after: core::documents::Cursor::Number { number: 1 },
+        store_after: None,
+    };
     assert_eq!(read_holds(&mut s, sign_in, Some(wrong)), core::reads::Answer::None(core::reads::Why::Unknown));
 }
 #[test]
@@ -846,13 +869,15 @@ fn a_holds_read_of_a_project_without_a_role_is_unknown() {
 
 #[test]
 fn a_holds_pages_price_includes_whole_reasons_and_exemptions() {
-    use jig_protocol_config::profile::{profile, Profile};
+    use jig_protocol_config::profile::{Profile, profile};
     for profile_name in [Profile::Small, Profile::Standard] {
         let limits = profile(profile_name).core;
         let before = core::documents::document_worst_case(&limits.documents).expect("document price");
         let holds = core::documents::project_holds_worst_case(&limits).expect("holds price");
         assert!(holds <= before, "the existing largest document covers this page");
         let context = core::documents::document_with_context_worst_case(&limits).expect("context price");
-        eprintln!("{profile_name:?}: document before={before} after={before}; holds={holds}; context before={context} after={context}");
+        eprintln!(
+            "{profile_name:?}: document before={before} after={before}; holds={holds}; context before={context} after={context}"
+        );
     }
 }

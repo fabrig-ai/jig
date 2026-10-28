@@ -22,7 +22,9 @@ pub(super) fn scope_allowed(core: &Core, party: u64, scope: &Scope) -> bool {
     match scope {
         Scope::SettingsHistory { .. } => core.people.role(party, jig_domain_people::DEPLOYMENT).is_some(),
         Scope::Tasks { query } => documents::task_query::admission(core, party, query).is_ok(),
-        Scope::Holds { project } | Scope::Notes { project } | Scope::Spend { project } => core.people.role(party, *project).is_some(),
+        Scope::Holds { project } | Scope::Notes { project } | Scope::Spend { project } => {
+            core.people.role(party, *project).is_some()
+        }
         Scope::ScopedNotes { scope, .. } => core.people.role(party, note_project(scope)).is_some(),
         Scope::Inbox { filter, .. } => match filter.project {
             Some(project) => core.people.role(party, project).is_some(),
@@ -175,7 +177,7 @@ pub(super) fn live_page(core: &Core, limits: &Limits, party: u64, read: &Read, d
                 | Read::Notes { .. }
                 | Read::ScopedNotes { .. }
                 | Read::Holds { .. }
-            | Read::Spend { .. }
+                | Read::Spend { .. }
                 | Read::Settings
                 | Read::Setting { .. }
                 | Read::Revision { .. }
@@ -929,7 +931,6 @@ fn page_row(core: &Core, limits: &Limits, range: &Range, row: Row) -> Result<Opt
             }
             Ok(Some(PageRow::Note(documents::note_from_entry(core, limits, range.party, value)?)))
         }
-        Scope::Holds { .. } => Ok(None),
         Scope::Spend { project } => {
             let Some(value) = ledger(&row.value) else {
                 return Ok(None);
@@ -944,7 +945,8 @@ fn page_row(core: &Core, limits: &Limits, range: &Range, row: Row) -> Result<Opt
         }
         Scope::Tasks { query } => super::ended::line(core, limits, range.party, query, &row),
         Scope::Inbox { group, filter } => inbox_row(core, limits, range.party, *group, *filter, row),
-        Scope::Task { .. }
+        Scope::Holds { .. }
+        | Scope::Task { .. }
         | Scope::Proposal { .. }
         | Scope::Escalation { .. }
         | Scope::Question { .. }
@@ -1785,30 +1787,42 @@ pub(super) fn holds(core: &Core, limits: &Limits, party: u64, project: u32, from
     let scope = Scope::Holds { project };
     let mut last = match from {
         None => 0,
-        Some(Cursor::Live { scope: owner, after: documents::Cursor::Number { number }, store_after: None }) if *owner == scope => *number,
+        Some(Cursor::Live { scope: owner, after: documents::Cursor::Number { number }, store_after: None })
+            if *owner == scope =>
+        {
+            *number
+        }
         Some(Cursor::Live { .. } | Cursor::Store { .. }) => return Answer::None(Why::Unknown),
     };
-    let window = documents::Window { rows: limits.documents.rows, after: Some(documents::Cursor::Number { number: last }) };
+    let window =
+        documents::Window { rows: limits.documents.rows, after: Some(documents::Cursor::Number { number: last }) };
     let mut rows = List::with_capacity(window.rows);
     let mut after = None;
     let mut last_row = last;
     while let Some(hold) = core.tasks.next_placed_hold(last) {
         if hold.project == project {
             if rows.len() == window.rows {
-                after = Some(Cursor::Live { scope, after: documents::Cursor::Number { number: last_row }, store_after: None });
+                after = Some(Cursor::Live {
+                    scope,
+                    after: documents::Cursor::Number { number: last_row },
+                    store_after: None,
+                });
                 break;
             }
             let line = match documents::task_tree::placed_line(core, limits, party, hold) {
                 Ok(line) => line,
-                Err(Missing::TooLarge | Missing::Unknown | Missing::Ended | Missing::NotAllowed) => return Answer::None(Why::Busy),
+                Err(Missing::TooLarge | Missing::Unknown | Missing::Ended | Missing::NotAllowed) => {
+                    return Answer::None(Why::Busy);
+                }
             };
-            let mut held = 0;
+            let mut held = 0_u32;
             let mut task_after = 0;
             while let Some(task) = core.tasks.next_placed_task(hold.number, task_after) {
-                held += 1;
+                held = held.checked_add(1).expect("bounded live tasks");
                 task_after = task.number;
             }
-            rows.push(documents::HoldRow { hold: line, held, exempt: hold.exempt.clone() }).expect("bounded holds page");
+            rows.push(documents::HoldRow { hold: line, held, exempt: hold.exempt.clone() })
+                .expect("bounded holds page");
             last_row = hold.number;
         }
         last = hold.number;

@@ -65,7 +65,10 @@ pub fn read(read: &c::Read, limits: &w::Limits) -> Result<w::Read, w::Problem> {
                 after: cursor(after.as_ref(), limits)?,
             },
         )?),
-        c::Read::Holds { project, after } => w::Read::Holds(w::ReadHolds::new(limits, w::ReadHoldsParts { project: *project, after: cursor(after.as_ref(), limits)? })?),
+        c::Read::Holds { project, after } => w::Read::Holds(w::ReadHolds::new(
+            limits,
+            w::ReadHoldsParts { project: *project, after: cursor(after.as_ref(), limits)? },
+        )?),
         c::Read::Spend { project, after } => w::Read::Spend(w::ReadSpend::new(
             limits,
             w::ReadSpendParts { project: *project, after: cursor(after.as_ref(), limits)? },

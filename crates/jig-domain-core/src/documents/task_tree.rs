@@ -634,7 +634,12 @@ pub(super) fn placed(core: &Core, limits: &Limits, party: u64, task: u64) -> Res
     Ok(Some(placed_line(core, limits, party, hold)?))
 }
 
-pub(crate) fn placed_line(core: &Core, limits: &Limits, party: u64, hold: &tasks::PlacedHold) -> Result<PlacedLine, Missing> {
+pub(crate) fn placed_line(
+    core: &Core,
+    limits: &Limits,
+    party: u64,
+    hold: &tasks::PlacedHold,
+) -> Result<PlacedLine, Missing> {
     if hold.reason.len() > usize::try_from(limits.documents.text_bytes).expect("text bound fits") {
         return Err(Missing::TooLarge);
     }

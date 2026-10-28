@@ -504,7 +504,8 @@ pub fn document_worst_case(limits: &DocumentLimits) -> Option<u64> {
 /// Bound of a document including the inbox's requester selection context.
 #[must_use]
 pub fn document_with_context_worst_case(limits: &Limits) -> Option<u64> {
-    document_worst_case(&limits.documents)?.max(project_holds_worst_case(limits)?)
+    document_worst_case(&limits.documents)?
+        .max(project_holds_worst_case(limits)?)
         .checked_add(settings::worst_case(limits)?)?
         .checked_add(settings_review::worst_case(limits)?)?
         .checked_add(inbox_selection_worst_case(limits.documents.rows, limits.tasks.depth)?)?
@@ -571,9 +572,10 @@ pub struct HoldRow {
 /// Owned rows, whole reasons and exemptions; no retained index or scratch table.
 #[must_use]
 pub fn project_holds_worst_case(limits: &Limits) -> Option<u64> {
-    u64::try_from(size_of::<ProjectHolds>()).ok()?
+    u64::try_from(size_of::<ProjectHolds>())
+        .ok()?
         .checked_add(List::<HoldRow>::worst_case(limits.documents.rows)?)?
         .checked_add(u64::from(limits.documents.rows).checked_mul(
-            u64::from(limits.documents.text_bytes).checked_add(u64::from(limits.tasks.exemptions).checked_mul(8)?)?
+            u64::from(limits.documents.text_bytes).checked_add(u64::from(limits.tasks.exemptions).checked_mul(8)?)?,
         )?)
 }
