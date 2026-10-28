@@ -61,21 +61,6 @@ impl State {
         }
     }
 }
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    Map::<u64, Pending>::worst_case(limits.secrets.queued)?
-        .checked_add(Map::<u64, Secret>::worst_case(limits.held)?)?
-        .checked_add(u64::from(limits.held).checked_mul(u64::from(limits.secrets.value))?)?
-        .checked_add(u64::from(limits.secrets.key).checked_mul(2)?.checked_mul(u64::from(limits.secrets.queued))?)?
-        .checked_add(u64::from(limits.secrets.key))?
-        .checked_add(List::<SecretRow>::worst_case(limits.secrets.page.rows)?)?
-        .checked_add(List::<skein_kv::Row>::worst_case(limits.secrets.page.rows)?)?
-        .checked_add(List::<skein_kv::Op>::worst_case(limits.secrets.ops)?)?
-        // A conditional write holds its encoded replacement and durable row;
-        // its digest borrows that row's payload without a decoded buffer.
-        .checked_add(u64::from(limits.secrets.value).checked_mul(2)?)?
-        .checked_add(32)?
-        .checked_add(u64::from(limits.secrets.page.bytes).checked_mul(2)?)
-}
 fn prefix(owner: SecretOwner) -> [u8; 2] {
     match owner {
         SecretOwner::SignIn => [1, 0],

@@ -222,12 +222,6 @@ pub(crate) fn most_ops(writes: u32, orphan_erases: u32) -> Option<u32> {
     writes.checked_mul(2)?.checked_add(3)?.checked_add(orphan_erases)
 }
 
-pub(crate) fn worst_case(limits: &crate::Limits) -> Option<u64> {
-    let capacity = most_ops(limits.journal.writes, limits.orphan_erases)?;
-    Map::<Box<[u8]>, u32>::worst_case(capacity)?
-        .checked_add(u64::from(limits.store.key).checked_mul(u64::from(capacity))?)
-}
-
 fn copy_settings(store: &mut Store, number: u32) -> Option<skein_kv::Op> {
     use jig_domain_core::{CoreKey, Key, settings};
     let held = Key::Core(CoreKey::Settings(settings::Key::Held(number)));

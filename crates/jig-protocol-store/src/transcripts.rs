@@ -89,34 +89,6 @@ impl State {
 pub(crate) fn reservation_count(limits: &Limits) -> Option<u32> {
     limits.queue.checked_add(1)?.checked_add(limits.store.queued)?.checked_mul(limits.journal.writes)
 }
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    let count = reservation_count(limits)?;
-    let codec = codec::limits(&limits.core)?;
-    let frame = crate::core_v6::TurnRecord::worst_case_bytes(&codec.core)?.checked_add(12)?;
-    let pending = frame
-        .checked_mul(u64::from(limits.journal.writes))?
-        .checked_add(u64::from(limits.store.commit))?
-        .checked_add(Queue::<Frame>::worst_case(limits.journal.writes)?)?;
-    Queue::<Pending>::worst_case(limits.queue)?
-        .checked_add(pending.checked_mul(u64::from(limits.queue.checked_add(1)?))?)?
-        .checked_add(frame.checked_mul(u64::from(limits.journal.writes.checked_add(2)?))?)?
-        .checked_add(
-            List::<skein_kv::Op>::worst_case(crate::commits::most_ops(limits.journal.writes, limits.orphan_erases)?)?
-                .checked_mul(u64::from(limits.queue.checked_add(3)?))?,
-        )?
-        .checked_add(List::<u64>::worst_case(count)?)?
-        .checked_add(List::<(u64, u64)>::worst_case(count)?)?
-        .checked_add(Map::<u64, Place>::worst_case(count)?)?
-        .checked_add(Map::<(u64, u64), u64>::worst_case(count)?)?
-        .checked_add(Map::<u64, File>::worst_case(limits.files)?)?
-        .checked_add(read::worst_case(limits, &codec)?)?
-        .checked_add(u64::from(limits.store.key))?
-        .checked_add(drop::worst_case(limits)?)?
-        .checked_add(
-            Queue::<u64>::worst_case(limits.journal.writes)?.checked_mul(u64::from(limits.queue.checked_add(1)?))?,
-        )?
-        .checked_add(64)
-}
 pub(crate) fn place(
     store: &mut Store,
     number: u64,

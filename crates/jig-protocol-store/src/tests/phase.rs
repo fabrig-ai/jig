@@ -1282,37 +1282,6 @@ fn cuts_at_each_page_and_sealing_write_and_sync_reopen_the_unchanged_source() {
 }
 
 #[test]
-fn patching_peak_grows_with_kept_texts_and_record_room() {
-    let mut limits = fixtures::store_limits();
-    limits.store.value = 128;
-    let none = crate::patching::phase::worst_case(&limits, &crate::PatchSets::NONE).expect("empty peak");
-    let baseline = crate::patching::phase::worst_case(&limits, &BASE).expect("baseline texts");
-    let kept = crate::patching::phase::worst_case(&limits, &SETS).expect("kept peak");
-    assert!(baseline > none);
-    assert!(kept > baseline, "the families' kept texts, plans and machines contribute");
-    limits.store.value = 256;
-    assert!(crate::patching::phase::worst_case(&limits, &SETS).expect("more room") > kept);
-}
-#[test]
-fn the_store_prices_the_larger_peak_and_worst_case_prices_none() {
-    let mut limits = fixtures::store_limits();
-    // A large decoded page makes serving dominate; a tiny page and large
-    // record machines make patching dominate. Shared maps are counted once.
-    for patching_larger in [false, true] {
-        limits.store.page.bytes = if patching_larger { 1 } else { 16_778_240 };
-        limits.store.value = if patching_larger { 16_777_216 } else { 128 };
-        limits.joins = if patching_larger { 0 } else { 32 };
-        let (common, serving) = crate::serving_peak(&limits).expect("serving peak");
-        let patching = crate::patching::phase::worst_case(&limits, &SETS).expect("patching peak");
-        assert_eq!(patching > serving, patching_larger, "both sides of the maximum");
-        let total = crate::worst_case_with_patches(&limits, &SETS).expect("total");
-        assert_eq!(total.checked_sub(common), Some(if patching_larger { patching } else { serving }));
-        assert!(total < common.checked_add(serving).expect("serving").checked_add(patching).expect("both"));
-        assert_eq!(crate::worst_case(&limits), crate::worst_case_with_patches(&limits, &crate::PatchSets::NONE));
-    }
-}
-
-#[test]
 fn a_plan_without_any_matching_records_reports_zero_counts_and_still_seals() {
     let mut disk = Harness::new(&baseline_with_sets(false, BASE));
     let mut store = fixture_store(&disk, 8, fixtures::store_limits().store.commit, levels(2, 2));
@@ -1485,7 +1454,7 @@ fn manifest_bounds_accept_the_count_and_name_ceilings() {
     let sets = crate::PatchSets {
         sets: &[crate::PatchSet { families: &[MANIFEST_FAMILY; MANIFEST_FAMILIES], ..MANIFEST_SET }],
     };
-    assert!(crate::patching::phase::worst_case(&fixtures::store_limits(), &sets).is_some());
+    assert!(crate::patching::plan::bounds(&sets).is_ok());
 }
 
 #[test]
@@ -1509,7 +1478,7 @@ fn manifest_bounds_refuse_a_count_or_name_past_the_ceiling() {
             }],
         },
     ] {
-        assert_eq!(crate::patching::phase::worst_case(&fixtures::store_limits(), &sets), None);
+        assert!(crate::patching::plan::bounds(&sets).is_err());
     }
 }
 
@@ -1922,14 +1891,3 @@ const FRESH_BEFORE: crate::PatchSets = crate::PatchSets {
         ..super::patching::SMITH
     }],
 };
-
-// The store fixture's resident price: 581,560,638,394,013 bytes at jig
-// 0d5ed2767. A ceiling, a quarter above, rounded up to two significant
-// digits (skein's dynamic-memory draft, 7.1); it moves by hand only in
-// the commit of a real change that passes it, never on a type's size.
-const STORE_RESIDENT_CEILING: u64 = 730_000_000_000_000;
-#[test]
-fn the_store_resident_price_stays_under_its_ceiling() {
-    let resident = crate::worst_case(&fixtures::store_limits()).expect("store fixture fits");
-    assert!(resident <= STORE_RESIDENT_CEILING, "{resident}");
-}

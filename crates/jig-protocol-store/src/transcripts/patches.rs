@@ -79,22 +79,6 @@ pub(crate) fn capacity(set: &PatchSet, ix: usize, limits: &Limits) -> Option<Cap
     Some(capacity)
 }
 
-pub(crate) fn worst_case(limits: &Limits, sets: &PatchSets) -> Option<u64> {
-    let mut bytes = 0_u64;
-    for set in sets.sets {
-        for (ix, family) in set.families.iter().enumerate() {
-            if family.frames.is_none() || family.texts.is_empty() {
-                continue;
-            }
-            let capacity = capacity(set, ix, limits)?;
-            bytes = bytes
-                .checked_add(Patcher::worst_case_heap(capacity)?)?
-                .checked_add(u64::try_from(size_of::<Patcher>()).ok()?)?;
-        }
-    }
-    Some(bytes)
-}
-
 /// Schemas name earlier declarations. Dynamic programming counts each named
 /// subtree once; a held field is one leaf, with no traversal into its bytes.
 pub(crate) fn node_bound(schema: &Schema, root: DeclIx) -> Option<u32> {

@@ -35,14 +35,10 @@ impl State {
         State { task: 0, directory: None, step: Step::Idle, orphans: Queue::uncapped() }
     }
 }
+// Bound a sweep's work by the disk budget and admitted transcript reservations.
 fn capacity(limits: &Limits) -> Option<u32> {
     // Each task needs at least one 18-byte attempt key in the map or a reservation.
     u32::try_from(limits.store.budget.checked_div(18)?).ok()?.checked_add(super::reservation_count(limits)?)
-}
-pub(crate) fn worst_case(limits: &Limits) -> Option<u64> {
-    // An estimate now: the queue holds what it holds; this count is the most
-    // orphan tasks the budget allows.
-    Queue::<Orphan>::worst_case(capacity(limits)?)
 }
 fn attempt_key(store: &mut Store, task: u64, after: Option<u64>) -> Result<Option<keys::Own>, ()> {
     let first = match after {

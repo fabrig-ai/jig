@@ -1,4 +1,4 @@
-//! Checked store admission bounds and phase peaks (protocol/store.md, 5.4, 6 and 13).
+//! Checked store admission bounds (protocol/store.md, 5.4, 6 and 13).
 use crate::{accounts_v2, codec, component_v3, core_v6, notes_v1, people_v13, tasks_v9};
 use jig_domain_core as core;
 
@@ -60,21 +60,6 @@ pub fn whole(bound: u32) -> Result<(), SizeRefusal> {
         return Err(SizeRefusal::Whole { needs: MANIFEST_BYTES, has: bound });
     }
     Ok(())
-}
-
-/// Shared resident state plus the patch phase alone (protocol/store.md, 13).
-#[must_use]
-pub fn patching_peak(limits: &crate::Limits, sets: &crate::PatchSets) -> Option<u64> {
-    let (common, _) = crate::serving_peak(limits)?;
-    common.checked_add(crate::patching::phase::worst_case(limits, sets)?)
-}
-
-/// Shared resident state plus serving alone, its frame machines among it
-/// (protocol/store.md, 8.6 and 13).
-#[must_use]
-pub fn serving_peak(limits: &crate::Limits, sets: &crate::PatchSets) -> Option<u64> {
-    let (common, serving) = crate::serving_peak(limits)?;
-    common.checked_add(serving)?.checked_add(crate::transcripts::patches::worst_case(limits, sets)?)
 }
 
 /// Whether patch planning or patching owns the current step's retained state

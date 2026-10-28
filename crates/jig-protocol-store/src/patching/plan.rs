@@ -469,32 +469,3 @@ fn flight_keys(store: &mut crate::Store, owner: Owner, family: &super::sets::Kep
     }
     Some(FlightKeys { count, keys: keys.into_boxed() })
 }
-
-/// Named keys coexist with a one-row memory page and its exclusive cursors.
-/// This is an alternative to copying, walking and checking, not resident state.
-pub(crate) fn flights_worst_case(limits: &crate::Limits, sets: &PatchSets) -> Option<u64> {
-    let mut peak = 0_u64;
-    for set in sets.sets {
-        for family in set.families {
-            if family.flights.is_empty() {
-                continue;
-            }
-            let map = match family.map {
-                super::sets::KeptMap::Store => &limits.store,
-                super::sets::KeptMap::Secrets => &limits.secrets,
-            };
-            let key = u64::from(map.key).checked_add(1)?;
-            let named = List::<Box<[u8]>>::worst_case(FLIGHT_KEYS)?
-                .checked_add(u64::from(FLIGHT_KEYS).checked_mul(u64::from(map.key))?)?;
-            // The caller's range and cursor (3 keys); walk_map's range,
-            // last and row cursor (4); load/past and the lookahead row (5).
-            // Exclusive cursors can be one byte longer than stored keys.
-            let page = List::<crate::pages::WalkRow>::worst_case(1)?
-                .checked_add(List::<skein_kv::Row>::worst_case(1)?)?
-                .checked_add(u64::from(map.page.bytes).checked_mul(2)?)?
-                .checked_add(key.checked_mul(12)?)?;
-            peak = peak.max(named.checked_add(page)?);
-        }
-    }
-    Some(peak)
-}

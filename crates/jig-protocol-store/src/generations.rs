@@ -274,15 +274,6 @@ pub(crate) fn removed(removing: &mut Removing, arrived: Arrived, queue: &mut Que
         Step::Finished => Progress::Failed,
     }
 }
-/// Heap of stack cells, each level's page and names, plus paths and one page
-/// in the directory scanner. A filesystem name is at most 255 bytes.
-pub(crate) fn worst_case() -> Option<u64> {
-    let page = u64::try_from(size_of::<file::Entry>()).ok()?.checked_add(255)?.checked_mul(u64::from(PAGE))?;
-    List::<Level>::worst_case(DEPTH)?
-        .checked_add(page.checked_mul(u64::from(DEPTH).checked_add(1)?)?)?
-        .checked_add(255_u64.checked_mul(u64::from(DEPTH))?)?
-        .checked_add(1024)
-}
 
 /// The copy keeps its roots and files on the transcripts driver, away from kv's
 /// handles. Even beside the transcript root it needs at most six open slots.
@@ -796,18 +787,6 @@ fn drop_arrived(dropping: &mut Dropping, arrived: Arrived, queue: &mut Queue<fil
         DropStep::Finished => return Progress::Failed,
     }
     Progress::Pending
-}
-
-/// The caller owns one operation at a time. Include inline states, a copy's one
-/// page with names, paths, and the single chunk while its `WriteAt` is in flight.
-pub(crate) fn operations_worst_case(chunk: u32) -> Option<u64> {
-    let state =
-        size_of::<Copying>().max(size_of::<Dropping>()).max(size_of::<Switching>()).max(size_of::<Manifesting>());
-    u64::try_from(state)
-        .ok()?
-        .checked_add(u64::from(chunk))?
-        .checked_add(u64::from(PAGE).checked_mul(u64::try_from(size_of::<file::Entry>()).ok()?.checked_add(255)?)?)?
-        .checked_add(1024)
 }
 
 impl Copying {

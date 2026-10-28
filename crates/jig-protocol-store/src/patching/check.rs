@@ -4,7 +4,7 @@ use crate::codec::component::{Count, CountParts};
 use crate::directory::OWNER;
 use crate::generations::PAGE;
 use crate::{
-    Arrived, Below, Check, KeptFamily, KeptMap, Limits, OpenRefusal, Owner, Root, Row, Store, intervals, pages, restore,
+    Arrived, Below, Check, KeptFamily, KeptMap, OpenRefusal, Owner, Root, Row, Store, intervals, pages, restore,
 };
 use alloc::boxed::Box;
 use jig_domain_core::{Record, RestoreRange};
@@ -278,33 +278,4 @@ pub(crate) fn up(checking: &mut Checking, arrived: Arrived, below: &mut Below) -
         Step::Done => return Err(OpenRefusal::Failed),
     }
     Ok(false)
-}
-
-pub(crate) fn worst_case(limits: &Limits, families: u32) -> Option<u64> {
-    let rows = limits
-        .store
-        .page
-        .rows
-        .min(limits.store.page.bytes)
-        .max(limits.secrets.page.rows.min(limits.secrets.page.bytes));
-    let bytes = limits.store.page.bytes.max(limits.secrets.page.bytes);
-    let key = limits.store.key.max(limits.secrets.key);
-    let entries = u64::try_from(size_of::<file::Entry>()).ok()?.checked_add(255)?.checked_mul(u64::from(PAGE))?;
-    u64::try_from(size_of::<Checking>())
-        .ok()?
-        .checked_add(List::<Counted>::worst_case(families)?)?
-        .checked_add(List::<Count>::worst_case(families)?)?
-        .checked_add(u64::from(families).checked_mul(64)?)?
-        .checked_add(List::<pages::WalkRow>::worst_case(rows)?)?
-        .checked_add(u64::from(bytes).checked_mul(2)?)?
-        .checked_add(u64::from(key).checked_mul(u64::from(rows).checked_add(5)?)?)?
-        .checked_add(entries.checked_mul(2)?)?
-        .checked_add(255)?
-        .checked_add(crate::decoded_worst_case(limits)?)?
-        .checked_add(
-            u64::try_from(size_of::<skein_kv::Range>())
-                .ok()?
-                .checked_add(u64::from(key).checked_mul(2)?)?
-                .checked_mul(u64::try_from(ranges().len()).ok()?)?,
-        )
 }

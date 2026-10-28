@@ -237,11 +237,6 @@ pub(crate) fn give(machines: &mut Machines, family: FamilyIx, patcher: Box<Patch
     *slot = Some(patcher);
 }
 
-/// The stack holds no record bytes: each active family's machine owns them.
-pub(crate) fn worst_case(families: u32) -> Option<u64> {
-    List::<Frame>::worst_case(families)?.checked_add(u64::try_from(size_of::<Walk>()).ok()?)
-}
-
 /// Held bytes and held secrets share the walk, but use their own read accessors.
 fn content(old: &skein_codec::patch::Old, at: Node) -> Result<&[u8], Halt> {
     match old.content(at) {
