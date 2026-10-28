@@ -322,37 +322,6 @@ fn last_plan(plans: &List<Option<PlanIx>>) -> Option<PlanIx> {
     last
 }
 
-pub(crate) fn worst_case_heap(sets: &PatchSets, rooms: Rooms) -> Option<u64> {
-    let mut heap = List::<Machine>::worst_case(count(sets)?)?;
-    for set in sets.sets {
-        for (family_ix, family) in set.families.iter().enumerate() {
-            if family.texts.is_empty() {
-                continue;
-            }
-            let capacity = capacity(set, family_ix, rooms.of_map(family.map))?;
-            heap = heap
-                .checked_add(Patcher::worst_case_heap(capacity)?)?
-                .checked_add(u64::try_from(size_of::<Patcher>()).ok()?)?
-                .checked_add(List::<Identity>::worst_case(capacity.versions)?)?
-                .checked_add(List::<Option<PlanIx>>::worst_case(u32::try_from(set.patches.len()).ok()?)?)?;
-        }
-    }
-    Some(heap)
-}
-
-/// The schemas and plans are static input; room bounds every record machine.
-pub(crate) fn worst_case(sets: &PatchSets, rooms: Rooms) -> Option<u64> {
-    let families = count(sets)?;
-    let mut patches = 0_u32;
-    for set in sets.sets {
-        patches = patches.checked_add(u32::try_from(set.patches.len()).ok()?)?;
-    }
-    worst_case_heap(sets, rooms)?
-        .checked_add(List::<Planned>::worst_case(patches)?)?
-        .checked_add(List::<bool>::worst_case(families)?.checked_mul(2)?)?
-        .checked_add(super::walk::worst_case(families)?)
-}
-
 pub(crate) fn kept_patcher(set: &PatchSet, ix: usize, capacity: Capacity) -> Result<Box<Patcher>, Unplanned> {
     let refusal = Unplanned { owner: set.owner, patch: 0 };
     let family = set.families.get(ix).ok_or(refusal)?;

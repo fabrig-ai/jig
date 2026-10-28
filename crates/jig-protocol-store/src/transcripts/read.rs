@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 use jig_domain_core::{self as domain, TurnRecord};
 use jig_domain_tasks as tasks;
 use skein_io::file;
-use skein_lib::{List, Map, Queue, Reader, Token, Writer};
+use skein_lib::{List, Queue, Reader, Token, Writer};
 mod party;
 pub(crate) const OWNER: Token = Token::new(0x5453);
 #[derive(Debug)]
@@ -53,20 +53,6 @@ pub(crate) struct Read {
     budget: u64,
     party: Option<Party>,
     activity: Option<Activity>,
-}
-pub(crate) fn worst_case(limits: &Limits, codec: &codec::Limits) -> Option<u64> {
-    let rows = limits.store.page.rows;
-    let turn = crate::core_v6::TurnRecord::worst_case_heap(&codec.core)?;
-    let frame = crate::core_v6::TurnRecord::worst_case_bytes(&codec.core)?.checked_add(12)?;
-    Map::<Token, Read>::worst_case(limits.reads)?
-        .checked_add(
-            List::<TurnRecord>::worst_case(rows)?
-                .checked_add(turn.checked_mul(u64::from(rows))?)?
-                .checked_mul(u64::from(limits.reads))?,
-        )?
-        .checked_add(frame.checked_mul(3)?)?
-        .checked_add(u64::try_from(size_of::<domain::reads::Loaded>()).ok()?)?
-        .checked_add(limits.core.load_bytes.checked_mul(3)?.checked_mul(u64::from(limits.reads))?)
 }
 pub(crate) fn transcript(
     store: &mut Store,

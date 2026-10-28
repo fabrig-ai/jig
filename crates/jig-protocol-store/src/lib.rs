@@ -181,8 +181,7 @@ impl Store {
         store
     }
 
-    /// Supplies the owners' static patch data (store.md 10.3). Price these
-    /// sets with `worst_case_with_patches` when checking startup room.
+    /// Supplies the owners' static patch data (store.md 10.3).
     pub fn patch_sets(&mut self, sets: PatchSets) {
         self.patch_sets = sets;
     }
@@ -250,66 +249,6 @@ fn frame_bound(limits: &Limits) -> Option<u64> {
     core_v6::TurnRecord::worst_case_bytes(&codec.core)?.checked_add(12)
 }
 
-/// Owned stores, component state and bounded temporary rows and operations.
-#[must_use]
-pub fn worst_case(limits: &Limits) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    worst_case_with_patches(limits, &PatchSets::NONE)
-}
-
-/// Includes the static sets supplied through `Store::patch_sets`. The ordinary
-/// `worst_case` prices `PatchSets::NONE`: limits alone cannot bound an
-/// arbitrary number of kept schemas. Record bytes also bound nodes (at least one wire byte each).
-#[must_use]
-pub fn worst_case_with_patches(limits: &Limits, sets: &PatchSets) -> Option<u64> {
-    if !valid(limits) {
-        return None;
-    }
-    let (common, serving) = serving_peak(limits)?;
-    let serving = serving.checked_add(transcripts::patches::worst_case(limits, sets)?)?;
-    let patching = patching::phase::worst_case(limits, sets)?;
-    common.checked_add(serving.max(patching))
-}
-
-/// Shared resident state and the additional serving peak (store.md 13).
-fn serving_peak(limits: &Limits) -> Option<(u64, u64)> {
-    let state = u64::try_from(size_of::<Store>()).ok()?;
-    let rows = u64::from(limits.store.value).checked_add(u64::from(limits.store.key))?.checked_mul(2)?;
-    let decoded = decoded_worst_case(limits)?;
-    // One byte per encoded row bounds carrier counts. Count wire values and
-    // their translated records together, including the census's fetched task.
-    let page = u64::from(limits.store.page.bytes)
-        .checked_mul(decoded.checked_add(u64::from(limits.store.key))?)?
-        .checked_add(u64::from(limits.store.page.bytes))?
-        .checked_add(skein_lib::List::<pages::WalkRow>::worst_case(limits.store.page.bytes)?)?
-        .checked_add(skein_lib::List::<Row>::worst_case(limits.store.page.bytes)?)?;
-    let common = skein_kv::worst_case(&limits.store)?
-        .checked_add(skein_kv::worst_case(&limits.secrets)?)?
-        .checked_add(state)?
-        .checked_add(secrets::worst_case(limits)?)?
-        .checked_add(transcripts::worst_case(limits)?)?
-        .checked_add(generations::worst_case()?)?
-        .checked_add(names_worst_case()?)?;
-    let serving = rows
-        .checked_add(page)?
-        .checked_add(decoded.checked_mul(u64::from(limits.joins))?)?
-        .checked_add(skein_lib::List::<Box<jig_domain_tasks::TaskRecord>>::worst_case(limits.joins)?)?
-        .checked_add(skein_lib::List::<u64>::worst_case(limits.core.tasks.depth)?)?
-        .checked_add(skein_lib::List::<jig_domain_tasks::Edge>::worst_case(limits.core.tasks.tree_tasks)?)?
-        .checked_add(skein_lib::Set::<u64>::worst_case(limits.joins)?)?
-        .checked_add(u64::from(limits.store.commit))?
-        .checked_add(skein_lib::List::<skein_kv::Op>::worst_case(limits.journal.writes.checked_add(1)?)?)?
-        .checked_add(Queue::<skein_kv::Event>::worst_case(skein_kv::MAX_OUT.above)?)?
-        .checked_add(Queue::<skein_io::file::Request>::worst_case(skein_kv::MAX_OUT.below)?)?
-        .checked_add(Queue::<Event>::worst_case(MAX_OUT_DOWN)?)?
-        .checked_add(question_restore_worst_case(limits)?)?
-        .checked_add(commits::worst_case(limits)?)?
-        .checked_add(patching::switch::worst_case()?)?;
-    Some((common, serving))
-}
-
 // Two decoded records, including their wire values and the census's joined task.
 pub(crate) fn decoded_worst_case(limits: &Limits) -> Option<u64> {
     let codec = codec::limits(&limits.core)?;
@@ -322,22 +261,6 @@ pub(crate) fn decoded_worst_case(limits: &Limits) -> Option<u64> {
         .checked_add(jig_domain_core::settings::revision_worst_case(&limits.core)?)?
         .checked_add(u64::try_from(size_of::<jig_domain_tasks::TaskRecord>()).ok()?)?
         .checked_mul(2)
-}
-
-// The census's exact question keys become point ranges beside the combined
-// restore intervals. Both arrays and their endpoints may coexist.
-fn question_restore_worst_case(limits: &Limits) -> Option<u64> {
-    let count = limits.core.tasks.tasks.checked_mul(limits.core.tasks.inbox_messages)?;
-    skein_lib::List::<skein_kv::Range>::worst_case(count)?
-        .checked_mul(2)?
-        .checked_add(u64::from(count).checked_mul(u64::from(limits.store.key).checked_add(1)?)?.checked_mul(4)?)
-}
-
-/// At most one configured model per `Models` bit, each name within its bound.
-fn names_worst_case() -> Option<u64> {
-    jig_domain_core::settings::model_names_worst_case()?
-        .checked_add(skein_lib::List::<Box<[u8]>>::worst_case(u64::BITS)?)?
-        .checked_add(u64::from(u64::BITS).checked_mul(u64::from(jig_domain_core::MODEL_NAME_BYTES))?)
 }
 
 /// The memory component's requests (store.md, section 10).

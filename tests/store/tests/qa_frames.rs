@@ -642,13 +642,9 @@ fn party_turn_too_large_names_the_patched_charge() {
 }
 
 #[test]
-fn serving_machines_fit_the_priced_worst_case() {
+fn serving_machines_decode_the_same_patched_turn_twice() {
     let limits = patches::limits();
-    let bound = store::worst_case_with_patches(&limits, &frame_reads::SETS).expect("priced machines");
-    let plain = store::worst_case(&limits).expect("priced without machines");
-    assert!(bound > plain);
     let raw = frames::frame(5, &frame_reads::turn(1, b"said", b"replay", 0));
-    let span = skein_heap::Span::start();
     let (mut component, env) = frame_reads::closed(frame_reads::SETS, &limits);
     frame_reads::open(&mut component, &env);
     for _ in 0..2 {
@@ -657,6 +653,4 @@ fn serving_machines_fit_the_priced_worst_case() {
             Some(frame_reads::turn(2, b"said", &[], 24))
         );
     }
-    let peak = u64::try_from(span.end().peak).expect("positive serving heap");
-    assert!(peak <= bound, "serving heap {peak} exceeds {bound}");
 }

@@ -406,15 +406,6 @@ fn advance_moves_only_the_step_owners_families_with_blocks() {
     machines.advance(SHELF_STEP);
     assert_eq!(machines.get(shelf).reached, 2);
 }
-#[test]
-fn the_machine_heap_bound_grows_with_record_room() {
-    // This crate has no counting allocator. This checks the declared bound's
-    // availability and room sensitivity, not a measurement of allocations.
-    let bound = machines::worst_case_heap(&SETS, ROOMS).expect("fixture bound fits");
-    let larger = machines::worst_case_heap(&SETS, Rooms { store: Room { bytes: 256, nodes: 32 }, ..ROOMS })
-        .expect("larger bound fits");
-    assert!(larger > bound, "record room contributes to the bound");
-}
 
 #[test]
 fn the_plan_honours_dependencies_through_all_four_owners() {

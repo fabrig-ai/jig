@@ -498,31 +498,6 @@ fn put_size(key: &[u8], value: &[u8], before: u64) -> Option<u64> {
     before.checked_add(u64::try_from(key.len()).ok()?)?.checked_add(u64::try_from(value.len()).ok()?)?.checked_add(9)
 }
 
-pub(super) fn worst_case(limits: &Limits) -> Option<u64> {
-    let puts = ops_capacity(limits);
-    let rows = page_capacity(limits);
-    let page = limits.store.page.bytes.max(limits.secrets.page.bytes);
-    let key = limits.store.key.max(limits.secrets.key);
-    let value = limits.store.value.max(limits.secrets.value);
-    let commit = limits.store.commit.max(limits.secrets.commit);
-    u64::try_from(size_of::<Walking>())
-        .ok()?
-        .checked_add(Queue::<pages::WalkRow>::worst_case(rows)?)?
-        .checked_add(List::<pages::WalkRow>::worst_case(rows)?)?
-        .checked_add(List::<skein_kv::Op>::worst_case(puts.max(3))?.checked_mul(2)?)?
-        // Loaded rows (including their key cursors), output puts, and a
-        // deferred finished record can coexist; page loads make one temporary.
-        .checked_add(u64::from(page).checked_mul(2)?)?
-        .checked_add(u64::from(key).checked_mul(u64::from(rows))?.checked_mul(3)?)?
-        .checked_add(u64::from(commit))?
-        .checked_add(u64::from(value).checked_mul(3)?)?
-        .checked_add(u64::from(key).checked_mul(8)?)?
-        // Closing holds a binary-decoded proof beside its source and encoded
-        // put. The shared decoder bound covers both wire and domain records,
-        // including a proof's carried terminal and its task payload.
-        .checked_add(crate::decoded_worst_case(limits)?)
-}
-
 fn start(walking: &mut Walking, family: FamilyIx, root: &str, row: pages::WalkRow) -> Option<()> {
     let step = walking.step().expect("a record has a plan step");
     let (walk, stopped) = match walk::start(&mut walking.pending.machines, step, family, root, row.row.value) {

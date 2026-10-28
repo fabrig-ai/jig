@@ -141,13 +141,3 @@ pub(crate) fn up(store: &mut Store, arrived: Arrived, above: &mut Queue<Event>, 
         }
     }
 }
-
-/// The retained check and its manifest coexist with the serving peak. Static
-/// wires allocate nothing; their slice is in Store's counted inline state.
-pub(crate) fn worst_case() -> Option<u64> {
-    let codec = &crate::component_v3::CEILINGS;
-    u64::try_from(size_of::<Pending>())
-        .ok()?
-        .checked_add(crate::component_v3::Manifest::worst_case_heap(codec)?.checked_mul(2)?)?
-        .checked_add(crate::component_v3::Manifest::worst_case_bytes(codec)?)
-}

@@ -436,31 +436,3 @@ pub(crate) fn site(
         | Patching::Checking(_) => refuse(store, above),
     }
 }
-
-/// Persistent state is counted by lib's common peak; copy, walk and check
-/// buffers are disjoint. Both KV maps' bounds already include their commits.
-pub(crate) fn worst_case(limits: &Limits, sets: &crate::PatchSets) -> Option<u64> {
-    super::plan::bounds(sets).ok()?;
-    // The counts' source and encoded row coexist with the manifest's buffer.
-    // The first start reserves the ceiling even when its sets have no families.
-    let codec = &crate::component_v3::CEILINGS;
-    let manifest = crate::component_v3::Manifest::worst_case_heap(codec)?
-        .checked_mul(2)?
-        .checked_add(crate::component_v3::Manifest::worst_case_bytes(codec)?)?;
-    let walking = walking::worst_case(limits)?;
-    let copying = generations::operations_worst_case(limits.store.chunk)?;
-    let checking = check::worst_case(limits, crate::component_v3::CEILINGS.manifest_counts)?;
-    // Pending owns the machines during copying as well as walking.
-    walking
-        .max(copying)
-        .max(checking)
-        .max(super::plan::flights_worst_case(limits, sets)?)
-        .checked_add(List::<Counted>::worst_case(crate::component_v3::CEILINGS.manifest_counts)?)?
-        .checked_add(manifest)?
-        .checked_add(super::machines::worst_case(sets, super::machines::Rooms::of(limits))?)?
-        .checked_add(u64::try_from(size_of::<Patching>()).ok()?)?
-        .checked_add(u64::try_from(size_of::<Pending>()).ok()?)?
-        .checked_add(Queue::<Event>::worst_case(crate::MAX_OUT_DOWN)?)?
-        .checked_add(Queue::<file::Request>::worst_case(skein_kv::MAX_OUT.below.checked_mul(2)?)?)?
-        .checked_add(Queue::<skein_kv::Event>::worst_case(skein_kv::MAX_OUT.above)?)
-}
