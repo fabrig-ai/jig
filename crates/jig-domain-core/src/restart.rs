@@ -6,6 +6,7 @@ mod census;
 mod cursor;
 mod joins;
 use crate::{Core, fleet};
+use alloc::boxed::Box;
 pub use census::{Census, ReadResults};
 pub use cursor::restore_cursor;
 
@@ -189,7 +190,7 @@ impl Core {
         if !changed {
             let _request = self.restart_done(RestartStep::Sweep);
         }
-        out.push(crate::Request::Held(alloc::boxed::Box::new(crate::Held::Restart(next))));
+        out.push(crate::Request::Held(Box::new(crate::Held::Restart(next))));
         crate::Requests::Out(out)
     }
 

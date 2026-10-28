@@ -17,6 +17,7 @@ const RESTORES: &[core::RestartStep] = &[
     core::RestartStep::LoadInbox,
     core::RestartStep::RestoreConnector { connector: 1 },
     core::RestartStep::RestoreConnector { connector: 2 },
+    core::RestartStep::Sweep,
     core::RestartStep::Switch,
 ];
 
