@@ -138,6 +138,7 @@ fn body(limits: &v9::Limits, kind: Kind) -> Option<u32> {
         Kind::TurnBusy => v9::TurnBusy::worst_case_bytes(limits),
         Kind::Acknowledge => v9::Acknowledge::worst_case_bytes(limits),
         Kind::Cancel => v9::Cancel::worst_case_bytes(limits),
+        Kind::Park => v9::Park::worst_case_bytes(limits),
         Kind::Sources => v9::Sources::worst_case_bytes(limits),
         Kind::Check => v9::Check::worst_case_bytes(limits),
         Kind::SignOut => v9::SignOut::worst_case_bytes(limits),
@@ -162,8 +163,9 @@ pub fn engine_cap(sizes: &Sizes) -> Option<Cap> {
     bytes = bytes.checked_add(sizes.turns.checked_mul(frame(&limits, Kind::TurnKept)?)?)?;
     bytes = bytes.checked_add(frame(&limits, Kind::Acknowledge)?)?;
     bytes = bytes.checked_add(frame(&limits, Kind::Cancel)?)?;
+    bytes = bytes.checked_add(frame(&limits, Kind::Park)?)?;
     bytes = bytes.checked_add(grants.checked_mul(frame(&limits, Kind::Grant)?)?)?;
-    let frames = 3_u32.checked_add(sizes.inbox)?.checked_add(sizes.calls)?.checked_add(sizes.turns)?;
+    let frames = 4_u32.checked_add(sizes.inbox)?.checked_add(sizes.calls)?.checked_add(sizes.turns)?;
     let frames = frames.checked_add(grants)?.checked_mul(sizes.slots)?;
     let sources = frame(&limits, Kind::Sources)?;
     let commands =
