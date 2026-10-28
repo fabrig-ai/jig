@@ -1810,17 +1810,11 @@ fn restore(domain: &mut Domain, env: &Env<Limits>, record: Stored, out: &mut Que
                 && !domain.identities.contains_key(&identity.key)
                 && domain.people.len() < env.limits.people
         }
-        Stored::ReadResults { party: person, through: position } => {
-            person != &0
-                && *position != 0
-                && !domain.results_seen.contains_key(person)
-                && domain.results_seen.len() < env.limits.people
+        Stored::ReadResults { party: person, .. } => {
+            !domain.results_seen.contains_key(person) && domain.results_seen.len() < env.limits.people
         }
-        Stored::ReadConversation { party, task, through } => {
-            *party != 0
-                && *task != 0
-                && *through != 0
-                && !domain.conversations_seen.contains_key(&(*party, *task))
+        Stored::ReadConversation { party, task, .. } => {
+            !domain.conversations_seen.contains_key(&(*party, *task))
                 && domain.conversations_seen.len() < domain.conversations_seen.capacity()
         }
         Stored::SignIn { number, .. } => {

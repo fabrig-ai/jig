@@ -72,7 +72,7 @@ mod relays;
 mod resources;
 mod restart;
 mod stopping;
-pub use restart::{Census, HeldLimit, ReadResults, RestartRequest, RestartStep, RestoreChild, RestoreRange};
+pub use restart::{Census, HeldLimit, ReadResults, RestartRequest, RestartStep, RestoreRange};
 mod host_rule;
 mod revisions;
 mod roles;
@@ -850,9 +850,7 @@ impl Core {
             && !self.finish_owed()
     }
 
-    /// Restore one current claim only when it matches the live task's
-    /// transient correlation. An archive row can never enter this live map.
-    #[expect(clippy::manual_let_else, reason = "the step-code subset uses exhaustive matches")]
+    /// Load a codec-bounded live proof; owner links attach after all live rows load.
     pub fn restore_proof(&mut self, proof: RunProof, _result_bytes: u32) -> bool {
         self.restoring_proofs.remove(&proof.task);
         self.proofs.insert(proof.task, proof).is_ok()

@@ -689,3 +689,12 @@ impl std::ops::DerefMut for World {
         &mut self.runtime
     }
 }
+
+impl Drop for World {
+    fn drop(&mut self) {
+        // The walking runner owns the referee and clock while its shared
+        // runtime owns the store and the common cold-restart teardown.
+        std::mem::swap(&mut self.runtime.observer, &mut self.observer);
+        self.runtime.wall = self.iteration * 1_000_000;
+    }
+}

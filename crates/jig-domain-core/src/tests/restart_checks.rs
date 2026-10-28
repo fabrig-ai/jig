@@ -10,7 +10,8 @@ fn at_switch() -> (Core, Limits) {
 }
 
 #[test]
-fn a_switch_without_the_childs_check_refuses_the_start() {
+#[should_panic(expected = "tasks: link pass must finish before the switch")]
+fn a_switch_without_the_childs_link_pass_panics() {
     let (mut core, _) = at_switch();
     assert!(!core.restart_checked());
     assert_eq!(core.restart_failure(), Some(RestartStep::Switch));
@@ -49,11 +50,6 @@ fn checked(core: &mut Core, limits: &Limits) {
         step(core, &Env { now: Time::ZERO, wall: Wall::EPOCH, limits: *limits }, Event::Tasks(tasks::Event::Check));
 }
 
-fn unresolved(core: &Core, child: RestoreChild, records: u32) {
-    assert_eq!(core.restart_failure(), Some(RestartStep::Switch));
-    assert_eq!(core.restore_failure(), Some(RestartRequest::Unresolved { child, records }));
-}
-
 fn orphan_source() -> accounts::Stored {
     accounts::Stored::Source {
         account: MISSING_ACCOUNT,
@@ -76,28 +72,15 @@ fn with_orphan_source() -> (Core, Limits) {
 }
 
 #[test]
-fn accounts_left_over_a_pending_generation_refuse_the_switch() {
-    let (mut core, _) = with_orphan_source();
-    core.restart_pending = true;
-    assert!(!core.restart_checked());
-    unresolved(&core, RestoreChild::Accounts, 1);
-    assert_eq!(core.restart_done(RestartStep::Switch), core.restore_failure().unwrap());
+#[should_panic(expected = "accounts: Source(3) links to account 4, which is absent")]
+fn a_pending_generations_source_links_to_its_account() {
+    let _core = with_orphan_source();
 }
 
 #[test]
-fn accounts_left_with_nothing_pending_admit_the_switch() {
-    let (mut core, _) = with_orphan_source();
-    assert!(core.restart_checked());
-    assert_eq!(core.accounts.unrestored(), 1);
-}
-
-#[test]
-fn the_switch_requires_accounts_to_finish_restoring() {
-    let (mut core, limits) = at_switch();
-    core.accounts = accounts::Domain::new(&limits.accounts, core.settings.llm_providers.clone());
-    checked(&mut core, &limits);
-    assert!(!core.restart_checked());
-    assert_eq!(core.restart_failure(), Some(RestartStep::Switch));
+#[should_panic(expected = "accounts: Source(3) links to account 4, which is absent")]
+fn an_active_generations_source_links_to_its_account() {
+    let _core = with_orphan_source();
 }
 
 fn live() -> (Core, Limits, tasks::TaskRecord) {
@@ -279,12 +262,12 @@ fn a_read_position_over_a_restored_live_task_admits_the_switch() {
 }
 
 #[test]
-fn a_read_position_over_no_restored_task_refuses_the_switch() {
+#[should_panic(expected = "people: ReadConversation(1, 2) links to task 2, which is absent")]
+fn a_read_position_links_to_its_restored_task() {
     let (mut core, limits) = at_switch();
     read_position(&mut core, &limits, MISSING_TASK);
     checked(&mut core, &limits);
     assert!(!core.restart_checked());
-    unresolved(&core, RestoreChild::People, 1);
 }
 
 #[test]
@@ -311,7 +294,7 @@ fn a_read_position_resolves_when_the_census_holds_its_ended_task() {
 }
 
 #[test]
-fn accounts_removed_only_at_finish_refuse_a_pending_generation() {
+fn an_empty_account_is_retained_in_a_pending_generation() {
     let (mut core, limits) = at_switch();
     let provider = core.settings.llm_providers.providers[0].number;
     core.accounts = accounts::Domain::new(&limits.accounts, core.settings.llm_providers.clone());
@@ -334,9 +317,8 @@ fn accounts_removed_only_at_finish_refuse_a_pending_generation() {
     let _requests = step(&mut core, &env, Event::Account(accounts::Event::Want));
     core.restart_pending = true;
     checked(&mut core, &limits);
-    assert!(!core.restart_checked());
-    unresolved(&core, RestoreChild::Accounts, 1);
-    assert_eq!(core.accounts.accounts(), 0);
+    assert!(core.restart_checked());
+    assert_eq!(core.accounts.accounts(), 1);
 }
 
 #[test]
@@ -363,7 +345,8 @@ fn a_live_tasks_placed_hold_resolves_its_party_owner_even_beside_another_cause()
 }
 
 #[test]
-fn a_placed_hold_masked_by_another_still_resolves_its_owner_before_switch() {
+#[should_panic(expected = "core: PlacedHold(72) links to owner Person(2), which is absent")]
+fn a_placed_hold_masked_by_another_still_links_its_owner_before_switch() {
     let (mut core, mut limits) = at_switch();
     limits.tasks.placed_holds = 2;
     limits.tasks.project_placed_holds = 2;
@@ -374,7 +357,5 @@ fn a_placed_hold_masked_by_another_still_resolves_its_owner_before_switch() {
     send_task(&mut core, &limits, placed(TASK, MISSING_PERSON, 72));
     assert_eq!(core.tasks.task(TASK).unwrap().placed, Some(71));
     assert_eq!(core.tasks.next_placed_hold(71).unwrap().number, 72);
-    checked(&mut core, &limits);
-    assert!(!core.restart_checked());
-    unresolved(&core, RestoreChild::Tasks, 1);
+    core.link_tasks();
 }

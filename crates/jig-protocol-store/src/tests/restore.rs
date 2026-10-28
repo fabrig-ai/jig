@@ -227,10 +227,10 @@ fn the_census_hands_up_the_ended_task_its_row_names() {
 }
 
 #[test]
-fn a_census_row_without_its_ended_task_is_corrupt() {
+#[should_panic(expected = "links to Ended(22), which is absent")]
+fn a_census_row_without_its_ended_task_panics_at_the_link() {
     let mut store = census_store(false);
-    let events = restore(&mut store, census(), None, 2, 65_536);
-    assert_corrupt(&mut store, &events);
+    let _events = restore(&mut store, census(), None, 2, 65_536);
 }
 
 #[test]

@@ -2,7 +2,7 @@
 use crate::{Core, tasks};
 
 impl Core {
-    pub(super) fn link_tasks(&self) {
+    pub(crate) fn link_tasks(&self) {
         for task in self.tasks.view_tasks() {
             let row = self.tasks.task(task.number).expect("live task view");
             assert!(
@@ -11,12 +11,7 @@ impl Core {
                 row.number,
                 row.project
             );
-            assert!(
-                self.task_references_resolve(row),
-                "core: Live({}) links to a person or placed hold in {:?}, which is absent",
-                row.number,
-                row
-            );
+            self.link_task_people(row);
         }
         let mut after = 0;
         while let Some(hold) = self.tasks.next_placed_hold(after) {
@@ -39,6 +34,114 @@ impl Core {
         }
     }
 
+    fn link_person(&self, task: u64, field: &str, person: u64) {
+        assert!(
+            self.people.identity(person).is_some(),
+            "core: Live({task}).{field} links to person {person}, which is absent"
+        );
+    }
+    fn link_party(&self, task: u64, field: &str, party: tasks::Party) {
+        match party {
+            tasks::Party::Person(person) => self.link_person(task, field, person),
+            tasks::Party::Task(_) | tasks::Party::Deployment { .. } => {}
+        }
+    }
+    fn link_executor(&self, task: u64, field: &str, executor: tasks::Executor) {
+        if let tasks::Executor::Person(tasks::PersonAddress::Person(person)) = executor {
+            self.link_person(task, field, person);
+        }
+    }
+    fn link_funder(&self, task: u64, field: &str, funder: tasks::Funder) {
+        if let tasks::Funder::Pool { person, .. } = funder {
+            self.link_person(task, field, person);
+        }
+    }
+    fn link_batch_people(&self, task: u64, batch: &[tasks::New]) {
+        for member in batch {
+            self.link_executor(task, "batch.executor", member.executor);
+            self.link_funder(task, "batch.funder", member.funder);
+        }
+    }
+    fn link_task_people(&self, row: &tasks::TaskRecord) {
+        let task = row.number;
+        self.link_party(task, "requester", row.requester);
+        self.link_executor(task, "executor", row.executor);
+        self.link_funder(task, "funder", row.funder);
+        if let Some(person) = row.taken_by {
+            self.link_person(task, "taken_by", person);
+        }
+        if let Some(answer) = row.person_answer {
+            self.link_person(task, "person_answer.by", answer.by);
+        }
+        if let Some(grace) = &row.grace {
+            self.link_party(task, "grace.by", grace.by);
+        }
+        for added in &row.added {
+            self.link_party(task, "added.by", added.by);
+        }
+        for word in &row.inbox {
+            self.link_party(task, "inbox.from", word.from);
+        }
+        if let Some(number) = row.placed {
+            let hold = match self.tasks.placed_hold(number) {
+                Some(hold) => hold,
+                None => panic!("core: Live({task}).placed links to PlacedHold({number}), which is absent"),
+            };
+            assert!(
+                self.authority.policy(hold.project).is_some(),
+                "core: PlacedHold({number}).project links to project {}, which is absent",
+                hold.project
+            );
+            if let tasks::Owner::Party { person } = hold.owner {
+                self.link_person(task, "placed.owner", person);
+            }
+        }
+        match &row.phase {
+            tasks::Phase::Closing(closing) | tasks::Phase::Held { was: tasks::Was::Closing(closing), .. } => {
+                if let tasks::Ending::Cancelled { by, .. } = closing.ending {
+                    self.link_party(task, "ending.by", by);
+                }
+            }
+            tasks::Phase::Waiting | tasks::Phase::Active(_) | tasks::Phase::Held { .. } | tasks::Phase::Ended(_) => {}
+        }
+        match row.escalation {
+            tasks::Escalation::Waiting { holder: tasks::EscalationHolder::Person(person), .. }
+            | tasks::Escalation::Rejected { by: person, .. } => self.link_person(task, "escalation.holder", person),
+            tasks::Escalation::Unheld { .. }
+            | tasks::Escalation::Routing { .. }
+            | tasks::Escalation::Waiting { .. } => {}
+        }
+        if let Some(proposal) = &row.proposal {
+            match proposal.state {
+                tasks::ProposalState::Pending { holder: tasks::ProposalHolder::Person(person), .. } => {
+                    self.link_person(task, "proposal.holder", person)
+                }
+                tasks::ProposalState::Accepted { by } | tasks::ProposalState::Rejected { by, .. } => {
+                    self.link_party(task, "proposal.by", by)
+                }
+                tasks::ProposalState::Pending { .. } | tasks::ProposalState::Withdrawn => {}
+            }
+            match &proposal.action {
+                tasks::ProposalAction::Batch(batch) => self.link_batch_people(task, batch),
+                tasks::ProposalAction::Amend { amendment, .. } => {
+                    if let Some(addressed) = amendment.addressed {
+                        self.link_executor(task, "proposal.addressed", tasks::Executor::Person(addressed.address));
+                    }
+                }
+                tasks::ProposalAction::Settings { .. }
+                | tasks::ProposalAction::Effect { .. }
+                | tasks::ProposalAction::ProcedureEffect { .. }
+                | tasks::ProposalAction::Widen { .. }
+                | tasks::ProposalAction::ReleasePlaced { .. }
+                | tasks::ProposalAction::Release { .. } => {}
+            }
+        }
+        if let Some(recurring) = &row.recurring {
+            self.link_batch_people(task, &recurring.template.batch);
+        }
+    }
+
+    #[cfg(test)]
     pub(crate) fn task_references_resolve(&self, row: &tasks::TaskRecord) -> bool {
         if self.authority.policy(row.project).is_none()
             || !self.party_resolves(row.requester)
@@ -88,6 +191,7 @@ impl Core {
         true
     }
 
+    #[cfg(test)]
     fn phase_parties_resolve(&self, row: &tasks::TaskRecord) -> bool {
         if let Some(number) = row.placed {
             let Some(hold) = self.tasks.placed_hold(number) else { return false };
@@ -131,6 +235,7 @@ impl Core {
         true
     }
 
+    #[cfg(test)]
     fn proposal_parties_resolve(&self, proposal: &tasks::Proposal) -> bool {
         match proposal.state {
             tasks::ProposalState::Pending { holder: tasks::ProposalHolder::Person(person), .. } => {
@@ -172,6 +277,7 @@ impl Core {
         true
     }
 
+    #[cfg(test)]
     fn funder_person_resolves(&self, funder: tasks::Funder) -> bool {
         match funder {
             tasks::Funder::Pool { person, .. } => self.people.identity(person).is_some(),
@@ -179,6 +285,7 @@ impl Core {
         }
     }
 
+    #[cfg(test)]
     fn batch_parties_resolve(&self, batch: &[tasks::New]) -> bool {
         for member in batch {
             if !self.executor_resolves(member.executor) || !self.funder_person_resolves(member.funder) {
@@ -188,6 +295,7 @@ impl Core {
         true
     }
 
+    #[cfg(test)]
     fn executor_resolves(&self, executor: tasks::Executor) -> bool {
         match executor {
             tasks::Executor::Person(tasks::PersonAddress::Person(person)) => self.people.identity(person).is_some(),

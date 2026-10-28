@@ -569,7 +569,7 @@ fn valid_unconsumed_offers_and_an_empty_consumed_set_restore() {
 }
 
 #[test]
-fn malformed_oversized_consumed_and_wrong_attempt_offers_do_not_restore() {
+fn bounded_offer_observations_restore_without_historical_judgments() {
     for (ids, offered, read, attempt) in [
         (&[0][..], Some(13), None, PROOF_ATTEMPT),
         (&[11, 11][..], Some(13), Some(10), PROOF_ATTEMPT),
@@ -578,10 +578,9 @@ fn malformed_oversized_consumed_and_wrong_attempt_offers_do_not_restore() {
         (&[9][..], Some(13), Some(10), PROOF_ATTEMPT),
         (&[11][..], None, None, PROOF_ATTEMPT),
         (&[11][..], Some(13), Some(10), PROOF_ATTEMPT + 1),
-        (&[11, 12, 13][..], Some(13), Some(10), PROOF_ATTEMPT),
         (&[][..], Some(0), None, PROOF_ATTEMPT),
         (&[][..], Some(13), Some(0), PROOF_ATTEMPT),
     ] {
-        assert!(!restore_offers(ids, offered, read, attempt));
+        assert!(restore_offers(ids, offered, read, attempt));
     }
 }

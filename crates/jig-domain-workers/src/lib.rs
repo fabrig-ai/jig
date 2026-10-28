@@ -26,6 +26,17 @@ impl SourceName {
         }
         Some(Self { length: u8::try_from(value.len()).ok()?, bytes })
     }
+    /// Reconstitute a bounded stored name; admission's spelling rules are
+    /// applied when a name is declared, never again during a cold start.
+    #[must_use]
+    pub fn from_stored(value: &[u8]) -> Option<Self> {
+        if value.len() > 32 {
+            return None;
+        }
+        let mut bytes = [0; 32];
+        bytes.get_mut(..value.len())?.copy_from_slice(value);
+        Some(Self { length: u8::try_from(value.len()).ok()?, bytes })
+    }
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         self.bytes.get(..usize::from(self.length)).expect("validated name")
