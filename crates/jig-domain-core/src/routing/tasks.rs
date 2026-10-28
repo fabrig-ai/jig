@@ -89,7 +89,7 @@ pub(super) fn tag_tasks(
                 core.touch_party(proposer);
                 if let Some(reply_to) = reply_to {
                     let token = reply_to.into_token();
-                    if let Some(RoutedCall::Decide { key, proposal }) = core.routing_calls.get(&token).cloned() {
+                    if let Some(RoutedCall::Decide { key, proposal }) = core.routing_calls.get(&token).copied() {
                         assert!(proposal == number, "party proposal call identity");
                         let _route = core.routing_calls.remove(&token);
                         call_decision(
@@ -1079,15 +1079,18 @@ pub(super) fn tag_tasks(
                     tasks::Stored::Live(task) | tasks::Stored::Ended(task) => {
                         Some((task.number, core.waiting_entries(&env.limits, task)))
                     }
-                    tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) => {
-                        if matches!(row.action, tasks::PersonAction::ReleasePlaced { .. })
-                            || row.first() == tasks::PROPOSAL_WITHOUT_TASK
-                        {
-                            None
-                        } else {
-                            Some((row.first(), core.person_proposal_entries(row)))
+                    tasks::Stored::PersonProposal(row) | tasks::Stored::DecidedProposal(row) => match row.action {
+                        tasks::PersonAction::ReleasePlaced { .. } => None,
+                        tasks::PersonAction::Settings { .. }
+                        | tasks::PersonAction::Batch(_)
+                        | tasks::PersonAction::Amend { .. } => {
+                            if row.first() == tasks::PROPOSAL_WITHOUT_TASK {
+                                None
+                            } else {
+                                Some((row.first(), core.person_proposal_entries(row)))
+                            }
                         }
-                    }
+                    },
                     tasks::Stored::Ledger(_)
                     | tasks::Stored::Writer(_)
                     | tasks::Stored::Result(_)

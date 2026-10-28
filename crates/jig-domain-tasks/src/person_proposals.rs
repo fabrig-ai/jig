@@ -150,7 +150,7 @@ pub(crate) fn ended(domain: &mut Domain, env: &Env<Limits>, task: u64, out: &mut
 pub(crate) fn check(domain: &Domain, env: &Env<Limits>, proposal: &PersonProposal) -> Result<(), Box<crate::Problem>> {
     if let PersonAction::ReleasePlaced { .. } = proposal.action {
         return match release_basis(domain, proposal) {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(why) => Err(Box::new(crate::Problem::new(Some(proposal.first()), why))),
         };
     }
@@ -204,6 +204,16 @@ pub(crate) fn valid_settings(items: &[crate::SettingHead]) -> bool {
     true
 }
 
+pub(crate) fn valid_revision(action: &PersonAction, revision: Option<u32>) -> bool {
+    match action {
+        PersonAction::Settings { against, .. } => match revision {
+            Some(revision) => revision > *against,
+            None => false,
+        },
+        PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => revision.is_none(),
+    }
+}
+
 impl Domain {
     /// Release proposals derive their sole recipient from the retained hold (tasks.md, 5.9).
     #[must_use]
@@ -238,7 +248,11 @@ fn release_basis(domain: &Domain, proposal: &PersonProposal) -> Result<(), Refus
     if target.project != proposal.project || target.placed != Some(hold) {
         return Err(Refusal::State);
     }
-    if !matches!(target.phase, crate::Phase::Held { .. }) && !crate::placed::draining(domain, target) {
+    let held = match target.phase {
+        crate::Phase::Held { .. } => true,
+        crate::Phase::Waiting | crate::Phase::Active(_) | crate::Phase::Closing(_) | crate::Phase::Ended(_) => false,
+    };
+    if !held && !crate::placed::draining(domain, target) {
         return Err(Refusal::State);
     }
     Ok(())

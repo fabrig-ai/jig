@@ -280,6 +280,10 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
     {
         return false;
     }
+    let release = match proposal.action {
+        PersonAction::ReleasePlaced { .. } => true,
+        PersonAction::Settings { .. } | PersonAction::Batch(_) | PersonAction::Amend { .. } => false,
+    };
     match &proposal.state {
         PersonProposalState::Pending { .. } | PersonProposalState::Withdrawn { .. } => true,
         PersonProposalState::SettingsAccepted { by, revision } => {
@@ -297,7 +301,7 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
         }
         PersonProposalState::Accepted { by } => match by {
             Party::Person(person) => !proposal.action.is_settings() && *person != 0,
-            Party::Task(task) => *task != 0 && matches!(proposal.action, PersonAction::ReleasePlaced { .. }),
+            Party::Task(task) => *task != 0 && release,
             Party::Deployment { .. } => false,
         },
         PersonProposalState::Rejected { by, reason, message, .. } => match by {
@@ -310,7 +314,7 @@ pub(crate) fn valid_person_proposal(proposal: &PersonProposal, limits: &Limits) 
                 *task != 0
                     && *message != 0
                     && reason.len() <= usize::try_from(limits.message_bytes).expect("message bound")
-                    && matches!(proposal.action, PersonAction::ReleasePlaced { .. })
+                    && release
             }
             Party::Deployment { .. } => false,
         },
@@ -424,20 +428,8 @@ pub(crate) fn decide_person(
     }
     let outcome = match &decision {
         ProposalDecision::Accept => {
-            let settings = match old.action {
-                PersonAction::Settings { .. } => true,
-                PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => false,
-            };
-            let valid_revision = match old.action {
-                PersonAction::Settings { against, .. } => match revision {
-                    Some(revision) => revision > against,
-                    None => false,
-                },
-                PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => {
-                    revision.is_none()
-                }
-            };
-            if settings != revision.is_some() || !valid_revision || !crate::person_proposals::made(domain, &old.action)
+            if !crate::person_proposals::valid_revision(&old.action, revision)
+                || !crate::person_proposals::made(domain, &old.action)
             {
                 return refused(to, None, Refusal::State, out);
             }

@@ -1329,23 +1329,7 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
         },
         Ask::SetPool { person, .. } => *person != 0,
         Ask::Create { batch, .. } => crate::batch::valid(limits, batch),
-        Ask::Propose { action: crate::Action::ReleasePlaced { task, hold, .. }, reason, .. } => {
-            *task != 0
-                && *hold != 0
-                && !reason.is_empty()
-                && reason.len() <= usize::try_from(limits.words).expect("words bound")
-        }
-        Ask::Propose { action: crate::Action::Batch(batch), reason, .. } => {
-            crate::batch::valid(limits, batch) && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
-        }
-        Ask::Propose { action: crate::Action::Amend { task, amendment, .. }, reason, .. } => {
-            *task != 0
-                && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
-                && crate::amendment::valid(limits, amendment)
-        }
-        Ask::Propose { project, action: crate::Action::Settings { .. }, reason } => {
-            *project == crate::DEPLOYMENT && reason.len() <= usize::try_from(limits.words).expect("u32 fits usize")
-        }
+        Ask::Propose { project, action, reason } => valid_propose(limits, *project, action, reason),
         Ask::Withdraw { proposal, .. } => *proposal != 0,
         Ask::Say { task, words, .. } => {
             *task != 0 && !words.is_empty() && words.len() <= usize::try_from(limits.words).expect("u32 fits usize")
@@ -1378,6 +1362,18 @@ pub(crate) fn valid_ask(limits: &Limits, ask: &Ask) -> bool {
                     }
                 }
         }
+    }
+}
+
+fn valid_propose(limits: &Limits, project: u32, action: &crate::Action, reason: &[u8]) -> bool {
+    if reason.len() > usize::try_from(limits.words).expect("words bound") {
+        return false;
+    }
+    match action {
+        crate::Action::ReleasePlaced { task, hold, .. } => *task != 0 && *hold != 0 && !reason.is_empty(),
+        crate::Action::Batch(batch) => crate::batch::valid(limits, batch),
+        crate::Action::Amend { task, amendment, .. } => *task != 0 && crate::amendment::valid(limits, amendment),
+        crate::Action::Settings { .. } => project == crate::DEPLOYMENT,
     }
 }
 

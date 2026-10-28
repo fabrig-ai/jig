@@ -424,23 +424,7 @@ impl Core {
 
         let deployment = self.counters.deployment();
         match row {
-            tasks::Stored::PersonProposal(proposal) => {
-                for member in proposal.batch() {
-                    if member.number > deployment.tasks {
-                        return false;
-                    }
-                }
-                proposal.number <= deployment.messages
-                    && proposal.proposer <= deployment.people
-                    && match proposal.action {
-                        tasks::PersonAction::Settings { .. } => proposal.project == jig_domain_people::DEPLOYMENT,
-                        tasks::PersonAction::Batch(_)
-                        | tasks::PersonAction::Amend { .. }
-                        | tasks::PersonAction::ReleasePlaced { .. } => {
-                            self.authority.policy(proposal.project).is_some()
-                        }
-                    }
-            }
+            tasks::Stored::PersonProposal(proposal) => supported_person_proposal(self, proposal, &deployment),
             tasks::Stored::PlacedHold(hold) => {
                 self.authority.policy(hold.project).is_some() && supported_placed_hold(hold, &deployment)
             }
@@ -606,6 +590,27 @@ fn supported_task(task: &jig_domain_tasks::TaskRecord, core: &Core) -> bool {
         tasks::Executor::Person(tasks::PersonAddress::Role(_)) => true,
     };
     task.number != 0 && task.result_position == 0 && executor
+}
+
+fn supported_person_proposal(
+    core: &Core,
+    proposal: &jig_domain_tasks::PersonProposal,
+    deployment: &Deployment,
+) -> bool {
+    use jig_domain_tasks::PersonAction;
+    for member in proposal.batch() {
+        if member.number > deployment.tasks {
+            return false;
+        }
+    }
+    proposal.number <= deployment.messages
+        && proposal.proposer <= deployment.people
+        && match proposal.action {
+            PersonAction::Settings { .. } => proposal.project == jig_domain_people::DEPLOYMENT,
+            PersonAction::Batch(_) | PersonAction::Amend { .. } | PersonAction::ReleasePlaced { .. } => {
+                core.authority.policy(proposal.project).is_some()
+            }
+        }
 }
 
 fn supported_proposal(task: &jig_domain_tasks::TaskRecord, deployment: &Deployment) -> bool {
